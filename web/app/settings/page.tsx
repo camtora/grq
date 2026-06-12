@@ -67,7 +67,7 @@ export default async function Settings() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Agent</dt>
-                <dd className="text-teal-50">{settings?.agentVersion ?? "—"} (arrives Phase 2)</dd>
+                <dd className="text-teal-50">{settings?.agentVersion ?? "—"} — on duty</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Universe ({symbols.length})</dt>

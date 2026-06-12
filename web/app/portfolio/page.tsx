@@ -33,7 +33,7 @@ export default async function Portfolio() {
         {pf.positions.length === 0 ? (
           <EmptyState
             title="All cash"
-            body="No open positions. Use the manual sim ticket below to exercise the engine, or wait for the agent in Phase 2."
+            body="The agent hasn't pulled the trigger yet — it researches at 9:00 ET and only buys when a thesis clears every guardrail. Patience is a position. (The manual sim ticket below still works for testing.)"
           />
         ) : (
           <Card className="overflow-x-auto">

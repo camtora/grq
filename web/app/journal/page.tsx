@@ -51,7 +51,7 @@ export default async function Journal({
       {entries.length === 0 ? (
         <EmptyState
           title="Nothing here yet"
-          body="Entries of this kind appear once the agent starts thinking out loud (Phase 2)."
+          body="Entries of this kind appear once the agent has something to say — it journals research, decisions, trades, retros, and lessons as they happen."
         />
       ) : (
         <div className="space-y-4">

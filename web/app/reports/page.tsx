@@ -21,9 +21,9 @@ export default async function Reports() {
           title="No reports yet"
           body={
             <>
-              The first end-of-day report is written when the sim goes live-fire in{" "}
-              <strong className="text-teal-200">Phase 2</strong> — daily P&L, every trade with
-              its reasoning, fees vs budget, and the &ldquo;vs just buying XIC&rdquo; benchmark.
+              The first end-of-day report lands at <strong className="text-teal-200">~16:15 ET
+              on the next market day</strong> — daily P&L, every trade with its reasoning, fees
+              vs budget, and the &ldquo;vs just buying XIC&rdquo; benchmark.
             </>
           }
         />

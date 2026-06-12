@@ -28,11 +28,11 @@ export default async function Overview() {
         <div>
           <h1 className="text-3xl font-semibold text-teal-50">Welcome back, {name}.</h1>
           <p className="mt-1 text-sm text-teal-200/50">
-            {name} &amp; {other}&rsquo;s autonomous fund · Phase 1 — mock fund, synthetic quotes
+            {name} &amp; {other}&rsquo;s autonomous fund · live-fire sim on real delayed quotes
           </p>
         </div>
         <Chip tone={pf.killSwitch ? "red" : "teal"}>
-          {pf.killSwitch ? "Trading halted" : "Sim engine ready"}
+          {pf.killSwitch ? "Trading halted" : "Agent on duty"}
         </Chip>
       </div>
 
