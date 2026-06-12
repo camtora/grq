@@ -9,6 +9,8 @@ import { refreshAllQuotes, refreshQuotesFor, getQuotes } from "../lib/broker/quo
 import { BENCHMARK } from "../lib/universe";
 import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
+import { refreshBars } from "../lib/bars";
+import { universeSymbols } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
@@ -24,6 +26,7 @@ let lastFastRefresh = 0;
 let lastSnapshot = 0;
 let decisionSessionsToday = 0;
 let decisionsDate = "";
+let lastBarsDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
@@ -215,6 +218,14 @@ async function tick() {
       lastSnapshot = Date.now();
     }
     await evaluateTriggers();
+  }
+
+  // Nightly bars maintenance: after close on market days, once per day.
+  const p = etParts();
+  if (isMarketDay() && p.minutesSinceMidnight >= 16 * 60 + 30 && lastBarsDay !== p.dateStr) {
+    lastBarsDay = p.dateStr;
+    const n = await refreshBars(universeSymbols(), "5d").catch(() => 0);
+    console.log(`[bars] nightly refresh stored ${n} rows`);
   }
 
   await maybeScheduledSessions();

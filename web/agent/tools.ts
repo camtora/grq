@@ -5,6 +5,7 @@ import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
 import { inUniverse, universeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
+import { computeSignals } from "./signals";
 import { AGENT_VERSION } from "./policy";
 import type { JournalKind } from "@prisma/client";
 
@@ -125,6 +126,17 @@ const setWatchlistTool = tool(
   },
 );
 
+const getSignalsTool = tool(
+  "get_signals",
+  "Technical signals v1 (from daily bars): SMA trend stack, RSI(14), MACD, 20d realized vol. Signals are inputs on scoreboard probation — cite them in sources[] as e.g. 'signal:rsi' so retros can grade them.",
+  { symbol: z.string() },
+  async (args) => {
+    const s = await computeSignals(args.symbol);
+    if (!s) return text(`No signal data for ${args.symbol.toUpperCase()} (insufficient bar history).`);
+    return text(JSON.stringify(s, null, 2));
+  },
+);
+
 const proposeOrderTool = tool(
   "propose_order",
   "Propose a trade. It passes through the deterministic guardrail gate — rejections are final and explain which rail fired. BUYs require a price target (cents) above the ask and at least one source.",
@@ -179,6 +191,7 @@ export const grqServer = createSdkMcpServer({
     writeJournalTool,
     getWatchlistTool,
     setWatchlistTool,
+    getSignalsTool,
     proposeOrderTool,
   ],
 });
@@ -190,5 +203,22 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__write_journal",
   "mcp__grq__get_watchlist",
   "mcp__grq__set_watchlist",
+  "mcp__grq__get_signals",
   "mcp__grq__propose_order",
+];
+
+// Read-only variant for the chat (2.5c): no propose_order, no writes —
+// a persuasive chat can never become a trading backdoor.
+export const grqReadOnlyServer = createSdkMcpServer({
+  name: "grq",
+  version: "1.0.0",
+  tools: [getPortfolioTool, getQuotesTool, getJournalTool, getWatchlistTool, getSignalsTool],
+});
+
+export const GRQ_READONLY_TOOL_NAMES = [
+  "mcp__grq__get_portfolio",
+  "mcp__grq__get_quotes",
+  "mcp__grq__get_journal",
+  "mcp__grq__get_watchlist",
+  "mcp__grq__get_signals",
 ];

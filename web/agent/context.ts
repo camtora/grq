@@ -2,6 +2,7 @@ import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { etParts, isMarketOpen, minutesToClose } from "./calendar";
 import { dayPnlBps } from "./validator";
+import { computeSignals, signalsOneLine } from "./signals";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
 
 function money(c: number): string {
@@ -52,6 +53,20 @@ Fee budget: ${money(pf.feeSpentMonthCents)} spent of ${money(pf.feeBudgetCentsMo
 
 ## Positions
 ${positions}
+
+## Signals on holdings (v1 — on scoreboard probation; cite as "signal:<family>")
+${
+  pf.positions.length === 0
+    ? "  (no holdings)"
+    : (
+        await Promise.all(
+          pf.positions.map(async (x) => {
+            const s = await computeSignals(x.symbol).catch(() => null);
+            return s ? `  ${x.symbol}: ${signalsOneLine(s)}` : `  ${x.symbol}: (no bar history yet)`;
+          }),
+        )
+      ).join("\n")
+}
 
 ## Watchlist
 ${watchlist.length === 0 ? "  (empty)" : watchlist.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}

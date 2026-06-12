@@ -167,6 +167,21 @@ model Report {
   @@unique([date, kind])
 }
 
+// Daily OHLCV history — feeds the signals layer (2.5d) and the stock-page
+// sparklines. Backfilled 1y, then maintained nightly after close.
+model Bar {
+  symbol     String
+  date       DateTime
+  openCents  Int
+  highCents  Int
+  lowCents   Int
+  closeCents Int
+  volume     Int
+
+  @@id([symbol, date])
+  @@index([symbol, date])
+}
+
 // Latest delayed quote per symbol. The agent's tick loop keeps these warm;
 // web reads them (with on-demand fallback fetch) so request paths stay fast.
 model Quote {

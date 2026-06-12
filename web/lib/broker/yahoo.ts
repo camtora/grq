@@ -77,3 +77,73 @@ export async function fetchYahooQuotes(symbols: string[]): Promise<FetchedQuote[
   }
   return out;
 }
+
+export type FetchedBar = {
+  date: Date; // ET trading day at UTC midnight
+  openCents: number;
+  highCents: number;
+  lowCents: number;
+  closeCents: number;
+  volume: number;
+};
+
+function etDayUtc(epochSeconds: number): Date {
+  const s = new Date(epochSeconds * 1000).toLocaleDateString("en-CA", {
+    timeZone: "America/Toronto",
+  });
+  return new Date(`${s}T00:00:00.000Z`);
+}
+
+/** Daily OHLCV history from the same crumb-free chart endpoint. */
+export async function fetchDailyBars(symbol: string, range = "1y"): Promise<FetchedBar[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+    toYahoo(symbol),
+  )}?interval=1d&range=${range}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: ctrl.signal });
+    if (!res.ok) return [];
+    const json = (await res.json()) as {
+      chart?: {
+        result?: {
+          timestamp?: number[];
+          indicators?: {
+            quote?: {
+              open?: (number | null)[];
+              high?: (number | null)[];
+              low?: (number | null)[];
+              close?: (number | null)[];
+              volume?: (number | null)[];
+            }[];
+          };
+        }[];
+      };
+    };
+    const r = json.chart?.result?.[0];
+    const ts = r?.timestamp ?? [];
+    const q = r?.indicators?.quote?.[0];
+    if (!q) return [];
+    const out: FetchedBar[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const o = q.open?.[i];
+      const h = q.high?.[i];
+      const l = q.low?.[i];
+      const c = q.close?.[i];
+      if (![o, h, l, c].every((v) => typeof v === "number" && v > 0)) continue;
+      out.push({
+        date: etDayUtc(ts[i]),
+        openCents: Math.round((o as number) * 100),
+        highCents: Math.round((h as number) * 100),
+        lowCents: Math.round((l as number) * 100),
+        closeCents: Math.round((c as number) * 100),
+        volume: Math.min(2_000_000_000, Math.max(0, Math.round(q.volume?.[i] ?? 0))),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -3,9 +3,14 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { universeEntry } from "@/lib/universe";
 import { getQuote } from "@/lib/broker/quotes";
+import { getCloses } from "@/lib/bars";
+import { computeSignals } from "@/agent/signals";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
+import Sparkline from "@/components/Sparkline";
+
+const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
 
 function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   if (!sourcesJson) return null;
@@ -33,12 +38,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const entry = universeEntry(symbol);
   if (!entry) notFound();
 
-  const [quote, position, watch, trades, journal] = await Promise.all([
+  const [quote, position, watch, trades, journal, closes, signals] = await Promise.all([
     getQuote(symbol),
     prisma.position.findUnique({ where: { symbol } }),
     prisma.watchlist.findUnique({ where: { symbol } }),
     prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
     prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
+    getCloses(symbol, 260).catch(() => []),
+    computeSignals(symbol).catch(() => null),
   ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -76,6 +83,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             valueClassName={pnlClass(position.qty * (quote.midCents - position.avgCostCents))}
           />
         </section>
+      )}
+
+      {closes.length > 1 && (
+        <Card className="mb-6 p-5">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-xs uppercase tracking-wider text-teal-200/50">Price — {closes.length} sessions</span>
+            <span className="text-xs text-teal-200/40">
+              {money(closes[0].closeCents)} → {money(closes[closes.length - 1].closeCents)}
+            </span>
+          </div>
+          <Sparkline values={closes.map((c) => c.closeCents)} />
+        </Card>
       )}
 
       {currentRead && (
@@ -140,10 +159,32 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             )}
           </Card>
 
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Data tiers</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
+          </h2>
+          <Card className="p-4">
+            {!signals ? (
+              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {signals.families.map((f) => (
+                  <li key={f.family} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold uppercase text-teal-100/80">{f.family}</span>
+                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
+                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
+                  </li>
+                ))}
+                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
+              </ul>
+            )}
+          </Card>
+
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Future data tiers</h2>
           <Card className="p-4 text-sm">
             <ul className="space-y-2 text-teal-200/50">
-              <li>📈 Tier 1 — signals: <span className="text-teal-200/40">lights up with the signals layer</span></li>
               <li>📊 Tier 6 — earnings: <span className="text-teal-200/40">lights up with earnings tracking</span></li>
               <li>📰 Tier 7 — news: <span className="text-teal-200/40">mentions land via research sessions</span></li>
               <li>🧑‍💼 Tier 4 — insiders (SEDI): <span className="text-teal-200/40">future</span></li>
