@@ -1,0 +1,30 @@
+services:
+  web:
+    build: ./web
+    container_name: grq-web
+    restart: unless-stopped
+    ports:
+      - "3012:3000"
+    env_file: .env
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: postgres:16-alpine
+    container_name: grq-db
+    restart: unless-stopped
+    # No host port on purpose — host 5432 belongs to haymaker's postgres.
+    environment:
+      POSTGRES_DB: grq
+      POSTGRES_USER: grq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - grq-db-data:/var/lib/postgresql/data
+
+volumes:
+  grq-db-data:
