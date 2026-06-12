@@ -8,7 +8,8 @@ detail: what each phase actually contains, what shipped, and exact exit criteria
 | 0 | Skeleton | ✅ shipped 2026-06-11 | no |
 | 1 | Mock fund | ✅ shipped 2026-06-11 | no |
 | 2 | Sim live-fire (the agent) | ✅ shipped 2026-06-12 — **soaking** | no |
-| 3 | IBKR paper | blocked on account opening | **yes** |
+| 2.5 | Quality-of-life builds (parallel with the soak) | planned 2026-06-12 | no |
+| 3 | IBKR paper | blocked on account opening (Cam & Graham both applied 2026-06-12) | **yes** |
 | 4 | Live ($5,000) | gated on soak | yes |
 | 5 | Later | backlog | yes |
 
@@ -74,6 +75,62 @@ The agent arrives. Scope:
 Exit: sim trading daily on its own; a week of reports worth reading; kill-switch drill passed
 under the agent; weekly tune-up cadence established with Cam & Graham. Sim clock starts
 counting toward the soak.
+
+## Phase 2.5 — Quality-of-life builds (planned 2026-06-12, run alongside the soak)
+
+None of these touch the order path, so they're safe to ship while the soak clock runs.
+Recommended order: **a → b → c → d** (b includes e as part of the same UI pass).
+
+### 2.5a — Nightly database backup (ops, first — it's a real gap)
+The fund's entire memory (journal, trades, NAV history, soak evidence) lives in one Docker
+volume. Build: `scripts/backup-db.sh` — `docker exec grq-db pg_dump | gzip` to
+`~/grq-backups/grq-YYYY-MM-DD.sql.gz`, plus a chmod-600 copy of `.env` (it's not in git by
+design); 14-day retention; cron `/etc/cron.d/grq-backup` at 4:30 AM (before the 5 AM docker
+prune); log to `/var/log/grq-backup.log`; **on failure, ping the Discord webhook**. Restore
+procedure documented in OPERATIONS.md and tested once against a scratch database. Offsite
+copies = future item.
+
+### 2.5b — Light & dark mode, per-member defaults
+The household split: **Graham wants dark, Cam wants light** — and the app knows who's signed
+in, so the theme *defaults by member* (`lib/users.ts` gains a `theme` field: Cam → light,
+Graham → dark) with a NavBar toggle whose override persists in a cookie. Implementation:
+refactor `globals.css` to semantic tokens (bg, surface, border, three text tones, accent)
+with a `[data-theme="light"]` override block; `<html data-theme>` set server-side from
+cookie-else-member-default (no flash); sweep components off hardcoded `teal-x/alpha` +
+`#060d0c` classes onto tokens. Light mode is a real design pass (warm white, teal-700
+accents) — not inverted colors. Non-negotiables in both themes: kill-switch red reads as
+red; P&L green/red contrast passes squint-test.
+
+### 2.5c — Agent chat (the big one)
+Multi-turn chat at `/chat` for Cam & Graham: discuss stocks, ask financial questions,
+interrogate decisions ("defend the ENB hold"). Architecture: a small **chat server in the
+agent image** (`agent/chat-server.ts`, second container from `Dockerfile.agent`, internal
+port — the SDK and Max token already live there; web is alpine and SDK wants glibc); web
+proxies `/api/chat` with SSE streaming. History in a `ChatMessage` table (at, email, role,
+content), last N turns fed to each session alongside the fund context block.
+**Hard rule (already in the backlog): chat gets read-only tools** — portfolio, quotes,
+journal, watchlist, web search. No `propose_order`, no `write_journal`. A persuasive chat
+can never become a trading backdoor; if chat surfaces a good idea, a human says it to the
+agent's morning plan via the tune-up, or we add a "suggest to agent" handoff later.
+Note: chat shares the Max rate windows with trading sessions — trading has priority;
+chat may get a "the trader is mid-session, give it a minute" response.
+
+### 2.5d — Tier-1 history + signals v1 (Graham's layer begins)
+Daily OHLCV bars from the same crumb-free Yahoo chart endpoint (it already returns series):
+`Bar` table (symbol, date, OHLC cents, volume), 1-year backfill + nightly after-close upsert
+job in the orchestrator. Then `agent/signals.ts` v1: SMA 20/50/200 + crossover state,
+RSI(14), MACD(12/26/9), 20-day realized vol → per family `{signal: BUY|SELL|HOLD,
+confidence, rationale}` via a new `get_signals` tool, injected into morning context for
+holdings + watchlist. Signal families enter `sources[]` **on probation** like any source —
+retros grade them, the scoreboard decides if TA earns a seat. Signals advise → agent
+decides → gate disposes (D11 intact).
+
+### 2.5e — Wealth-aware greetings (dessert, ships with 2.5b's UI pass)
+`lib/greetings.ts`: deterministic pick (seeded by date+member, so it doesn't change on
+refresh) from banded pools on total P&L %: ≥+5% escalating flattery ("Welcome back, oh
+prosperous one."), +1–5% cheerful, ±1% deadpan neutral, −1–5% gentle ("We don't talk about
+Tuesday."), ≤−5% condolences + a pointed reminder of what XIC did. Loss jokes punch at the
+robot, never at the member.
 
 ## Phase 3 — IBKR paper (needs the account)
 
