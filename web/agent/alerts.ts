@@ -21,6 +21,12 @@ export async function alert(severity: Severity, title: string, body = ""): Promi
     console.error("alert: journal write failed", e);
   }
 
+  await sendDiscord(severity, title, body);
+}
+
+/** Discord-only delivery — for callers that handle their own journaling
+ *  (e.g. the kill-switch API route). */
+export async function sendDiscord(severity: Severity, title: string, body = ""): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL;
   if (!url) return;
   try {

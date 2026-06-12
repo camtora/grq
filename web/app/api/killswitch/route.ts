@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sessionFromRequest, displayName } from "@/lib/session";
+import { sendDiscord } from "@/agent/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,12 @@ export async function POST(req: Request) {
       },
     }),
   ]);
+
+  await sendDiscord(
+    body.engaged ? "critical" : "warning",
+    body.engaged ? `Kill switch ENGAGED by ${who}` : `Trading resumed by ${who}`,
+    body.engaged ? "All order placement is halted at the gate." : "The order gate is open again.",
+  );
 
   return NextResponse.json({ ok: true, engaged: body.engaged });
 }
