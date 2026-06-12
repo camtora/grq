@@ -22,7 +22,7 @@ export type UniverseRow = {
 
 export const BENCHMARK = "XIC";
 export const CANDIDATE_CAP = 20;
-export const ON_DEMAND_RESEARCH_PER_DAY = 5;
+export const ON_DEMAND_RESEARCH_PER_DAY = 10; // sized for Cam's Max 20x (was 5)
 export const ROTATION_DOSSIERS_PER_DAY = 3;
 
 let cache: { at: number; rows: UniverseRow[] } | null = null;

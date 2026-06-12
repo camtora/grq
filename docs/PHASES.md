@@ -252,7 +252,7 @@ Tiered instead, same outcome with sane economics:
 | **Dossier rotation** | every tracked symbol gets a deep, symbol-tagged research dossier | ~3/day rotating (oldest-first) → full universe refresh ≈ every 2–3 weeks | bounded |
 | Event-triggered dossiers | big movers, signal flips, (later) earnings | as they fire, within the daily budget | bounded |
 | Holdings + watchlist | deep attention | every morning session (already live) | existing |
-| **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; daily cap (~5) shared between members | bounded |
+| **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; daily cap **10** shared between members (raised from 5 for Cam's Max 20x, 2026-06-12) | bounded |
 
 - **Dossier** = a structured symbol-tagged RESEARCH entry ("Dossier — RY — date"): business
   snapshot, recent news, signals read, bull/bear case, thesis-worthiness, risks, sources.
