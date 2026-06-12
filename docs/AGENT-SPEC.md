@@ -44,6 +44,37 @@ they meet in the database (orders, journal, reports, settings).
   **self-curates** — source attribution (below) feeds weekly hit-rate grading, and the agent
   proposes adds/drops like any other strategy tweak. Yahoo headline endpoints remain the
   cheap intraday news check.
+- **Earnings awareness** (Graham, 2026-06-12): the orchestrator tracks the earnings
+  calendar for holdings + watchlist; the 9:00 session before a holding's earnings day
+  reviews the setup, and the first session after results gets a transcript/coverage
+  summary (web search) — summarized into the journal so the retro can cite it.
+
+## Signals layer (Graham's proposal 2026-06-12 — Phase 2.5 candidate)
+
+Deterministic signal generation as **agent inputs, never autonomous deciders** (D11 chain
+stays intact: signals advise → agent decides → gate disposes).
+
+- Compute per-symbol technicals from yahoo-finance2 historical OHLC: moving-average
+  crossovers, RSI, MACD, realized volatility — then sentiment scores distilled from the
+  research sweep; ML forecasts / factor rankings are later-if-ever.
+- **Prediction models** (Graham 2026-06-12: XGBoost, Random Forest, LSTM, Transformers):
+  filed here behind the same `get_signals` interface, deliberately last. Classical ML
+  forecasting is a research project of its own — feature engineering, training data,
+  leakage/overfitting risk — and a $5k fund earns simple signals first. If ever built:
+  tree models (XGBoost/RF) on engineered features before any deep nets, validated
+  walk-forward on the sim before the agent may even *see* their output.
+- **LLM uses** (Graham's same list): news analysis, sentiment scoring, and trade
+  explanation are already core spec (research sweep, sentiment family, thesis/journal);
+  earnings call summaries are added to the research section below.
+- Output shape per signal family: `{ signal: BUY | SELL | HOLD, confidence, rationale }`,
+  exposed to sessions as a `get_signals(symbol)` tool.
+- **Signal families are sources**: theses that lean on a signal record it in `sources[]`,
+  and retros grade signal hit-rates exactly like news sources — so the fund learns which
+  indicators actually work for it instead of cargo-culting TA.
+- The orchestrator may use signal thresholds as wake triggers (e.g. RSI extremes on a
+  holding), keeping LLM invocations cheap.
+- Needs a historical-bars cache before any of this; start with MA/RSI/MACD/vol on the
+  universe only.
 
 ## Sessions (Claude Agent SDK, on the Max token)
 
@@ -125,6 +156,22 @@ doesn't raise ROI %) — advisory only.
 - Kill switch / daily pause: checked at validator AND engine; UI banner via NavBar dot.
 - `/api/health` gains `{agent: {alive, lastTick, lastSession, paused, killSwitch}}` —
   registered with the infra status dashboard in Phase 3.
+
+## Alerting (required — Cam, 2026-06-12)
+
+Single chokepoint (`agent/alerts.ts`): anything that journals `SYSTEM` at warning level or
+above also fires an alert. Channels: **Discord webhook first** (house standard — infra
+alerting already lives there); later PWA push (pairs with the mobile backlog item) and/or
+email digest.
+
+| Severity | Events | Delivery |
+|---|---|---|
+| Info | order fills · EOD report posted · weekly report posted | Discord |
+| Warning | guardrail rejection · daily-loss pause engaged · quote source stale > 15 min · agent restart | Discord + journal |
+| Critical | kill switch engaged · drawdown kill triggered · agent down / restart loop · (Phase 3) IBKR session lost while holding positions | Discord @mention + `/api/health` agent field (infra monitoring picks it up) |
+
+Alert fatigue is a failure mode: info-level is digestible by design (a few/day), and
+anything that pages a human must be actionable.
 
 ## Build order (suggested)
 
