@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
+import { greeting } from "@/lib/greetings";
 import { getPortfolio, getNavHistory } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
@@ -26,7 +27,9 @@ export default async function Overview() {
     <main>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-teal-50">Welcome back, {name}.</h1>
+          <h1 className="text-3xl font-semibold text-teal-50">
+            {greeting(name, pf.totalPnlCents, pf.contributionsCents)}
+          </h1>
           <p className="mt-1 text-sm text-teal-200/50">
             {name} &amp; {other}&rsquo;s autonomous fund · live-fire sim on real delayed quotes
           </p>

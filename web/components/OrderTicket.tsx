@@ -51,7 +51,7 @@ export default function OrderTicket({ symbols }: { symbols: string[] }) {
   }
 
   const sel =
-    "rounded-lg border border-teal-400/20 bg-[#0a1413] px-2.5 py-2 text-sm text-teal-50 outline-none";
+    "rounded-lg border border-teal-400/20 bg-(--field-bg) px-2.5 py-2 text-sm text-teal-50 outline-none";
 
   return (
     <div className="rounded-2xl border border-dashed border-teal-400/20 bg-teal-400/[0.02] p-5">

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import ThemeToggle from "./ThemeToggle";
 
 const LINKS = [
   { href: "/", label: "Overview" },
   { href: "/portfolio", label: "Portfolio" },
+  { href: "/stocks", label: "Stocks" },
   { href: "/activity", label: "Activity" },
   { href: "/journal", label: "Journal" },
   { href: "/reports", label: "Reports" },
@@ -16,14 +18,16 @@ export default function NavBar({
   name,
   killSwitch,
   broker,
+  theme,
 }: {
   name: string;
   killSwitch: boolean;
   broker: string;
+  theme: "light" | "dark";
 }) {
   const pathname = usePathname();
   return (
-    <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-[#060d0c]/90 backdrop-blur">
+    <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-(--nav-bg) backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
         <Link href="/" className="flex items-baseline gap-2">
           <span className="bg-gradient-to-r from-teal-300 to-teal-500 bg-clip-text text-xl font-black tracking-tight text-transparent">
@@ -66,6 +70,7 @@ export default function NavBar({
             {killSwitch ? "HALTED" : "OK"}
           </span>
           <span className="text-teal-200/40">{name}</span>
+          <ThemeToggle current={theme} />
         </div>
       </div>
     </nav>

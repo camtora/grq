@@ -1,13 +1,56 @@
 @import "tailwindcss";
 
+/* ---------- Dark (default — Graham's pick) ---------- */
 :root {
   color-scheme: dark;
+  --nav-bg: rgba(6, 13, 12, 0.9);
+  --field-bg: #0a1413;
+  --spark-up: #2dd4bf;
+  --spark-down: #f87171;
+  --body-bg: #060d0c;
+  --body-fg: #e7f5f2;
+  --glow-a: rgba(20, 184, 166, 0.08);
+  --glow-b: rgba(20, 184, 166, 0.05);
+}
+
+/* ---------- Light (Cam's pick) ----------
+   Tailwind v4 utilities resolve to var(--color-*), so redefining the ramps
+   here re-skins every component. The teal scale flips direction: teal-50
+   (bright text on dark) becomes deep ink; teal-400 (accent) darkens so
+   alpha overlays read as soft tints on warm white. */
+html[data-theme="light"] {
+  color-scheme: light;
+  --nav-bg: rgba(244, 250, 248, 0.92);
+  --field-bg: #ffffff;
+  --spark-up: #0d9488;
+  --spark-down: #dc2626;
+  --body-bg: #f4faf8;
+  --body-fg: #0c2b26;
+  --glow-a: rgba(13, 148, 136, 0.07);
+  --glow-b: rgba(13, 148, 136, 0.05);
+
+  --color-teal-50: #0f3d36;
+  --color-teal-100: #14524a;
+  --color-teal-200: #11665b;
+  --color-teal-300: #0d9488;
+  --color-teal-400: #0f766e;
+  --color-teal-500: #134e4a;
+  --color-teal-950: #ecfdf8;
+
+  --color-red-200: #7f1d1d;
+  --color-red-300: #991b1b;
+  --color-red-400: #dc2626;
+
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+
+  --color-amber-300: #b45309;
 }
 
 body {
-  background: #060d0c;
+  background: var(--body-bg);
   background-image:
-    radial-gradient(60rem 30rem at 80% -10%, rgba(20, 184, 166, 0.08), transparent),
-    radial-gradient(40rem 20rem at -10% 110%, rgba(20, 184, 166, 0.05), transparent);
-  color: #e7f5f2;
+    radial-gradient(60rem 30rem at 80% -10%, var(--glow-a), transparent),
+    radial-gradient(40rem 20rem at -10% 110%, var(--glow-b), transparent);
+  color: var(--body-fg);
 }

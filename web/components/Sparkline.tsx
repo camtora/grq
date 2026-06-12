@@ -20,7 +20,7 @@ export default function Sparkline({
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const up = values[values.length - 1] >= values[0];
-  const stroke = up ? "#2dd4bf" : "#f87171";
+  const stroke = up ? "var(--spark-up)" : "var(--spark-down)";
   const last = pts[pts.length - 1].split(",");
 
   return (

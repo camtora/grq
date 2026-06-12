@@ -1,11 +1,12 @@
-export type GrqUser = { name: string; role: "admin" };
+export type GrqUser = { name: string; role: "admin"; theme: "light" | "dark" };
 
 // The fund's member list. Both members are admins — equal access, both hold
 // the kill switch (PROJECT_PLAN.md §10.3). GRQ_ALLOWED_EMAILS in .env extends
 // this list without a rebuild (extra emails get no display name).
+// Theme defaults settle the household dispute: Cam light, Graham dark.
 export const USERS: Record<string, GrqUser> = {
-  "cameron.tora@gmail.com": { name: "Cam", role: "admin" },
-  "g.j.appleby@gmail.com": { name: "Graham", role: "admin" },
+  "cameron.tora@gmail.com": { name: "Cam", role: "admin", theme: "light" },
+  "g.j.appleby@gmail.com": { name: "Graham", role: "admin", theme: "dark" },
 };
 
 function envEmails(): string[] {
