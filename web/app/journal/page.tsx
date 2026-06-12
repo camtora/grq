@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import type { JournalKind } from "@prisma/client";
 import { fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
-import Md from "@/components/Md";
+import CollapsibleMd from "@/components/CollapsibleMd";
 import Scoreboard from "@/components/Scoreboard";
 import { getScoreboard } from "@/lib/scoreboard";
 
@@ -78,7 +78,7 @@ export default async function Journal({
                 </span>
               </div>
               <div className="mt-3">
-                <Md text={j.body} />
+                <CollapsibleMd text={j.body} />
               </div>
             </Card>
           ))}

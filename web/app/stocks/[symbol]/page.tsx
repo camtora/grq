@@ -11,6 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
+import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
@@ -151,7 +152,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <span className="text-sm font-medium text-teal-50">{currentRead.title}</span>
             <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(currentRead.at)}</span>
           </div>
-          <Md text={currentRead.body} />
+          <CollapsibleMd text={currentRead.body} />
           <SourceChips sourcesJson={currentRead.sourcesJson} />
         </Card>
       )}
@@ -177,7 +178,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   </span>
                 </div>
                 <div className="mt-2">
-                  <Md text={j.body} />
+                  <CollapsibleMd text={j.body} />
                 </div>
                 <SourceChips sourcesJson={j.sourcesJson} />
               </Card>
