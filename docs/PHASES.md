@@ -161,6 +161,51 @@ tier slots that light up as tiers get built — Tier 1 (price/signals), Tier 6 (
 dates + post-call summaries), Tier 7 (news mentions from research sessions), Tier 4
 (insider activity via SEDI) — so each new data tier has an obvious UI home the day it ships.
 
+## Phase 2.6 — Learning-loop hardening (planned 2026-06-12, build during soak)
+
+Three zero-dependency builds that make the soak itself smarter. Order: b → c → a
+(smallest/safety first, scoreboard last because it's the meatiest).
+
+### 2.6a — Source scoreboard (the DATA-SOURCES scoring system, structurally)
+
+- **`SourceGrade` model**: `{ id, at, source, symbol?, journalId (the retro that issued it),
+  grade (-1|0|+1), note? }`. Sources normalized lowercase; signal families canonical as
+  `signal:rsi` etc.
+- **New agent tool `grade_sources`** — called during retros/weekly review: writes grades
+  atomically, linked to the RETRO entry. Retro + weekly prompts updated to *require* grading
+  every source the resolved thesis cited.
+- **`getScoreboard()`** (shared lib): per source — grades n, hits, misses, hit-rate
+  (min 3 grades to rank), last-graded. 
+- **Feedback loop**: `buildContext` gains a scoreboard block — top 5 trusted, bottom 3
+  "downweight these" — so grading yesterday changes behaviour today. Weekly review gets the
+  full table and proposes source adds/drops from evidence.
+- **UI**: scoreboard card at the top of /journal (the learning loop's home) + the
+  per-symbol slice on stock pages (closes the pending 2.5f item).
+
+### 2.6b — Superficial-loss guard (§6 promise, kept)
+
+- **Rule enforced**: after selling a symbol at a realized loss, the agent may not rebuy it
+  for **30 days** — validator rejects the BUY with the CRA explanation. (v1 enforces the
+  rebuy-after-loss leg — the one a swing bot actually trips; the acquired-30-days-before leg
+  is documented as out of scope until real money.)
+- Loss-realizing SELL verdicts append the warning: "superficial-loss window opens — no
+  rebuy of X until <date>". `buildContext` lists open windows so the agent plans around
+  them instead of discovering rejections.
+- Binds the agent path; members' manual sim orders are exempt (it's their money and their
+  tax form — but the ticket shows the warning).
+
+### 2.6c — Member directives: pin & no-fly list
+
+- **`SymbolDirective` model**: `{ symbol, directive: PINNED | BLOCKED, by, note?, at }`.
+- **BLOCKED** = the agent may never BUY it (sells allowed — exits must never be trapped).
+  Validator-enforced with the member's note in the rejection. Binds the agent only;
+  members can still trade it manually.
+- **PINNED** = always on the watchlist; the agent's `set_watchlist` cannot remove it.
+- **UI**: Pin / Block buttons on each stock page header; 📌/🚫 markers on /stocks; every
+  directive change is journaled (SYSTEM) and Discord-alerted — you two see each other's
+  steering.
+- **Context**: directives block in every session ("BLOCKED: SHOP — Cam: 'too spicy'").
+
 ## Phase 3 — IBKR paper (needs the account)
 
 Human prerequisites (Cam, in Client Portal once approved): enable paper account · create

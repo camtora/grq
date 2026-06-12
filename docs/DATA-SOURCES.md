@@ -21,8 +21,8 @@ loop). The scoring system closes the loop:
    the morning routine. Adds/drops of whole tiers are proposed in weekly reviews and
    approved by humans, like any strategy change.
 
-Storage: derivable today from `JournalEntry.sourcesJson` + retro bodies; a structured
-`SourceGrade` table is the Phase 2.5 upgrade if parsing proves annoying. Signal families
+Storage: structured `SourceGrade` table + `grade_sources` agent tool — **build plan lives in
+`docs/PHASES.md` → Phase 2.6a** (planned 2026-06-12). Signal families
 from the signals layer enter the same scoreboard — an RSI signal competes for trust with
 the Wall Street Journal on equal terms.
 
