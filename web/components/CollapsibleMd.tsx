@@ -5,11 +5,21 @@ import Md from "./Md";
 export default function CollapsibleMd({
   text,
   threshold = 500,
+  children,
 }: {
   text: string;
   threshold?: number;
+  /** Extra content (e.g. source chips) that should only show when expanded. */
+  children?: React.ReactNode;
 }) {
-  if (text.length <= threshold) return <Md text={text} />;
+  if (text.length <= threshold) {
+    return (
+      <>
+        <Md text={text} />
+        {children}
+      </>
+    );
+  }
 
   const preview = text
     .replace(/[#*`_]/g, "")
@@ -35,6 +45,7 @@ export default function CollapsibleMd({
       </summary>
       <div className="mt-3">
         <Md text={text} />
+        {children}
       </div>
     </details>
   );

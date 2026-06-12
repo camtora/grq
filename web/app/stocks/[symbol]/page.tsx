@@ -152,8 +152,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <span className="text-sm font-medium text-teal-50">{currentRead.title}</span>
             <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(currentRead.at)}</span>
           </div>
-          <CollapsibleMd text={currentRead.body} />
-          <SourceChips sourcesJson={currentRead.sourcesJson} />
+          <CollapsibleMd text={currentRead.body}>
+            <SourceChips sourcesJson={currentRead.sourcesJson} />
+          </CollapsibleMd>
         </Card>
       )}
 
@@ -178,9 +179,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   </span>
                 </div>
                 <div className="mt-2">
-                  <CollapsibleMd text={j.body} />
+                  <CollapsibleMd text={j.body}>
+                    <SourceChips sourcesJson={j.sourcesJson} />
+                  </CollapsibleMd>
                 </div>
-                <SourceChips sourcesJson={j.sourcesJson} />
               </Card>
             ))
           )}
