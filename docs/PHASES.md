@@ -249,10 +249,10 @@ Tiered instead, same outcome with sane economics:
 | Layer | Coverage | Cadence | Cost |
 |---|---|---|---|
 | Signals + bars + quotes | ALL tracked symbols (ACTIVE + CANDIDATE) | daily (nightly job) | $0, deterministic |
-| **Dossier rotation** | every tracked symbol gets a deep, symbol-tagged research dossier | ~3/day rotating (oldest-first) → full universe refresh ≈ every 2–3 weeks | bounded |
+| **Weekly full refresh** | every tracked symbol gets a fresh deep dossier | Saturdays from 02:00 ET, whole universe overnight — all fresh for Sunday's 10:00 review (replaced 3/day rotation, 2026-06-12) | bounded |
 | Event-triggered dossiers | big movers, signal flips, (later) earnings | as they fire, within the daily budget | bounded |
 | Holdings + watchlist | deep attention | every morning session (already live) | existing |
-| **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; daily cap **10** shared between members (raised from 5 for Cam's Max 20x, 2026-06-12) | bounded |
+| **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; **30/day** shared between members (Max 20x); hard safety ceiling 60 dossiers/day all sources | bounded |
 
 - **Dossier** = a structured symbol-tagged RESEARCH entry ("Dossier — RY — date"): business
   snapshot, recent news, signals read, bull/bear case, thesis-worthiness, risks, sources.

@@ -22,8 +22,12 @@ export type UniverseRow = {
 
 export const BENCHMARK = "XIC";
 export const CANDIDATE_CAP = 20;
-export const ON_DEMAND_RESEARCH_PER_DAY = 10; // sized for Cam's Max 20x (was 5)
-export const ROTATION_DOSSIERS_PER_DAY = 3;
+export const ON_DEMAND_RESEARCH_PER_DAY = 30; // Cam's Max 20x — generous on purpose
+// Full-universe dossier refresh runs weekly: Saturday from 02:00 ET, so every
+// name is fresh before Sunday's 10:00 weekly review.
+export const WEEKLY_REFRESH_WEEKDAY = 6; // Saturday
+export const WEEKLY_REFRESH_START_MIN = 2 * 60; // 02:00 ET
+export const RESEARCH_DAILY_CEILING = 60; // hard safety stop, all sources combined
 
 let cache: { at: number; rows: UniverseRow[] } | null = null;
 const TTL_MS = 60_000;

@@ -79,8 +79,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         {entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
         {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">watchlist</Chip>}
-        {directive?.directive === "BLOCKED" && <Chip tone="red">no-fly — {directive.by}</Chip>}
-        {directive?.directive === "PINNED" && <Chip tone="teal">📌 {directive.by}</Chip>}
         {quote && (
           <span className="ml-auto flex items-baseline gap-3">
             <span className="text-2xl font-semibold tabular-nums text-teal-50">{money(quote.midCents)}</span>
@@ -89,6 +87,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </span>
           </span>
         )}
+      </div>
+
+      <div className="mt-4 mb-6 flex flex-wrap items-center gap-2">
         <UniverseActions
           symbol={symbol}
           status={entry.status}
@@ -109,8 +110,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Link>
       </div>
 
+      <section className="grid gap-6 lg:grid-cols-3">
+      <div className="space-y-6 lg:col-span-2">
+
       {position && quote && (
-        <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-4">
           <StatCard label="Held" value={`${position.qty} sh`} note={`since ${fmtWhen(position.openedAt)}`} />
           <StatCard label="Avg cost (ACB)" value={money(position.avgCostCents)} />
           <StatCard label="Market value" value={money(position.qty * quote.midCents)} />
@@ -123,7 +127,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       )}
 
       {watch?.note && (
-        <Card className="mb-6 p-4">
+        <Card className="p-4">
           <div className="flex items-baseline gap-3">
             <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
               Watchlist note
@@ -134,7 +138,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       )}
 
       {closes.length > 1 && (
-        <Card className="mb-6 p-5">
+        <Card className="p-5">
           <div className="mb-2 flex items-baseline justify-between">
             <span className="text-xs uppercase tracking-wider text-teal-200/50">Price — {closes.length} sessions</span>
             <span className="text-xs text-teal-200/40">
@@ -146,7 +150,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       )}
 
       {currentRead && (
-        <Card className="mb-6 border-teal-400/30 p-5">
+        <Card className="border-teal-400/30 p-5">
           <div className="mb-2 flex items-center gap-3">
             <Chip tone="teal">current read</Chip>
             <span className="text-sm font-medium text-teal-50">{currentRead.title}</span>
@@ -158,8 +162,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
-      <section className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
             Agent intelligence ({journal.length})
           </h2>
@@ -187,6 +190,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             ))
           )}
         </div>
+      </div>
 
         <div className="space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Trades</h2>

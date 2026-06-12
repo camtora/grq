@@ -44,7 +44,7 @@ export default function DirectiveButtons({
             : "border-teal-400/20 text-teal-200/50 hover:bg-teal-400/10"
         }`}
       >
-        📌 {isPinned ? "Pinned" : "Pin"}
+        {isPinned ? `Pinned by ${current?.by}` : "Pin"}
       </button>
       <button
         disabled={busy}
@@ -67,7 +67,7 @@ export default function DirectiveButtons({
             : "border-red-400/20 text-red-300/50 hover:bg-red-400/10"
         }`}
       >
-        🚫 {isBlocked ? "Blocked" : "Block"}
+        {isBlocked ? `Blocked by ${current?.by}` : "Block"}
       </button>
     </div>
   );

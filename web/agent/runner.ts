@@ -10,7 +10,7 @@ import { BENCHMARK } from "../lib/universe";
 import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
-import { trackedSymbols, ROTATION_DOSSIERS_PER_DAY, ON_DEMAND_RESEARCH_PER_DAY } from "../lib/universe";
+import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN, RESEARCH_DAILY_CEILING } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen, startOfEtDay } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
@@ -27,7 +27,7 @@ let lastSnapshot = 0;
 let decisionSessionsToday = 0;
 let decisionsDate = "";
 let lastBarsDay = "";
-let lastRotationDay = "";
+let lastWeeklyRefreshDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
@@ -230,16 +230,17 @@ async function tick() {
   }
 
   await maybeScheduledSessions();
-  await maybeRotationEnqueue();
+  await maybeWeeklyRefreshEnqueue();
   await processResearchQueue();
 }
 
-// Daily dossier rotation (17:00 ET): the oldest-researched tracked symbols
-// get queued, so every name's dossier stays ≲ 3 weeks fresh.
-async function maybeRotationEnqueue() {
+// Weekly full-universe dossier refresh: Saturday from 02:00 ET, every tracked
+// symbol gets re-researched overnight — all fresh for Sunday's 10:00 review.
+async function maybeWeeklyRefreshEnqueue() {
   const p = etParts();
-  if (p.minutesSinceMidnight < 17 * 60 || lastRotationDay === p.dateStr) return;
-  lastRotationDay = p.dateStr;
+  if (p.weekday !== WEEKLY_REFRESH_WEEKDAY || p.minutesSinceMidnight < WEEKLY_REFRESH_START_MIN) return;
+  if (lastWeeklyRefreshDay === p.dateStr) return;
+  lastWeeklyRefreshDay = p.dateStr;
   const symbols = await trackedSymbols();
   const inFlight = new Set(
     (
@@ -249,25 +250,17 @@ async function maybeRotationEnqueue() {
       })
     ).map((r) => r.symbol),
   );
-  const ages: { symbol: string; at: number }[] = [];
+  let queued = 0;
   for (const s of symbols) {
     if (inFlight.has(s)) continue;
-    const latest = await prisma.journalEntry.findFirst({
-      where: { symbol: s, kind: "RESEARCH", title: { startsWith: "Dossier —" } },
-      orderBy: { at: "desc" },
-      select: { at: true },
-    });
-    ages.push({ symbol: s, at: latest?.at.getTime() ?? 0 });
+    await prisma.researchRequest.create({ data: { symbol: s, requestedBy: "weekly-refresh" } });
+    queued++;
   }
-  ages.sort((a, b) => a.at - b.at);
-  const picks = ages.slice(0, ROTATION_DOSSIERS_PER_DAY);
-  for (const pick of picks) {
-    await prisma.researchRequest.create({ data: { symbol: pick.symbol, requestedBy: "rotation" } });
-  }
-  if (picks.length > 0) console.log(`[rotation] queued dossiers: ${picks.map((x) => x.symbol).join(", ")}`);
+  console.log(`[weekly-refresh] queued ${queued} dossiers for the Sunday review`);
+  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before Sunday's review.");
 }
 
-// Work the research queue one dossier at a time, hard daily ceiling.
+// Work the research queue one dossier at a time, hard daily safety ceiling.
 async function processResearchQueue() {
   if (sessionRunning) return;
   const next = await prisma.researchRequest.findFirst({
@@ -278,7 +271,7 @@ async function processResearchQueue() {
   const startedToday = await prisma.researchRequest.count({
     where: { status: { in: ["RUNNING", "DONE", "FAILED"] }, at: { gte: startOfEtDay() } },
   });
-  if (startedToday >= ROTATION_DOSSIERS_PER_DAY + ON_DEMAND_RESEARCH_PER_DAY) return;
+  if (startedToday >= RESEARCH_DAILY_CEILING) return;
 
   await prisma.researchRequest.update({ where: { id: next.id }, data: { status: "RUNNING" } });
   sessionRunning = true;
@@ -288,7 +281,7 @@ async function processResearchQueue() {
       where: { id: next.id },
       data: { status: "DONE", completedAt: new Date() },
     });
-    if (next.requestedBy !== "rotation") {
+    if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh") {
       await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
     }
   } catch (e) {
@@ -316,7 +309,9 @@ async function main() {
       console.error("[tick] error", e);
       await alert("warning", "Agent tick error", e instanceof Error ? e.message : String(e)).catch(() => {});
     }
-    await sleep(isMarketOpen() ? 60_000 : 5 * 60_000);
+    // Tick fast while research is queued (batch nights), otherwise relax off-hours.
+    const queuedCount = await prisma.researchRequest.count({ where: { status: "QUEUED" } }).catch(() => 0);
+    await sleep(isMarketOpen() || queuedCount > 0 ? 60_000 : 5 * 60_000);
   }
 }
 

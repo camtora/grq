@@ -56,7 +56,7 @@ export default function UniverseActions({
           title="Queue a fresh deep-research dossier (shared budget: 5/day)"
           className={`${btn} border-teal-400/30 text-teal-300 hover:bg-teal-400/10`}
         >
-          {researchInFlight ? "researching…" : "🔍 Research now"}
+          {researchInFlight ? "Researching…" : "Research now"}
         </button>
       )}
 
@@ -84,7 +84,7 @@ export default function UniverseActions({
                 }
                 className={`${btn} border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10`}
               >
-                {pendingBy === currentUser ? `⏳ awaiting other member` : "⬆ Request promotion"}
+                {pendingBy === currentUser ? "Awaiting other member" : "Request promotion"}
               </button>
             </>
           ) : (
@@ -94,7 +94,7 @@ export default function UniverseActions({
               title={`${pendingBy} requested this (${proposedTier}) — your click makes it tradeable`}
               className={`${btn} border-emerald-400/50 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20`}
             >
-              ✓ Approve → universe ({pendingBy} asked)
+              Approve — {pendingBy} asked
             </button>
           )}
           <button
@@ -116,7 +116,7 @@ export default function UniverseActions({
           }
           className={`${btn} border-red-400/20 text-red-300/60 hover:bg-red-400/10`}
         >
-          ⬇ Demote
+          Demote
         </button>
       )}
 
@@ -126,7 +126,7 @@ export default function UniverseActions({
           onClick={() => act("add")}
           className={`${btn} border-teal-400/30 text-teal-300 hover:bg-teal-400/10`}
         >
-          ↻ Re-open research
+          Re-open research
         </button>
       )}
 
