@@ -9,19 +9,19 @@ import Sparkline from "@/components/Sparkline";
 import KillSwitch from "@/components/KillSwitch";
 
 export default async function Overview() {
-  const [session, pf, history, recentJournal] = await Promise.all([
+  const [session, pf, history, recentJournal, latestPlan] = await Promise.all([
     getSession(),
     getPortfolio(),
     getNavHistory(60),
-    prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 3 }),
+    prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
+    prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
+      orderBy: { at: "desc" },
+    }),
   ]);
   const name = session?.user?.name ?? "friend";
-  const other = name === "Cam" ? "Graham" : "Cam";
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
   const feeFrac = pf.feeBudgetCentsMonth > 0 ? pf.feeSpentMonthCents / pf.feeBudgetCentsMonth : 0;
-  const topPositions = [...pf.positions]
-    .sort((a, b) => b.marketValueCents - a.marketValueCents)
-    .slice(0, 5);
 
   return (
     <main>
@@ -31,7 +31,15 @@ export default async function Overview() {
             {greeting(name, pf.totalPnlCents, pf.contributionsCents)}
           </h1>
           <p className="mt-1 text-sm text-teal-200/50">
-            {name} &amp; {other}&rsquo;s autonomous fund · live-fire sim on real delayed quotes
+            Live-fire sim on real delayed quotes
+            {latestPlan && (
+              <>
+                {" · "}
+                <Link href="/today" className="text-teal-300 hover:underline">
+                  {latestPlan.title} →
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <Chip tone={pf.killSwitch ? "red" : "teal"}>
@@ -90,41 +98,75 @@ export default async function Overview() {
         </Card>
       </section>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card className="p-5">
-          <div className="mb-3 flex items-baseline justify-between">
-            <span className="text-xs uppercase tracking-wider text-teal-200/50">Top positions</span>
-            <Link href="/portfolio" className="text-xs text-teal-300 hover:underline">
-              portfolio →
-            </Link>
+      <section className="mt-6">
+        <Card className="overflow-x-auto">
+          <div className="flex items-baseline justify-between px-5 pt-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+              Positions
+            </span>
+            <span className="text-xs text-teal-200/40">
+              {pf.quotesAsOf
+                ? `quotes delayed ~15 min · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
+                : "ACB includes commissions"}
+            </span>
           </div>
-          {topPositions.length === 0 ? (
-            <p className="text-sm text-teal-200/40">All cash — no positions yet.</p>
+          {pf.positions.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-teal-200/40">
+              All cash — the agent researches at 9:00 ET and only buys when a thesis clears
+              every guardrail. Patience is a position.
+            </p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="mt-2 w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+                  <th className="px-5 py-2">Symbol</th>
+                  <th className="px-5 py-2 text-right">Qty</th>
+                  <th className="px-5 py-2 text-right">Avg cost</th>
+                  <th className="px-5 py-2 text-right">Last</th>
+                  <th className="px-5 py-2 text-right">Market value</th>
+                  <th className="px-5 py-2 text-right">Unrealized P&L</th>
+                  <th className="px-5 py-2 text-right">Weight</th>
+                </tr>
+              </thead>
               <tbody>
-                {topPositions.map((p) => (
-                  <tr key={p.symbol} className="border-t border-teal-400/10 first:border-0">
-                    <td className="py-2 font-semibold text-teal-50">{p.symbol}</td>
-                    <td className="py-2 text-right tabular-nums text-teal-200/60">{p.qty} sh</td>
-                    <td className="py-2 text-right tabular-nums text-teal-100/80">
-                      {money(p.marketValueCents)}
+                {pf.positions.map((p) => (
+                  <tr key={p.symbol} className="border-t border-teal-400/10">
+                    <td className="px-5 py-2.5">
+                      <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
+                        {p.symbol}
+                      </Link>
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(p.marketValueCents)}</td>
+                    <td className="px-5 py-2.5 text-right">
                       <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
+                    </td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                      {pf.navCents > 0 ? pct(p.marketValueCents / pf.navCents) : "—"}
                     </td>
                   </tr>
                 ))}
+                <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
+                  <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash</td>
+                  <td className="px-5 py-2.5" colSpan={3} />
+                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cashCents)}</td>
+                  <td className="px-5 py-2.5" />
+                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                    {pf.navCents > 0 ? pct(pf.cashCents / pf.navCents) : "—"}
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}
         </Card>
+      </section>
 
+      <section className="mt-6">
         <Card className="p-5">
           <div className="mb-3 flex items-baseline justify-between">
-            <span className="text-xs uppercase tracking-wider text-teal-200/50">
-              Latest journal
-            </span>
+            <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
             <Link href="/journal" className="text-xs text-teal-300 hover:underline">
               journal →
             </Link>
@@ -132,14 +174,12 @@ export default async function Overview() {
           {recentJournal.length === 0 ? (
             <p className="text-sm text-teal-200/40">Quiet so far.</p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="grid gap-3 md:grid-cols-2">
               {recentJournal.map((j) => (
-                <li key={j.id} className="border-t border-teal-400/10 pt-3 first:border-0 first:pt-0">
-                  <div className="flex items-center gap-2">
-                    <Chip tone="dim">{j.kind}</Chip>
-                    <span className="truncate text-sm font-medium text-teal-50">{j.title}</span>
-                  </div>
-                  <div className="mt-1 text-xs text-teal-200/40">{fmtWhen(j.at)}</div>
+                <li key={j.id} className="flex items-center gap-2">
+                  <Chip tone="dim">{j.kind}</Chip>
+                  <span className="truncate text-sm font-medium text-teal-50">{j.title}</span>
+                  <span className="ml-auto shrink-0 text-xs text-teal-200/40">{fmtWhen(j.at)}</span>
                 </li>
               ))}
             </ul>

@@ -4,6 +4,7 @@ import { getBroker } from "@/lib/broker";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import SettingsForm from "@/components/SettingsForm";
 import KillSwitch from "@/components/KillSwitch";
+import OrderTicket from "@/components/OrderTicket";
 
 const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
@@ -84,6 +85,8 @@ export default async function Settings() {
             </dl>
           </Card>
         </div>
+
+        <OrderTicket symbols={symbols} />
 
         <Card className="p-5">
           <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
