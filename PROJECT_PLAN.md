@@ -431,6 +431,9 @@ week — the soak is the deliberate bottleneck and it's non-negotiable.
 | Added | Item |
 |---|---|
 | 2026-06-11 (Cam) | **Wealth-aware greetings** — the welcome line scales with the fund's fortunes: baseline "Welcome back, Cam.", escalating flattery as P&L climbs (*"Welcome back, oh prosperous one."*), gentle condolences in drawdowns (*"Welcome back, Cam. We don't talk about Tuesday."*). Implement off total P&L % in the overview greeting. |
+| 2026-06-11 (Cam) | **Agent chat** — a multi-turn chat window where Cam or Graham talk with the fund's agent: discuss specific stocks, ask financial questions, interrogate its reasoning ("why are we still holding ENB?"). Grounded in the fund's own journal/lessons/portfolio plus web search. Natural landing: right after Phase 2 ships (it reuses the agent's sessions and tools). **Hard rule: chat can never place orders** — it can propose an idea, which goes through the same human + guardrail path as everything else. |
+| 2026-06-11 (Cam) | **Knowledge base** — camwiki-style browsable KB grown from the agent's research notes, lessons, and source digests. Note: the journal already *is* the proto-KB (searchable, typed, versioned); this item is about giving it a wiki-like browse/organize layer once there's enough content to be worth organizing. Exploratory — revisit after a few weeks of Phase 2 output. |
+| 2026-06-11 (Cam) | ~~Curated research sources + per-decision source attribution~~ — **promoted into the Phase 2 spec** (`docs/AGENT-SPEC.md`: research sources + learning loop). Seed list: BNN Bloomberg, CBC, MSNBC, NYT, Toronto Star, WSJ, plus a standing macro sweep (gold, oil, CAD/USD, rates). The agent self-curates the list over time; every decision records which sources fed it, and retros grade whether those sources earned their keep. |
 
 ---
 

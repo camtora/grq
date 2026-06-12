@@ -36,8 +36,14 @@ they meet in the database (orders, journal, reports, settings).
   Delayed ~15 min — fine for swing decisions (D12); the sim measures decision quality.
 - Universe v2: replace the 10 synthetic names with a screened TSX list (price ≥ $2, liquid
   large/mid caps + broad ETFs per risk dial); store as config, not DB.
-- Research: the agent's web search tool (Agent SDK built-in) during 9:00 and weekly
-  sessions; Yahoo headline endpoints as a cheap intraday news check.
+- Research sources (Cam, 2026-06-11): the 9:00 session works through a **seed source list**
+  — BNN Bloomberg, CBC Business, MSNBC/CNBC, NYT Business, Toronto Star Business, WSJ —
+  plus a standing **macro sweep**: gold, oil, CAD/USD, rates, and anything geopolitical
+  that moves the TSX. Paywalled outlets (WSJ/NYT) are consumed via search-surfaced
+  headlines/summaries. The list lives in config (`agent/sources.ts`), not gospel: the agent
+  **self-curates** — source attribution (below) feeds weekly hit-rate grading, and the agent
+  proposes adds/drops like any other strategy tweak. Yahoo headline endpoints remain the
+  cheap intraday news check.
 
 ## Sessions (Claude Agent SDK, on the Max token)
 
@@ -55,8 +61,13 @@ lives in the journal (that's deliberate: restartable, auditable).
 **Tools exposed to the model:**
 `get_portfolio` · `get_quotes(symbols)` · `get_journal(filter)` · `write_journal(entry)` ·
 `web_search` · `propose_order({symbol, side, qty, type, limit?, thesis, target, stop,
-horizon, invalidation, confidence})` → returns the validator verdict (filled / pending /
-rejected-with-reason — rejections feed back into the model's context so it learns the rails).
+horizon, invalidation, confidence, sources[]})` → returns the validator verdict (filled /
+pending / rejected-with-reason — rejections feed back into the model's context so it learns
+the rails).
+
+**Future (backlog, after Phase 2 core):** the same session/tool machinery powers the
+**agent chat** — a multi-turn window for Cam & Graham (stocks, financial questions, "defend
+this position"). Chat sessions get the read tools only: chat can *never* place orders.
 
 ## Guardrail validator (wraps the engine gate; §6 of PROJECT_PLAN)
 
@@ -78,9 +89,14 @@ Risk-dial parameter table lives in code as config (`agent/policy.ts`), displayed
 ## Learning loop (D13 — first-class)
 
 1. **Thesis at entry** (journal `DECISION`, then `TRADE` on fill): why, expected move,
-   horizon date, invalidation condition, confidence %. `propose_order` *requires* these.
+   horizon date, invalidation condition, confidence %, **and the sources consulted** —
+   every thesis lists which articles/sources/data fed it. `propose_order` *requires* all of
+   these (a thesis with no sources is rejected as unsupported).
 2. **Retro at exit** (journal `RETRO`): outcome vs thesis; explicitly classify
-   right-reasoning/wrong-outcome and wrong-reasoning/right-outcome (luck flagged as luck).
+   right-reasoning/wrong-outcome and wrong-reasoning/right-outcome (luck flagged as luck);
+   **grade the sources** — did the inputs that drove this decision point the right way?
+   Source hit-rates aggregate in the weekly review, which is how the source list curates
+   itself (Cam, 2026-06-11: "document what sources lead to a decision as part of the retro").
 3. **Lessons** (journal `LESSON`): durable patterns distilled during weekly review;
    the latest N lessons are injected into every decision session's context.
 4. **Weekly self-review** (Sunday): attribution, open-thesis grades, proposed strategy
