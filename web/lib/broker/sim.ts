@@ -1,5 +1,6 @@
 import { prisma } from "../db";
-import { getQuoteSource } from "./quotes";
+import { getQuote, getQuotes, isHardStale } from "./quotes";
+import { universeSymbols, BENCHMARK } from "../universe";
 import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
@@ -23,12 +24,32 @@ async function feeSpendThisMonthCents(): Promise<number> {
   return agg._sum.commissionCents ?? 0;
 }
 
-export async function writeNavSnapshot(note?: string): Promise<{ navCents: number; cashCents: number; positionsCents: number }> {
+/** What the same contributions would be worth had they bought XIC instead. */
+export async function benchmarkValueCents(): Promise<number | null> {
+  const [contribs, xic] = await Promise.all([
+    prisma.contribution.findMany(),
+    getQuote(BENCHMARK),
+  ]);
+  if (!xic || contribs.length === 0) return null;
+  let total = 0;
+  for (const c of contribs) {
+    if (c.xicPriceCents && c.xicPriceCents > 0) {
+      total += Math.round((c.amountCents * xic.midCents) / c.xicPriceCents);
+    } else {
+      total += c.amountCents; // unknowable anchor — count at par
+    }
+  }
+  return total;
+}
+
+export async function writeNavSnapshot(
+  note?: string,
+): Promise<{ navCents: number; cashCents: number; positionsCents: number }> {
   const [account, positions] = await Promise.all([
     prisma.account.findUnique({ where: { id: 1 } }),
     prisma.position.findMany(),
   ]);
-  const quotes = getQuoteSource();
+  const quotes = await getQuotes(positions.map((p) => p.symbol));
   let positionsCents = 0;
   for (const p of positions) {
     const q = quotes.get(p.symbol);
@@ -36,7 +57,10 @@ export async function writeNavSnapshot(note?: string): Promise<{ navCents: numbe
   }
   const cashCents = account?.cashCents ?? 0;
   const navCents = cashCents + positionsCents;
-  await prisma.navSnapshot.create({ data: { navCents, cashCents, positionsCents, note } });
+  const benchmarkCents = await benchmarkValueCents().catch(() => null);
+  await prisma.navSnapshot.create({
+    data: { navCents, cashCents, positionsCents, benchmarkCents, note },
+  });
   return { navCents, cashCents, positionsCents };
 }
 
@@ -44,17 +68,18 @@ export class SimBroker implements BrokerAdapter {
   readonly kind = "sim";
 
   async getQuote(symbol: string): Promise<Quote> {
-    const q = getQuoteSource().get(symbol);
-    if (!q) throw new Error(`Unknown symbol: ${symbol}`);
+    const q = await getQuote(symbol);
+    if (!q) throw new Error(`No quote for symbol: ${symbol}`);
     return q;
   }
 
   async getQuotes(symbols: string[]): Promise<Quote[]> {
-    return Promise.all(symbols.map((s) => this.getQuote(s)));
+    const m = await getQuotes(symbols);
+    return symbols.map((s) => m.get(s.toUpperCase())).filter((q): q is Quote => !!q);
   }
 
   async listSymbols(): Promise<string[]> {
-    return getQuoteSource().symbols();
+    return universeSymbols();
   }
 
   async placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
@@ -80,8 +105,13 @@ export class SimBroker implements BrokerAdapter {
     if (settings?.killSwitch) return reject("Kill switch is engaged — all trading halted.");
     if (!Number.isInteger(input.qty) || input.qty <= 0) return reject("Quantity must be a positive whole number of shares.");
 
-    const quote = getQuoteSource().get(input.symbol);
-    if (!quote) return reject(`Unknown symbol: ${input.symbol.toUpperCase()}`);
+    const quote = await getQuote(input.symbol);
+    if (!quote) return reject(`No quote available for ${input.symbol.toUpperCase()}.`);
+    if (isHardStale(quote)) {
+      return reject(
+        `Quote for ${input.symbol.toUpperCase()} is stale (as of ${quote.at.toISOString()}) — refusing to fill blind.`,
+      );
+    }
 
     // Marketable? MARKET always; LIMIT only if it crosses the spread now.
     let fillPriceCents: number | null = null;
@@ -96,7 +126,7 @@ export class SimBroker implements BrokerAdapter {
     const symbol = input.symbol.toUpperCase();
 
     if (fillPriceCents === null) {
-      // Resting limit order. Phase 2's orchestrator sweeps these on quote ticks.
+      // Resting limit order — the agent's tick loop sweeps these on fresh quotes.
       const order = await prisma.order.create({
         data: {
           symbol,
@@ -112,18 +142,53 @@ export class SimBroker implements BrokerAdapter {
       return { ok: true, orderId: order.id, status: "PENDING" };
     }
 
-    const commissionCents = ibkrFixedCommissionCents(input.qty, fillPriceCents);
+    return this.fillNow(input, symbol, fillPriceCents, settings?.agentVersion);
+  }
 
-    // Sufficiency + fee budget
+  /** Fill a marketable order (or a swept resting order) at a known price. */
+  async fillNow(
+    input: PlaceOrderInput,
+    symbol: string,
+    price: number,
+    agentVersion?: string,
+    existingOrderId?: number,
+  ): Promise<PlaceOrderResult> {
+    const reject = async (rejectReason: string): Promise<PlaceOrderResult> => {
+      if (existingOrderId) {
+        await prisma.order.update({
+          where: { id: existingOrderId },
+          data: { status: "REJECTED", rejectReason },
+        });
+        return { ok: false, orderId: existingOrderId, rejectReason };
+      }
+      const order = await prisma.order.create({
+        data: {
+          symbol,
+          side: input.side,
+          type: input.type,
+          qty: input.qty,
+          limitPriceCents: input.limitPriceCents,
+          status: "REJECTED",
+          rejectReason,
+          placedBy: input.placedBy,
+          reason: input.reason,
+        },
+      });
+      return { ok: false, orderId: order.id, rejectReason };
+    };
+
+    const commissionCents = ibkrFixedCommissionCents(input.qty, price);
+
     const account = await prisma.account.findUnique({ where: { id: 1 } });
     const cash = account?.cashCents ?? 0;
     if (input.side === "BUY") {
-      const cost = input.qty * fillPriceCents + commissionCents;
+      const cost = input.qty * price + commissionCents;
       if (cost > cash) return reject(`Insufficient cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
     } else {
       const pos = await prisma.position.findUnique({ where: { symbol } });
       if (!pos || pos.qty < input.qty) return reject(`Insufficient shares: selling ${input.qty} ${symbol}, hold ${pos?.qty ?? 0} (no shorting — guardrail).`);
     }
+    const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     const budget = settings?.feeBudgetCentsMonth ?? 2000;
     const spent = await feeSpendThisMonthCents();
     if (spent + commissionCents > budget) {
@@ -131,23 +196,27 @@ export class SimBroker implements BrokerAdapter {
     }
 
     // ---- Execute atomically ----
-    const price = fillPriceCents;
     const result = await prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          symbol,
-          side: input.side,
-          type: input.type,
-          qty: input.qty,
-          limitPriceCents: input.limitPriceCents,
-          status: "FILLED",
-          filledQty: input.qty,
-          avgFillPriceCents: price,
-          commissionCents,
-          placedBy: input.placedBy,
-          reason: input.reason,
-        },
-      });
+      const order = existingOrderId
+        ? await tx.order.update({
+            where: { id: existingOrderId },
+            data: { status: "FILLED", filledQty: input.qty, avgFillPriceCents: price, commissionCents },
+          })
+        : await tx.order.create({
+            data: {
+              symbol,
+              side: input.side,
+              type: input.type,
+              qty: input.qty,
+              limitPriceCents: input.limitPriceCents,
+              status: "FILLED",
+              filledQty: input.qty,
+              avgFillPriceCents: price,
+              commissionCents,
+              placedBy: input.placedBy,
+              reason: input.reason,
+            },
+          });
 
       let realizedPnlCents: number | null = null;
       const pos = await tx.position.findUnique({ where: { symbol } });
@@ -193,7 +262,7 @@ export class SimBroker implements BrokerAdapter {
             (realizedPnlCents !== null
               ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} CAD (after ${(commissionCents / 100).toFixed(2)} commission)`
               : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} CAD`),
-          agentVersion: settings?.agentVersion ?? "v0.1-phase1",
+          agentVersion: agentVersion ?? "v1.0-phase2",
         },
       });
 
@@ -202,5 +271,36 @@ export class SimBroker implements BrokerAdapter {
 
     await writeNavSnapshot(`post-fill order #${result.orderId}`);
     return { ok: true, orderId: result.orderId, status: "FILLED", fillPriceCents: price, commissionCents };
+  }
+
+  /** Sweep resting limit orders against fresh quotes. Called by the agent tick. */
+  async sweepPendingOrders(): Promise<number> {
+    const pending = await prisma.order.findMany({ where: { status: "PENDING" } });
+    let filled = 0;
+    for (const o of pending) {
+      const q = await getQuote(o.symbol);
+      if (!q || isHardStale(q)) continue;
+      let price: number | null = null;
+      if (o.side === "BUY" && o.limitPriceCents && o.limitPriceCents >= q.askCents) price = q.askCents;
+      if (o.side === "SELL" && o.limitPriceCents && o.limitPriceCents <= q.bidCents) price = q.bidCents;
+      if (price === null) continue;
+      const res = await this.fillNow(
+        {
+          symbol: o.symbol,
+          side: o.side,
+          type: o.type,
+          qty: o.qty,
+          limitPriceCents: o.limitPriceCents ?? undefined,
+          placedBy: o.placedBy,
+          reason: o.reason ?? undefined,
+        },
+        o.symbol,
+        price,
+        undefined,
+        o.id,
+      );
+      if (res.ok) filled++;
+    }
+    return filled;
   }
 }

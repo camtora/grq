@@ -6,7 +6,7 @@
 **Domain:** grq.camerontora.ca (live, SSO-protected, routed to port 3012)
 **Users:** Cam & Graham — equal access, both hold the kill switch
 **Initial contribution:** $5,000 CAD (Cam's money; a learning project for both)
-**Status:** Building — Phases 0–1 shipped 2026-06-11. IBKR account opening is the only external dependency (gates Phase 3).
+**Status:** Phases 0–2 shipped — agent live-fire on the sim since 2026-06-12, soak clock running. IBKR account opening is the only external dependency (gates Phase 3).
 **Last updated:** 2026-06-11
 
 ---
@@ -439,6 +439,7 @@ week — the soak is the deliberate bottleneck and it's non-negotiable.
 | 2026-06-12 (Cam) | **Mobile** — the responsive site already works on phones; next step is a **PWA** (installable, and PWA push notifications pair perfectly with alerting) before considering a native app. |
 | 2026-06-12 (Graham) | **AI components** — prediction models (XGBoost, Random Forest, LSTM, Transformers) + LLM uses (news analysis, earnings call summaries, sentiment scoring, trade explanation). Disposition: the LLM uses are mostly already core spec — news analysis/sentiment/trade-explanation are the research sweep, signals sentiment family, and thesis journal; **earnings call summaries promoted into the spec** (research section). Prediction models filed under the Signals layer, last in line: simple signals must earn their keep before ML forecasts get built (walk-forward validated on the sim first). |
 | 2026-06-12 (Cam) | ~~Alerting~~ — **promoted into the Phase 2 spec** (`docs/AGENT-SPEC.md` → "Alerting"): severity-tiered events to a Discord webhook first (house standard), health-api integration for criticals, PWA push/email later. |
+| 2026-06-12 (Cam & Graham) | **Tiered data sources + source scoring system** — 10-tier taxonomy (price, fundamentals, options flow, insiders, institutional, earnings, news, social, macro, alt-data) with a hit-rate scoreboard that promotes/demotes sources based on retro grades. Full doc: `docs/DATA-SOURCES.md` (includes Canadian equivalents: SEDAR+/SEDI/BoC/StatCan). Tier 1 history + Tier 9 structured macro are the near-term builds; everything enters on probation through the scoreboard. |
 
 ---
 

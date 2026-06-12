@@ -60,16 +60,18 @@ model Settings {
   killSwitch          Boolean   @default(false)
   killSwitchBy        String?
   killSwitchAt        DateTime?
-  agentVersion        String    @default("v0.1-phase1")
+  agentVersion        String    @default("v1.0-phase2")
   updatedBy           String?
   updatedAt           DateTime  @updatedAt
 }
 
 model Contribution {
-  id          Int      @id @default(autoincrement())
-  at          DateTime @default(now())
-  amountCents Int
-  note        String?
+  id            Int      @id @default(autoincrement())
+  at            DateTime @default(now())
+  amountCents   Int
+  // XIC mid price when the money arrived — anchors the "vs just buying XIC" benchmark.
+  xicPriceCents Int?
+  note          String?
 }
 
 model Order {
@@ -92,6 +94,7 @@ model Order {
   journal           JournalEntry[]
 
   @@index([createdAt])
+  @@index([status])
 }
 
 model Trade {
@@ -123,6 +126,8 @@ model NavSnapshot {
   navCents       Int
   cashCents      Int
   positionsCents Int
+  // What the same contributions would be worth in XIC (null if unknowable).
+  benchmarkCents Int?
   note           String?
 
   @@index([at])
@@ -136,7 +141,9 @@ model JournalEntry {
   title        String
   body         String
   confidence   Int?
-  agentVersion String      @default("v0.1-phase1")
+  // JSON array of source strings that fed this entry (attribution — D13).
+  sourcesJson  String?
+  agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])
 
@@ -154,4 +161,32 @@ model Report {
   createdAt DateTime   @default(now())
 
   @@unique([date, kind])
+}
+
+// Latest delayed quote per symbol. The agent's tick loop keeps these warm;
+// web reads them (with on-demand fallback fetch) so request paths stay fast.
+model Quote {
+  symbol       String   @id
+  bidCents     Int
+  askCents     Int
+  midCents     Int
+  dayChangeBps Int      @default(0)
+  at           DateTime
+  source       String   @default("yahoo-delayed")
+}
+
+model Watchlist {
+  symbol  String   @id
+  note    String?
+  addedAt DateTime @default(now())
+}
+
+// Agent heartbeat — read by /api/health and the dashboard.
+model AgentState {
+  id            Int       @id @default(1)
+  bootAt        DateTime?
+  lastTickAt    DateTime?
+  lastSessionAt DateTime?
+  note          String?
+  updatedAt     DateTime  @updatedAt
 }

@@ -44,6 +44,11 @@ they meet in the database (orders, journal, reports, settings).
   **self-curates** — source attribution (below) feeds weekly hit-rate grading, and the agent
   proposes adds/drops like any other strategy tweak. Yahoo headline endpoints remain the
   cheap intraday news check.
+- **Tiered data sources & source scoring** (Cam & Graham, 2026-06-12): the full 10-tier
+  taxonomy (price → fundamentals → options flow → insiders → 13F → earnings → news →
+  social → macro → alt-data) lives in `docs/DATA-SOURCES.md`, with the scoring system that
+  grades every cited source's hit-rate and promotes/demotes accordingly. New tiers enter
+  on probation through that scoreboard.
 - **Earnings awareness** (Graham, 2026-06-12): the orchestrator tracks the earnings
   calendar for holdings + watchlist; the 9:00 session before a holding's earnings day
   reviews the setup, and the first session after results gets a transcript/coverage

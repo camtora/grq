@@ -1,86 +1,92 @@
+import { prisma } from "../db";
+import { universeSymbols } from "../universe";
+import { fetchYahooQuotes } from "./yahoo";
 import type { Quote } from "./types";
 
-export interface QuoteSource {
-  readonly kind: string;
-  get(symbol: string): Quote | null;
-  symbols(): string[];
-}
+// DB-cached delayed quotes. The agent's tick loop keeps the cache warm
+// (refreshAllQuotes); web request paths read the cache and only fall back to
+// a live fetch when an entry is missing or stale. If everything is down,
+// callers get the stale row with its honest timestamp — the engine applies
+// its own hard-staleness rejection on top (QUOTE_HARD_STALE_MS).
 
-type SymState = {
-  base: number; // cents — anchor the walk decays toward
-  mid: number; // cents
-  volBps: number; // per-step volatility in basis points
-  spreadBps: number;
-  lastTick: number; // ms epoch
+const FRESH_MS = 15 * 60_000; // don't refetch newer than this
+export const QUOTE_HARD_STALE_MS = 90 * 60_000; // engine refuses to fill past this
+
+type QuoteRow = {
+  symbol: string;
+  bidCents: number;
+  askCents: number;
+  midCents: number;
+  dayChangeBps: number;
+  at: Date;
 };
 
-// Plausible-but-fake TSX universe for Phase 1. Prices are synthetic; Phase 2
-// swaps this source for real delayed quotes and this list for a screened one.
-const UNIVERSE: Record<string, { base: number; volBps: number; spreadBps: number }> = {
-  "RY":   { base: 14500, volBps: 8,  spreadBps: 4 },
-  "TD":   { base: 8800,  volBps: 9,  spreadBps: 4 },
-  "BNS":  { base: 7500,  volBps: 9,  spreadBps: 5 },
-  "ENB":  { base: 5200,  volBps: 8,  spreadBps: 5 },
-  "SU":   { base: 5500,  volBps: 12, spreadBps: 6 },
-  "CNR":  { base: 16000, volBps: 8,  spreadBps: 5 },
-  "BCE":  { base: 3500,  volBps: 9,  spreadBps: 6 },
-  "T":    { base: 2300,  volBps: 9,  spreadBps: 8 },
-  "SHOP": { base: 13000, volBps: 22, spreadBps: 8 },
-  "XIC":  { base: 4200,  volBps: 6,  spreadBps: 3 },
-};
-
-function gauss(): number {
-  // Box–Muller
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+function toQuote(r: QuoteRow): Quote {
+  return {
+    symbol: r.symbol,
+    bidCents: r.bidCents,
+    askCents: r.askCents,
+    midCents: r.midCents,
+    dayChangeBps: r.dayChangeBps,
+    at: r.at,
+  };
 }
 
-export class SyntheticQuoteSource implements QuoteSource {
-  readonly kind = "synthetic";
-  private state = new Map<string, SymState>();
+async function upsertMany(rows: QuoteRow[]): Promise<void> {
+  for (const q of rows) {
+    await prisma.quote.upsert({
+      where: { symbol: q.symbol },
+      create: { ...q, source: "yahoo-delayed" },
+      update: { ...q, source: "yahoo-delayed" },
+    });
+  }
+}
 
-  constructor() {
-    for (const [sym, cfg] of Object.entries(UNIVERSE)) {
-      this.state.set(sym, { ...cfg, mid: cfg.base, lastTick: Date.now() });
+export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> {
+  const wanted = symbols.map((s) => s.toUpperCase());
+  const rows = await prisma.quote.findMany({ where: { symbol: { in: wanted } } });
+  const have = new Map<string, QuoteRow>(rows.map((r) => [r.symbol, r]));
+  const now = Date.now();
+  const missing = wanted.filter((s) => {
+    const r = have.get(s);
+    return !r || now - r.at.getTime() > FRESH_MS;
+  });
+
+  if (missing.length > 0) {
+    try {
+      const fetched = await fetchYahooQuotes(missing);
+      await upsertMany(fetched);
+      for (const q of fetched) have.set(q.symbol, { ...q });
+    } catch {
+      // fall through with whatever cache we have — staleness is visible via `at`
     }
   }
 
-  symbols(): string[] {
-    return [...this.state.keys()];
+  const out = new Map<string, Quote>();
+  for (const s of wanted) {
+    const r = have.get(s);
+    if (r) out.set(s, toQuote(r));
   }
-
-  get(symbol: string): Quote | null {
-    const s = this.state.get(symbol.toUpperCase());
-    if (!s) return null;
-
-    // Advance the walk one step per ~5s elapsed, mean-reverting gently to base
-    // so synthetic prices stay plausible across long uptimes.
-    const now = Date.now();
-    const steps = Math.min(500, Math.floor((now - s.lastTick) / 5000));
-    for (let i = 0; i < steps; i++) {
-      const shock = gauss() * (s.volBps / 10_000);
-      const pull = (s.base - s.mid) / s.base * 0.002;
-      s.mid = Math.max(100, Math.round(s.mid * (1 + shock + pull)));
-    }
-    if (steps > 0) s.lastTick = now;
-
-    const half = Math.max(1, Math.round((s.mid * s.spreadBps) / 10_000 / 2));
-    return {
-      symbol: symbol.toUpperCase(),
-      midCents: s.mid,
-      bidCents: s.mid - half,
-      askCents: s.mid + half,
-      at: new Date(),
-    };
-  }
+  return out;
 }
 
-const globalForQuotes = globalThis as unknown as { grqQuotes?: SyntheticQuoteSource };
+export async function getQuote(symbol: string): Promise<Quote | null> {
+  const m = await getQuotes([symbol]);
+  return m.get(symbol.toUpperCase()) ?? null;
+}
 
-export function getQuoteSource(): SyntheticQuoteSource {
-  if (!globalForQuotes.grqQuotes) globalForQuotes.grqQuotes = new SyntheticQuoteSource();
-  return globalForQuotes.grqQuotes;
+/** Refresh specific symbols (ignores freshness — callers decide cadence). */
+export async function refreshQuotesFor(symbols: string[]): Promise<number> {
+  const fetched = await fetchYahooQuotes(symbols);
+  await upsertMany(fetched);
+  return fetched.length;
+}
+
+/** Bulk refresh of the whole universe — called by the agent tick loop. */
+export async function refreshAllQuotes(): Promise<number> {
+  return refreshQuotesFor(universeSymbols());
+}
+
+export function isHardStale(q: Quote, now = Date.now()): boolean {
+  return now - q.at.getTime() > QUOTE_HARD_STALE_MS;
 }

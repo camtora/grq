@@ -1,5 +1,6 @@
 import { prisma } from "./db";
-import { getQuoteSource } from "./broker/quotes";
+import { getQuotes } from "./broker/quotes";
+import { benchmarkValueCents } from "./broker/sim";
 
 export type PositionView = {
   symbol: string;
@@ -8,6 +9,7 @@ export type PositionView = {
   lastCents: number;
   marketValueCents: number;
   unrealizedPnlCents: number;
+  dayChangeBps: number;
   openedAt: Date;
 };
 
@@ -18,11 +20,13 @@ export type PortfolioView = {
   navCents: number;
   contributionsCents: number;
   totalPnlCents: number;
+  benchmarkCents: number | null;
   feeSpentMonthCents: number;
   feeBudgetCentsMonth: number;
   riskLevel: "CAUTIOUS" | "BALANCED" | "AGGRESSIVE";
   killSwitch: boolean;
   killSwitchBy: string | null;
+  quotesAsOf: Date | null;
 };
 
 export async function getPortfolio(): Promise<PortfolioView> {
@@ -38,9 +42,12 @@ export async function getPortfolio(): Promise<PortfolioView> {
     prisma.trade.aggregate({ where: { at: { gte: monthStart } }, _sum: { commissionCents: true } }),
   ]);
 
-  const quotes = getQuoteSource();
+  const quotes = await getQuotes(positions.map((p) => p.symbol));
+  let quotesAsOf: Date | null = null;
   const views: PositionView[] = positions.map((p) => {
-    const lastCents = quotes.get(p.symbol)?.midCents ?? p.avgCostCents;
+    const q = quotes.get(p.symbol);
+    const lastCents = q?.midCents ?? p.avgCostCents;
+    if (q && (!quotesAsOf || q.at < quotesAsOf)) quotesAsOf = q.at;
     const marketValueCents = p.qty * lastCents;
     return {
       symbol: p.symbol,
@@ -49,6 +56,7 @@ export async function getPortfolio(): Promise<PortfolioView> {
       lastCents,
       marketValueCents,
       unrealizedPnlCents: marketValueCents - p.qty * p.avgCostCents,
+      dayChangeBps: q?.dayChangeBps ?? 0,
       openedAt: p.openedAt,
     };
   });
@@ -57,6 +65,7 @@ export async function getPortfolio(): Promise<PortfolioView> {
   const positionsCents = views.reduce((s, p) => s + p.marketValueCents, 0);
   const navCents = cashCents + positionsCents;
   const contributionsCents = contributions._sum.amountCents ?? 0;
+  const benchmarkCents = await benchmarkValueCents().catch(() => null);
 
   return {
     cashCents,
@@ -65,11 +74,13 @@ export async function getPortfolio(): Promise<PortfolioView> {
     navCents,
     contributionsCents,
     totalPnlCents: navCents - contributionsCents,
+    benchmarkCents,
     feeSpentMonthCents: fees._sum.commissionCents ?? 0,
     feeBudgetCentsMonth: settings?.feeBudgetCentsMonth ?? 2000,
     riskLevel: settings?.riskLevel ?? "BALANCED",
     killSwitch: settings?.killSwitch ?? false,
     killSwitchBy: settings?.killSwitchBy ?? null,
+    quotesAsOf,
   };
 }
 

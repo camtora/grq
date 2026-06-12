@@ -7,7 +7,7 @@ detail: what each phase actually contains, what shipped, and exact exit criteria
 |---|---|---|---|
 | 0 | Skeleton | ✅ shipped 2026-06-11 | no |
 | 1 | Mock fund | ✅ shipped 2026-06-11 | no |
-| 2 | Sim live-fire (the agent) | **next** | no |
+| 2 | Sim live-fire (the agent) | ✅ shipped 2026-06-12 — **soaking** | no |
 | 3 | IBKR paper | blocked on account opening | **yes** |
 | 4 | Live ($5,000) | gated on soak | yes |
 | 5 | Later | backlog | yes |

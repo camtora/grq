@@ -17,6 +17,16 @@ services:
       timeout: 5s
       retries: 3
 
+  agent:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.agent
+    container_name: grq-agent
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - db
+
   db:
     image: postgres:16-alpine
     container_name: grq-db

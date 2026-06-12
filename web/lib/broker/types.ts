@@ -3,6 +3,7 @@ export type Quote = {
   bidCents: number;
   askCents: number;
   midCents: number;
+  dayChangeBps?: number;
   at: Date;
 };
 

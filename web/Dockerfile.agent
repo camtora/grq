@@ -1,0 +1,15 @@
+# grq-agent — the orchestrator + Claude session worker.
+# debian-slim (not alpine): the Agent SDK vendors glibc-built binaries.
+# Runs as the non-root `node` user — Claude Code refuses bypassPermissions as root.
+FROM node:22-slim
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+ENV NEXT_TELEMETRY_DISABLED=1 HOME=/home/node
+COPY package.json ./
+RUN npm install --no-audit --no-fund
+COPY . .
+RUN npx prisma generate && chown -R node:node /app /home/node
+USER node
+CMD ["npx", "tsx", "agent/runner.ts"]

@@ -8,7 +8,7 @@ import KillSwitch from "@/components/KillSwitch";
 const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
   { n: 1, label: "Mock fund — dashboard + sim engine", done: true },
-  { n: 2, label: "Sim live-fire — agent trades $5,000 vs real markets", done: false },
+  { n: 2, label: "Sim live-fire — agent trades $5,000 vs real markets", done: true },
   { n: 3, label: "IBKR paper — real broker plumbing, ≥2 clean weeks", done: false },
   { n: 4, label: "Live — real money, Cautious dial for week 1", done: false },
 ];
@@ -62,7 +62,7 @@ export default async function Settings() {
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Broker</dt>
                 <dd className="font-semibold text-teal-50">
-                  {(process.env.BROKER ?? "sim").toUpperCase()} — synthetic quotes
+                  {(process.env.BROKER ?? "sim").toUpperCase()} — real delayed quotes
                 </dd>
               </div>
               <div className="flex justify-between">

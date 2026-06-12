@@ -11,7 +11,11 @@ export default async function Portfolio() {
     <main>
       <PageHeader
         title="Portfolio"
-        sub="Positions are marked to the sim's synthetic quotes; ACB includes commissions."
+        sub={`Marked to real delayed quotes (~15 min)${
+          pf.quotesAsOf
+            ? ` · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
+            : ""
+        } · ACB includes commissions.`}
       />
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">

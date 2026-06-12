@@ -50,7 +50,11 @@ export default async function Overview() {
           label="Total P&L"
           value={signedMoney(pf.totalPnlCents)}
           valueClassName={pnlClass(pf.totalPnlCents)}
-          note={`${pct(pnlPct, 2)} on contributions`}
+          note={
+            pf.benchmarkCents !== null
+              ? `${pct(pnlPct, 2)} · vs XIC ${signedMoney(pf.navCents - pf.benchmarkCents)}`
+              : `${pct(pnlPct, 2)} on contributions`
+          }
         />
         <StatCard
           label="Contributions"

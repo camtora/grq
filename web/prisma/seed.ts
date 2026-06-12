@@ -1,16 +1,16 @@
 /**
- * Seed the sim fund. DESTRUCTIVE: wipes all sim data and starts fresh —
- * that's the point (re-run any time the sandbox should reset).
+ * Seed the sim fund — LIVE-FIRE EDITION. DESTRUCTIVE: wipes all sim data.
  *
  *   npx tsx prisma/seed.ts
  *
- * Seeds: $5,000 contribution, default settings, a week of flat NAV history,
- * and three demo trades executed through the real SimBroker engine so every
- * dashboard page has honest engine output to render. Demo theses are clearly
- * labelled — they vanish on the next reseed when the sim goes live-fire.
+ * Seeds a clean $5,000 with a real XIC benchmark anchor (live delayed quote)
+ * and NO demo trades — the agent earns every entry on this slate. NAV history
+ * starts with a single honest baseline point.
  */
 import { prisma } from "../lib/db";
-import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
+import { refreshAllQuotes, getQuote } from "../lib/broker/quotes";
+import { writeNavSnapshot } from "../lib/broker/sim";
+import { BENCHMARK } from "../lib/universe";
 
 async function main() {
   console.log("Wiping sim data…");
@@ -22,78 +22,45 @@ async function main() {
     prisma.navSnapshot.deleteMany(),
     prisma.report.deleteMany(),
     prisma.contribution.deleteMany(),
+    prisma.watchlist.deleteMany(),
     prisma.account.deleteMany(),
+    prisma.agentState.deleteMany(),
     prisma.settings.deleteMany(),
   ]);
 
+  console.log("Fetching real quotes for the universe…");
+  const n = await refreshAllQuotes();
+  console.log(`  ${n} symbols quoted (delayed).`);
+  const xic = await getQuote(BENCHMARK);
+  if (!xic) throw new Error("No XIC quote — refusing to seed without a benchmark anchor.");
+  console.log(`  ${BENCHMARK} @ $${(xic.midCents / 100).toFixed(2)} (benchmark anchor)`);
+
   console.log("Seeding account…");
-  await prisma.settings.create({ data: { id: 1 } }); // defaults: BALANCED, $20 budget
+  await prisma.settings.create({ data: { id: 1 } }); // BALANCED, $20 budget
   await prisma.account.create({ data: { id: 1, cashCents: 500_000 } });
   await prisma.contribution.create({
-    data: { amountCents: 500_000, note: "Initial commitment — Cam" },
+    data: {
+      amountCents: 500_000,
+      xicPriceCents: xic.midCents,
+      note: "Initial commitment — Cam",
+    },
   });
-
-  // A week of flat NAV history so the sparkline has a baseline.
-  const day = 24 * 60 * 60 * 1000;
-  for (let i = 7; i >= 1; i--) {
-    await prisma.navSnapshot.create({
-      data: {
-        at: new Date(Date.now() - i * day),
-        navCents: 500_000,
-        cashCents: 500_000,
-        positionsCents: 0,
-        note: "pre-trading baseline",
-      },
-    });
-  }
 
   await prisma.journalEntry.create({
     data: {
       kind: "SYSTEM",
-      title: "Sim fund initialized",
+      title: "Sim fund initialized — live fire",
       body:
-        "GRQ simulation seeded with **$5,000.00 CAD**. Broker: `sim` (synthetic quotes). " +
-        "Risk: Balanced. Fee budget: $20/month. Guardrails active: no shorting, no margin, " +
-        "kill switch armed.\n\n_The demo trades below exercise the engine end-to-end; " +
-        "everything resets when the sim goes live-fire in Phase 2._",
+        `**$5,000.00 CAD** on the line (simulated). Real delayed market quotes. ` +
+        `Benchmark anchored: same money in ${BENCHMARK} @ $${(xic.midCents / 100).toFixed(2)}. ` +
+        `Risk: Balanced. Fee budget: $20/month. No shorting, no margin, kill switch armed.\n\n` +
+        `The agent takes over at the next market open. The soak clock starts now — ` +
+        `every clean week counts toward real money.`,
     },
   });
 
-  console.log("Placing demo trades through SimBroker…");
-  const broker = new SimBroker();
-  const demos = [
-    {
-      symbol: "XIC",
-      side: "BUY" as const,
-      qty: 40,
-      reason:
-        "**[DEMO]** Core index anchor. Park ~a third of the book in the TSX composite while the " +
-        "agent is still in development — the benchmark we must eventually beat.",
-    },
-    {
-      symbol: "RY",
-      side: "BUY" as const,
-      qty: 8,
-      reason:
-        "**[DEMO]** Blue-chip placeholder position to exercise multi-position accounting, " +
-        "ACB-with-commission math, and per-position P&L display.",
-    },
-    {
-      symbol: "RY",
-      side: "SELL" as const,
-      qty: 3,
-      reason:
-        "**[DEMO]** Partial exit to exercise realized P&L, position reduction, and the " +
-        "sell path through the fee gate.",
-    },
-  ];
-  for (const d of demos) {
-    const res = await broker.placeOrder({ ...d, type: "MARKET", placedBy: "seed-script" });
-    console.log(" ", d.side, d.qty, d.symbol, "→", res.ok ? `order #${res.orderId} ${res.status}` : `REJECTED: ${res.rejectReason}`);
-  }
-
-  await writeNavSnapshot("seed complete");
-  console.log("Done.");
+  await writeNavSnapshot("seed — clean slate");
+  console.log("Done. Clean slate, agent's move.");
 }
 
 main()

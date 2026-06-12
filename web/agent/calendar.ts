@@ -1,0 +1,92 @@
+// Market calendar for the TSX, computed in ET via Intl (no OS tzdata needed).
+// Regular session 9:30–16:00 ET. Extend HOLIDAYS each December.
+
+const ET = "America/Toronto";
+
+// TSX full-closure holidays, 2026. (2027: add before New Year's.)
+const HOLIDAYS = new Set([
+  "2026-01-01", // New Year's Day
+  "2026-02-16", // Family Day
+  "2026-04-03", // Good Friday
+  "2026-05-18", // Victoria Day
+  "2026-07-01", // Canada Day
+  "2026-08-03", // Civic Holiday
+  "2026-09-07", // Labour Day
+  "2026-10-12", // Thanksgiving
+  "2026-12-25", // Christmas
+  "2026-12-28", // Boxing Day (observed)
+]);
+
+export type ETParts = {
+  dateStr: string; // YYYY-MM-DD in ET
+  weekday: number; // 0=Sun … 6=Sat
+  hour: number;
+  minute: number;
+  minutesSinceMidnight: number;
+};
+
+export function etParts(d: Date = new Date()): ETParts {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ET,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(d).map((p) => [p.type, p.value]));
+  const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const hour = Number(parts.hour) % 24; // en-CA may render midnight as 24
+  const minute = Number(parts.minute);
+  return {
+    dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+    weekday: weekdayMap[parts.weekday.slice(0, 3)] ?? 0,
+    hour,
+    minute,
+    minutesSinceMidnight: hour * 60 + minute,
+  };
+}
+
+export function isMarketDay(d: Date = new Date()): boolean {
+  const p = etParts(d);
+  return p.weekday >= 1 && p.weekday <= 5 && !HOLIDAYS.has(p.dateStr);
+}
+
+const OPEN_MIN = 9 * 60 + 30;
+const CLOSE_MIN = 16 * 60;
+
+export function isMarketOpen(d: Date = new Date()): boolean {
+  if (!isMarketDay(d)) return false;
+  const m = etParts(d).minutesSinceMidnight;
+  return m >= OPEN_MIN && m < CLOSE_MIN;
+}
+
+/** Minutes since the 9:30 open (negative before open). */
+export function minutesSinceOpen(d: Date = new Date()): number {
+  return etParts(d).minutesSinceMidnight - OPEN_MIN;
+}
+
+/** Minutes until the 16:00 close (negative after close). */
+export function minutesToClose(d: Date = new Date()): number {
+  return CLOSE_MIN - etParts(d).minutesSinceMidnight;
+}
+
+/** Start of "today" in ET, as a UTC Date — for day-bounded DB queries. */
+export function startOfEtDay(d: Date = new Date()): Date {
+  const p = etParts(d);
+  // Find the UTC instant where ET reads 00:00 for this date by probing offsets.
+  for (const offsetH of [4, 5]) {
+    const guess = new Date(`${p.dateStr}T00:00:00-0${offsetH}:00`);
+    if (etParts(guess).dateStr === p.dateStr && etParts(guess).minutesSinceMidnight === 0) {
+      return guess;
+    }
+  }
+  return new Date(`${p.dateStr}T00:00:00-05:00`);
+}
+
+/** The ET date string (YYYY-MM-DD) — handy as a Report date key. */
+export function etDateStr(d: Date = new Date()): string {
+  return etParts(d).dateStr;
+}
