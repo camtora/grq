@@ -79,7 +79,8 @@ counting toward the soak.
 ## Phase 2.5 — Quality-of-life builds (planned 2026-06-12, run alongside the soak)
 
 None of these touch the order path, so they're safe to ship while the soak clock runs.
-Recommended order: **a → b → c → d** (b includes e as part of the same UI pass).
+Recommended order: **a → b(+e) → f-V1 → d → c** — stocks pages (f) come before signals (d)
+and chat (c) because both light them up further once they land.
 
 ### 2.5a — Nightly database backup (ops, first — it's a real gap)
 The fund's entire memory (journal, trades, NAV history, soak evidence) lives in one Docker
@@ -131,6 +132,34 @@ refresh) from banded pools on total P&L %: ≥+5% escalating flattery ("Welcome 
 prosperous one."), +1–5% cheerful, ±1% deadpan neutral, −1–5% gentle ("We don't talk about
 Tuesday."), ≤−5% condolences + a pointed reminder of what XIC did. Loss jokes punch at the
 robot, never at the member.
+
+### 2.5f — Stocks pages: per-symbol one-pagers (Cam, 2026-06-12)
+
+The per-stock home that ties the universe, the agent's intelligence, the tiered sources,
+and (eventually) signals + chat together. Ships in levels:
+
+**V1 (with what exists today):**
+- `/stocks` — the universe table, **holdings first** (qty, ACB, market value, unrealized
+  P&L), then watchlist, then the rest; columns: symbol, name, tier, last, day %, journal
+  count. This also answers "what can the manual ticket trade" by being the same list.
+- `/stocks/[symbol]` — the one-pager: header (name, tier, live quote, day change), the
+  position card if held, full trade history for the symbol, and **everything the agent has
+  written about it** — DECISIONs with theses, TRADEs, RETROs, RESEARCH mentions —
+  chronological, with sources shown per entry. "What does the agent currently think" =
+  the latest decision/research excerpt pinned up top.
+
+**V2 (lights up when 2.5d lands):** price sparkline from the `Bar` table, the signals panel
+(SMA/RSI/MACD/vol with BUY/SELL/HOLD + confidence each), and the symbol's slice of the
+source scoreboard (which sources/signals have been right *about this stock*).
+
+**V3 (lights up when 2.5c lands):** an **"Ask GRQ about this stock"** button — opens the
+chat pre-seeded with a symbol context block (position, open thesis, signals, recent journal
+entries), so questions like "why are we still holding this?" land fully informed.
+
+**Tiered-sources tie-in (DATA-SOURCES.md):** the one-pager is deliberately structured as
+tier slots that light up as tiers get built — Tier 1 (price/signals), Tier 6 (earnings
+dates + post-call summaries), Tier 7 (news mentions from research sessions), Tier 4
+(insider activity via SEDI) — so each new data tier has an obvious UI home the day it ships.
 
 ## Phase 3 — IBKR paper (needs the account)
 
