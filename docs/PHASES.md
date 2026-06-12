@@ -206,6 +206,78 @@ night (directives end-to-end, scoreboard aggregation math, context blocks).
   steering.
 - **Context**: directives block in every session ("BLOCKED: SHOP — Cam: 'too spicy'").
 
+## Phase 2.7 — Universe pipeline & research dossiers (planned 2026-06-12, awaiting Cam's answers)
+
+Cam's ask: stocks get researched continuously; humans add/remove universe members through
+the UI instead of code; /stocks splits into **Universe** and **Research** tabs.
+
+### The pipeline (proposed)
+
+```
+  [add ticker via UI] → CANDIDATE → (promote) → ACTIVE (the tradeable universe)
+                            │                      │
+                      (stop researching)      (demote — no new buys;
+                            ▼                  holds/sells unaffected)
+                         RETIRED  ◄────────────────┘
+```
+
+- **`UniverseMember` model** replaces the static list: `{ symbol, yahoo, name, tier,
+  status: CANDIDATE|ACTIVE|RETIRED, addedBy, at, notes }`. Current 38 seed as ACTIVE.
+  `lib/universe.ts` becomes DB-backed (async — ripples through validator, quotes, signals,
+  pages; the structural chunk of this build).
+- **Add-a-ticker form** (Research tab): validates via live quote lookup (handles `.TO`/`.V`
+  suffixes and dotted classes like `GIB.A → GIB-A.TO`), stores the explicit Yahoo mapping,
+  backfills bars, computes signals, queues a dossier. Caps candidate count (~20) to keep
+  Yahoo politeness intact.
+- **Promotion to ACTIVE** = expanding what the robot may buy: runs the **automated screen**
+  (price ≥ $2, ADV ≥ 100k sh, bar history present) + human picks the tier + journaled +
+  Discord-pinged. Demotion/stop-researching likewise journaled; **history is never deleted**.
+- **Benchmark (XIC) is not demotable.** Directives (pin/no-fly) remain a separate member
+  veto *within* the universe.
+
+### Research model — the honest cost redesign
+
+"Research every stock daily with the LLM" would blow the Max budget (38+ deep sessions/day).
+Tiered instead, same outcome with sane economics:
+
+| Layer | Coverage | Cadence | Cost |
+|---|---|---|---|
+| Signals + bars + quotes | ALL tracked symbols (ACTIVE + CANDIDATE) | daily (nightly job) | $0, deterministic |
+| **Dossier rotation** | every tracked symbol gets a deep, symbol-tagged research dossier | ~3/day rotating (oldest-first) → full universe refresh ≈ every 2–3 weeks | bounded |
+| Event-triggered dossiers | big movers, signal flips, (later) earnings | as they fire, within the daily budget | bounded |
+| Holdings + watchlist | deep attention | every morning session (already live) | existing |
+| **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; daily cap (~5) shared between members | bounded |
+
+- **Dossier** = a structured symbol-tagged RESEARCH entry ("Dossier — RY — date"): business
+  snapshot, recent news, signals read, bull/bear case, thesis-worthiness, risks, sources.
+  Pinned as the stock page's "current read"; Research tab shows last-dossier age per symbol.
+- **`ResearchRequest` queue** `{ symbol, requestedBy, status: QUEUED|RUNNING|DONE|FAILED }` —
+  the web UI can't run sessions (no SDK there), so the agent runner polls the queue each tick
+  (works off-hours too) and runs `runStockDossier(symbol)`.
+
+### UI
+
+- `/stocks` → tabs: **Universe** (today's table, ACTIVE only) · **Research** (candidates +
+  retired: last-dossier age, signals snapshot, [Promote to universe] [Stop researching]
+  buttons, add-ticker form, "Research now" on every row and on stock one-pagers).
+
+### Supersedes
+
+The "universe is human-edited code" governance line (AGENT-SPEC) — once built, governance
+becomes: **UI-managed, screen-enforced, journaled + Discord-alerted; the agent still cannot
+change membership, only propose.** Update AGENT-SPEC + DECISIONS when this ships.
+
+### Open questions for Cam & Graham (blocking the build)
+
+1. **Cost/cadence**: accept the tiered model over literal "all stocks daily"? What dossier
+   staleness is acceptable (suggested: ≤ 3 weeks rotation, daily for holdings/watchlist)?
+2. **Addable scope**: TSX/TSX-V only for now? US tickers as research-only until Phase 5?
+   Keep the $2 / 100k-ADV floor as a hard screen?
+3. **Promotion authority**: either member alone (kill-switch precedent) or both to confirm?
+4. **Tier on promotion**: human picks (suggested) or auto by market cap?
+5. **Demotion of a held symbol**: rule = no new buys, holds/sells unaffected — OK?
+6. Candidate cap ~20 and on-demand budget ~5/day — OK?
+
 ## Phase 3 — IBKR paper (needs the account)
 
 Human prerequisites (Cam, in Client Portal once approved): enable paper account · create
