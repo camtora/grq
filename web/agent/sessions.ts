@@ -169,7 +169,7 @@ This week's fills: ${trades.map((t) => `${t.side} ${t.qty} ${t.symbol} @ $${(t.p
 This week's decisions: ${decisions.length}
 
 Do the full review, using tools:
-1. RETRO entries (write_journal kind=RETRO) for every position closed this week and every resolved thesis — outcome vs thesis, right-for-the-right-reasons or lucky, AND grade the sources that fed it.
+1. RETRO entries (write_journal kind=RETRO) for every position closed this week and every resolved thesis — outcome vs thesis, right-for-the-right-reasons or lucky. **After each RETRO, call grade_sources** for every source that thesis cited (+1 pointed right, −1 misleading, 0 neutral) — including signal families like signal:rsi. The scoreboard is how the fund learns whom to trust.
 2. LESSON entries for durable patterns worth carrying forward (only real ones).
 3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades, lessons added, proposed strategy adjustments (these need Cam & Graham's approval — say so), source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
 

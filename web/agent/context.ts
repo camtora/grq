@@ -1,8 +1,9 @@
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { etParts, isMarketOpen, minutesToClose } from "./calendar";
-import { dayPnlBps } from "./validator";
+import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
+import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
 
 function money(c: number): string {
@@ -12,14 +13,18 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, watchlist, openTheses] = await Promise.all([
-    getPortfolio(),
-    prisma.settings.findUnique({ where: { id: 1 } }),
-    prisma.journalEntry.findMany({ where: { kind: "LESSON" }, orderBy: { at: "desc" }, take: 10 }),
-    prisma.journalEntry.findMany({ where: { kind: "RETRO" }, orderBy: { at: "desc" }, take: 5 }),
-    prisma.watchlist.findMany({ orderBy: { addedAt: "desc" } }),
-    prisma.journalEntry.findMany({ where: { kind: "DECISION" }, orderBy: { at: "desc" }, take: 12 }),
-  ]);
+  const [pf, settings, lessons, retros, watchlist, openTheses, directives, slWindows, scoreboard] =
+    await Promise.all([
+      getPortfolio(),
+      prisma.settings.findUnique({ where: { id: 1 } }),
+      prisma.journalEntry.findMany({ where: { kind: "LESSON" }, orderBy: { at: "desc" }, take: 10 }),
+      prisma.journalEntry.findMany({ where: { kind: "RETRO" }, orderBy: { at: "desc" }, take: 5 }),
+      prisma.watchlist.findMany({ orderBy: { addedAt: "desc" } }),
+      prisma.journalEntry.findMany({ where: { kind: "DECISION" }, orderBy: { at: "desc" }, take: 12 }),
+      prisma.symbolDirective.findMany(),
+      superficialLossWindows().catch(() => []),
+      getScoreboard().catch(() => []),
+    ]);
   const dialName = settings?.riskLevel ?? "BALANCED";
   const dial = DIALS[dialName];
   const p = etParts();
@@ -74,6 +79,27 @@ ${watchlist.length === 0 ? "  (empty)" : watchlist.map((w) => `  ${w.symbol}${w.
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
 Hard limits: max ${HARD.maxPositions} positions · ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.
+
+## Member directives (binding — set by Cam & Graham on the stock pages)
+${
+  directives.length === 0
+    ? "  (none)"
+    : directives
+        .map((d) => `  ${d.directive === "BLOCKED" ? "🚫 BLOCKED" : "📌 PINNED"}: ${d.symbol} — ${d.by}${d.note ? `: "${d.note}"` : ""}`)
+        .join("\n")
+}
+
+## Superficial-loss windows (no rebuy — CRA denies the loss)
+${slWindows.length === 0 ? "  (none open)" : slWindows.map((w) => `  ${w.symbol}: blocked until ${w.until.toISOString().slice(0, 10)}`).join("\n")}
+
+## Source scoreboard (grade sources in retros; ranked after ${MIN_GRADES_TO_RANK} grades)
+${
+  scoreboard.length === 0
+    ? "  (no grades yet — your retros build this)"
+    : "Trust the top, downweight the bottom:\n" +
+      scoreboardText(scoreboard.slice(0, 5)) +
+      (scoreboard.length > 5 ? "\n…worst:\n" + scoreboardText(scoreboard.slice(-3)) : "")
+}
 
 ## Seed sources (you may use others; cite everything; your retros grade source hit-rates)
 ${SOURCES.map((s) => `- ${s}`).join("\n")}

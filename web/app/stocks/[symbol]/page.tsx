@@ -5,10 +5,13 @@ import { universeEntry } from "@/lib/universe";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
 import { computeSignals } from "@/agent/signals";
+import { getScoreboard } from "@/lib/scoreboard";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import Sparkline from "@/components/Sparkline";
+import Scoreboard from "@/components/Scoreboard";
+import DirectiveButtons from "@/components/DirectiveButtons";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
 
@@ -38,15 +41,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const entry = universeEntry(symbol);
   if (!entry) notFound();
 
-  const [quote, position, watch, trades, journal, closes, signals] = await Promise.all([
-    getQuote(symbol),
-    prisma.position.findUnique({ where: { symbol } }),
-    prisma.watchlist.findUnique({ where: { symbol } }),
-    prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
-    prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
-    getCloses(symbol, 260).catch(() => []),
-    computeSignals(symbol).catch(() => null),
-  ]);
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores] =
+    await Promise.all([
+      getQuote(symbol),
+      prisma.position.findUnique({ where: { symbol } }),
+      prisma.watchlist.findUnique({ where: { symbol } }),
+      prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
+      prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
+      getCloses(symbol, 260).catch(() => []),
+      computeSignals(symbol).catch(() => null),
+      prisma.symbolDirective.findUnique({ where: { symbol } }),
+      getScoreboard(symbol).catch(() => []),
+    ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
   const dayBps = quote?.dayChangeBps ?? 0;
@@ -62,6 +68,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <span className="text-teal-200/60">{entry.name}</span>
         <Chip tone="dim">{entry.tier}</Chip>
         {watch && <Chip tone="teal">watchlist</Chip>}
+        {directive?.directive === "BLOCKED" && <Chip tone="red">no-fly — {directive.by}</Chip>}
+        {directive?.directive === "PINNED" && <Chip tone="teal">📌 {directive.by}</Chip>}
         {quote && (
           <span className="ml-auto flex items-baseline gap-3">
             <span className="text-2xl font-semibold tabular-nums text-teal-50">{money(quote.midCents)}</span>
@@ -70,6 +78,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </span>
           </span>
         )}
+        <DirectiveButtons
+          symbol={symbol}
+          current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
+        />
         <Link
           href={`/chat?symbol=${symbol}`}
           className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
@@ -187,6 +199,12 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </ul>
             )}
           </Card>
+
+          <Scoreboard
+            rows={symbolScores}
+            title={`Scoreboard — ${symbol}`}
+            emptyText="No graded calls on this name yet — retros fill this in."
+          />
 
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Future data tiers</h2>
           <Card className="p-4 text-sm">

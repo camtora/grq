@@ -4,6 +4,8 @@ import type { JournalKind } from "@prisma/client";
 import { fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
 import Md from "@/components/Md";
+import Scoreboard from "@/components/Scoreboard";
+import { getScoreboard } from "@/lib/scoreboard";
 
 const KINDS = ["ALL", "SYSTEM", "RESEARCH", "DECISION", "TRADE", "RETRO", "LESSON"] as const;
 
@@ -19,11 +21,14 @@ export default async function Journal({
       ? { kind: kind as JournalKind }
       : {};
 
-  const entries = await prisma.journalEntry.findMany({
-    where,
-    orderBy: { at: "desc" },
-    take: 100,
-  });
+  const [entries, scoreboard] = await Promise.all([
+    prisma.journalEntry.findMany({
+      where,
+      orderBy: { at: "desc" },
+      take: 100,
+    }),
+    getScoreboard().catch(() => []),
+  ]);
 
   return (
     <main>
@@ -31,6 +36,10 @@ export default async function Journal({
         title="Journal"
         sub="The agent's working memory: every thesis, decision, retro, and lesson — including the decisions not to trade."
       />
+
+      <div className="mb-6">
+        <Scoreboard rows={scoreboard} />
+      </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
         {KINDS.map((k) => (

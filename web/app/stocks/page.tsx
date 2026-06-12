@@ -6,15 +6,17 @@ import { money, pct } from "@/lib/money";
 import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 
 export default async function Stocks() {
-  const [positions, watchlist, journalCounts, quotes] = await Promise.all([
+  const [positions, watchlist, journalCounts, quotes, directives] = await Promise.all([
     prisma.position.findMany(),
     prisma.watchlist.findMany(),
     prisma.journalEntry.groupBy({ by: ["symbol"], _count: { id: true }, where: { symbol: { not: null } } }),
     getQuotes(UNIVERSE.map((u) => u.symbol)),
+    prisma.symbolDirective.findMany(),
   ]);
 
   const posBy = new Map(positions.map((p) => [p.symbol, p]));
   const watchSet = new Set(watchlist.map((w) => w.symbol));
+  const dirBy = new Map(directives.map((d) => [d.symbol, d.directive]));
   const jcBy = new Map(journalCounts.map((j) => [j.symbol as string, j._count.id]));
 
   const rows = UNIVERSE.map((u) => {
@@ -73,6 +75,12 @@ export default async function Stocks() {
                   </Link>
                   {r.watched && (
                     <span className="ml-2 align-middle" title="On the watchlist">👁</span>
+                  )}
+                  {dirBy.get(r.symbol) === "PINNED" && (
+                    <span className="ml-1 align-middle" title="Pinned by a member">📌</span>
+                  )}
+                  {dirBy.get(r.symbol) === "BLOCKED" && (
+                    <span className="ml-1 align-middle" title="No-fly: the agent may not buy this">🚫</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-teal-100/70">{r.name}</td>

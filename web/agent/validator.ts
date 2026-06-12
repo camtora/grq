@@ -54,6 +54,25 @@ export async function isDailyLossPaused(): Promise<boolean> {
   return (await dayPnlBps()) <= HARD.dailyLossPauseBps;
 }
 
+const SUPERFICIAL_LOSS_DAYS = 30;
+
+/** Open superficial-loss windows: symbols sold at a realized loss within the
+ *  last 30 days. Rebuying inside the window gets the loss denied by CRA. */
+export async function superficialLossWindows(): Promise<{ symbol: string; until: Date }[]> {
+  const since = new Date(Date.now() - SUPERFICIAL_LOSS_DAYS * 24 * 60 * 60_000);
+  const losses = await prisma.trade.groupBy({
+    by: ["symbol"],
+    where: { side: "SELL", realizedPnlCents: { lt: 0 }, at: { gte: since } },
+    _max: { at: true },
+  });
+  return losses
+    .filter((l) => l._max.at !== null)
+    .map((l) => ({
+      symbol: l.symbol,
+      until: new Date((l._max.at as Date).getTime() + SUPERFICIAL_LOSS_DAYS * 24 * 60 * 60_000),
+    }));
+}
+
 /**
  * The agent's full §6 gate. Checks policy, then hands off to the engine
  * (which independently re-checks its own layer). Every rejection is recorded
@@ -83,6 +102,27 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   if (!entry) return refuse(`${symbol} is not in the universe.`);
   if (order.side === "BUY" && !dial.tiers.includes(entry.tier)) {
     return refuse(`${symbol} (${entry.tier}) is outside the ${settings?.riskLevel ?? "BALANCED"} dial's universe.`);
+  }
+
+  // -- member directives (2.6c): BLOCKED bars buys; sells always allowed --
+  if (order.side === "BUY") {
+    const directive = await prisma.symbolDirective.findUnique({ where: { symbol } });
+    if (directive?.directive === "BLOCKED") {
+      return refuse(
+        `${symbol} is on the no-fly list (blocked by ${directive.by}${directive.note ? `: "${directive.note}"` : ""}). Members can unblock it on the stock page; you cannot.`,
+      );
+    }
+  }
+
+  // -- superficial-loss guard (2.6b): no rebuy within 30 days of a loss-sale --
+  if (order.side === "BUY") {
+    const windows = await superficialLossWindows();
+    const w = windows.find((x) => x.symbol === symbol);
+    if (w) {
+      return refuse(
+        `Superficial-loss guard: ${symbol} was sold at a loss within the last 30 days — CRA denies the loss if rebought before ${w.until.toISOString().slice(0, 10)}. Pick a different name or wait.`,
+      );
+    }
   }
 
   // -- rate limits --
@@ -141,6 +181,18 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     }
   }
 
+  // Warn when a SELL is about to realize a loss and open a 30-day window.
+  let sellLossNote = "";
+  if (order.side === "SELL") {
+    const pos = await prisma.position.findUnique({ where: { symbol } });
+    if (pos && estPrice < pos.avgCostCents) {
+      const until = new Date(Date.now() + SUPERFICIAL_LOSS_DAYS * 24 * 60 * 60_000)
+        .toISOString()
+        .slice(0, 10);
+      sellLossNote = ` ⚠️ Realizes a loss — superficial-loss window opens: no rebuy of ${symbol} until ${until}.`;
+    }
+  }
+
   // -- engine (its own gate runs again: kill switch, staleness, cash/shares, fee budget) --
   const result = await broker.placeOrder({
     symbol,
@@ -153,11 +205,12 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   });
 
   // -- journal the DECISION with full thesis + attribution --
-  const verdictText = result.ok
-    ? result.status === "FILLED"
-      ? `FILLED @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)} (commission $${((result.commissionCents ?? 0) / 100).toFixed(2)})`
-      : `PENDING (resting limit #${result.orderId})`
-    : `REJECTED — ${result.rejectReason}`;
+  const verdictText =
+    (result.ok
+      ? result.status === "FILLED"
+        ? `FILLED @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)} (commission $${((result.commissionCents ?? 0) / 100).toFixed(2)})`
+        : `PENDING (resting limit #${result.orderId})`
+      : `REJECTED — ${result.rejectReason}`) + (result.ok ? sellLossNote : "");
   await prisma.journalEntry.create({
     data: {
       kind: "DECISION",

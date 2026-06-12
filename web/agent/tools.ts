@@ -119,10 +119,49 @@ const setWatchlistTool = tool(
       results.push(`ADDED ${sym}`);
     }
     for (const r of args.remove) {
-      await prisma.watchlist.deleteMany({ where: { symbol: r.toUpperCase() } });
-      results.push(`REMOVED ${r.toUpperCase()}`);
+      const sym = r.toUpperCase();
+      const directive = await prisma.symbolDirective.findUnique({ where: { symbol: sym } });
+      if (directive?.directive === "PINNED") {
+        results.push(`SKIP remove ${sym}: pinned by ${directive.by} — members decide when it leaves.`);
+        continue;
+      }
+      await prisma.watchlist.deleteMany({ where: { symbol: sym } });
+      results.push(`REMOVED ${sym}`);
     }
     return text(results.join("\n") || "no-op");
+  },
+);
+
+const gradeSourcesTool = tool(
+  "grade_sources",
+  "Grade the sources a resolved thesis cited: +1 pointed the right way, -1 misleading, 0 neutral. Call this after writing each RETRO — signal families (signal:rsi) get graded like any outlet. The scoreboard decides who you trust.",
+  {
+    symbol: z.string().optional(),
+    journalId: z.number().int().optional(),
+    grades: z
+      .array(
+        z.object({
+          source: z.string().min(2).max(120),
+          grade: z.number().int().min(-1).max(1),
+          note: z.string().max(300).optional(),
+        }),
+      )
+      .min(1)
+      .max(20),
+  },
+  async (args) => {
+    await prisma.sourceGrade.createMany({
+      data: args.grades.map((g) => ({
+        source: g.source.trim().toLowerCase(),
+        grade: g.grade,
+        note: g.note,
+        symbol: args.symbol?.toUpperCase(),
+        journalId: args.journalId,
+      })),
+    });
+    return text(
+      `Recorded ${args.grades.length} grade(s): ${args.grades.map((g) => `${g.source} ${g.grade > 0 ? "+1" : g.grade < 0 ? "−1" : "0"}`).join(", ")}.`,
+    );
   },
 );
 
@@ -192,6 +231,7 @@ export const grqServer = createSdkMcpServer({
     getWatchlistTool,
     setWatchlistTool,
     getSignalsTool,
+    gradeSourcesTool,
     proposeOrderTool,
   ],
 });
@@ -204,6 +244,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__get_watchlist",
   "mcp__grq__set_watchlist",
   "mcp__grq__get_signals",
+  "mcp__grq__grade_sources",
   "mcp__grq__propose_order",
 ];
 

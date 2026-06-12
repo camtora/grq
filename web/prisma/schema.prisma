@@ -200,6 +200,38 @@ model Watchlist {
   addedAt DateTime @default(now())
 }
 
+// Member steering for the agent (2.6c): BLOCKED = agent may never buy it
+// (sells always allowed); PINNED = always on the watchlist. Binds the agent
+// only — members' manual orders are exempt.
+enum DirectiveType {
+  PINNED
+  BLOCKED
+}
+
+model SymbolDirective {
+  symbol    String        @id
+  directive DirectiveType
+  by        String
+  note      String?
+  at        DateTime      @default(now())
+}
+
+// Source scoreboard (2.6a): retros grade every source a resolved thesis cited.
+// +1 pointed the right way, −1 misleading, 0 neutral. Signal families are
+// sources too ("signal:rsi").
+model SourceGrade {
+  id        Int      @id @default(autoincrement())
+  at        DateTime @default(now())
+  source    String
+  symbol    String?
+  grade     Int
+  note      String?
+  journalId Int?
+
+  @@index([source])
+  @@index([symbol])
+}
+
 // Shared chat thread between the members and the agent (read-only tools —
 // chat can never trade). email is the author; "agent" for assistant turns.
 model ChatMessage {
