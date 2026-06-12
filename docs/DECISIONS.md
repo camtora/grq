@@ -1,0 +1,103 @@
+# GRQ Decision Record
+
+Engineering + plan decisions with rationale. Plan-level sign-offs also live in
+`PROJECT_PLAN.md` §10; this file is the deeper "why" so future sessions don't relitigate.
+All decided 2026-06-11 unless noted.
+
+---
+
+### D1 — Broker: Interactive Brokers Canada (not Questrade, not anyone else)
+**Context:** The fund needs API order placement for a Canadian retail account, TSX + US.
+**Decision:** IBKR Canada. **Why:** Questrade's API executes trades for *approved partner
+developers only* — retail gets read-only account/market data (verified on questrade.com/api).
+Wealthsimple/TD/CIBC have no public trading APIs. Alpaca doesn't serve Canadian residents.
+IBKR has full retail API trading, both markets, CAD+USD, and a paper-trading twin.
+**Consequences:** Headless auth runs through the Client Portal Gateway (retail OAuth isn't
+self-service as of mid-2026) → IBeam container + a dedicated secondary username in Phase 3;
+IBKR Flex Web Service (token-based, no gateway) as the resilient statements/history path.
+
+### D2 — Swing trading; same-day round trips prohibited
+**Context:** US FINRA day-trade rules constrain margin accounts < USD 25k (~3 day trades per
+5 days; transitioning to Intraday Margin Standards through Oct 2027). $5k can't absorb
+day-trade fee churn anyway. **Decision:** Multi-day holds; the v1 gate rejects same-day round
+trips. **Consequences:** Sidesteps PDT entirely; delayed quotes are sufficient pre-live;
+the agent's cadence is research-and-hold, not scalping.
+
+### D3 — Non-registered **margin** account, margin borrowing banned in code
+**Context:** CRA treats active trading inside a TFSA as business income (actively audited) —
+a robot trading weekly is the poster child. Cash vs margin: cash accounts dodge PDT but
+can never short and have settlement friction; margin settles flexibly. **Decision:**
+Non-registered margin account, CAD base; guardrails prohibit borrowing. **Consequences:**
+Capital-gains treatment preserved; the dormant shorting toggle (D4) stays *possible*;
+buying power is never used beyond settled-cash equivalents by rule.
+
+### D4 — No shorts in v1, but as a config toggle (Cam)
+Shorting is OFF and hard-rejected by the gate, implemented as configuration rather than
+assumption so it can be revisited *after the paper soak proves the model*. Enabling it is a
+human decision + code change, never an agent decision.
+
+### D5 — Sim-first build behind a broker seam (`BROKER=sim → ibkr-paper → ibkr-live`)
+**Context:** IBKR account opening takes days–weeks; Cam wanted live-fire testing with a
+pseudo-account immediately. **Decision:** Everything builds against `BrokerAdapter`; the sim
+is a *complete* paper engine (real fills math, real accounting), upgraded from synthetic to
+real delayed quotes in Phase 2. **Consequences:** Phases 0–2 have zero external dependencies;
+clean sim weeks count toward the soak gate (≥2 of the ≥4 clean weeks must still be on IBKR
+paper because only that tests gateway/session/fill plumbing); the sim survives forever as the
+shadow sandbox for A/B-testing agent changes.
+
+### D6 — Agent runs on Cam's Claude Max subscription (not metered API)
+Token minted via `claude setup-token`, stored as `CLAUDE_CODE_OAUTH_TOKEN` in `.env`,
+**verified working** with a live Haiku call. Marginal Claude cost ≈ $0 vs ~$40–120/mo
+metered — the single biggest lever on a $5k fund where overhead is the main enemy
+(full math: PROJECT_PLAN §8). Tradeoff: Max rate-limit windows; mitigated by Haiku-triage +
+caching habits, acceptable for swing cadence.
+
+### D7 — Money = integer cents, shares = integers
+No floats in accounting paths, ever. BigInt rejected (JSON/serialization friction; int cents
+covers ±$21M). Display formatting is the UI's job (`lib/money.ts`).
+
+### D8 — Stack: TypeScript end-to-end, Next.js 15 + Prisma + Postgres, Docker
+Matches the house (whosup = Express+TS+Prisma+Postgres; camerontora_web = Next on 3002).
+One codebase: the Phase 2 agent joins as a second container from the same repo (own
+entrypoint) rather than a workspace/monorepo split — legacy docker-compose v1 and solo
+maintenance favour boring structure.
+
+### D9 — Auth: reuse infra SSO, add an app-level member door
+The global oauth2-proxy allowlist has ~7 people (wiki/media users). GRQ's middleware admits
+exactly Cam + Graham (`lib/users.ts` ∪ `GRQ_ALLOWED_EMAILS`). Both are **equal admins and
+both hold the kill switch** (Cam's call). The money is Cam's; Graham is a full partner in
+operation and learning.
+
+### D10 — ACB includes commissions; realized P&L is net
+Buy commissions roll into average cost; sell commissions reduce realized P&L — matches CRA
+adjusted-cost-base treatment and keeps dashboard P&L honest. Superficial-loss tracking
+(30-day rebuy after a loss sale) is a Phase 2 agent rule.
+
+### D11 — Hard limits live in code; the agent can never modify them
+The gate (kill switch, no-short/no-margin, fee budget, position caps, rate limits) executes
+deterministically inside `placeOrder` before any fill. The learning loop (D13) improves the
+agent's *judgment*; its *leash* changes only by human commit. UI copy on the settings page
+says exactly this, on purpose.
+
+### D12 — Data feed: $0 delayed until go-live; real-time only when latency costs money
+Phase 2 sim: Yahoo delayed (~15 min, free, unofficial-but-ubiquitous, feeds only the sim).
+Phase 3: IBKR free delayed via gateway. Phase 4: TSX Level 1 streaming (~CAD 16.50/mo
+historical non-pro rate). Protective stops will rest at IBKR and execute on exchange
+real-time prices regardless of our subscription — downside protection is never 15 min late.
+
+### D13 — Learning loop + capital recommendations are first-class requirements (Cam)
+Thesis-at-entry (falsifiable) → retro-at-exit (luck flagged as luck) → distilled lessons
+injected into every future session → weekly self-review proposing strategy tweaks
+(human-approved during soak), all stamped with `agentVersion` so "v3 beats v2" is measurable.
+Weekly report ends with contribute / hold / withdraw, honestly framed: more capital
+amortizes overhead, it does not raise ROI %. Advisory only — money moves only in IBKR's portal.
+
+### D14 — grq-db host port: loopback-only 5434
+5432 = haymaker's postgres, 5433 already taken. Host-side prisma CLI uses
+`web/.env` → 127.0.0.1:5434; containers use `db:5432` from root `.env`. Loopback binding
+keeps it off the LAN.
+
+### D15 — Zero-dependency markdown renderer
+Agent/journal output is simple (bold/code/paragraphs). `components/Md.tsx` (~40 lines)
+instead of react-markdown's remark pipeline — fewer deps, faster builds, same output.
+Revisit only if reports need tables/links.

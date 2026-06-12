@@ -6,7 +6,21 @@ Autonomous Claude-powered investing fund for Cam & Graham at
 [grq.camerontora.ca](https://grq.camerontora.ca) (SSO-protected, port 3012).
 
 **Read [PROJECT_PLAN.md](PROJECT_PLAN.md) first** — architecture, guardrails, phases,
-decisions log, and build runbook all live there.
+decisions log, and build runbook all live there. **Status: Phases 0–1 shipped 2026-06-11**
+(site + dashboard + SimBroker paper engine live); next is Phase 2 (the agent).
+
+## Documentation
+
+| Doc | What |
+|---|---|
+| [PROJECT_PLAN.md](PROJECT_PLAN.md) | The plan: guardrails §6, phases §9, decisions §10, runbook §12, backlog §13 |
+| [CLAUDE.md](CLAUDE.md) | Operating reference: rules, gotchas, commands |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, broker seam, data model |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Decision record (D1–D15) with rationale |
+| [docs/PHASES.md](docs/PHASES.md) | Phase-by-phase detail, soak gate, exit criteria |
+| [docs/SIM-ENGINE.md](docs/SIM-ENGINE.md) | Paper engine spec: gate order, fills, commissions, ACB |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Runbook: deploy, db, secrets, troubleshooting |
+| [docs/AGENT-SPEC.md](docs/AGENT-SPEC.md) | Phase 2 blueprint for the trading agent |
 
 ## Layout
 
