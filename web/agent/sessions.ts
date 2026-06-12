@@ -71,7 +71,7 @@ export async function runMorningResearch(): Promise<void> {
 1. Work through your seed sources and the macro sweep with WebSearch (and WebFetch for promising articles). You're looking for anything that affects current holdings, the watchlist, or presents a swing opportunity in the universe.
 2. Review every open position against its thesis — still valid?
 3. Update the watchlist (set_watchlist) to reflect today's best candidates.
-4. Write ONE RESEARCH journal entry (write_journal) titled "Game plan — ${etDateStr()}": today's read of the market, what you're watching, planned actions with conditions ("buy X if it holds above Y"), and cited sources.
+4. Write ONE RESEARCH journal entry (write_journal) titled "Game plan — ${etDateStr()}": today's read of the market, what you're watching, planned actions with conditions ("buy X if it holds above Y"), and cited sources. When a finding is specifically about one symbol, ALSO write a short symbol-tagged RESEARCH entry for it — the stock pages collect those.
 5. Do NOT place orders now — the market is closed and entries are blocked in the first 15 minutes anyway. Trades happen via your plan when conditions trigger, or at midday check-ins.
 
 Be selective: 3 great sources beat 10 skimmed ones. End with a one-paragraph summary of the plan.`;

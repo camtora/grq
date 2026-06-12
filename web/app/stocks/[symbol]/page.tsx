@@ -103,6 +103,17 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </section>
       )}
 
+      {watch?.note && (
+        <Card className="mb-6 p-4">
+          <div className="flex items-baseline gap-3">
+            <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+              Watchlist note
+            </span>
+            <p className="text-sm text-teal-100/80">{watch.note}</p>
+          </div>
+        </Card>
+      )}
+
       {closes.length > 1 && (
         <Card className="mb-6 p-5">
           <div className="mb-2 flex items-baseline justify-between">

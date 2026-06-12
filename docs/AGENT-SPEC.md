@@ -36,6 +36,10 @@ they meet in the database (orders, journal, reports, settings).
   Delayed ~15 min — fine for swing decisions (D12); the sim measures decision quality.
 - Universe v2: replace the 10 synthetic names with a screened TSX list (price ≥ $2, liquid
   large/mid caps + broad ETFs per risk dial); store as config, not DB.
+  **Governance (clarified 2026-06-12):** the universe is human-edited code
+  (`lib/universe.ts`) — the agent can never add or remove names. It manages the *watchlist
+  within* the universe, and may **propose** universe changes in weekly reviews for the
+  humans to approve at a tune-up, like any strategy tweak.
 - Research sources (Cam, 2026-06-11): the 9:00 session works through a **seed source list**
   — BNN Bloomberg, CBC Business, MSNBC/CNBC, NYT Business, Toronto Star Business, WSJ —
   plus a standing **macro sweep**: gold, oil, CAD/USD, rates, and anything geopolitical

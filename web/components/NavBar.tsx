@@ -8,7 +8,6 @@ const LINKS = [
   { href: "/", label: "Overview" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/stocks", label: "Stocks" },
-  { href: "/chat", label: "Chat" },
   { href: "/activity", label: "Activity" },
   { href: "/journal", label: "Journal" },
   { href: "/reports", label: "Reports" },
@@ -54,6 +53,16 @@ export default function NavBar({
           })}
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs">
+          <Link
+            href="/chat"
+            className={`rounded-lg px-2.5 py-1 text-sm font-semibold transition-colors ${
+              pathname.startsWith("/chat")
+                ? "bg-teal-400/15 text-teal-200"
+                : "text-teal-300 hover:bg-teal-400/10"
+            }`}
+          >
+            💬 Chat
+          </Link>
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>
