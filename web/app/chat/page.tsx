@@ -10,7 +10,7 @@ export default async function Chat({
 }) {
   const sp = await searchParams;
   const symbol =
-    sp.symbol && universeEntry(sp.symbol) ? sp.symbol.toUpperCase() : undefined;
+    sp.symbol && (await universeEntry(sp.symbol)) ? sp.symbol.toUpperCase() : undefined;
 
   const messages = await prisma.chatMessage.findMany({
     orderBy: { at: "desc" },

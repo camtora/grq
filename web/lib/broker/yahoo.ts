@@ -20,6 +20,8 @@ const TIMEOUT_MS = 10_000;
 
 type ChartMeta = {
   symbol?: string;
+  shortName?: string;
+  longName?: string;
   regularMarketPrice?: number;
   chartPreviousClose?: number;
   previousClose?: number;
@@ -28,7 +30,7 @@ type ChartMeta = {
 
 async function fetchOne(symbol: string): Promise<FetchedQuote | null> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    toYahoo(symbol),
+    await toYahoo(symbol),
   )}?interval=1d&range=2d`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -78,6 +80,31 @@ export async function fetchYahooQuotes(symbols: string[]): Promise<FetchedQuote[
   return out;
 }
 
+/** Probe an explicit Yahoo symbol (used by the add-ticker flow to discover
+ *  the right suffix). Returns price + best-effort name, or null. */
+export async function probeYahooSymbol(
+  yahooSymbol: string,
+): Promise<{ priceCents: number; name: string | null } | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, signal: ctrl.signal },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as { chart?: { result?: { meta?: ChartMeta }[] } };
+    const meta = json.chart?.result?.[0]?.meta;
+    const price = meta?.regularMarketPrice;
+    if (!meta || typeof price !== "number" || !(price > 0)) return null;
+    return { priceCents: Math.round(price * 100), name: meta.shortName ?? meta.longName ?? null };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type FetchedBar = {
   date: Date; // ET trading day at UTC midnight
   openCents: number;
@@ -97,7 +124,7 @@ function etDayUtc(epochSeconds: number): Date {
 /** Daily OHLCV history from the same crumb-free chart endpoint. */
 export async function fetchDailyBars(symbol: string, range = "1y"): Promise<FetchedBar[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    toYahoo(symbol),
+    await toYahoo(symbol),
   )}?interval=1d&range=${range}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);

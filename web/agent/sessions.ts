@@ -1,9 +1,12 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
+import { getQuote } from "../lib/broker/quotes";
+import { universeEntry } from "../lib/universe";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
-import { grqServer, GRQ_TOOL_NAMES } from "./tools";
+import { computeSignals, signalsOneLine } from "./signals";
+import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
 import { MODELS, AGENT_VERSION } from "./policy";
 import { alert, heartbeat } from "./alerts";
 
@@ -21,6 +24,7 @@ type SessionOpts = {
   prompt: string;
   model: string;
   withTools: boolean;
+  toolset?: "full" | "research"; // default full
   maxTurns: number;
 };
 
@@ -39,8 +43,12 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
         stderr: (data: string) => console.error(`[session:${opts.label}] ${data.slice(0, 400)}`),
         ...(opts.withTools
           ? {
-              mcpServers: { grq: grqServer },
-              allowedTools: ["WebSearch", "WebFetch", ...GRQ_TOOL_NAMES],
+              mcpServers: { grq: opts.toolset === "research" ? grqResearchServer : grqServer },
+              allowedTools: [
+                "WebSearch",
+                "WebFetch",
+                ...(opts.toolset === "research" ? GRQ_RESEARCH_TOOL_NAMES : GRQ_TOOL_NAMES),
+              ],
             }
           : { allowedTools: [] }),
       },
@@ -89,6 +97,39 @@ The market is open. Review the trigger above against your morning game plan (get
 - If no action is right, write a short DECISION-grade RESEARCH note via write_journal explaining the pass — "no trade" is a decision and gets receipts too.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
+}
+
+/** Deep single-stock dossier (2.7) — research tools only, never trades. */
+export async function runStockDossier(symbol: string, requestedBy = "rotation"): Promise<void> {
+  const sym = symbol.toUpperCase();
+  const [entry, quote, sig, recent] = await Promise.all([
+    universeEntry(sym),
+    getQuote(sym).catch(() => null),
+    computeSignals(sym).catch(() => null),
+    prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 5 }),
+  ]);
+  const prompt = `# STOCK DOSSIER ASSIGNMENT: ${sym}${entry ? ` — ${entry.name} (${entry.status}${entry.tier ? `, ${entry.tier}` : ""})` : ""}
+Requested by: ${requestedBy} · Today: ${etDateStr()}
+Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
+Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
+Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
+
+Research this stock thoroughly with WebSearch/WebFetch — the business, recent news and
+results, catalysts, competitive position, risks. Then write EXACTLY ONE symbol-tagged
+RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
+markdown body with sections: **Snapshot** · **Recent developments** (dated, sourced) ·
+**Signals read** · **Bull case** · **Bear case** · **Verdict** (watchlist-worthy?
+thesis-worthy? confidence 0–100) · **Risks**. Cite every source in sources[].
+${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
+Research only — no trades, no watchlist changes (you don't have those tools here).`;
+  await runSession({
+    label: `dossier:${sym}`,
+    prompt,
+    model: MODELS.decision,
+    withTools: true,
+    toolset: "research",
+    maxTurns: 24,
+  });
 }
 
 export async function runTriage(event: string): Promise<"ignore" | "note" | "escalate"> {

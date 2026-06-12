@@ -1,25 +1,95 @@
-// The tradeable universe: screened, liquid TSX names. Symbols are stored bare
-// everywhere in GRQ; the Yahoo mapping happens only at the data boundary.
-// Risk-dial tiers: CAUTIOUS = etf+large, BALANCED = +mid, AGGRESSIVE = all.
+import { prisma } from "./db";
+
+// The universe is DB-backed (Phase 2.7): CANDIDATE (researched, not tradeable)
+// → ACTIVE (the agent may buy; promotion needs BOTH members + the automated
+// screen) → RETIRED (stop researching; history kept). The agent can never
+// change membership — it may only propose. A 60s in-process cache keeps the
+// hot paths cheap.
 
 export type Tier = "etf" | "large" | "mid";
+export type UniverseStatus = "CANDIDATE" | "ACTIVE" | "RETIRED";
 
-export type UniverseEntry = {
+export type UniverseRow = {
   symbol: string;
   yahoo: string;
   name: string;
-  tier: Tier;
+  tier: Tier | null;
+  status: UniverseStatus;
+  addedBy: string | null;
+  promotionRequestedBy: string | null;
+  proposedTier: string | null;
 };
 
 export const BENCHMARK = "XIC";
+export const CANDIDATE_CAP = 20;
+export const ON_DEMAND_RESEARCH_PER_DAY = 5;
+export const ROTATION_DOSSIERS_PER_DAY = 3;
 
-export const UNIVERSE: UniverseEntry[] = [
-  // Broad ETFs
+let cache: { at: number; rows: UniverseRow[] } | null = null;
+const TTL_MS = 60_000;
+
+export function invalidateUniverseCache(): void {
+  cache = null;
+}
+
+async function load(): Promise<UniverseRow[]> {
+  if (cache && Date.now() - cache.at < TTL_MS) return cache.rows;
+  const rows = await prisma.universeMember.findMany();
+  const mapped: UniverseRow[] = rows.map((r) => ({
+    symbol: r.symbol,
+    yahoo: r.yahoo,
+    name: r.name,
+    tier: (r.tier as Tier | null) ?? null,
+    status: r.status as UniverseStatus,
+    addedBy: r.addedBy,
+    promotionRequestedBy: r.promotionRequestedBy,
+    proposedTier: r.proposedTier,
+  }));
+  cache = { at: Date.now(), rows: mapped };
+  return mapped;
+}
+
+export async function allUniverse(): Promise<UniverseRow[]> {
+  return load();
+}
+
+/** Tradeable names — what the agent may BUY. */
+export async function activeUniverse(): Promise<UniverseRow[]> {
+  return (await load()).filter((r) => r.status === "ACTIVE");
+}
+
+/** Everything we keep data warm for (ACTIVE + CANDIDATE). */
+export async function trackedUniverse(): Promise<UniverseRow[]> {
+  return (await load()).filter((r) => r.status !== "RETIRED");
+}
+
+export async function activeSymbols(): Promise<string[]> {
+  return (await activeUniverse()).map((r) => r.symbol);
+}
+
+export async function trackedSymbols(): Promise<string[]> {
+  return (await trackedUniverse()).map((r) => r.symbol);
+}
+
+export async function universeEntry(symbol: string): Promise<UniverseRow | null> {
+  return (await load()).find((r) => r.symbol === symbol.toUpperCase()) ?? null;
+}
+
+export async function inUniverse(symbol: string): Promise<boolean> {
+  return (await universeEntry(symbol)) !== null;
+}
+
+export async function toYahoo(symbol: string): Promise<string> {
+  const e = await universeEntry(symbol);
+  return e?.yahoo ?? `${symbol.toUpperCase().replace(".", "-")}.TO`;
+}
+
+// The original hand-screened list — seeds UniverseMember as ACTIVE.
+export const SEED: { symbol: string; yahoo: string; name: string; tier: Tier }[] = [
   { symbol: "XIC", yahoo: "XIC.TO", name: "iShares Core S&P/TSX Capped Composite", tier: "etf" },
   { symbol: "XIU", yahoo: "XIU.TO", name: "iShares S&P/TSX 60", tier: "etf" },
   { symbol: "VFV", yahoo: "VFV.TO", name: "Vanguard S&P 500 (CAD)", tier: "etf" },
   { symbol: "VDY", yahoo: "VDY.TO", name: "Vanguard FTSE Cdn High Dividend", tier: "etf" },
-  // Large caps
   { symbol: "RY", yahoo: "RY.TO", name: "Royal Bank", tier: "large" },
   { symbol: "TD", yahoo: "TD.TO", name: "TD Bank", tier: "large" },
   { symbol: "BNS", yahoo: "BNS.TO", name: "Scotiabank", tier: "large" },
@@ -48,7 +118,6 @@ export const UNIVERSE: UniverseEntry[] = [
   { symbol: "WCN", yahoo: "WCN.TO", name: "Waste Connections", tier: "large" },
   { symbol: "WSP", yahoo: "WSP.TO", name: "WSP Global", tier: "large" },
   { symbol: "BN", yahoo: "BN.TO", name: "Brookfield", tier: "large" },
-  // Liquid mids
   { symbol: "OTEX", yahoo: "OTEX.TO", name: "OpenText", tier: "mid" },
   { symbol: "EMA", yahoo: "EMA.TO", name: "Emera", tier: "mid" },
   { symbol: "IFC", yahoo: "IFC.TO", name: "Intact Financial", tier: "mid" },
@@ -56,21 +125,3 @@ export const UNIVERSE: UniverseEntry[] = [
   { symbol: "MG", yahoo: "MG.TO", name: "Magna", tier: "mid" },
   { symbol: "TFII", yahoo: "TFII.TO", name: "TFI International", tier: "mid" },
 ];
-
-const bySymbol = new Map(UNIVERSE.map((u) => [u.symbol, u]));
-
-export function inUniverse(symbol: string): boolean {
-  return bySymbol.has(symbol.toUpperCase());
-}
-
-export function universeEntry(symbol: string): UniverseEntry | null {
-  return bySymbol.get(symbol.toUpperCase()) ?? null;
-}
-
-export function toYahoo(symbol: string): string {
-  return bySymbol.get(symbol.toUpperCase())?.yahoo ?? `${symbol.toUpperCase()}.TO`;
-}
-
-export function universeSymbols(): string[] {
-  return UNIVERSE.map((u) => u.symbol);
-}

@@ -95,13 +95,19 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   // -- thesis discipline --
   if (!thesis.thesis || thesis.sources.length === 0) return refuse("Every order needs a thesis with at least one source (attribution rule).");
 
-  // -- universe & dial --
+  // -- universe & dial (BUYs only — exits must never be trapped by membership) --
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
-  const entry = universeEntry(symbol);
-  if (!entry) return refuse(`${symbol} is not in the universe.`);
-  if (order.side === "BUY" && !dial.tiers.includes(entry.tier)) {
-    return refuse(`${symbol} (${entry.tier}) is outside the ${settings?.riskLevel ?? "BALANCED"} dial's universe.`);
+  if (order.side === "BUY") {
+    const entry = await universeEntry(symbol);
+    if (!entry || entry.status !== "ACTIVE") {
+      return refuse(
+        `${symbol} is not in the ACTIVE universe${entry ? ` (status: ${entry.status} — promotion needs both members)` : ""}.`,
+      );
+    }
+    if (!entry.tier || !dial.tiers.includes(entry.tier)) {
+      return refuse(`${symbol} (${entry.tier ?? "untiered"}) is outside the ${settings?.riskLevel ?? "BALANCED"} dial's universe.`);
+    }
   }
 
   // -- member directives (2.6c): BLOCKED bars buys; sells always allowed --

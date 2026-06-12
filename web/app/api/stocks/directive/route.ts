@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
-  if (typeof body.symbol !== "string" || !inUniverse(body.symbol)) {
+  if (typeof body.symbol !== "string" || !(await inUniverse(body.symbol))) {
     return NextResponse.json({ error: "Unknown symbol." }, { status: 400 });
   }
   const symbol = body.symbol.toUpperCase();

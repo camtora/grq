@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/db";
 import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
-import { inUniverse, universeSymbols } from "../lib/universe";
+import { universeEntry, activeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { computeSignals } from "./signals";
 import { AGENT_VERSION } from "./policy";
@@ -107,8 +107,9 @@ const setWatchlistTool = tool(
     const results: string[] = [];
     for (const a of args.add) {
       const sym = a.symbol.toUpperCase();
-      if (!inUniverse(sym)) {
-        results.push(`SKIP ${sym}: not in universe (${universeSymbols().length} symbols available).`);
+      const entry = await universeEntry(sym);
+      if (!entry || entry.status !== "ACTIVE") {
+        results.push(`SKIP ${sym}: not in the ACTIVE universe (${(await activeSymbols()).length} tradeable symbols).`);
         continue;
       }
       await prisma.watchlist.upsert({
@@ -262,4 +263,19 @@ export const GRQ_READONLY_TOOL_NAMES = [
   "mcp__grq__get_journal",
   "mcp__grq__get_watchlist",
   "mcp__grq__get_signals",
+];
+
+// Research variant for dossier sessions (2.7): reads + write_journal only —
+// dossiers document, they never trade or touch the watchlist.
+export const grqResearchServer = createSdkMcpServer({
+  name: "grq",
+  version: "1.0.0",
+  tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool],
+});
+
+export const GRQ_RESEARCH_TOOL_NAMES = [
+  "mcp__grq__get_quotes",
+  "mcp__grq__get_journal",
+  "mcp__grq__get_signals",
+  "mcp__grq__write_journal",
 ];

@@ -200,6 +200,51 @@ model Watchlist {
   addedAt DateTime @default(now())
 }
 
+// The universe pipeline (2.7): CANDIDATE = researched, not tradeable;
+// ACTIVE = the agent may buy it (promotion requires BOTH members + the
+// automated screen); RETIRED = stop researching (history is never deleted).
+enum UniverseStatus {
+  CANDIDATE
+  ACTIVE
+  RETIRED
+}
+
+model UniverseMember {
+  symbol               String         @id
+  yahoo                String
+  name                 String
+  tier                 String? // etf | large | mid — set at promotion
+  status               UniverseStatus @default(CANDIDATE)
+  addedBy              String?
+  addedAt              DateTime       @default(now())
+  promotionRequestedBy String?
+  promotionRequestedAt DateTime?
+  proposedTier         String?
+  note                 String?
+  updatedAt            DateTime       @updatedAt
+}
+
+// On-demand + rotation research queue — the agent runner processes it.
+enum ResearchStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+model ResearchRequest {
+  id          Int            @id @default(autoincrement())
+  symbol      String
+  requestedBy String
+  status      ResearchStatus @default(QUEUED)
+  at          DateTime       @default(now())
+  completedAt DateTime?
+  error       String?
+
+  @@index([status])
+  @@index([at])
+}
+
 // Member steering for the agent (2.6c): BLOCKED = agent may never buy it
 // (sells always allowed); PINNED = always on the watchlist. Binds the agent
 // only — members' manual orders are exempt.

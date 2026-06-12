@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { universeSymbols } from "../universe";
+import { trackedSymbols } from "../universe";
 import { fetchYahooQuotes } from "./yahoo";
 import type { Quote } from "./types";
 
@@ -82,9 +82,9 @@ export async function refreshQuotesFor(symbols: string[]): Promise<number> {
   return fetched.length;
 }
 
-/** Bulk refresh of the whole universe — called by the agent tick loop. */
+/** Bulk refresh of all tracked symbols — called by the agent tick loop. */
 export async function refreshAllQuotes(): Promise<number> {
-  return refreshQuotesFor(universeSymbols());
+  return refreshQuotesFor(await trackedSymbols());
 }
 
 export function isHardStale(q: Quote, now = Date.now()): boolean {

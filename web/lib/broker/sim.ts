@@ -1,6 +1,6 @@
 import { prisma } from "../db";
 import { getQuote, getQuotes, isHardStale } from "./quotes";
-import { universeSymbols, BENCHMARK } from "../universe";
+import { activeSymbols, BENCHMARK } from "../universe";
 import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
@@ -79,7 +79,7 @@ export class SimBroker implements BrokerAdapter {
   }
 
   async listSymbols(): Promise<string[]> {
-    return universeSymbols();
+    return activeSymbols();
   }
 
   async placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {

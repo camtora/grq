@@ -97,6 +97,19 @@ amortizes overhead, it does not raise ROI %. Advisory only — money moves only 
 `web/.env` → 127.0.0.1:5434; containers use `db:5432` from root `.env`. Loopback binding
 keeps it off the LAN.
 
+### D16 — Universe is UI-managed with a two-person promotion rule (2026-06-12)
+**Context:** Cam wanted stocks added/researched/promoted through the UI, not code commits.
+**Decision:** `UniverseMember` lifecycle CANDIDATE → ACTIVE → RETIRED; anyone adds
+candidates (researched, signal-tracked, never tradeable; cap 20); **promotion to ACTIVE
+requires both members** + an automated screen; demotion/retirement is single-member
+(reducing the robot's reach should never be blocked on a second person — kill-switch
+precedent); the benchmark (XIC) is not demotable; history is never deleted. Research model
+is tiered for cost (signals daily for everything; ~3 rotating deep dossiers/day + 5/day
+on-demand) rather than "all stocks daily by LLM," which would blow the Max budget.
+**Consequences:** supersedes the earlier "universe is code" stance from the same day;
+`lib/universe.ts` became async/DB-backed with a 60s cache; sells and exits never depend on
+membership status.
+
 ### D15 — Zero-dependency markdown renderer
 Agent/journal output is simple (bold/code/paragraphs). `components/Md.tsx` (~40 lines)
 instead of react-markdown's remark pipeline — fewer deps, faster builds, same output.

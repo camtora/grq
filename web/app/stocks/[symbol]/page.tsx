@@ -6,6 +6,8 @@ import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
 import { computeSignals } from "@/agent/signals";
 import { getScoreboard } from "@/lib/scoreboard";
+import { getSession, displayName } from "@/lib/session";
+import UniverseActions from "@/components/UniverseActions";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
@@ -38,8 +40,14 @@ function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
 export default async function StockPage({ params }: { params: Promise<{ symbol: string }> }) {
   const { symbol: raw } = await params;
   const symbol = raw.toUpperCase();
-  const entry = universeEntry(symbol);
+  const entry = await universeEntry(symbol);
   if (!entry) notFound();
+  const session = await getSession();
+  const me = displayName(session);
+  const researchInFlight =
+    (await prisma.researchRequest.count({
+      where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
+    })) > 0;
 
   const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores] =
     await Promise.all([
@@ -66,7 +74,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
         <span className="text-teal-200/60">{entry.name}</span>
-        <Chip tone="dim">{entry.tier}</Chip>
+        <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
+        {entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
+        {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">watchlist</Chip>}
         {directive?.directive === "BLOCKED" && <Chip tone="red">no-fly — {directive.by}</Chip>}
         {directive?.directive === "PINNED" && <Chip tone="teal">📌 {directive.by}</Chip>}
@@ -78,6 +88,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </span>
           </span>
         )}
+        <UniverseActions
+          symbol={symbol}
+          status={entry.status}
+          pendingBy={entry.promotionRequestedBy}
+          proposedTier={entry.proposedTier}
+          currentUser={me}
+          researchInFlight={researchInFlight}
+        />
         <DirectiveButtons
           symbol={symbol}
           current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}

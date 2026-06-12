@@ -61,7 +61,7 @@ export default function NavBar({
                 : "text-teal-300 hover:bg-teal-400/10"
             }`}
           >
-            💬 Chat
+            Chat
           </Link>
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}

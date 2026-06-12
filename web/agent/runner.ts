@@ -10,12 +10,12 @@ import { BENCHMARK } from "../lib/universe";
 import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
-import { universeSymbols } from "../lib/universe";
-import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
+import { trackedSymbols, ROTATION_DOSSIERS_PER_DAY, ON_DEMAND_RESEARCH_PER_DAY } from "../lib/universe";
+import { etDateStr, etParts, isMarketDay, isMarketOpen, startOfEtDay } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier } from "./sessions";
 
 const broker = new SimBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -27,6 +27,7 @@ let lastSnapshot = 0;
 let decisionSessionsToday = 0;
 let decisionsDate = "";
 let lastBarsDay = "";
+let lastRotationDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
@@ -224,11 +225,81 @@ async function tick() {
   const p = etParts();
   if (isMarketDay() && p.minutesSinceMidnight >= 16 * 60 + 30 && lastBarsDay !== p.dateStr) {
     lastBarsDay = p.dateStr;
-    const n = await refreshBars(universeSymbols(), "5d").catch(() => 0);
+    const n = await refreshBars(await trackedSymbols(), "5d").catch(() => 0);
     console.log(`[bars] nightly refresh stored ${n} rows`);
   }
 
   await maybeScheduledSessions();
+  await maybeRotationEnqueue();
+  await processResearchQueue();
+}
+
+// Daily dossier rotation (17:00 ET): the oldest-researched tracked symbols
+// get queued, so every name's dossier stays ≲ 3 weeks fresh.
+async function maybeRotationEnqueue() {
+  const p = etParts();
+  if (p.minutesSinceMidnight < 17 * 60 || lastRotationDay === p.dateStr) return;
+  lastRotationDay = p.dateStr;
+  const symbols = await trackedSymbols();
+  const inFlight = new Set(
+    (
+      await prisma.researchRequest.findMany({
+        where: { status: { in: ["QUEUED", "RUNNING"] } },
+        select: { symbol: true },
+      })
+    ).map((r) => r.symbol),
+  );
+  const ages: { symbol: string; at: number }[] = [];
+  for (const s of symbols) {
+    if (inFlight.has(s)) continue;
+    const latest = await prisma.journalEntry.findFirst({
+      where: { symbol: s, kind: "RESEARCH", title: { startsWith: "Dossier —" } },
+      orderBy: { at: "desc" },
+      select: { at: true },
+    });
+    ages.push({ symbol: s, at: latest?.at.getTime() ?? 0 });
+  }
+  ages.sort((a, b) => a.at - b.at);
+  const picks = ages.slice(0, ROTATION_DOSSIERS_PER_DAY);
+  for (const pick of picks) {
+    await prisma.researchRequest.create({ data: { symbol: pick.symbol, requestedBy: "rotation" } });
+  }
+  if (picks.length > 0) console.log(`[rotation] queued dossiers: ${picks.map((x) => x.symbol).join(", ")}`);
+}
+
+// Work the research queue one dossier at a time, hard daily ceiling.
+async function processResearchQueue() {
+  if (sessionRunning) return;
+  const next = await prisma.researchRequest.findFirst({
+    where: { status: "QUEUED" },
+    orderBy: { at: "asc" },
+  });
+  if (!next) return;
+  const startedToday = await prisma.researchRequest.count({
+    where: { status: { in: ["RUNNING", "DONE", "FAILED"] }, at: { gte: startOfEtDay() } },
+  });
+  if (startedToday >= ROTATION_DOSSIERS_PER_DAY + ON_DEMAND_RESEARCH_PER_DAY) return;
+
+  await prisma.researchRequest.update({ where: { id: next.id }, data: { status: "RUNNING" } });
+  sessionRunning = true;
+  try {
+    await runStockDossier(next.symbol, next.requestedBy);
+    await prisma.researchRequest.update({
+      where: { id: next.id },
+      data: { status: "DONE", completedAt: new Date() },
+    });
+    if (next.requestedBy !== "rotation") {
+      await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
+    }
+  } catch (e) {
+    await prisma.researchRequest.update({
+      where: { id: next.id },
+      data: { status: "FAILED", error: e instanceof Error ? e.message : String(e) },
+    });
+    await alert("warning", `Dossier failed: ${next.symbol}`, e instanceof Error ? e.message : String(e));
+  } finally {
+    sessionRunning = false;
+  }
 }
 
 async function main() {

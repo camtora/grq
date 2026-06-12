@@ -206,7 +206,13 @@ night (directives end-to-end, scoreboard aggregation math, context blocks).
   steering.
 - **Context**: directives block in every session ("BLOCKED: SHOP — Cam: 'too spicy'").
 
-## Phase 2.7 — Universe pipeline & research dossiers (planned 2026-06-12, awaiting Cam's answers)
+## Phase 2.7 — Universe pipeline & research dossiers ✅ (shipped 2026-06-12)
+
+Defaults blessed by Cam; **promotion requires both members** (his call). Verified end-to-end
+same night: GSY added (probe found GSY.TO, 252 bars backfilled, dossier queued) → Cam
+requested promotion → Cam's self-approval refused → Graham's approval ran the screen →
+ACTIVE → demoted → retired with history kept. /stocks regrouped: 📌 pinned (with the
+pinner's initial) → 👁 watchlist → universe.
 
 Cam's ask: stocks get researched continuously; humans add/remove universe members through
 the UI instead of code; /stocks splits into **Universe** and **Research** tabs.
