@@ -153,13 +153,13 @@ export default async function Stocks() {
           <tbody>
             {pinned.length > 0 && (
               <>
-                <SectionHeader label="📌 Pinned" />
+                <SectionHeader label="Pinned" />
                 <SectionRows rows={pinned} />
               </>
             )}
             {watched.length > 0 && (
               <>
-                <SectionHeader label="👁 Watchlist" />
+                <SectionHeader label="Watchlist" />
                 <SectionRows rows={watched} />
               </>
             )}

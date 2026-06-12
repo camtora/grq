@@ -43,7 +43,9 @@ Phase 3 only).
   git- and docker-ignored. Container process env wins over Next's .env loading.
 - **React SSR splits dynamic text with `<!-- -->`** — grep rendered HTML loosely
   (e.g. `Welcome back,[^<]*<!-- -->Cam`).
-- Server disk hovers ~89% — a nightly `docker image prune` cron exists (infra repo).
+- Server disk hovers ~89% on /home; **Docker's root is on `/` and rebuild marathons fill it
+  faster than the nightly 5AM prune** — this took the db down once (2026-06-12). After any
+  heavy build session: `docker image prune -f` (never `system prune`).
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

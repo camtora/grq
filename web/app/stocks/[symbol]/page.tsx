@@ -8,6 +8,7 @@ import { computeSignals } from "@/agent/signals";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
+import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
@@ -102,12 +103,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           symbol={symbol}
           current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
         />
-        <Link
-          href={`/chat?symbol=${symbol}`}
-          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
-        >
-          Ask GRQ →
-        </Link>
+        <AskGrq symbol={symbol} />
       </div>
 
       {position && quote && (

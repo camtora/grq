@@ -12,16 +12,35 @@ function authorName(email: string): string {
 }
 
 export default function ChatClient({
-  initialMessages,
+  initialMessages = [],
   symbol,
+  heightClass = "h-[calc(100vh-16rem)] min-h-[24rem]",
+  selfLoad = false,
 }: {
-  initialMessages: Msg[];
+  initialMessages?: Msg[];
   symbol?: string;
+  heightClass?: string;
+  selfLoad?: boolean;
 }) {
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [draft, setDraft] = useState(
     symbol ? `Let's talk about ${symbol}. ` : "",
   );
+
+  useEffect(() => {
+    if (!selfLoad) return;
+    fetch("/api/chat")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.messages)) setMessages(d.messages);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfLoad]);
+
+  useEffect(() => {
+    if (symbol) setDraft((d) => (d === "" || d.startsWith("Let's talk about") ? `Let's talk about ${symbol}. ` : d));
+  }, [symbol]);
   const [pending, setPending] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -96,7 +115,7 @@ export default function ChatClient({
   }
 
   return (
-    <div className="flex h-[calc(100vh-16rem)] min-h-[24rem] flex-col">
+    <div className={`flex flex-col ${heightClass}`}>
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
         {messages.length === 0 && !pending && (
           <p className="pt-10 text-center text-sm text-teal-200/40">

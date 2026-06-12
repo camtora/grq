@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { cookies } from "next/headers";
 import NavBar from "@/components/NavBar";
+import ChatDrawer from "@/components/ChatDrawer";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 
@@ -33,6 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           theme={theme}
         />
         <div className="mx-auto max-w-[1700px] px-6 py-10">{children}</div>
+        <ChatDrawer />
         <footer className="mx-auto max-w-[1700px] px-6 pb-10 text-xs text-teal-200/30">
           &ldquo;Get rich quick, slowly, with receipts.&rdquo; · Markets open 9:30–16:00 ET ·
           Hard guardrails enforced in code, not vibes

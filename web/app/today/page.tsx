@@ -150,31 +150,52 @@ export default async function Today({
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
           The day as it happened ({timeline.length})
         </h2>
-        {timeline.length === 0 ? (
-          <Card className="p-6 text-sm text-teal-200/40">Nothing journaled this day.</Card>
-        ) : (
-          <div className="space-y-3">
-            {timeline.map((j) => (
-              <Card key={j.id} className="p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs tabular-nums text-teal-200/40">{fmtWhen(j.at)}</span>
-                  <Chip tone={j.kind === "TRADE" ? "green" : j.kind === "SYSTEM" ? "dim" : "teal"}>{j.kind}</Chip>
-                  {j.symbol && (
-                    <Link href={`/stocks/${j.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                      {j.symbol}
-                    </Link>
-                  )}
-                  <span className="text-sm font-medium text-teal-50">{j.title}</span>
-                </div>
-                <div className="mt-2">
-                  <CollapsibleMd text={j.body} threshold={300}>
-                    <Sources sourcesJson={j.sourcesJson} />
-                  </CollapsibleMd>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {(
+            [
+              { label: "Trades", items: timeline.filter((j) => j.kind === "TRADE") },
+              { label: "Research", items: timeline.filter((j) => j.kind !== "TRADE" && j.kind !== "SYSTEM") },
+              { label: "System", items: timeline.filter((j) => j.kind === "SYSTEM") },
+            ] as const
+          ).map((panel) => (
+            <div key={panel.label} className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/40">
+                {panel.label} ({panel.items.length})
+              </h3>
+              {panel.items.length === 0 ? (
+                <Card className="p-4 text-sm text-teal-200/40">
+                  {panel.label === "Trades"
+                    ? "No fills this day."
+                    : panel.label === "Research"
+                      ? "No research this day."
+                      : "Quiet."}
+                </Card>
+              ) : (
+                panel.items.map((j) => (
+                  <Card key={j.id} className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs tabular-nums text-teal-200/40">{fmtWhen(j.at)}</span>
+                      <Chip tone={j.kind === "TRADE" ? "green" : j.kind === "SYSTEM" ? "dim" : "teal"}>
+                        {j.kind}
+                      </Chip>
+                      {j.symbol && (
+                        <Link href={`/stocks/${j.symbol}`} className="font-semibold text-teal-300 hover:underline">
+                          {j.symbol}
+                        </Link>
+                      )}
+                    </div>
+                    <div className="mt-1.5 text-sm font-medium text-teal-50">{j.title}</div>
+                    <div className="mt-2">
+                      <CollapsibleMd text={j.body} threshold={300}>
+                        <Sources sourcesJson={j.sourcesJson} />
+                      </CollapsibleMd>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          ))}
+        </div>
       </section>
     </main>
   );
