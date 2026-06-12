@@ -161,10 +161,10 @@ tier slots that light up as tiers get built — Tier 1 (price/signals), Tier 6 (
 dates + post-call summaries), Tier 7 (news mentions from research sessions), Tier 4
 (insider activity via SEDI) — so each new data tier has an obvious UI home the day it ships.
 
-## Phase 2.6 — Learning-loop hardening (planned 2026-06-12, build during soak)
+## Phase 2.6 — Learning-loop hardening ✅ (shipped 2026-06-12)
 
-Three zero-dependency builds that make the soak itself smarter. Order: b → c → a
-(smallest/safety first, scoreboard last because it's the meatiest).
+Three zero-dependency builds that make the soak itself smarter. All live; verified same
+night (directives end-to-end, scoreboard aggregation math, context blocks).
 
 ### 2.6a — Source scoreboard (the DATA-SOURCES scoring system, structurally)
 
