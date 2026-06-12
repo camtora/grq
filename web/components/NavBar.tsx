@@ -28,7 +28,7 @@ export default function NavBar({
   const pathname = usePathname();
   return (
     <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-(--nav-bg) backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
+      <div className="mx-auto flex max-w-[1700px] flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
         <Link href="/" className="flex items-baseline gap-2">
           <span className="bg-gradient-to-r from-teal-300 to-teal-500 bg-clip-text text-xl font-black tracking-tight text-transparent">
             GRQ
