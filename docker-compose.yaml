@@ -1,3 +1,6 @@
+# version 2.4 on purpose — the host runs legacy docker-compose v1 (same as ~/infrastructure)
+version: "2.4"
+
 services:
   web:
     build: ./web
