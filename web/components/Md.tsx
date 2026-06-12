@@ -1,47 +1,45 @@
-import React from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 
-// Tiny renderer for our own generated markdown (bold, code, line breaks,
-// paragraphs). The journal/report bodies are agent-written and simple — no
-// need for a full remark pipeline.
-function inline(text: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} className="font-semibold text-teal-50">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code key={i} className="rounded bg-teal-400/10 px-1 py-0.5 text-[0.85em] text-teal-200">
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    return part;
-  });
-}
+// Full markdown rendering (react-markdown + GFM), themed teal. Replaced the
+// hand-rolled mini-renderer (D15) once agent game plans and reports started
+// using headers, lists, and links for real.
+
+const components: Components = {
+  h1: ({ node: _n, ...props }) => <h3 className="mt-4 text-base font-bold text-teal-50 first:mt-0" {...props} />,
+  h2: ({ node: _n, ...props }) => <h3 className="mt-4 text-base font-bold text-teal-50 first:mt-0" {...props} />,
+  h3: ({ node: _n, ...props }) => <h4 className="mt-3 text-sm font-bold text-teal-50 first:mt-0" {...props} />,
+  h4: ({ node: _n, ...props }) => <h4 className="mt-3 text-sm font-semibold text-teal-50 first:mt-0" {...props} />,
+  ul: ({ node: _n, ...props }) => <ul className="list-disc space-y-1 pl-5" {...props} />,
+  ol: ({ node: _n, ...props }) => <ol className="list-decimal space-y-1 pl-5" {...props} />,
+  strong: ({ node: _n, ...props }) => <strong className="font-semibold text-teal-50" {...props} />,
+  a: ({ node: _n, ...props }) => (
+    <a className="text-teal-300 underline hover:text-teal-200" target="_blank" rel="noreferrer" {...props} />
+  ),
+  code: ({ node: _n, ...props }) => (
+    <code className="rounded bg-teal-400/10 px-1 py-0.5 text-[0.85em] text-teal-200" {...props} />
+  ),
+  blockquote: ({ node: _n, ...props }) => (
+    <blockquote className="border-l-2 border-teal-400/30 pl-3 italic text-teal-200/60" {...props} />
+  ),
+  hr: () => <hr className="my-3 border-teal-400/15" />,
+  table: ({ node: _n, ...props }) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs" {...props} />
+    </div>
+  ),
+  th: ({ node: _n, ...props }) => (
+    <th className="border-b border-teal-400/20 px-2 py-1 text-left font-semibold text-teal-50" {...props} />
+  ),
+  td: ({ node: _n, ...props }) => <td className="border-b border-teal-400/10 px-2 py-1 align-top" {...props} />,
+};
 
 export default function Md({ text, className = "" }: { text: string; className?: string }) {
-  const blocks = text.trim().split(/\n{2,}/);
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-teal-100/80 ${className}`}>
-      {blocks.map((block, bi) => {
-        const lines = block.split("\n");
-        const italic = block.startsWith("_") && block.endsWith("_");
-        const content = italic ? block.slice(1, -1) : block;
-        return (
-          <p key={bi} className={italic ? "italic text-teal-200/50" : undefined}>
-            {(italic ? [content] : lines).map((line, li) => (
-              <React.Fragment key={li}>
-                {li > 0 && <br />}
-                {inline(line)}
-              </React.Fragment>
-            ))}
-          </p>
-        );
-      })}
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }

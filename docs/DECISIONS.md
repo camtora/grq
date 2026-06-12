@@ -110,7 +110,9 @@ on-demand) rather than "all stocks daily by LLM," which would blow the Max budge
 `lib/universe.ts` became async/DB-backed with a 60s cache; sells and exits never depend on
 membership status.
 
-### D15 — Zero-dependency markdown renderer
-Agent/journal output is simple (bold/code/paragraphs). `components/Md.tsx` (~40 lines)
-instead of react-markdown's remark pipeline — fewer deps, faster builds, same output.
-Revisit only if reports need tables/links.
+### D15 — Zero-dependency markdown renderer *(superseded 2026-06-12)*
+Original: hand-rolled ~40-line renderer since agent output was simple. Superseded the day
+real game plans and reports arrived using headers, lists, and links — `Md.tsx` now wraps
+react-markdown + remark-gfm with teal-themed component overrides. The "revisit when reports
+need more" clause triggered in under 24 hours, which is its own lesson about D-numbered
+optimism.
