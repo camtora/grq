@@ -70,6 +70,12 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </span>
           </span>
         )}
+        <Link
+          href={`/chat?symbol=${symbol}`}
+          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+        >
+          Ask GRQ →
+        </Link>
       </div>
 
       {position && quote && (

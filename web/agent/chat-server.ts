@@ -1,0 +1,150 @@
+/**
+ * GRQ chat server — the members' window for talking to the agent.
+ * READ-ONLY by construction: the tool server wired here has no propose_order
+ * and no writes. A persuasive chat can never become a trading backdoor.
+ *
+ * Runs as its own container (same image as the agent), internal port only;
+ * the web app proxies /api/chat to it and streams SSE through.
+ */
+import http from "node:http";
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import { prisma } from "../lib/db";
+import { buildContext } from "./context";
+import { computeSignals, signalsOneLine } from "./signals";
+import { grqReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
+import { MODELS } from "./policy";
+
+const PORT = Number(process.env.CHAT_PORT ?? 3014);
+
+const CHAT_PERSONA = `You are GRQ's trading agent in chat mode, talking with Cam or Graham — the fund's two members. You have READ-ONLY tools: inspect the portfolio, quotes, journal, watchlist, signals, and search the web. You CANNOT trade, journal, or change anything from chat — if asked to, say so plainly and point at the morning session / tune-up as the path. Be direct, honest, lightly funny (never about losses); cite sources and signals when you lean on them; "I don't know" beats confident nonsense. You are the fund's robot thinking out loud with its humans — not a licensed advisor, and you say so if it matters.`;
+
+type ChatBody = { email?: string; message?: string; symbol?: string };
+
+function sse(res: http.ServerResponse, event: object) {
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function authorName(email: string): string {
+  if (email.startsWith("cameron")) return "Cam";
+  if (email.startsWith("g.j.appleby")) return "Graham";
+  return email;
+}
+
+async function symbolFocus(symbol: string): Promise<string> {
+  const sym = symbol.toUpperCase();
+  const [sig, entries] = await Promise.all([
+    computeSignals(sym).catch(() => null),
+    prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 5 }),
+  ]);
+  return `\n# FOCUS SYMBOL: ${sym}
+Signals: ${sig ? signalsOneLine(sig) : "(no bar history)"}
+Recent journal on ${sym}:
+${entries.map((j) => `- [${j.kind}] ${j.title}: ${j.body.slice(0, 200).replace(/\n/g, " ")}`).join("\n") || "(nothing yet)"}\n`;
+}
+
+async function handleChat(res: http.ServerResponse, body: ChatBody) {
+  const email = body.email?.trim().toLowerCase();
+  const message = body.message?.trim();
+  if (!email || !message || message.length > 4000) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "bad request" }));
+    return;
+  }
+
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+  });
+
+  await prisma.chatMessage.create({ data: { email, role: "user", content: message } });
+
+  const [ctx, history] = await Promise.all([
+    buildContext(),
+    prisma.chatMessage.findMany({ orderBy: { at: "desc" }, take: 20 }),
+  ]);
+  history.reverse();
+  const focus = body.symbol ? await symbolFocus(body.symbol) : "";
+  const convo = history
+    .map((m) => `${m.role === "user" ? authorName(m.email) : "GRQ"}: ${m.content}`)
+    .join("\n\n");
+
+  const prompt = `${ctx}${focus}
+# CONVERSATION (most recent last — reply to the final message)
+${convo}`;
+
+  let finalText = "";
+  try {
+    const q = query({
+      prompt,
+      options: {
+        model: MODELS.decision,
+        systemPrompt: CHAT_PERSONA,
+        maxTurns: 12,
+        permissionMode: "bypassPermissions",
+        settingSources: [],
+        mcpServers: { grq: grqReadOnlyServer },
+        allowedTools: ["WebSearch", "WebFetch", ...GRQ_READONLY_TOOL_NAMES],
+        stderr: (d: string) => console.error(`[chat] ${d.slice(0, 300)}`),
+      },
+    });
+    for await (const m of q) {
+      if (m.type === "assistant") {
+        for (const block of m.message.content) {
+          if (block.type === "text" && block.text) {
+            finalText += (finalText ? "\n\n" : "") + block.text;
+            sse(res, { type: "text", text: block.text });
+          } else if (block.type === "tool_use") {
+            sse(res, {
+              type: "status",
+              text: `${String(block.name).replace("mcp__grq__", "").replace(/_/g, " ")}…`,
+            });
+          }
+        }
+      }
+      if (m.type === "result" && m.subtype !== "success") {
+        sse(res, { type: "error", text: `session ended: ${m.subtype}` });
+      }
+    }
+  } catch (e) {
+    sse(res, { type: "error", text: e instanceof Error ? e.message : String(e) });
+  }
+
+  if (finalText) {
+    await prisma.chatMessage.create({ data: { email: "agent", role: "assistant", content: finalText } });
+  }
+  sse(res, { type: "done" });
+  res.end();
+}
+
+const server = http.createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200).end("ok");
+    return;
+  }
+  if (req.method === "POST" && req.url === "/chat") {
+    let data = "";
+    req.on("data", (c) => (data += c));
+    req.on("end", () => {
+      let body: ChatBody = {};
+      try {
+        body = JSON.parse(data);
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+      handleChat(res, body).catch((e) => {
+        console.error("[chat] fatal", e);
+        try {
+          res.end();
+        } catch {
+          /* already closed */
+        }
+      });
+    });
+    return;
+  }
+  res.writeHead(404).end();
+});
+
+server.listen(PORT, () => console.log(`[grq-chat] listening on :${PORT}`));

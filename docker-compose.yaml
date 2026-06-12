@@ -27,6 +27,18 @@ services:
     depends_on:
       - db
 
+  chat:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.agent
+    container_name: grq-chat
+    restart: unless-stopped
+    command: ["npx", "tsx", "agent/chat-server.ts"]
+    env_file: .env
+    depends_on:
+      - db
+    # internal only — web proxies /api/chat → chat:3014
+
   db:
     image: postgres:16-alpine
     container_name: grq-db
