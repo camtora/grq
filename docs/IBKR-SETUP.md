@@ -3,13 +3,12 @@
 Written 2026-06-12 so the instructions are forwardable (Cam → Graham). These steps open the
 brokerage account that GRQ's Phase 3 (paper) and Phase 4 (real money) plug into.
 
-> **Whose name goes on the account matters.** The plan (PROJECT_PLAN §10.2) treats the fund
-> as **Cam's money in Cam's account** — Graham has equal app access and the kill switch, but
-> the brokerage account, the taxes, and the linked bank are Cam's. The application asks for
-> the holder's SIN and ID, so **Cam must be the one completing it** (Graham can drive the
-> keyboard, but with Cam's documents and answers). If Graham ever wants his own money in
-> play, he opens his *own* account the same way — we don't pool (tax attribution +
-> someone-else's-money problems).
+> **Whose name goes on the account matters — and is currently an open decision** (see
+> `docs/OWNERSHIP.md` for the full options map). Current plan: **single owner, either all
+> Cam's money or all Graham's money** — whoever owns it completes this application with
+> *their own* ID, SIN, and bank, and takes the taxes. The other member keeps equal app
+> access and the kill switch regardless. These instructions work identically for either of
+> you; just don't mix one person's documents with the other's money.
 
 ## Phase A — Apply now (~20 min + 1–3 business days approval)
 

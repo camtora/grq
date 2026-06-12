@@ -95,6 +95,9 @@ rebuild web.
 | `docs/SIM-ENGINE.md` | SimBroker spec: fills, commissions, ACB, gate order |
 | `docs/AGENT-SPEC.md` | **Phase 2 blueprint — start here when building the agent** |
 | `docs/OPERATIONS.md` | Runbook: deploy, db, backups, troubleshooting |
+| `docs/DATA-SOURCES.md` | 10-tier data taxonomy + source scoring system |
+| `docs/IBKR-SETUP.md` | Forwardable account-opening guide |
+| `docs/OWNERSHIP.md` | Whose money/account: options, tax notes, open decision |
 | `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `quotes.ts`, `index.ts` |
 | `web/prisma/schema.prisma` | Data model (int cents everywhere) |
 | `web/prisma/seed.ts` | Destructive sim reset + demo trades |

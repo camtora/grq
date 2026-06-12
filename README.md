@@ -22,6 +22,8 @@ decisions log, and build runbook all live there. **Status: Phases 0–1 shipped 
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Runbook: deploy, db, secrets, troubleshooting |
 | [docs/AGENT-SPEC.md](docs/AGENT-SPEC.md) | Phase 2 blueprint for the trading agent |
 | [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md) | 10-tier data taxonomy + source scoring system |
+| [docs/IBKR-SETUP.md](docs/IBKR-SETUP.md) | Forwardable IBKR account-opening guide |
+| [docs/OWNERSHIP.md](docs/OWNERSHIP.md) | Account ownership options (single/joint/dual) + tax notes |
 
 ## Layout
 

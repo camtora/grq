@@ -41,8 +41,9 @@ async function main() {
   await prisma.contribution.create({
     data: {
       amountCents: 500_000,
+      contributor: "Cam", // sim placeholder — real-money ownership: docs/OWNERSHIP.md
       xicPriceCents: xic.midCents,
-      note: "Initial commitment — Cam",
+      note: "Initial commitment",
     },
   });
 

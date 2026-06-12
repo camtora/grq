@@ -69,6 +69,10 @@ model Contribution {
   id            Int      @id @default(autoincrement())
   at            DateTime @default(now())
   amountCents   Int
+  // Who put this money in ("Cam" | "Graham"). Ownership is data, not code —
+  // the app supports single-owner, joint (CRA: gains allocate by contribution
+  // proportion), or future multi-account. See docs/OWNERSHIP.md.
+  contributor   String?
   // XIC mid price when the money arrived — anchors the "vs just buying XIC" benchmark.
   xicPriceCents Int?
   note          String?

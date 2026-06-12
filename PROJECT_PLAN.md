@@ -374,7 +374,7 @@ week — the soak is the deliberate bottleneck and it's non-negotiable.
 | # | Decision | Outcome |
 |---|---|---|
 | 1 | Broker account | **Open IBKR Canada: non-registered, margin, CAD base.** Borrowing banned by guardrails; margin chosen partly to keep the future shorting toggle possible. Cam starts the application — the only external dependency |
-| 2 | Whose money | **Cam's.** A learning project for both |
+| 2 | Whose money | Revised 2026-06-12: **single-owner — all Cam's OR all Graham's, final call before the IBKR application.** App is ownership-agnostic by design (joint + two-account options also documented & supported): `docs/OWNERSHIP.md`. A learning project for both either way |
 | 3 | App access | Exactly `cameron.tora@gmail.com` + `g.j.appleby@gmail.com` — **equal admin, both hold the kill switch** |
 | 4 | Guardrails | **Approved as specified in §6.** No shorts in v1 — config toggle, revisit after the paper soak proves the model |
 | 5 | Claude cost | **Cam's Claude Max subscription** (token via `claude setup-token`) |
