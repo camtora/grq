@@ -6,7 +6,7 @@
 **Domain:** grq.camerontora.ca (live, SSO-protected, routed to port 3012)
 **Users:** Cam & Graham — equal access, both hold the kill switch
 **Initial contribution:** $5,000 CAD (Cam's money; a learning project for both)
-**Status:** Approved 2026-06-11 — building. IBKR account opening is the only external dependency.
+**Status:** Building — Phases 0–1 shipped 2026-06-11. IBKR account opening is the only external dependency (gates Phase 3).
 **Last updated:** 2026-06-11
 
 ---
@@ -426,4 +426,12 @@ week — the soak is the deliberate bottleneck and it's non-negotiable.
 
 ---
 
-*Decisions locked (§10). Next: build step 1 — the site can be live behind SSO today.*
+## 13. Backlog (fun & someday)
+
+| Added | Item |
+|---|---|
+| 2026-06-11 (Cam) | **Wealth-aware greetings** — the welcome line scales with the fund's fortunes: baseline "Welcome back, Cam.", escalating flattery as P&L climbs (*"Welcome back, oh prosperous one."*), gentle condolences in drawdowns (*"Welcome back, Cam. We don't talk about Tuesday."*). Implement off total P&L % in the overview greeting. |
+
+---
+
+*Decisions locked (§10). Phases 0–1 shipped. Next: Phase 2 — the agent goes live-fire on the sim.*

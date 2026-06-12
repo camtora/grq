@@ -21,7 +21,10 @@ services:
     image: postgres:16-alpine
     container_name: grq-db
     restart: unless-stopped
-    # No host port on purpose — host 5432 belongs to haymaker's postgres.
+    # Loopback-only on 5434 for host-side prisma CLI (db push / seed / psql).
+    # Not 5432 (haymaker's postgres) or 5433 (also taken). Containers use db:5432.
+    ports:
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_DB: grq
       POSTGRES_USER: grq

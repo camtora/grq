@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// All money values are integer cents (CAD unless noted). All quantities are
+// whole shares — fractional shares are not in the v1 universe.
+
+enum RiskLevel {
+  CAUTIOUS
+  BALANCED
+  AGGRESSIVE
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum JournalKind {
+  SYSTEM
+  RESEARCH
+  DECISION
+  TRADE
+  RETRO
+  LESSON
+}
+
+enum ReportKind {
+  EOD
+  WEEKLY
+}
+
+model Account {
+  id        Int      @id @default(1)
+  cashCents Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Settings {
+  id                  Int       @id @default(1)
+  riskLevel           RiskLevel @default(BALANCED)
+  feeBudgetCentsMonth Int       @default(2000)
+  killSwitch          Boolean   @default(false)
+  killSwitchBy        String?
+  killSwitchAt        DateTime?
+  agentVersion        String    @default("v0.1-phase1")
+  updatedBy           String?
+  updatedAt           DateTime  @updatedAt
+}
+
+model Contribution {
+  id          Int      @id @default(autoincrement())
+  at          DateTime @default(now())
+  amountCents Int
+  note        String?
+}
+
+model Order {
+  id                Int            @id @default(autoincrement())
+  createdAt         DateTime       @default(now())
+  symbol            String
+  side              OrderSide
+  type              OrderType
+  qty               Int
+  limitPriceCents   Int?
+  status            OrderStatus    @default(PENDING)
+  filledQty         Int            @default(0)
+  avgFillPriceCents Int?
+  commissionCents   Int            @default(0)
+  placedBy          String
+  reason            String?
+  rejectReason      String?
+  broker            String         @default("sim")
+  trades            Trade[]
+  journal           JournalEntry[]
+
+  @@index([createdAt])
+}
+
+model Trade {
+  id               Int       @id @default(autoincrement())
+  orderId          Int
+  order            Order     @relation(fields: [orderId], references: [id])
+  at               DateTime  @default(now())
+  symbol           String
+  side             OrderSide
+  qty              Int
+  priceCents       Int
+  commissionCents  Int
+  realizedPnlCents Int?
+
+  @@index([at])
+}
+
+model Position {
+  symbol       String   @id
+  qty          Int
+  avgCostCents Int
+  openedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model NavSnapshot {
+  id             Int      @id @default(autoincrement())
+  at             DateTime @default(now())
+  navCents       Int
+  cashCents      Int
+  positionsCents Int
+  note           String?
+
+  @@index([at])
+}
+
+model JournalEntry {
+  id           Int         @id @default(autoincrement())
+  at           DateTime    @default(now())
+  kind         JournalKind
+  symbol       String?
+  title        String
+  body         String
+  confidence   Int?
+  agentVersion String      @default("v0.1-phase1")
+  orderId      Int?
+  order        Order?      @relation(fields: [orderId], references: [id])
+
+  @@index([at])
+  @@index([kind])
+}
+
+model Report {
+  id        Int        @id @default(autoincrement())
+  date      DateTime
+  kind      ReportKind
+  title     String
+  body      String
+  statsJson String?
+  createdAt DateTime   @default(now())
+
+  @@unique([date, kind])
+}
