@@ -50,9 +50,16 @@ npx tsx prisma/seed.ts
 # psql
 docker exec -it grq-db psql -U grq grq
 
-# Backup / restore (do before risky schema work; nightly cron is a Phase 2 ops item)
-docker exec grq-db pg_dump -U grq grq > ~/grq-backups/grq-$(date +%F).sql
-cat backup.sql | docker exec -i grq-db psql -U grq grq
+# Backups — automated nightly at 04:30 (user crontab) via scripts/backup-db.sh:
+#   pg_dump|gzip + chmod-600 .env copy → ~/grq-backups/, 14-day retention,
+#   failures ping Discord. Log: ~/grq-backups/backup.log
+/home/camerontora/grq/scripts/backup-db.sh        # run manually any time
+
+# Restore (replace target db as needed; tested 2026-06-12):
+docker exec grq-db createdb -U grq grq_restore_test
+gunzip -c ~/grq-backups/grq-YYYY-MM-DD.sql.gz | docker exec -i grq-db psql -U grq -q grq_restore_test
+# verify, then either repoint DATABASE_URL or pg_dump/restore into "grq"
+docker exec grq-db dropdb -U grq grq_restore_test
 ```
 
 Two DATABASE_URLs by design: containers get `db:5432` (root `.env` via env_file); host CLI
