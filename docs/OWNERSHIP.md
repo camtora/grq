@@ -62,4 +62,5 @@ accountant is cheap insurance. This doc is not tax advice; it's a map.
 |---|---|
 | 2026-06-11 | Initial: Cam's money, Cam's account (§10.2) |
 | 2026-06-12 | Revised: **single-owner, Cam OR Graham, TBD before the IBKR application.** App made formally ownership-agnostic (`Contribution.contributor` added). Joint + two-account options documented and supported by design |
-| _pending_ | Final owner named → update §10.2, `docs/IBKR-SETUP.md` greeting, and the seed contributor |
+| 2026-06-12 | Leaning **Graham**: personalized setup guide generated (`docs/IBKR-SETUP-GRAHAM.md`, his money + his taxes spelled out). Decision is final when the application is submitted |
+| _pending_ | Final owner named → update §10.2 and the seed contributor |
