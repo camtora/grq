@@ -45,6 +45,9 @@ export const SOURCES = [
 export const MACRO_SWEEP = ["gold", "oil (WTI/WCS)", "CAD/USD", "Bank of Canada / Fed rates", "geopolitics affecting the TSX"];
 
 export const MODELS = {
-  decision: process.env.GRQ_MODEL_DECISION ?? "claude-fable-5",
+  // Decision tier: Opus 4.8 (2026-06-13 — Fable 5 access broke overnight, the
+  // Max token returns "model may not exist or you may not have access"; Opus is
+  // the flagship the token can reach). Override per-env with GRQ_MODEL_DECISION.
+  decision: process.env.GRQ_MODEL_DECISION ?? "claude-opus-4-8",
   triage: process.env.GRQ_MODEL_TRIAGE ?? "claude-haiku-4-5-20251001",
 };
