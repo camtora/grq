@@ -275,14 +275,37 @@ async function processResearchQueue() {
 
   await prisma.researchRequest.update({ where: { id: next.id }, data: { status: "RUNNING" } });
   sessionRunning = true;
+  const startedAt = new Date();
   try {
-    await runStockDossier(next.symbol, next.requestedBy);
-    await prisma.researchRequest.update({
-      where: { id: next.id },
-      data: { status: "DONE", completedAt: new Date() },
+    const result = await runStockDossier(next.symbol, next.requestedBy);
+    // DONE only if the session returned (didn't error) AND actually wrote its
+    // RESEARCH entry. Otherwise the queue lies and the UI shows stale dossiers
+    // as fresh — the 2026-06-13 model-outage failure mode where 41 errored
+    // sessions were all silently marked DONE.
+    const wrote = await prisma.journalEntry.count({
+      where: { kind: "RESEARCH", symbol: next.symbol.toUpperCase(), at: { gte: startedAt } },
     });
-    if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh") {
-      await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
+    if (result === null || wrote === 0) {
+      await prisma.researchRequest.update({
+        where: { id: next.id },
+        data: {
+          status: "FAILED",
+          error: result === null ? "session errored (model/SDK — see SYSTEM alerts)" : "session wrote no dossier entry",
+        },
+      });
+      // runSession already alerts on a hard error; this catches the quiet
+      // "ran but produced nothing" case it can't see.
+      if (result !== null) {
+        await alert("warning", `Dossier produced nothing: ${next.symbol}`, "Session ended without writing a RESEARCH entry.");
+      }
+    } else {
+      await prisma.researchRequest.update({
+        where: { id: next.id },
+        data: { status: "DONE", completedAt: new Date() },
+      });
+      if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh") {
+        await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
+      }
     }
   } catch (e) {
     await prisma.researchRequest.update({
@@ -299,6 +322,13 @@ async function main() {
   markBoot();
   await heartbeat({ bootAt: new Date(), note: "booting" });
   await prisma.settings.updateMany({ data: { agentVersion: AGENT_VERSION } });
+  // A restart interrupts any in-flight dossier — requeue orphaned RUNNING
+  // requests so they retry instead of being stuck RUNNING forever.
+  const requeued = await prisma.researchRequest.updateMany({
+    where: { status: "RUNNING" },
+    data: { status: "QUEUED" },
+  });
+  if (requeued.count > 0) console.log(`[boot] requeued ${requeued.count} orphaned RUNNING dossier(s)`);
   await alert("warning", `Agent restarted (${AGENT_VERSION})`, `Warm-up: no trading for ${HARD.warmupMs / 60_000} minutes. Resuming watch.`);
   console.log(`[grq-agent] ${AGENT_VERSION} up. Market ${isMarketOpen() ? "OPEN" : "closed"}.`);
 

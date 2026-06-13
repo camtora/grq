@@ -99,8 +99,10 @@ Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
 }
 
-/** Deep single-stock dossier (2.7) — research tools only, never trades. */
-export async function runStockDossier(symbol: string, requestedBy = "rotation"): Promise<void> {
+/** Deep single-stock dossier (2.7) — research tools only, never trades.
+ *  Returns the session result (null if the session errored), so the queue can
+ *  tell a real failure from a success instead of marking everything DONE. */
+export async function runStockDossier(symbol: string, requestedBy = "rotation"): Promise<string | null> {
   const sym = symbol.toUpperCase();
   const [entry, quote, sig, recent] = await Promise.all([
     universeEntry(sym),
@@ -122,7 +124,7 @@ markdown body with sections: **Snapshot** · **Recent developments** (dated, sou
 thesis-worthy? confidence 0–100) · **Risks**. Cite every source in sources[].
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
 Research only — no trades, no watchlist changes (you don't have those tools here).`;
-  await runSession({
+  return runSession({
     label: `dossier:${sym}`,
     prompt,
     model: MODELS.decision,
