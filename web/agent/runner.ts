@@ -10,6 +10,7 @@ import { BENCHMARK } from "../lib/universe";
 import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
+import { backfillLogos } from "../lib/logos";
 import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
@@ -27,6 +28,7 @@ let lastSnapshot = 0;
 let decisionSessionsToday = 0;
 let decisionsDate = "";
 let lastBarsDay = "";
+let lastLogoBackfill = 0;
 let lastWeeklyRefreshDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
@@ -245,6 +247,13 @@ async function tick() {
     lastBarsDay = p.dateStr;
     const n = await refreshBars(await trackedSymbols(), "5d").catch(() => 0);
     console.log(`[bars] nightly refresh stored ${n} rows`);
+  }
+
+  // Company-logo backfill (hourly; resolves everything on the first tick).
+  if (Date.now() - lastLogoBackfill > 60 * 60_000) {
+    lastLogoBackfill = Date.now();
+    const n = await backfillLogos().catch(() => 0);
+    if (n > 0) console.log(`[logos] resolved ${n} company logo(s)`);
   }
 
   await maybeScheduledSessions();

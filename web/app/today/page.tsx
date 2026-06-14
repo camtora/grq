@@ -7,7 +7,7 @@ import { money, signedMoney, pct, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
-import StockAvatar from "@/components/StockAvatar";
+import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { dailyQuote } from "@/lib/dailyquote";
 
@@ -43,10 +43,10 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">{children}</h2>;
 }
 
-function MoverRow({ symbol, name, midCents, dayBps }: { symbol: string; name: string; midCents: number; dayBps: number }) {
+function MoverRow({ symbol, name, midCents, dayBps, logoUrl }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2">
-      <StockAvatar symbol={symbol} className="h-8 w-8 text-[11px]" />
+      <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
       <div className="min-w-0">
         <Link href={`/stocks/${symbol}`} className="font-semibold text-teal-200 hover:underline">
           {symbol}
@@ -61,10 +61,10 @@ function MoverRow({ symbol, name, midCents, dayBps }: { symbol: string; name: st
   );
 }
 
-function HitterRow({ p }: { p: PositionView }) {
+function HitterRow({ p, logoUrl }: { p: PositionView; logoUrl: string | null }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2">
-      <StockAvatar symbol={p.symbol} className="h-8 w-8 text-[11px]" />
+      <StockLogo symbol={p.symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
       <div className="min-w-0">
         <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-200 hover:underline">
           {p.symbol}
@@ -79,10 +79,10 @@ function HitterRow({ p }: { p: PositionView }) {
   );
 }
 
-function RadarRow({ symbol, note, tone }: { symbol: string; note: string; tone: "teal" | "dim" }) {
+function RadarRow({ symbol, note, tone, logoUrl }: { symbol: string; note: string; tone: "teal" | "dim"; logoUrl: string | null }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2">
-      <StockAvatar symbol={symbol} className="h-8 w-8 text-[11px]" />
+      <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
       <Link href={`/stocks/${symbol}`} className="font-semibold text-teal-200 hover:underline">
         {symbol}
       </Link>
@@ -99,13 +99,14 @@ type Idea = {
   nearDays: number | null;
   confidence: number | null;
   obscurity: number;
+  logoUrl: string | null;
 };
 
 function IdeaRow({ idea }: { idea: Idea }) {
   return (
     <li className="px-3 py-2.5">
       <div className="flex items-center gap-3">
-        <StockAvatar symbol={idea.sym} className="h-8 w-8 text-[11px]" />
+        <StockLogo symbol={idea.sym} logoUrl={idea.logoUrl} className="h-8 w-8 text-[11px]" />
         <div className="min-w-0">
           <Link href={`/stocks/${idea.sym}`} className="font-semibold text-teal-200 hover:underline">
             {idea.sym}
@@ -208,9 +209,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   if (dayOpenSnap) tape.unshift(dayOpenSnap.navCents);
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
+  const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
   const movers = quoteRows
     .filter((q) => nameBy.has(q.symbol))
-    .map((q) => ({ symbol: q.symbol, name: nameBy.get(q.symbol) ?? q.symbol, midCents: q.midCents, dayBps: q.dayChangeBps }))
+    .map((q) => ({ symbol: q.symbol, name: nameBy.get(q.symbol) ?? q.symbol, midCents: q.midCents, dayBps: q.dayChangeBps, logoUrl: logoBy.get(q.symbol) ?? null }))
     .sort((a, b) => b.dayBps - a.dayBps);
   const gainers = movers.filter((m) => m.dayBps > 0).slice(0, 5);
   const losers = movers.filter((m) => m.dayBps < 0).slice(-5).reverse();
@@ -220,10 +222,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   // On the radar: watchlist first, then today's dossier'd names not already shown.
   const seen = new Set(watchlist.map((w) => w.symbol));
   const radar = [
-    ...watchlist.map((w) => ({ symbol: w.symbol, note: "watchlist", tone: "teal" as const })),
+    ...watchlist.map((w) => ({ symbol: w.symbol, note: "watchlist", tone: "teal" as const, logoUrl: logoBy.get(w.symbol) ?? null })),
     ...dossiers
       .filter((d) => d.symbol && !seen.has(d.symbol))
-      .map((d) => ({ symbol: d.symbol as string, note: d.confidence != null ? `dossier · ${d.confidence}%` : "dossier", tone: "dim" as const })),
+      .map((d) => ({
+        symbol: d.symbol as string,
+        note: d.confidence != null ? `dossier · ${d.confidence}%` : "dossier",
+        tone: "dim" as const,
+        logoUrl: logoBy.get(d.symbol as string) ?? null,
+      })),
   ].slice(0, 8);
 
   // Ideas with upside — the latest dossier-with-a-target per symbol, priced live.
@@ -250,6 +257,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         nearDays: d.targetNearDays ?? null,
         confidence: d.confidence,
         obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
+        logoUrl: logoBy.get(sym) ?? null,
       };
     })
     .sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9))
@@ -414,7 +422,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             {hitters.length > 0 ? (
               <ul className="divide-y divide-teal-400/10">
                 {hitters.map((p) => (
-                  <HitterRow key={p.symbol} p={p} />
+                  <HitterRow key={p.symbol} p={p} logoUrl={logoBy.get(p.symbol) ?? null} />
                 ))}
               </ul>
             ) : (
@@ -436,7 +444,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             ) : radar.length > 0 ? (
               <ul className="divide-y divide-teal-400/10">
                 {radar.map((r) => (
-                  <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} />
+                  <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} logoUrl={r.logoUrl} />
                 ))}
               </ul>
             ) : (

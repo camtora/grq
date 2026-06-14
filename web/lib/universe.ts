@@ -18,6 +18,7 @@ export type UniverseRow = {
   addedBy: string | null;
   promotionRequestedBy: string | null;
   proposedTier: string | null;
+  logoUrl: string | null;
 };
 
 export const BENCHMARK = "XIC";
@@ -49,6 +50,7 @@ async function load(): Promise<UniverseRow[]> {
     addedBy: r.addedBy,
     promotionRequestedBy: r.promotionRequestedBy,
     proposedTier: r.proposedTier,
+    logoUrl: r.logoUrl,
   }));
   cache = { at: Date.now(), rows: mapped };
   return mapped;

@@ -227,6 +227,9 @@ model UniverseMember {
   promotionRequestedAt DateTime?
   proposedTier         String?
   note                 String?
+  // Resolved company logo URL (favicon by domain; FMP logos later). Lifecycle:
+  // null = not yet resolved, "" = resolved but none found, URL = use it.
+  logoUrl              String?
   updatedAt            DateTime       @updatedAt
 }
 
