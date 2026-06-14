@@ -158,10 +158,23 @@ export default async function Ideas() {
   );
   ideas.sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9));
 
-  const [hunt, smartMoney] = await Promise.all([
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Hunt —" } }, orderBy: { at: "desc" } }),
+  const [huntRaw, smartMoney] = await Promise.all([
+    prisma.journalEntry.findMany({
+      where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      take: 16,
+    }),
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
   ]);
+  // Latest hunt dossier per symbol (most recent hunt wins).
+  const huntSeen = new Set<string>();
+  const huntFinds = huntRaw
+    .filter((d) => {
+      if (!d.symbol || huntSeen.has(d.symbol)) return false;
+      huntSeen.add(d.symbol);
+      return true;
+    })
+    .slice(0, 8);
 
   return (
     <main>
@@ -170,20 +183,33 @@ export default async function Ideas() {
         sub="Under-the-radar names the agent has researched, ranked by expected upside — unfamiliar names first."
       />
 
-      {hunt && (
-        <Card className="mb-6 border-teal-400/30 p-5">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
+      {huntFinds.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <Chip tone="teal">the hunt</Chip>
-            <span className="text-sm font-medium text-teal-50">{hunt.title}</span>
-            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(hunt.at)}</span>
+            <span className="text-sm text-teal-200/50">
+              under-the-radar names the agent flagged — why we care up top, &ldquo;read more&rdquo; for the full dossier
+            </span>
           </div>
-          <CollapsibleMd text={hunt.body}>
-            <SourceChips sourcesJson={hunt.sourcesJson} />
-          </CollapsibleMd>
+          <div className="space-y-3">
+            {huntFinds.map((d) => (
+              <Card key={d.id} className="p-5">
+                <div className="mb-2 flex items-center gap-3">
+                  <StockLogo symbol={d.symbol as string} logoUrl={null} className="h-9 w-9 text-[11px]" />
+                  <span className="text-lg font-bold text-teal-200">{d.symbol}</span>
+                  {d.confidence != null && <Chip tone="dim">conf {d.confidence}%</Chip>}
+                  <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(d.at)}</span>
+                </div>
+                <CollapsibleMd text={d.body} threshold={320}>
+                  <SourceChips sourcesJson={d.sourcesJson} />
+                </CollapsibleMd>
+              </Card>
+            ))}
+          </div>
           <p className="mt-2 text-[11px] text-teal-200/40">
-            The agent proposes these — add the promising ones as research candidates on the Research tab.
+            Proposals only — the agent can&apos;t add these to the universe. Add the ones you like as research candidates on the Research tab.
           </p>
-        </Card>
+        </section>
       )}
 
       {smartMoney && (

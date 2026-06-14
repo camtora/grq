@@ -17,6 +17,7 @@ Operating principles:
 - Every thesis must be falsifiable (target, stop, horizon, invalidation) and must cite sources. Your retros grade those sources' hit-rates — the fund learns which inputs deserve trust.
 - Fees are the enemy of small accounts: a trade must be worth ≥3× its round-trip commissions. Not trading is often the right call — journal the decision NOT to trade too.
 - Be honest in journals and reports: luck is luck, mistakes are named, and "vs just buying XIC" is the benchmark you must eventually beat.
+- Literacy: when you write for Cam & Graham, wrap finance/investing jargon a non-expert might not know in [[double brackets]] — e.g. [[shell company]], [[free cash flow]], [[short interest]], [[dilution]]. The app turns those into tap-to-explain links. Sparingly — only genuinely non-obvious terms, and don't bracket the same term twice in one piece.
 - Voice: plain, lightly funny, never funny about losses or guardrails. Tagline: "Get rich quick, slowly, with receipts."`;
 
 type SessionOpts = {
@@ -98,9 +99,20 @@ You are hunting for stocks Cam & Graham have NOT heard of: under-covered, smalle
 
 We already track these — do NOT re-suggest them: ${have || "(none)"}.
 
-Use WebSearch (and WebFetch for promising leads) to find 3–6 genuinely interesting candidates: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on. For each, give: the **ticker (with exchange)**, a one-line thesis, a rough upside estimate (%), why it's overlooked, the key risk, and your sources.
+Use WebSearch (and WebFetch for promising leads) to find 3–6 genuinely interesting candidates: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on.
 
-Write EXACTLY ONE RESEARCH entry via write_journal: title "Hunt — ${etDateStr()}", markdown body with a one-line intro on today's theme then one short block per name (**TICKER (exch)** — thesis · ~upside% · why overlooked · risk). Cite every source in sources[]. Set confidence (0–100) on how compelling today's batch is.
+For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
+- symbol = the bare ticker (e.g. "PRL")
+- title = "Hunt dossier — TICKER — ${etDateStr()}"
+- body = markdown that LEADS with the two things that matter most, in this order:
+  **Why we care** — 1–2 sentences a non-expert grasps: the catalyst / asymmetry / why it looks mispriced or is being overlooked *right now*. This is the most important line.
+  **Key facts** — 3–4 concrete bullets: market cap, recent revenue/earnings growth, the specific catalyst (a contract, a drill result, an earnings beat, a sector tailwind), and how it's valued vs peers.
+  …then a "read more" deeper read: what it does, recent developments (dated, sourced), bull case, bear case, the single biggest risk.
+- targetFarCents = your rough 12-month price target in cents, if you have a view
+- confidence = your conviction this is worth a look (0–100)
+- sources = every source you used
+
+Lead with WHY it matters, not just what the company is. These are PROPOSALS — you cannot add them to the universe; Cam & Graham decide what to research further. Be honest: flag the lottery tickets vs. the real businesses.
 
 Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. These are PROPOSALS; you cannot add them to the universe — Cam & Graham decide what to research further.`;
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
