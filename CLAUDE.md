@@ -8,10 +8,14 @@ Cam & Graham at https://grq.camerontora.ca. A trading agent (Phase 2+) manages a
 brokerage account within hard code-enforced guardrails; the web app is the dashboard.
 Tagline: *"Get rich quick, slowly, with receipts."*
 
-**Status (2026-06-11):** Phases 0–1 shipped — site live behind SSO, SimBroker paper engine +
-full dashboard running on synthetic quotes. Next: Phase 2 (agent live-fire on the sim, spec
-in `docs/AGENT-SPEC.md`). External dependency: Cam opening the IBKR Canada account (gates
-Phase 3 only).
+**Status (2026-06-13):** Phases 0–2.7 shipped — site live behind SSO; the agent is
+live-firing on the sim on real Yahoo-delayed quotes (soak running since 2026-06-12), with
+per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives
+(pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
+chat. Decision sessions run on **Opus 4.8** (`claude-opus-4-8`), triage on Haiku 4.5 — Fable 5
+access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). Next: Phase 2 has
+exited build and is soaking; Phase 3 (IBKR paper) is blocked only on Cam & Graham's IBKR
+account (both applied 2026-06-12).
 
 ---
 
@@ -54,12 +58,16 @@ Phase 3 only).
 ```bash
 cd /home/camerontora/grq
 
-# Deploy / rebuild after code changes
+# Deploy / rebuild after code changes (4 services: web · agent · chat · db).
+# agent + chat share web/Dockerfile.agent and the web/ source tree (no bind mounts —
+# a source change needs a rebuild, not just a restart).
 docker-compose build web && docker-compose up -d web
+docker-compose build agent chat && docker-compose up -d agent chat
+docker image prune -f   # after any heavy build — Docker root is on / and fills fast
 
 # Logs / status / health
-docker-compose logs -f web
-curl -s localhost:3012/api/health
+docker-compose logs -f web        # or: agent (orchestrator) · chat (read-only chat server)
+curl -s localhost:3012/api/health  # includes agent heartbeat: bootAt, lastTickAt, lastSessionAt
 
 # Schema change → push to db (host-side)
 source ~/.nvm/nvm.sh && cd web && npx prisma db push
@@ -100,12 +108,15 @@ rebuild web.
 | `docs/DATA-SOURCES.md` | 10-tier data taxonomy + source scoring system |
 | `docs/IBKR-SETUP.md` | Forwardable account-opening guide |
 | `docs/OWNERSHIP.md` | Whose money/account: options, tax notes, open decision |
-| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `quotes.ts`, `index.ts` |
+| `docs/LITERACY.md` | **Financial-literacy product pillar** — every number explainable; glossary + agent explainers |
+| `docs/NEWSPAPER.md` | "The Daily" — Today-as-newspaper: editions by time of day, sections, imagery roadmap |
+| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` |
+| `web/agent/` | The agent worker (Phase 2): `runner.ts` (orchestrator/tick loop), `validator.ts` (§6 gate), `policy.ts` (hard limits + model IDs), `sessions.ts` (LLM sessions), `tools.ts`, `context.ts`, `signals.ts`, `calendar.ts`, `alerts.ts`, `chat-server.ts` |
 | `web/prisma/schema.prisma` | Data model (int cents everywhere) |
 | `web/prisma/seed.ts` | Destructive sim reset + demo trades |
 | `web/lib/users.ts` | Member list (the app-level allowlist) |
 | `web/middleware.ts` | The door |
-| `.env` | Secrets: db password, `BROKER=sim`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token, verified working) |
+| `.env` | Secrets/config: db password, `BROKER=sim`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token), `DISCORD_WEBHOOK_URL` (alerts), optional `GRQ_MODEL_DECISION` (overrides the decision model; default `claude-opus-4-8` in `agent/policy.ts`) |
 
 ## Working agreements
 
@@ -115,4 +126,8 @@ rebuild web.
 - Commit at phase boundaries with descriptive messages; remote is private GitHub.
 - Cam & Graham read the dashboards — keep UI copy in GRQ's voice (honest, lightly funny,
   teal). The fund's money rules are never funny: rejections state the guardrail plainly.
+- **Financial literacy is a product pillar** (`docs/LITERACY.md`): every number, acronym, and
+  concept on screen should be explainable — inline or by the agent. A figure the app shows but
+  can't explain is a bug. GRQ is being built as a product, not a single-user tool (multi-tenancy
+  deferred; the content layers come first). The Today page is "The Daily" newspaper (`docs/NEWSPAPER.md`).
 - When the user reports a bug mid-market-hours (Phase 2+), check kill switch state FIRST.
