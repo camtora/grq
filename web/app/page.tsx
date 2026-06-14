@@ -97,7 +97,7 @@ export default async function Overview() {
               <span className="text-xs uppercase tracking-wider text-teal-200/50">NAV history</span>
               <span className="text-xs text-teal-200/40">{history.length} snapshots</span>
             </div>
-            <Sparkline values={history.map((h) => h.navCents)} />
+            <Sparkline values={history.map((h) => h.navCents)} dates={history.map((h) => h.at)} format={money} axes />
           </Card>
 
           <Card className="overflow-x-auto">

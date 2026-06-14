@@ -208,7 +208,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               {money(closes[0].closeCents)} → {money(closes[closes.length - 1].closeCents)}
             </span>
           </div>
-          <Sparkline values={closes.map((c) => c.closeCents)} />
+          <Sparkline values={closes.map((c) => c.closeCents)} dates={closes.map((c) => c.date)} format={money} axes />
         </Card>
       )}
 
