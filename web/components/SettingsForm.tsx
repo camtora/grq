@@ -24,9 +24,11 @@ const DIALS = [
 export default function SettingsForm({
   riskLevel,
   feeBudgetCentsMonth,
+  readOnly = false,
 }: {
   riskLevel: string;
   feeBudgetCentsMonth: number;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [risk, setRisk] = useState(riskLevel);
@@ -66,8 +68,8 @@ export default function SettingsForm({
           {DIALS.map((d) => (
             <button
               key={d.value}
-              onClick={() => setRisk(d.value)}
-              className={`rounded-2xl border p-4 text-left transition-colors ${
+              onClick={() => !readOnly && setRisk(d.value)}
+              className={`rounded-2xl border p-4 text-left transition-colors ${readOnly ? "cursor-default" : ""} ${
                 risk === d.value
                   ? "border-teal-400/50 bg-teal-400/10"
                   : "border-teal-400/10 bg-teal-400/[0.02] hover:border-teal-400/30"
@@ -100,19 +102,28 @@ export default function SettingsForm({
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               inputMode="numeric"
+              readOnly={readOnly}
               className="w-24 bg-transparent px-2 py-2.5 text-teal-50 outline-none"
             />
             <span className="text-xs text-teal-200/40">/ month</span>
           </div>
-          <button
-            onClick={save}
-            disabled={state === "saving"}
-            className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
-          >
-            {state === "saving" ? "Saving…" : "Save"}
-          </button>
-          {state === "saved" && <span className="text-sm text-emerald-400">Saved ✓</span>}
-          {state === "error" && <span className="text-sm text-red-400">{error}</span>}
+          {readOnly ? (
+            <span className="rounded-xl border border-teal-400/15 px-4 py-2.5 text-xs uppercase tracking-wider text-teal-200/40">
+              view only
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={save}
+                disabled={state === "saving"}
+                className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
+              >
+                {state === "saving" ? "Saving…" : "Save"}
+              </button>
+              {state === "saved" && <span className="text-sm text-emerald-400">Saved ✓</span>}
+              {state === "error" && <span className="text-sm text-red-400">{error}</span>}
+            </>
+          )}
         </div>
         <p className="mt-2 text-xs text-teal-200/40">
           Commissions stop dead at this number — the order gate rejects anything that would

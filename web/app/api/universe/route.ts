@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sessionFromRequest, displayName } from "@/lib/session";
+import { memberFromRequest, displayName } from "@/lib/session";
 import {
   universeEntry,
   invalidateUniverseCache,
@@ -45,8 +45,8 @@ async function promotionScreen(symbol: string): Promise<string[]> {
 }
 
 export async function POST(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return bad("Not a member.", 403);
+  const session = memberFromRequest(req);
+  if (!session) return bad("Members only — read-only access.", 403);
   const who = displayName(session);
 
   let body: { action?: unknown; symbol?: unknown; tier?: unknown; note?: unknown };

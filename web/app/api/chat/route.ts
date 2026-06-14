@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sessionFromRequest } from "@/lib/session";
+import { memberFromRequest } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const CHAT_URL = process.env.CHAT_URL ?? "http://chat:3014";
 
 export async function GET(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Not a member." }, { status: 403 });
+  const session = memberFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Members only — chat is members-only." }, { status: 403 });
   const messages = await prisma.chatMessage.findMany({ orderBy: { at: "desc" }, take: 50 });
   return NextResponse.json({ messages: messages.reverse() });
 }
 
 export async function POST(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Not a member." }, { status: 403 });
+  const session = memberFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Members only — chat is members-only." }, { status: 403 });
 
   let body: { message?: unknown; symbol?: unknown };
   try {

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sessionFromRequest, displayName } from "@/lib/session";
+import { memberFromRequest, displayName } from "@/lib/session";
 import { sendDiscord } from "@/agent/alerts";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Not a member." }, { status: 403 });
+  const session = memberFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Members only — read-only access." }, { status: 403 });
 
   let body: { engaged?: unknown };
   try {

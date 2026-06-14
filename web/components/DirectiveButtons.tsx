@@ -8,12 +8,29 @@ type Directive = { directive: "PINNED" | "BLOCKED"; by: string; note: string | n
 export default function DirectiveButtons({
   symbol,
   current,
+  canEdit = true,
 }: {
   symbol: string;
   current: Directive;
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+
+  // Viewers see the directive state read-only (nothing if there's none).
+  if (!canEdit) {
+    if (!current) return null;
+    const pinned = current.directive === "PINNED";
+    return (
+      <span
+        className={`rounded-xl border px-3 py-2 text-sm font-bold uppercase tracking-wider ${
+          pinned ? "border-teal-400/50 bg-teal-400/20 text-teal-200" : "border-red-400/50 bg-red-400/15 text-red-300"
+        }`}
+      >
+        {pinned ? `Pinned by ${current.by}` : `Blocked by ${current.by}`}
+      </span>
+    );
+  }
 
   async function set(directive: "PINNED" | "BLOCKED" | null, note?: string | null) {
     setBusy(true);

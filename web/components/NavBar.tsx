@@ -21,11 +21,13 @@ export default function NavBar({
   killSwitch,
   broker,
   theme,
+  isMember = true,
 }: {
   name: string;
   killSwitch: boolean;
   broker: string;
   theme: "light" | "dark";
+  isMember?: boolean;
 }) {
   const pathname = usePathname();
   return (
@@ -55,12 +57,22 @@ export default function NavBar({
           })}
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs">
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent("grq:chat"))}
-            className="rounded-lg px-2.5 py-1 text-sm font-semibold text-teal-300 transition-colors hover:bg-teal-400/10"
-          >
-            Chat
-          </button>
+          {isMember && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("grq:chat"))}
+              className="rounded-lg px-2.5 py-1 text-sm font-semibold text-teal-300 transition-colors hover:bg-teal-400/10"
+            >
+              Chat
+            </button>
+          )}
+          {!isMember && (
+            <span
+              className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-amber-300/80"
+              title="You have read-only access to this fund"
+            >
+              read-only
+            </span>
+          )}
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>

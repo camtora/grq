@@ -16,10 +16,26 @@ function envEmails(): string[] {
     .filter(Boolean);
 }
 
-export function isAllowed(email: string | null | undefined): boolean {
+// A member is Cam/Graham or anyone in GRQ_ALLOWED_EMAILS — they act on the fund.
+export function isMember(email: string | null | undefined): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   return normalized in USERS || envEmails().includes(normalized);
+}
+
+// Back-compat alias (kept for any caller that means "is a member").
+export const isAllowed = isMember;
+
+// Access tiers. oauth2-proxy already gates login to the infra allowlist
+// (~/infrastructure/oauth2-proxy/authenticated_emails.txt), so ANY request that
+// reaches GRQ with a valid X-Forwarded-Email is allowlisted → at least a
+// read-only viewer. Members may act; viewers may only look. null = no identity
+// (a header-less LAN hit) → denied at the door.
+export type Role = "member" | "viewer";
+
+export function roleForEmail(email: string | null | undefined): Role | null {
+  if (!email || !email.trim()) return null;
+  return isMember(email) ? "member" : "viewer";
 }
 
 export function userForEmail(email: string | null | undefined): GrqUser | null {

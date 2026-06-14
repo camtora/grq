@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { USERS } from "@/lib/users";
+import { getSession } from "@/lib/session";
 import { getBroker } from "@/lib/broker";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import SettingsForm from "@/components/SettingsForm";
@@ -15,10 +16,12 @@ const ROADMAP = [
 ];
 
 export default async function Settings() {
-  const [settings, symbols] = await Promise.all([
+  const [settings, symbols, session] = await Promise.all([
     prisma.settings.findUnique({ where: { id: 1 } }),
     getBroker().listSymbols(),
+    getSession(),
   ]);
+  const isMember = session?.role === "member";
 
   return (
     <main>
@@ -31,11 +34,13 @@ export default async function Settings() {
         <SettingsForm
           riskLevel={settings?.riskLevel ?? "BALANCED"}
           feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
+          readOnly={!isMember}
         />
 
         <KillSwitch
           engaged={settings?.killSwitch ?? false}
           engagedBy={settings?.killSwitchBy ?? null}
+          canToggle={isMember}
         />
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -86,7 +91,7 @@ export default async function Settings() {
           </Card>
         </div>
 
-        <OrderTicket symbols={symbols} />
+        {isMember && <OrderTicket symbols={symbols} />}
 
         <Card className="p-5">
           <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">

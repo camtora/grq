@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sessionFromRequest, displayName } from "@/lib/session";
+import { memberFromRequest, displayName } from "@/lib/session";
 import { money } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +9,8 @@ const RISK_LEVELS = ["CAUTIOUS", "BALANCED", "AGGRESSIVE"] as const;
 type Risk = (typeof RISK_LEVELS)[number];
 
 export async function PUT(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Not a member." }, { status: 403 });
+  const session = memberFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Members only — read-only access." }, { status: 403 });
 
   let body: { riskLevel?: unknown; feeBudgetCentsMonth?: unknown };
   try {

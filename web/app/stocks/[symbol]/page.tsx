@@ -49,6 +49,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   if (!entry) notFound();
   const session = await getSession();
   const me = displayName(session);
+  const isMember = session?.role === "member";
   const researchInFlight =
     (await prisma.researchRequest.count({
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
@@ -102,19 +103,22 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       </div>
 
       <div className="mt-4 mb-6 flex flex-wrap items-center gap-2">
-        <UniverseActions
-          symbol={symbol}
-          status={entry.status}
-          pendingBy={entry.promotionRequestedBy}
-          proposedTier={entry.proposedTier}
-          currentUser={me}
-          researchInFlight={researchInFlight}
-        />
+        {isMember && (
+          <UniverseActions
+            symbol={symbol}
+            status={entry.status}
+            pendingBy={entry.promotionRequestedBy}
+            proposedTier={entry.proposedTier}
+            currentUser={me}
+            researchInFlight={researchInFlight}
+          />
+        )}
         <DirectiveButtons
           symbol={symbol}
           current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
+          canEdit={isMember}
         />
-        <AskGrq symbol={symbol} />
+        {isMember && <AskGrq symbol={symbol} />}
       </div>
 
       {rec && (

@@ -205,7 +205,7 @@ export default async function Overview() {
       </section>
 
       <section className="mt-6">
-        <KillSwitch engaged={pf.killSwitch} engagedBy={pf.killSwitchBy} />
+        <KillSwitch engaged={pf.killSwitch} engagedBy={pf.killSwitchBy} canToggle={session?.role === "member"} />
       </section>
     </main>
   );

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { getBroker } from "@/lib/broker";
-import { sessionFromRequest, displayName } from "@/lib/session";
+import { memberFromRequest, displayName } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /** Manual order entry — a Phase 1 dev tool for exercising the engine. Only
  *  exists while BROKER=sim; the agent goes through the engine directly. */
 export async function POST(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Not a member." }, { status: 403 });
+  const session = memberFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Members only — read-only access." }, { status: 403 });
   if ((process.env.BROKER ?? "sim") !== "sim") {
     return NextResponse.json({ error: "Manual orders are sim-only." }, { status: 400 });
   }

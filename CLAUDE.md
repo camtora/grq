@@ -87,11 +87,21 @@ Full verification suite + troubleshooting: `docs/OPERATIONS.md`.
 ## Auth model
 
 nginx + oauth2-proxy (infra repo) authenticate the Google account and pass
-`X-Forwarded-Email`. The app's own door is `web/middleware.ts`: member list =
-`web/lib/users.ts` (Cam, Graham — both admin, both hold the kill switch) ∪
-`GRQ_ALLOWED_EMAILS` env. Everyone else gets a teal 403. `/api/health` is exempt
-(LAN monitoring). Adding a member: edit `lib/users.ts` (named) or the env var (anonymous),
-rebuild web.
+`X-Forwarded-Email`. oauth2-proxy already rejects anyone not in the infra
+allowlist (`~/infrastructure/oauth2-proxy/authenticated_emails.txt`) at login, so
+a valid header == an allowlisted user. **Two tiers** (`web/lib/users.ts` →
+`roleForEmail`): **members** = `lib/users.ts` (Cam, Graham — admins, both hold the
+kill switch) ∪ `GRQ_ALLOWED_EMAILS` env → full access; **viewers** = any other
+allowlisted email → **read-only** (full read, no writes). A header-less hit (direct
+LAN, no SSO) has no identity → 403. `/api/health` is exempt (LAN monitoring).
+
+The read-only enforcement is **server-side, not cosmetic**: every mutating route
+guards with `memberFromRequest()` (`web/lib/session.ts`) → viewers get 403 on
+`killswitch`, `settings`, `sim/order`, `stocks/directive`, `universe`, `chat`.
+`explain` (the literacy explainer) is open to viewers by design. The UI also
+hides/disables member-only controls and shows a "read-only" badge, but that's
+defense-in-depth — the route guards are the lock. Promote a viewer to member:
+edit `lib/users.ts` (named) or `GRQ_ALLOWED_EMAILS` (anonymous), rebuild web.
 
 ## File map
 

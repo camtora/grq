@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 export default function KillSwitch({
   engaged,
   engagedBy,
+  canToggle = true,
 }: {
   engaged: boolean;
   engagedBy: string | null;
+  canToggle?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -51,17 +53,23 @@ export default function KillSwitch({
         </div>
         {error ? <div className="mt-1 text-xs text-red-300">{error}</div> : null}
       </div>
-      <button
-        onClick={toggle}
-        disabled={busy}
-        className={`rounded-xl px-5 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
-          engaged
-            ? "border border-teal-400/40 bg-teal-400/10 text-teal-200 hover:bg-teal-400/20"
-            : "border border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/25"
-        }`}
-      >
-        {busy ? "…" : engaged ? "Resume trading" : "Halt trading"}
-      </button>
+      {canToggle ? (
+        <button
+          onClick={toggle}
+          disabled={busy}
+          className={`rounded-xl px-5 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+            engaged
+              ? "border border-teal-400/40 bg-teal-400/10 text-teal-200 hover:bg-teal-400/20"
+              : "border border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/25"
+          }`}
+        >
+          {busy ? "…" : engaged ? "Resume trading" : "Halt trading"}
+        </button>
+      ) : (
+        <span className="rounded-xl border border-red-400/15 px-4 py-2 text-xs uppercase tracking-wider text-red-200/40">
+          view only
+        </span>
+      )}
     </div>
   );
 }

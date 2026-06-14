@@ -21,6 +21,7 @@ export default async function Research() {
     }),
   ]);
   const me = displayName(session);
+  const isMember = session?.role === "member";
   const candidates = universe.filter((u) => u.status === "CANDIDATE");
   const retired = universe.filter((u) => u.status === "RETIRED");
 
@@ -80,9 +81,11 @@ export default async function Research() {
         </div>
       </Card>
 
-      <div className="mb-6">
-        <AddTicker />
-      </div>
+      {isMember && (
+        <div className="mb-6">
+          <AddTicker />
+        </div>
+      )}
 
       {candidates.length === 0 ? (
         <Card className="p-8 text-center text-sm text-teal-200/40">
@@ -114,16 +117,18 @@ export default async function Research() {
                     {c.addedBy ? ` · added by ${c.addedBy}` : ""}
                   </span>
                 </div>
-                <div className="mt-3">
-                  <UniverseActions
-                    symbol={c.symbol}
-                    status="CANDIDATE"
-                    pendingBy={c.promotionRequestedBy}
-                    proposedTier={c.proposedTier}
-                    currentUser={me}
-                    researchInFlight={inFlight.has(c.symbol)}
-                  />
-                </div>
+                {isMember && (
+                  <div className="mt-3">
+                    <UniverseActions
+                      symbol={c.symbol}
+                      status="CANDIDATE"
+                      pendingBy={c.promotionRequestedBy}
+                      proposedTier={c.proposedTier}
+                      currentUser={me}
+                      researchInFlight={inFlight.has(c.symbol)}
+                    />
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -142,9 +147,11 @@ export default async function Research() {
                   {r.symbol}
                 </Link>
                 <span className="text-sm text-teal-200/40">{r.name}</span>
-                <div className="ml-auto">
-                  <UniverseActions symbol={r.symbol} status="RETIRED" pendingBy={null} proposedTier={null} currentUser={me} />
-                </div>
+                {isMember && (
+                  <div className="ml-auto">
+                    <UniverseActions symbol={r.symbol} status="RETIRED" pendingBy={null} proposedTier={null} currentUser={me} />
+                  </div>
+                )}
               </Card>
             ))}
           </div>
