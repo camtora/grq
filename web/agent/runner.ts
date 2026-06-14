@@ -10,8 +10,8 @@ import { BENCHMARK } from "../lib/universe";
 import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
-import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN, RESEARCH_DAILY_CEILING } from "../lib/universe";
-import { etDateStr, etParts, isMarketDay, isMarketOpen, startOfEtDay } from "./calendar";
+import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
+import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
@@ -260,7 +260,9 @@ async function maybeWeeklyRefreshEnqueue() {
   await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before Sunday's review.");
 }
 
-// Work the research queue one dossier at a time, hard daily safety ceiling.
+// Work the research queue one dossier at a time. Uncapped (Cam removed the daily
+// ceiling 2026-06-13); still bounded upstream by the weekly-refresh size and the
+// on-demand per-day cap (ON_DEMAND_RESEARCH_PER_DAY, enforced in the API route).
 async function processResearchQueue() {
   if (sessionRunning) return;
   const next = await prisma.researchRequest.findFirst({
@@ -268,10 +270,6 @@ async function processResearchQueue() {
     orderBy: { at: "asc" },
   });
   if (!next) return;
-  const startedToday = await prisma.researchRequest.count({
-    where: { status: { in: ["RUNNING", "DONE", "FAILED"] }, at: { gte: startOfEtDay() } },
-  });
-  if (startedToday >= RESEARCH_DAILY_CEILING) return;
 
   await prisma.researchRequest.update({ where: { id: next.id }, data: { status: "RUNNING" } });
   sessionRunning = true;

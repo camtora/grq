@@ -27,7 +27,8 @@ export const ON_DEMAND_RESEARCH_PER_DAY = 30; // Cam's Max 20x — generous on p
 // name is fresh before Sunday's 10:00 weekly review.
 export const WEEKLY_REFRESH_WEEKDAY = 6; // Saturday
 export const WEEKLY_REFRESH_START_MIN = 2 * 60; // 02:00 ET
-export const RESEARCH_DAILY_CEILING = 60; // hard safety stop, all sources combined
+// (RESEARCH_DAILY_CEILING removed 2026-06-13 — Cam lifted the daily cap; the
+// on-demand budget above and the weekly-refresh size remain the bounds.)
 
 let cache: { at: number; rows: UniverseRow[] } | null = null;
 const TTL_MS = 60_000;
