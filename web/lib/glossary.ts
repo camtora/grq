@@ -58,6 +58,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "SMA — Simple Moving Average",
     def: "The average closing price over the last N days (SMA50 ≈ 10 weeks). Smooths out daily noise to show the underlying trend.",
   },
+  trend: {
+    term: "Trend (SMA stack)",
+    def: "Up- or down-trend read from the moving averages: price above its 50-day average, and the 50-day above the 200-day, is the classic 'uptrend' stack.",
+  },
+  volatility: {
+    term: "Volatility (realized)",
+    def: "How much the price swings, annualized from the last ~20 days — a regime gauge (calm / normal / spicy), not a buy/sell signal. It tells you how bumpy the ride is.",
+  },
   recommendation: {
     term: "Recommendation",
     def: "A confidence-weighted consensus of the directional signals (trend, rsi, macd). The % is the share of signal-confidence behind the call — advisory, not the agent's decision.",

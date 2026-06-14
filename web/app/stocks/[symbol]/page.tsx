@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { universeEntry } from "@/lib/universe";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
-import { computeSignals } from "@/agent/signals";
+import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
@@ -16,6 +16,8 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
+import RatingDial from "@/components/RatingDial";
+import Term from "@/components/Term";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
 
@@ -67,6 +69,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
   const dayBps = quote?.dayChangeBps ?? 0;
 
+  // The at-a-glance verdict + the agent's expected return (latest dossier target).
+  const rec = signals ? overallSignal(signals) : null;
+  const targetEntry = journal.find((j) => j.targetFarCents != null || j.targetNearCents != null);
+  const cur = quote?.midCents ?? null;
+  const nearPct = targetEntry?.targetNearCents != null && cur ? (targetEntry.targetNearCents - cur) / cur : null;
+  const farPct = targetEntry?.targetFarCents != null && cur ? (targetEntry.targetFarCents - cur) / cur : null;
+
   return (
     <main>
       <Link href="/stocks" className="text-xs text-teal-300 hover:underline">
@@ -105,6 +114,47 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         />
         <AskGrq symbol={symbol} />
       </div>
+
+      {rec && (
+        <Card className="mb-6 border-teal-400/30 p-5">
+          <div className="grid gap-6 md:grid-cols-2 md:items-center">
+            <div>
+              <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
+              <RatingDial rec={rec} />
+            </div>
+            <div className="text-sm text-teal-100/80">
+              <p>{`The signals read ${rec.label.toLowerCase()}${signals ? ` — ${signalsOneLine(signals)}.` : "."}`}</p>
+              {(nearPct !== null || farPct !== null) && (
+                <p className="mt-2 text-teal-200/70">
+                  Target:{" "}
+                  {nearPct !== null && (
+                    <>
+                      near{" "}
+                      <span className={nearPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                        {nearPct > 0 ? "+" : ""}
+                        {pct(nearPct, 0)}
+                      </span>
+                      {farPct !== null ? " · " : ""}
+                    </>
+                  )}
+                  {farPct !== null && (
+                    <>
+                      12-mo{" "}
+                      <span className={farPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                        {farPct > 0 ? "+" : ""}
+                        {pct(farPct, 0)}
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
+              <p className="mt-2 text-[11px] text-teal-200/40">
+                Technical consensus of trend/rsi/macd — advisory; the call the agent actually makes lives in its journal below.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {position && quote && (
         <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -220,7 +270,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 {signals.families.map((f) => (
                   <li key={f.family} className="text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold uppercase text-teal-100/80">{f.family}</span>
+                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
+                        {f.family}
+                      </Term>
                       <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
                       <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
                     </div>

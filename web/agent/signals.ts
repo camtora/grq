@@ -142,9 +142,27 @@ export function signalsOneLine(s: Signals): string {
   return s.families.map((f) => `${f.family} ${f.signal}${f.family === "volatility" ? ` (${f.rationale.split("≈ ")[1] ?? ""})` : ""}`).join(" · ");
 }
 
-export type Recommendation = { signal: "BUY" | "SELL" | "HOLD"; confidence: number; rationale: string };
+export type Recommendation = {
+  signal: "BUY" | "SELL" | "HOLD"; // coarse call (kept for coloring / back-compat)
+  label: string; // Strong Buy · Buy · Weak Buy · Hold · Weak Sell · Sell · Strong Sell
+  score: number; // 0–10 dial position (5 = neutral)
+  ratio: number; // signed conviction, −1..+1
+  confidence: number; // |ratio| × 100
+  rationale: string;
+};
 
 const DIRECTIONAL: SignalFamily["family"][] = ["trend", "rsi", "macd"];
+
+/** Graded label from the signed conviction ratio (−1..+1). */
+function gradeLabel(ratio: number): string {
+  if (ratio >= 0.55) return "Strong Buy";
+  if (ratio >= 0.25) return "Buy";
+  if (ratio >= 0.1) return "Weak Buy";
+  if (ratio > -0.1) return "Hold";
+  if (ratio > -0.25) return "Weak Sell";
+  if (ratio > -0.55) return "Sell";
+  return "Strong Sell";
+}
 
 /** Deterministic technical consensus across the directional families
  *  (volatility is regime, not direction, so it's excluded). Confidence-weighted
@@ -152,7 +170,8 @@ const DIRECTIONAL: SignalFamily["family"][] = ["trend", "rsi", "macd"];
  *  the agent decides, the gate disposes (D11) — this is not the agent's call. */
 export function overallSignal(s: Signals): Recommendation {
   const fams = s.families.filter((f) => DIRECTIONAL.includes(f.family));
-  if (fams.length === 0) return { signal: "HOLD", confidence: 0, rationale: "no directional signals" };
+  if (fams.length === 0)
+    return { signal: "HOLD", label: "Hold", score: 5, ratio: 0, confidence: 0, rationale: "no directional signals" };
   let score = 0;
   let weight = 0;
   for (const f of fams) {
@@ -166,5 +185,12 @@ export function overallSignal(s: Signals): Recommendation {
   const parts = (["BUY", "SELL", "HOLD"] as const)
     .map((sig) => (tally(sig).length ? `${sig}: ${tally(sig).join(", ")}` : null))
     .filter(Boolean);
-  return { signal, confidence: Math.round(Math.abs(ratio) * 100), rationale: parts.join(" · ") };
+  return {
+    signal,
+    label: gradeLabel(ratio),
+    score: Math.round(((ratio + 1) / 2) * 10),
+    ratio,
+    confidence: Math.round(Math.abs(ratio) * 100),
+    rationale: parts.join(" · "),
+  };
 }
