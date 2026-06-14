@@ -10,6 +10,7 @@ export const HARD = {
   dailyLossPauseBps: -300, // day P&L ≤ −3% NAV → no new buys today
   drawdownKillBps: -1500, // NAV ≤ −15% from high-water mark → kill switch
   feeEdgeMultiple: 3, // thesis target must clear ≥ 3× round-trip commissions
+  minBuyConfidence: 75, // conviction gate (Graham, 2026-06-14): no BUY below 75% thesis confidence
   warmupMs: 5 * 60_000, // no agent trading for 5 min after a restart
   noEntriesFirstMin: 15, // no new BUYs in the first 15 min of the session
   noEntriesLastMin: 15, // …or the last 15
@@ -22,13 +23,14 @@ export type DialPolicy = {
   cashFloorPct: number; // of NAV, post-trade
   tiers: Tier[];
   stopPct: number; // deterministic stop distance below ACB
+  takeProfitPct: number; // deterministic take-profit distance above ACB (claim the gain)
   maxNewTradesPerWeek: number; // BUY orders, rolling 7 days
 };
 
 export const DIALS: Record<"CAUTIOUS" | "BALANCED" | "AGGRESSIVE", DialPolicy> = {
-  CAUTIOUS: { maxPositionPct: 10, cashFloorPct: 30, tiers: ["etf", "large"], stopPct: 5, maxNewTradesPerWeek: 2 },
-  BALANCED: { maxPositionPct: 15, cashFloorPct: 15, tiers: ["etf", "large", "mid"], stopPct: 8, maxNewTradesPerWeek: 5 },
-  AGGRESSIVE: { maxPositionPct: 25, cashFloorPct: 0, tiers: ["etf", "large", "mid"], stopPct: 12, maxNewTradesPerWeek: 10 },
+  CAUTIOUS: { maxPositionPct: 10, cashFloorPct: 30, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 2 },
+  BALANCED: { maxPositionPct: 15, cashFloorPct: 15, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 5 },
+  AGGRESSIVE: { maxPositionPct: 25, cashFloorPct: 0, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 10 },
 };
 
 // Seed research sources (Cam, 2026-06-12). The agent self-curates over time:

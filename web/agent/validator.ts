@@ -95,6 +95,13 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   // -- thesis discipline --
   if (!thesis.thesis || thesis.sources.length === 0) return refuse("Every order needs a thesis with at least one source (attribution rule).");
 
+  // -- conviction gate (Graham, 2026-06-14): only act on high-conviction BUYs --
+  if (order.side === "BUY" && (typeof thesis.confidence !== "number" || thesis.confidence < HARD.minBuyConfidence)) {
+    return refuse(
+      `Conviction gate: BUYs require ≥${HARD.minBuyConfidence}% thesis confidence — this one is ${typeof thesis.confidence === "number" ? `${thesis.confidence}%` : "unstated"}. The fund only acts on its strongest calls.`,
+    );
+  }
+
   // -- universe & dial (BUYs only — exits must never be trapped by membership) --
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];

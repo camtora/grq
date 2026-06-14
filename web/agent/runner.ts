@@ -62,7 +62,10 @@ async function refreshQuotes(open: boolean) {
   }
 }
 
-async function enforceStops() {
+// Deterministic exits on every position: protective stop-loss AND take-profit.
+// Both rest in code like a broker-side bracket — protection (and claiming the
+// gain) is rules, not vibes.
+async function enforceExits() {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   if (settings?.killSwitch) return;
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
@@ -73,6 +76,7 @@ async function enforceStops() {
     const q = quotes.get(p.symbol);
     if (!q) continue;
     const stopLevel = Math.round(p.avgCostCents * (1 - dial.stopPct / 100));
+    const takeProfitLevel = Math.round(p.avgCostCents * (1 + dial.takeProfitPct / 100));
     if (q.midCents <= stopLevel) {
       const res = await broker.placeOrder({
         symbol: p.symbol,
@@ -86,6 +90,20 @@ async function enforceStops() {
         res.ok ? "warning" : "critical",
         res.ok ? `Stop triggered: sold ${p.qty} ${p.symbol}` : `Stop FAILED for ${p.symbol}`,
         res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)} (${dial.stopPct}% stop).` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
+      );
+    } else if (q.midCents >= takeProfitLevel) {
+      const res = await broker.placeOrder({
+        symbol: p.symbol,
+        side: "SELL",
+        type: "MARKET",
+        qty: p.qty,
+        placedBy: "system-takeprofit",
+        reason: `Take-profit: ${p.symbol} hit ${(q.midCents / 100).toFixed(2)}, +${dial.takeProfitPct}% over ACB ${(p.avgCostCents / 100).toFixed(2)}. Claiming the gain — discipline, not greed.`,
+      });
+      await alert(
+        res.ok ? "info" : "warning",
+        res.ok ? `Take-profit: sold ${p.qty} ${p.symbol} (+${dial.takeProfitPct}%)` : `Take-profit FAILED for ${p.symbol}`,
+        res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)}.` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
       );
     }
   }
@@ -211,7 +229,7 @@ async function tick() {
   if (open) {
     const swept = await broker.sweepPendingOrders();
     if (swept > 0) await alert("info", `Resting orders filled: ${swept}`);
-    await enforceStops();
+    await enforceExits();
     await checkDrawdown();
     await checkDailyLossPause();
     if (Date.now() - lastSnapshot > 30 * 60_000) {
