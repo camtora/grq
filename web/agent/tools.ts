@@ -66,7 +66,7 @@ const getJournalTool = tool(
 
 const writeJournalTool = tool(
   "write_journal",
-  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources.",
+  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view.",
   {
     kind: z.enum(["RESEARCH", "RETRO", "LESSON"]),
     symbol: z.string().optional(),
@@ -74,6 +74,9 @@ const writeJournalTool = tool(
     body: z.string().min(10).max(8000),
     confidence: z.number().int().min(0).max(100).optional(),
     sources: z.array(z.string()).default([]),
+    targetNearCents: z.number().int().positive().optional(),
+    targetNearDays: z.number().int().min(5).max(120).optional(),
+    targetFarCents: z.number().int().positive().optional(),
   },
   async (args) => {
     const e = await prisma.journalEntry.create({
@@ -84,10 +87,13 @@ const writeJournalTool = tool(
         body: args.body,
         confidence: args.confidence,
         sourcesJson: JSON.stringify(args.sources),
+        targetNearCents: args.targetNearCents,
+        targetNearDays: args.targetNearDays,
+        targetFarCents: args.targetFarCents,
         agentVersion: AGENT_VERSION,
       },
     });
-    return text(`Journaled #${e.id} (${args.kind}).`);
+    return text(`Journaled #${e.id} (${args.kind})${args.targetFarCents || args.targetNearCents ? " with targets" : ""}.`);
   },
 );
 

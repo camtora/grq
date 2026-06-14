@@ -91,6 +91,54 @@ function RadarRow({ symbol, note, tone }: { symbol: string; note: string; tone: 
   );
 }
 
+type Idea = {
+  sym: string;
+  name: string;
+  near: number | null;
+  far: number | null;
+  nearDays: number | null;
+  confidence: number | null;
+  obscurity: number;
+};
+
+function IdeaRow({ idea }: { idea: Idea }) {
+  return (
+    <li className="px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <StockAvatar symbol={idea.sym} className="h-8 w-8 text-[11px]" />
+        <div className="min-w-0">
+          <Link href={`/stocks/${idea.sym}`} className="font-semibold text-teal-200 hover:underline">
+            {idea.sym}
+          </Link>
+          <div className="truncate text-xs text-teal-200/40">{idea.name}</div>
+        </div>
+        {idea.far !== null && (
+          <div className="ml-auto text-right">
+            <div className={`text-sm font-bold tabular-nums ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {idea.far > 0 ? "+" : ""}
+              {pct(idea.far, 0)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">12-mo</div>
+          </div>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 text-xs text-teal-200/50">
+        {idea.near !== null && (
+          <span>
+            near{idea.nearDays ? ` ~${Math.max(1, Math.round(idea.nearDays / 5))}w` : ""}{" "}
+            <span className={idea.near > 0 ? "text-emerald-400" : "text-red-400"}>
+              {idea.near > 0 ? "+" : ""}
+              {pct(idea.near, 0)}
+            </span>
+          </span>
+        )}
+        {idea.far !== null && <span>≈ {signedMoney(Math.round(idea.far * 100_000))} on $1k</span>}
+        {idea.confidence != null && <span>conf {idea.confidence}%</span>}
+      </div>
+    </li>
+  );
+}
+
 function editionLabel(): string {
   if (!isMarketDay()) return "Weekend Edition";
   const m = etParts().minutesSinceMidnight;
@@ -117,7 +165,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch] =
+  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch, ideaRows] =
     await Promise.all([
       getPortfolio(),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } } }),
@@ -136,6 +184,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       }),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" } }, orderBy: { at: "desc" } }),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH" }, orderBy: { at: "desc" } }),
+      prisma.journalEntry.findMany({
+        where: {
+          kind: "RESEARCH",
+          title: { startsWith: "Dossier" },
+          symbol: { not: null },
+          OR: [{ targetNearCents: { not: null } }, { targetFarCents: { not: null } }],
+        },
+        orderBy: { at: "desc" },
+        take: 40,
+      }),
     ]);
   const timeline = entries.filter((e) => e.id !== plan?.id);
   // The lead is never empty: today's plan, else the most recent game plan, else
@@ -167,6 +225,35 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       .filter((d) => d.symbol && !seen.has(d.symbol))
       .map((d) => ({ symbol: d.symbol as string, note: d.confidence != null ? `dossier · ${d.confidence}%` : "dossier", tone: "dim" as const })),
   ].slice(0, 8);
+
+  // Ideas with upside — the latest dossier-with-a-target per symbol, priced live.
+  // Ranked "stocks you haven't heard of" first (candidates/mid-caps over household names).
+  const priceBy = new Map(quoteRows.map((q) => [q.symbol, q.midCents]));
+  const tierBy = new Map(universeRows.map((u) => [u.symbol, u.tier]));
+  const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
+  const ideaSeen = new Set<string>();
+  const ideas: Idea[] = ideaRows
+    .filter((d) => {
+      if (!d.symbol || ideaSeen.has(d.symbol)) return false;
+      ideaSeen.add(d.symbol);
+      return true;
+    })
+    .map((d) => {
+      const sym = d.symbol as string;
+      const cur = priceBy.get(sym) ?? null;
+      const tier = tierBy.get(sym) ?? null;
+      return {
+        sym,
+        name: nameBy.get(sym) ?? sym,
+        near: cur && d.targetNearCents ? (d.targetNearCents - cur) / cur : null,
+        far: cur && d.targetFarCents ? (d.targetFarCents - cur) / cur : null,
+        nearDays: d.targetNearDays ?? null,
+        confidence: d.confidence,
+        obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
+      };
+    })
+    .sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9))
+    .slice(0, 6);
 
   let eodStats: Record<string, string | number> | null = null;
   if (eod?.statsJson) {
@@ -338,20 +425,28 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </Card>
         </div>
         <div>
-          <SectionTitle>On the Radar · what the agent's eyeing</SectionTitle>
+          <SectionTitle>On the Radar · ideas with upside</SectionTitle>
           <Card className="overflow-hidden p-1">
-            {radar.length > 0 ? (
+            {ideas.length > 0 ? (
+              <ul className="divide-y divide-teal-400/10">
+                {ideas.map((idea) => (
+                  <IdeaRow key={idea.sym} idea={idea} />
+                ))}
+              </ul>
+            ) : radar.length > 0 ? (
               <ul className="divide-y divide-teal-400/10">
                 {radar.map((r) => (
                   <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} />
                 ))}
               </ul>
             ) : (
-              <p className="p-3 text-sm text-teal-200/40">Nothing pinned yet — the morning research session populates this.</p>
+              <p className="p-3 text-sm text-teal-200/40">Nothing yet — the agent's dossiers populate this.</p>
             )}
           </Card>
           <p className="mt-2 px-1 text-[10px] text-teal-200/40">
-            watchlist + names freshly researched — expected upside lights up once the agent sets price targets
+            {ideas.length > 0
+              ? "names you may not know, first · the agent's targets are hypotheses, not promises — a track record builds as they resolve"
+              : "expected upside appears here once the agent files dossiers with price targets (it's re-running them now)"}
           </p>
         </div>
       </section>

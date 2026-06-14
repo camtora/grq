@@ -30,8 +30,9 @@ session cadence (9:00 research · midday check-ins · 16:15 EOD), so the content
 - **Market Movers** — biggest moves across the tracked universe (the "5 that made/lost the
   most"). Universe-scoped in v1; a whole-market movers feed is a later upgrade.
 - **Top Hitters** — your holdings by day move.
-- **On the Radar** — watchlist + freshly-researched names; **expected upside %** lights up
-  once the agent sets price targets (i.e. once it trades).
+- **On the Radar** — "ideas with upside": the agent's **near-term + 12-month price targets**
+  per researched name, shown as expected return (% and $ on a $1,000 stake) with confidence;
+  unfamiliar names (candidates/mid-caps) surfaced first. Targets are hypotheses, framed honestly.
 - **The day as it happened** — the full journal timeline, preserved.
 
 ## Imagery roadmap
@@ -50,6 +51,11 @@ Cam OK'd **logos-first, editorial photos later** (2026-06-13).
 lead story, Market Movers, Top Hitters, On the Radar, daily quote, full timeline preserved.
 All soak-safe — zero order-path changes.
 
-**Next:** Morning/Midday faces · company logos · expected-return on On-the-Radar (needs
-trade targets) · whole-market movers feed · the literacy glossary + agent explainers
-(`docs/LITERACY.md`).
+**Phase 1 (expected return) shipped 2026-06-14:** dossiers commit a near-term swing target
+(+ horizon) and a 12-month target (`JournalEntry.targetNear*/targetFarCents`, set via
+`write_journal`); On-the-Radar renders the expected $/% per idea, unfamiliar names first.
+Targets populate as the agent re-runs dossiers under the new prompt.
+
+**Next (automation-first per Cam):** company logos resolved automatically from the company
+name (no hand-map; monogram fallback) · agent "explain this" boxes (`docs/LITERACY.md`) ·
+distinct Morning/Midday/Evening faces · whole-market movers feed.

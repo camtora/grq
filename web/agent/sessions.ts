@@ -121,7 +121,12 @@ results, catalysts, competitive position, risks. Then write EXACTLY ONE symbol-t
 RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
 markdown body with sections: **Snapshot** · **Recent developments** (dated, sourced) ·
 **Signals read** · **Bull case** · **Bear case** · **Verdict** (watchlist-worthy?
-thesis-worthy? confidence 0–100) · **Risks**. Cite every source in sources[].
+thesis-worthy? confidence 0–100, plus your **price targets**) · **Risks**. Cite every source in sources[].
+In the write_journal call, commit your expected prices as fields: **targetNearCents** (a
+near-term swing target ~4–8 weeks out) with **targetNearDays** (its horizon in trading days),
+and **targetFarCents** (a 12-month target). Prices in cents (e.g. $54.20 → 5420). These power
+the expected return members see on "On the Radar" — set only targets you would defend; omit if
+you genuinely have no view.
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
 Research only — no trades, no watchlist changes (you don't have those tools here).`;
   return runSession({

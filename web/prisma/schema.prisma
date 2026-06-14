@@ -147,6 +147,12 @@ model JournalEntry {
   confidence   Int?
   // JSON array of source strings that fed this entry (attribution — D13).
   sourcesJson  String?
+  // Dossier price targets (Phase 1 "expected return"): a near-term swing target
+  // (+ horizon in trading days) and a 12-month target, both in cents. These power
+  // the expected-return figures on the Today page's "On the Radar".
+  targetNearCents Int?
+  targetNearDays  Int?
+  targetFarCents  Int?
   agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])
