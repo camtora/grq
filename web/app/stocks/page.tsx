@@ -4,6 +4,9 @@ import { activeUniverse, type UniverseRow } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { money, pct } from "@/lib/money";
 import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
+import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
+import SignalStrip from "@/components/SignalStrip";
+import SignalRec from "@/components/SignalRec";
 
 type Row = UniverseRow & {
   lastCents: number | null;
@@ -16,6 +19,8 @@ type Row = UniverseRow & {
   journal: number;
   mvCents: number;
   upnlCents: number;
+  signals: Signals | null;
+  rec: Recommendation | null;
 };
 
 function sortRows(rows: Row[]): Row[] {
@@ -61,6 +66,12 @@ function SectionRows({ rows }: { rows: Row[] }) {
           >
             {r.dayBps !== null ? pct(r.dayBps / 10_000, 2) : "—"}
           </td>
+          <td className="px-4 py-2.5">
+            <SignalStrip signals={r.signals} />
+          </td>
+          <td className="px-4 py-2.5">
+            <SignalRec rec={r.rec} />
+          </td>
           <td className="px-4 py-2.5 text-right tabular-nums text-teal-50">
             {r.held ? `${r.held.qty} sh · ${money(r.mvCents)}` : ""}
           </td>
@@ -75,7 +86,7 @@ function SectionRows({ rows }: { rows: Row[] }) {
 function SectionHeader({ label }: { label: string }) {
   return (
     <tr className="border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
-      <td colSpan={8} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
+      <td colSpan={10} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
         {label}
       </td>
     </tr>
@@ -92,6 +103,8 @@ export default async function Stocks() {
   ]);
   const quotes = await getQuotes(universe.map((u) => u.symbol));
   const candidateCount = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
+  const signalsList = await Promise.all(universe.map((u) => computeSignals(u.symbol).catch(() => null)));
+  const sigBy = new Map(universe.map((u, i) => [u.symbol, signalsList[i]] as const));
 
   const posBy = new Map(positions.map((p) => [p.symbol, p]));
   const watchBy = new Map(watchlist.map((w) => [w.symbol, w]));
@@ -102,6 +115,7 @@ export default async function Stocks() {
     const q = quotes.get(u.symbol);
     const p = posBy.get(u.symbol);
     const d = dirBy.get(u.symbol);
+    const sig = sigBy.get(u.symbol) ?? null;
     return {
       ...u,
       lastCents: q?.midCents ?? null,
@@ -114,6 +128,8 @@ export default async function Stocks() {
       journal: jcBy.get(u.symbol) ?? 0,
       mvCents: p && q ? p.qty * q.midCents : 0,
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
+      signals: sig,
+      rec: sig ? overallSignal(sig) : null,
     };
   });
 
@@ -145,6 +161,8 @@ export default async function Stocks() {
               <th className="px-4 py-3">Tier</th>
               <th className="px-4 py-3 text-right">Last</th>
               <th className="px-4 py-3 text-right">Day</th>
+              <th className="px-4 py-3">Signals</th>
+              <th className="px-4 py-3">Recommendation</th>
               <th className="px-4 py-3 text-right">Position</th>
               <th className="px-4 py-3 text-right">Unrealized</th>
               <th className="px-4 py-3 text-right">Journal</th>
@@ -169,6 +187,14 @@ export default async function Stocks() {
         </table>
       </Card>
       <p className="mt-3 text-xs text-teal-200/40">
+        <span className="font-semibold text-teal-200/60">Signals</span> (hover for detail):{" "}
+        <span className="font-semibold text-teal-200/60">T</span> trend ·{" "}
+        <span className="font-semibold text-teal-200/60">R</span> rsi ·{" "}
+        <span className="font-semibold text-teal-200/60">M</span> macd ·{" "}
+        <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
+        <span className="font-semibold text-teal-200/60">Recommendation</span> = confidence-weighted consensus of trend/rsi/macd (technical only; advisory — the agent's actual call lives in its journal).
+      </p>
+      <p className="mt-1 text-xs text-teal-200/40">
         quotes delayed ~15 min · the risk dial gates which tiers the agent may buy ·{" "}
         <Link href="/stocks/research" className="text-teal-300 hover:underline">
           add or promote stocks on the Research tab →

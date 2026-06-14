@@ -141,3 +141,30 @@ export async function computeSignals(symbol: string): Promise<Signals | null> {
 export function signalsOneLine(s: Signals): string {
   return s.families.map((f) => `${f.family} ${f.signal}${f.family === "volatility" ? ` (${f.rationale.split("≈ ")[1] ?? ""})` : ""}`).join(" · ");
 }
+
+export type Recommendation = { signal: "BUY" | "SELL" | "HOLD"; confidence: number; rationale: string };
+
+const DIRECTIONAL: SignalFamily["family"][] = ["trend", "rsi", "macd"];
+
+/** Deterministic technical consensus across the directional families
+ *  (volatility is regime, not direction, so it's excluded). Confidence-weighted
+ *  vote → BUY/SELL/HOLD with a HOLD dead-zone. ADVISORY ONLY: signals advise,
+ *  the agent decides, the gate disposes (D11) — this is not the agent's call. */
+export function overallSignal(s: Signals): Recommendation {
+  const fams = s.families.filter((f) => DIRECTIONAL.includes(f.family));
+  if (fams.length === 0) return { signal: "HOLD", confidence: 0, rationale: "no directional signals" };
+  let score = 0;
+  let weight = 0;
+  for (const f of fams) {
+    const sign = f.signal === "BUY" ? 1 : f.signal === "SELL" ? -1 : 0;
+    score += sign * f.confidence;
+    weight += f.confidence;
+  }
+  const ratio = weight > 0 ? score / weight : 0; // -1..+1
+  const signal: Recommendation["signal"] = ratio >= 0.25 ? "BUY" : ratio <= -0.25 ? "SELL" : "HOLD";
+  const tally = (sig: string) => fams.filter((f) => f.signal === sig).map((f) => f.family);
+  const parts = (["BUY", "SELL", "HOLD"] as const)
+    .map((sig) => (tally(sig).length ? `${sig}: ${tally(sig).join(", ")}` : null))
+    .filter(Boolean);
+  return { signal, confidence: Math.round(Math.abs(ratio) * 100), rationale: parts.join(" · ") };
+}

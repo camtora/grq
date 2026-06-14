@@ -5,7 +5,7 @@ import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
 import { universeEntry, activeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
-import { computeSignals } from "./signals";
+import { computeSignals, overallSignal } from "./signals";
 import { AGENT_VERSION } from "./policy";
 import type { JournalKind } from "@prisma/client";
 
@@ -168,12 +168,12 @@ const gradeSourcesTool = tool(
 
 const getSignalsTool = tool(
   "get_signals",
-  "Technical signals v1 (from daily bars): SMA trend stack, RSI(14), MACD, 20d realized vol. Signals are inputs on scoreboard probation — cite them in sources[] as e.g. 'signal:rsi' so retros can grade them.",
+  "Technical signals v1 from daily bars (SMA trend stack, RSI14, MACD, 20d realized vol) PLUS the `recommendation` shown on the /stocks page — use it so you can explain that number instead of guessing. Recommendation aggregates ONLY the 3 directional families (trend, rsi, macd; volatility is a non-directional regime gauge and is excluded): ratio = Σ(signed confidence: BUY=+conf, SELL=−conf, HOLD=0) ÷ Σ(confidence of the three); signal = BUY if ratio≥0.25, SELL if ≤−0.25, else HOLD; conviction % = round(|ratio|×100) — the share of directional confidence behind the verdict, so HOLD families dilute it toward 50 rather than voting against (e.g. trend BUY 56 with rsi/macd HOLD 14/44 → 56÷(56+14+44) = 49% BUY). Signals are inputs on scoreboard probation — cite them in sources[] as e.g. 'signal:rsi' so retros can grade them.",
   { symbol: z.string() },
   async (args) => {
     const s = await computeSignals(args.symbol);
     if (!s) return text(`No signal data for ${args.symbol.toUpperCase()} (insufficient bar history).`);
-    return text(JSON.stringify(s, null, 2));
+    return text(JSON.stringify({ ...s, recommendation: overallSignal(s) }, null, 2));
   },
 );
 
