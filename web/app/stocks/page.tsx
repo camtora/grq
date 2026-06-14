@@ -145,7 +145,7 @@ export default async function Stocks() {
         right={
           <div className="flex gap-2">
             <Chip tone="teal">universe {universe.length}</Chip>
-            <Link href="/stocks/research">
+            <Link href="/research">
               <Chip tone="dim">research {candidateCount} →</Chip>
             </Link>
           </div>
@@ -196,7 +196,7 @@ export default async function Stocks() {
       </p>
       <p className="mt-1 text-xs text-teal-200/40">
         quotes delayed ~15 min · the risk dial gates which tiers the agent may buy ·{" "}
-        <Link href="/stocks/research" className="text-teal-300 hover:underline">
+        <Link href="/research" className="text-teal-300 hover:underline">
           add or promote stocks on the Research tab →
         </Link>
       </p>
