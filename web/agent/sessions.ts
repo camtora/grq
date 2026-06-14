@@ -2,7 +2,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
-import { universeEntry } from "../lib/universe";
+import { universeEntry, allUniverse } from "../lib/universe";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -84,6 +84,26 @@ export async function runMorningResearch(): Promise<void> {
 
 Be selective: 3 great sources beat 10 skimmed ones. End with a one-paragraph summary of the plan.`;
   await runSession({ label: "morning-research", prompt, model: MODELS.decision, withTools: true, maxTurns: 40 });
+}
+
+/** Discovery hunt (2026-06-14) — the agent web-searches for under-the-radar,
+ *  high-upside Canadian small-caps the members have NOT heard of, and PROPOSES
+ *  them (it cannot add to the universe — members decide; D16). Research-only. */
+export async function runDiscoveryHunt(): Promise<void> {
+  const universe = await allUniverse();
+  const have = universe.map((u) => u.symbol).join(", ");
+  const prompt = `# TASK: Discovery hunt — under-the-radar opportunities (${etDateStr()})
+
+You are hunting for stocks Cam & Graham have NOT heard of: under-covered, smaller Canadian-listed names (TSX and TSX Venture) with asymmetric upside — explicitly NOT blue chips. The whole point is to surface names that aren't on the front page but could deliver high percentage growth.
+
+We already track these — do NOT re-suggest them: ${have || "(none)"}.
+
+Use WebSearch (and WebFetch for promising leads) to find 3–6 genuinely interesting candidates: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on. For each, give: the **ticker (with exchange)**, a one-line thesis, a rough upside estimate (%), why it's overlooked, the key risk, and your sources.
+
+Write EXACTLY ONE RESEARCH entry via write_journal: title "Hunt — ${etDateStr()}", markdown body with a one-line intro on today's theme then one short block per name (**TICKER (exch)** — thesis · ~upside% · why overlooked · risk). Cite every source in sources[]. Set confidence (0–100) on how compelling today's batch is.
+
+Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. These are PROPOSALS; you cannot add them to the universe — Cam & Graham decide what to research further.`;
+  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
 }
 
 export async function runMiddayCheckIn(reason: string): Promise<void> {

@@ -16,7 +16,7 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt } from "./sessions";
 
 const broker = new SimBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -184,6 +184,23 @@ async function maybeScheduledSessions() {
       sessionRunning = true;
       try {
         await runMorningResearch();
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
+  // 10:00–10:30 discovery hunt on market days (once/day) — surfaces new names.
+  if (isMarketDay() && m >= 10 * 60 && m < 10 * 60 + 30) {
+    const existing = await prisma.journalEntry.count({
+      where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Hunt —" } },
+    });
+    if (existing === 0) {
+      sessionRunning = true;
+      try {
+        await runDiscoveryHunt();
+        await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on the Ideas page.");
       } finally {
         sessionRunning = false;
       }

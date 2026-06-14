@@ -3,8 +3,8 @@ import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { computeSignals, overallSignal, type Recommendation } from "@/agent/signals";
-import { money, pct, signedMoney } from "@/lib/money";
-import { Card, PageHeader, EmptyState } from "@/components/ui";
+import { money, pct, signedMoney, fmtWhen } from "@/lib/money";
+import { Card, PageHeader, EmptyState, Chip } from "@/components/ui";
 import StockLogo from "@/components/StockLogo";
 import RatingDial from "@/components/RatingDial";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -158,12 +158,33 @@ export default async function Ideas() {
   );
   ideas.sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9));
 
+  const hunt = await prisma.journalEntry.findFirst({
+    where: { kind: "RESEARCH", title: { startsWith: "Hunt —" } },
+    orderBy: { at: "desc" },
+  });
+
   return (
     <main>
       <PageHeader
         title="Stocks you should look at"
         sub="Under-the-radar names the agent has researched, ranked by expected upside — unfamiliar names first."
       />
+
+      {hunt && (
+        <Card className="mb-6 border-teal-400/30 p-5">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <Chip tone="teal">the hunt</Chip>
+            <span className="text-sm font-medium text-teal-50">{hunt.title}</span>
+            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(hunt.at)}</span>
+          </div>
+          <CollapsibleMd text={hunt.body}>
+            <SourceChips sourcesJson={hunt.sourcesJson} />
+          </CollapsibleMd>
+          <p className="mt-2 text-[11px] text-teal-200/40">
+            The agent proposes these — add the promising ones as research candidates on the Research tab.
+          </p>
+        </Card>
+      )}
 
       {ideas.length === 0 ? (
         <EmptyState
