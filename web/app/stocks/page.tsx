@@ -70,7 +70,7 @@ function SectionRows({ rows }: { rows: Row[] }) {
             <SignalStrip signals={r.signals} />
           </td>
           <td className="px-4 py-2.5">
-            <SignalRec rec={r.rec} />
+            <SignalRec rec={r.rec} signals={r.signals} />
           </td>
           <td className="px-4 py-2.5 text-right tabular-nums text-teal-50">
             {r.held ? `${r.held.qty} sh · ${money(r.mvCents)}` : ""}
