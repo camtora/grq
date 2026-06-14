@@ -153,6 +153,9 @@ model JournalEntry {
   targetNearCents Int?
   targetNearDays  Int?
   targetFarCents  Int?
+  // Plain-English "why" — 3–5 palatable bullets a non-expert can read, explaining
+  // the agent's read on the stock. Surfaced on the stock page's bottom-line card.
+  bottomLine      String?
   agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])

@@ -17,6 +17,7 @@ import Sparkline from "@/components/Sparkline";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import RatingDial from "@/components/RatingDial";
+import SignalStrip from "@/components/SignalStrip";
 import Term from "@/components/Term";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
@@ -75,6 +76,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const cur = quote?.midCents ?? null;
   const nearPct = targetEntry?.targetNearCents != null && cur ? (targetEntry.targetNearCents - cur) / cur : null;
   const farPct = targetEntry?.targetFarCents != null && cur ? (targetEntry.targetFarCents - cur) / cur : null;
+  const bottomLineEntry = journal.find((j) => j.bottomLine);
 
   return (
     <main>
@@ -117,15 +119,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
       {rec && (
         <Card className="mb-6 border-teal-400/30 p-5">
-          <div className="grid gap-6 md:grid-cols-2 md:items-center">
+          <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
+          <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
               <RatingDial rec={rec} />
-            </div>
-            <div className="text-sm text-teal-100/80">
-              <p>{`The signals read ${rec.label.toLowerCase()}${signals ? ` — ${signalsOneLine(signals)}.` : "."}`}</p>
+              {signals && (
+                <div className="mt-3 flex items-center gap-2">
+                  <SignalStrip signals={signals} />
+                  <span className="text-[10px] uppercase tracking-wider text-teal-200/40">signals</span>
+                </div>
+              )}
               {(nearPct !== null || farPct !== null) && (
-                <p className="mt-2 text-teal-200/70">
+                <p className="mt-3 text-sm text-teal-200/70">
                   Target:{" "}
                   {nearPct !== null && (
                     <>
@@ -148,8 +153,23 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   )}
                 </p>
               )}
-              <p className="mt-2 text-[11px] text-teal-200/40">
-                Technical consensus of trend/rsi/macd — advisory; the call the agent actually makes lives in its journal below.
+            </div>
+            <div>
+              {bottomLineEntry?.bottomLine ? (
+                <>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Why</div>
+                  <div className="text-sm text-teal-100/80">
+                    <Md text={bottomLineEntry.bottomLine} />
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-teal-100/80">
+                  {`The signals read ${rec.label.toLowerCase()}${signals ? ` — ${signalsOneLine(signals)}.` : "."} The agent's plain-English "why" appears here once it dossiers this name.`}
+                </p>
+              )}
+              <p className="mt-3 text-[11px] text-teal-200/40">
+                Rating is the technical consensus of trend/rsi/macd (advisory). The reasons are the agent research read; the
+                trade it actually makes lives in its journal below.
               </p>
             </div>
           </div>

@@ -146,7 +146,10 @@ In the write_journal call, commit your expected prices as fields: **targetNearCe
 near-term swing target ~4–8 weeks out) with **targetNearDays** (its horizon in trading days),
 and **targetFarCents** (a 12-month target). Prices in cents (e.g. $54.20 → 5420). These power
 the expected return members see on "On the Radar" — set only targets you would defend; omit if
-you genuinely have no view.
+you genuinely have no view. Also set **bottomLine**: 3–5 short plain-English bullets (markdown,
+"- " each) a non-expert can read on why this stock is a buy/sell/hold for us — the real reasons
+(does the business make money? recent news/lawsuits/catalysts? the key risk?), concrete and
+palatable. This is the at-a-glance "why" shown on the stock page.
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
 Research only — no trades, no watchlist changes (you don't have those tools here).`;
   return runSession({
