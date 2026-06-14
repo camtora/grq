@@ -158,10 +158,10 @@ export default async function Ideas() {
   );
   ideas.sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9));
 
-  const hunt = await prisma.journalEntry.findFirst({
-    where: { kind: "RESEARCH", title: { startsWith: "Hunt —" } },
-    orderBy: { at: "desc" },
-  });
+  const [hunt, smartMoney] = await Promise.all([
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Hunt —" } }, orderBy: { at: "desc" } }),
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
+  ]);
 
   return (
     <main>
@@ -182,6 +182,22 @@ export default async function Ideas() {
           </CollapsibleMd>
           <p className="mt-2 text-[11px] text-teal-200/40">
             The agent proposes these — add the promising ones as research candidates on the Research tab.
+          </p>
+        </Card>
+      )}
+
+      {smartMoney && (
+        <Card className="mb-6 p-5">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <Chip tone="dim">smart money</Chip>
+            <span className="text-sm font-medium text-teal-50">{smartMoney.title}</span>
+            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(smartMoney.at)}</span>
+          </div>
+          <CollapsibleMd text={smartMoney.body}>
+            <SourceChips sourcesJson={smartMoney.sourcesJson} />
+          </CollapsibleMd>
+          <p className="mt-2 text-[11px] text-teal-200/40">
+            What notable public portfolios (congress, funds, insiders) are buying — colour, not gospel; disclosures lag.
           </p>
         </Card>
       )}

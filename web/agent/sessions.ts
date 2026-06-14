@@ -106,6 +106,24 @@ Be honest: smaller names are higher-risk — flag the lottery tickets vs. the on
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
 }
 
+/** Smart-money scan (2026-06-14) — what notable, disclosure-required public
+ *  portfolios are buying/selling, as a signal. Research-only; the agent proposes. */
+export async function runSmartMoneyScan(): Promise<void> {
+  const universe = await allUniverse();
+  const have = universe.map((u) => u.symbol).join(", ");
+  const prompt = `# TASK: Smart-money scan — what notable public portfolios are doing (${etDateStr()})
+
+Track what well-followed or disclosure-required public investors have been BUYING and SELLING recently, as a signal. Use WebSearch (and WebFetch) for the latest on:
+- **Congressional trades** — Nancy Pelosi and other notable members of Congress (their disclosed stock transactions are widely reported and tracked).
+- **Famous investors / funds** — recent 13F moves or public positions from Buffett/Berkshire and other widely-followed managers.
+- **Clustered insider buying** — notable recent insider purchases.
+
+Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", markdown body grouped by source (Congress · Funds · Insiders), each a short bullet (who · bought/sold what · the read). Call out any names that OVERLAP our universe (${have || "none"}) or look worth a closer look. Cite every source in sources[]. Set confidence on how actionable this batch is.
+
+Honest framing: disclosures lag (often 30–45 days), most of these names are US-listed (we trade TSX), and "a famous person bought it" is weak on its own — flag it as colour, not gospel. These are leads for Cam & Graham, not trade instructions.`;
+  await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
+}
+
 export async function runMiddayCheckIn(reason: string): Promise<void> {
   const ctx = await buildContext();
   const prompt = `${ctx}

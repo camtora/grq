@@ -16,7 +16,7 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan } from "./sessions";
 
 const broker = new SimBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -201,6 +201,24 @@ async function maybeScheduledSessions() {
       try {
         await runDiscoveryHunt();
         await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on the Ideas page.");
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
+  // Weekly smart-money scan (first market-day 11:00 window each week) — what
+  // notable public portfolios (Pelosi/congress, funds, insiders) are doing.
+  if (isMarketDay() && m >= 11 * 60 && m < 11 * 60 + 30) {
+    const recent = await prisma.journalEntry.count({
+      where: { kind: "RESEARCH", title: { startsWith: "Smart money" }, at: { gte: new Date(Date.now() - 6 * 24 * 60 * 60_000) } },
+    });
+    if (recent === 0) {
+      sessionRunning = true;
+      try {
+        await runSmartMoneyScan();
+        await alert("info", "Smart-money scan posted", "What notable public portfolios are buying — on the Ideas page.");
       } finally {
         sessionRunning = false;
       }
