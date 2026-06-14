@@ -39,6 +39,17 @@ services:
       - db
     # internal only — web proxies /api/chat → chat:3014
 
+  # Phase 3: IBKR Client Portal Gateway (headless auth + keep-alive). Reads
+  # IBEAM_ACCOUNT / IBEAM_PASSWORD from .env (Graham's PAPER API username). The
+  # agent reaches the gateway at https://ibeam:5000/v1/api. Internal only.
+  # Won't authenticate until the creds are set — bring it up explicitly with
+  # `docker-compose up -d ibeam` after the Phase 3 config (docs/IBKR-PHASE3.md).
+  ibeam:
+    image: voyz/ibeam:latest
+    container_name: grq-ibeam
+    restart: unless-stopped
+    env_file: .env
+
   db:
     image: postgres:16-alpine
     container_name: grq-db
