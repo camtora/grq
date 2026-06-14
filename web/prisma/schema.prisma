@@ -301,6 +301,16 @@ model ChatMessage {
   @@index([at])
 }
 
+// Cached agent explanations of finance/investing concepts (the literacy pillar's
+// "explain this" — docs/LITERACY.md). Keyed by the normalized term so the second
+// reader to click "shell company" pays $0 and gets it instantly.
+model Explainer {
+  key  String   @id // normalized term (lowercase, trimmed)
+  term String
+  body String
+  at   DateTime @default(now())
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)

@@ -117,9 +117,63 @@ ${convo}`;
   res.end();
 }
 
+// Plain-English explainer (the literacy pillar). A cheap one-shot, no tools —
+// the web layer caches the result so each concept is explained once.
+async function handleExplain(res: http.ServerResponse, body: { term?: string }) {
+  const term = body.term?.trim();
+  if (!term || term.length > 120) {
+    res.writeHead(400, { "content-type": "application/json" }).end(JSON.stringify({ error: "bad term" }));
+    return;
+  }
+  let text = "";
+  try {
+    const q = query({
+      prompt: `Explain this to a smart non-expert investor in 2–3 plain, concrete sentences: "${term}". If it's a tactic (e.g. a shell company), say plainly why someone would use one. No fluff, no boilerplate disclaimers. If it isn't really a finance/investing concept, say so in one line.`,
+      options: {
+        model: MODELS.triage,
+        systemPrompt:
+          "You are GRQ's plain-English explainer. You make finance and investing concepts legible to a smart non-expert: 2–3 short sentences, concrete, honest, never jargon-to-explain-jargon. The financial-literacy pillar in action.",
+        maxTurns: 1,
+        permissionMode: "bypassPermissions",
+        settingSources: [],
+        allowedTools: [],
+        stderr: () => {},
+      },
+    });
+    for await (const m of q) {
+      if (m.type === "result" && m.subtype === "success") text = m.result;
+    }
+  } catch {
+    res.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({ error: "explain failed" }));
+    return;
+  }
+  res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ body: text || "No explanation available." }));
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200).end("ok");
+    return;
+  }
+  if (req.method === "POST" && req.url === "/explain") {
+    let data = "";
+    req.on("data", (c) => (data += c));
+    req.on("end", () => {
+      let body: { term?: string } = {};
+      try {
+        body = JSON.parse(data);
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+      handleExplain(res, body).catch(() => {
+        try {
+          res.writeHead(502).end();
+        } catch {
+          /* already closed */
+        }
+      });
+    });
     return;
   }
   if (req.method === "POST" && req.url === "/chat") {

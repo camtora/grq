@@ -1,5 +1,6 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Term from "./Term";
 
 // Full markdown rendering (react-markdown + GFM), themed teal. Replaced the
 // hand-rolled mini-renderer (D15) once agent game plans and reports started
@@ -13,9 +14,12 @@ const components: Components = {
   ul: ({ node: _n, ...props }) => <ul className="list-disc space-y-1 pl-5" {...props} />,
   ol: ({ node: _n, ...props }) => <ol className="list-decimal space-y-1 pl-5" {...props} />,
   strong: ({ node: _n, ...props }) => <strong className="font-semibold text-teal-50" {...props} />,
-  a: ({ node: _n, ...props }) => (
-    <a className="text-teal-300 underline hover:text-teal-200" target="_blank" rel="noreferrer" {...props} />
-  ),
+  a: ({ node: _n, href, children, ...props }) =>
+    href && href.startsWith("#explain:") ? (
+      <Term k={decodeURIComponent(href.slice(9)).toLowerCase()}>{children}</Term>
+    ) : (
+      <a className="text-teal-300 underline hover:text-teal-200" target="_blank" rel="noreferrer" href={href} {...props} />
+    ),
   code: ({ node: _n, ...props }) => (
     <code className="rounded bg-teal-400/10 px-1 py-0.5 text-[0.85em] text-teal-200" {...props} />
   ),
@@ -35,10 +39,13 @@ const components: Components = {
 };
 
 export default function Md({ text, className = "" }: { text: string; className?: string }) {
+  // Turn the agent's [[jargon]] markers into tap-to-explain links (rendered by
+  // the `a` override → <Term>). Plain prose is left untouched.
+  const processed = text.replace(/\[\[([^\][]{1,80})\]\]/g, (_m, t) => `[${t}](#explain:${encodeURIComponent(t.trim())})`);
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-teal-100/80 ${className}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {text}
+        {processed}
       </ReactMarkdown>
     </div>
   );
