@@ -172,25 +172,44 @@ export function overallSignal(s: Signals): Recommendation {
   const fams = s.families.filter((f) => DIRECTIONAL.includes(f.family));
   if (fams.length === 0)
     return { signal: "HOLD", label: "Hold", score: 5, ratio: 0, confidence: 0, rationale: "no directional signals" };
-  let score = 0;
+  let acc = 0;
   let weight = 0;
   for (const f of fams) {
     const sign = f.signal === "BUY" ? 1 : f.signal === "SELL" ? -1 : 0;
-    score += sign * f.confidence;
+    acc += sign * f.confidence;
     weight += f.confidence;
   }
-  const ratio = weight > 0 ? score / weight : 0; // -1..+1
-  const signal: Recommendation["signal"] = ratio >= 0.25 ? "BUY" : ratio <= -0.25 ? "SELL" : "HOLD";
+  let ratio = weight > 0 ? acc / weight : 0; // -1..+1
   const tally = (sig: string) => fams.filter((f) => f.signal === sig).map((f) => f.family);
+  const buys = tally("BUY");
+  const sells = tally("SELL");
+
+  // Honesty cap: a "Strong" call requires no active dissent. If a directional
+  // signal points the other way (e.g. RSI SELL under a BUY), it's at most a
+  // plain Buy/Sell — never "Strong" — and we pull the dial out of the extreme
+  // band so the needle and the label agree. A split read is not a strong read.
+  let label = gradeLabel(ratio);
+  let split = false;
+  if (label === "Strong Buy" && sells.length > 0) {
+    label = "Buy";
+    ratio = Math.min(ratio, 0.54);
+    split = true;
+  } else if (label === "Strong Sell" && buys.length > 0) {
+    label = "Sell";
+    ratio = Math.max(ratio, -0.54);
+    split = true;
+  }
+
+  const signal: Recommendation["signal"] = ratio >= 0.25 ? "BUY" : ratio <= -0.25 ? "SELL" : "HOLD";
   const parts = (["BUY", "SELL", "HOLD"] as const)
     .map((sig) => (tally(sig).length ? `${sig}: ${tally(sig).join(", ")}` : null))
     .filter(Boolean);
   return {
     signal,
-    label: gradeLabel(ratio),
+    label,
     score: Math.round(((ratio + 1) / 2) * 10),
     ratio,
     confidence: Math.round(Math.abs(ratio) * 100),
-    rationale: parts.join(" · "),
+    rationale: parts.join(" · ") + (split ? " · split read (not Strong)" : ""),
   };
 }
