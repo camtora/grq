@@ -16,7 +16,7 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport } from "./sessions";
 
 const broker = new SimBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -201,6 +201,22 @@ async function maybeScheduledSessions() {
       try {
         await runDiscoveryHunt();
         await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on the Ideas page.");
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
+  // 12:30–13:00 midday brief on market days (once/day) — the lunch read.
+  if (isMarketDay() && m >= 12 * 60 + 30 && m < 13 * 60) {
+    const existing = await prisma.journalEntry.count({
+      where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Midday brief" } },
+    });
+    if (existing === 0) {
+      sessionRunning = true;
+      try {
+        await runMiddayReport();
       } finally {
         sessionRunning = false;
       }

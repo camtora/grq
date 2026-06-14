@@ -222,6 +222,22 @@ Write the EOD report body in markdown (no top-level title — the dashboard adds
   await alert("info", `EOD report — ${etDateStr()}`, `Day P&L ${stats.day_pnl} · NAV ${stats.nav} · vs XIC ${stats.vs_xic} · ${stats.trades} trade(s)`);
 }
 
+export async function runMiddayReport(): Promise<void> {
+  const { pf, trades, rejections, dayPnlCents } = await computeDayStats();
+  const ctx = await buildContext();
+  const prompt = `${ctx}
+
+# TASK: Midday brief — ${etDateStr()}
+
+Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or the watchlist, and what would make you act (or sit on your hands) before the close. 3–5 tight sentences, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
+  const body = await runSession({ label: "midday-report", prompt, model: MODELS.decision, withTools: false, maxTurns: 3 });
+  if (!body) return;
+  await prisma.journalEntry.create({
+    data: { kind: "RESEARCH", title: `Midday brief — ${etDateStr()}`, body, agentVersion: AGENT_VERSION },
+  });
+  await alert("info", `Midday brief — ${etDateStr()}`, `Day P&L $${(dayPnlCents / 100).toFixed(2)} · NAV $${(pf.navCents / 100).toFixed(2)}\n${body.slice(0, 1000)}`);
+}
+
 export async function runWeeklyReview(): Promise<void> {
   const ctx = await buildContext();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);

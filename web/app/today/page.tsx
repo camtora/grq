@@ -197,9 +197,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       }),
     ]);
   const timeline = entries.filter((e) => e.id !== plan?.id);
-  // The lead is never empty: today's plan, else the most recent game plan, else
-  // the latest research the agent has filed (so quiet days still read like a paper).
-  const leadEntry = plan ?? latestPlan ?? latestResearch;
+  // The lead adapts by edition and is never empty: today's midday brief (the
+  // afternoon read), else today's plan, else the most recent plan/research.
+  const middayBrief = await prisma.journalEntry.findFirst({
+    where: { kind: "RESEARCH", title: { startsWith: "Midday brief" }, at: { gte: start, lt: end } },
+  });
+  const leadEntry = middayBrief ?? plan ?? latestPlan ?? latestResearch;
 
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
   const dayPnl = pf.navCents - dayOpenNav;
