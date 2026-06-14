@@ -9,8 +9,18 @@ import { prisma } from "./db";
 const TIMEOUT_MS = 8000;
 const CONCURRENCY = 4;
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+// Does a Clearbit suggestion's name correspond to ours? Whole-word prefix match
+// in either direction; never a continuation — "Suncor" matches "Suncor Energy"
+// but not "Suncorp Bank", and "BCE" matches nothing like "Boston College".
+function nameCorresponds(ours: string, suggestion: string): boolean {
+  const a = ours.toLowerCase().trim();
+  const b = suggestion.toLowerCase().trim();
+  if (a.length < 3 || !b) return false;
+  if (a === b) return true;
+  const boundary = (s: string, i: number) => i >= s.length || /[\s.,&'/-]/.test(s.charAt(i));
+  if (b.startsWith(a) && boundary(b, a.length)) return true;
+  if (a.startsWith(b) && boundary(a, b.length)) return true;
+  return false;
 }
 
 // Strip the noise that derails a name lookup (CDR wrappers, legal suffixes…).
@@ -35,17 +45,8 @@ export async function resolveLogo(name: string): Promise<string | null> {
     if (!res.ok) return null;
     const arr = (await res.json()) as Suggest[];
     if (!Array.isArray(arr) || arr.length === 0) return null;
-    const nq = norm(q);
-    // Require the suggestion's name to actually correspond to ours — never blindly
-    // take the first result. Better a monogram than a confidently-wrong logo
-    // (e.g. "BCE" matching Boston College / bc.edu).
-    const best =
-      arr.find((c) => c.name && norm(c.name) === nq) ??
-      arr.find((c) => {
-        if (!c.name) return false;
-        const cn = norm(c.name);
-        return cn.length >= 4 && nq.length >= 4 && (cn.startsWith(nq) || nq.startsWith(cn));
-      });
+    // Better a monogram than a confidently-wrong logo: require a real name match.
+    const best = arr.find((c) => c.name && nameCorresponds(q, c.name));
     if (!best?.domain) return null;
     return `https://icons.duckduckgo.com/ip3/${best.domain}.ico`;
   } catch {
