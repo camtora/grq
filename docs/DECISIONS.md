@@ -116,3 +116,30 @@ real game plans and reports arrived using headers, lists, and links — `Md.tsx`
 react-markdown + remark-gfm with teal-themed component overrides. The "revisit when reports
 need more" clause triggered in under 24 hours, which is its own lesson about D-numbered
 optimism.
+
+### D17 — Decision model: Opus 4.8 after Fable 5 access broke (2026-06-13)
+**Context:** The decision tier ran `claude-fable-5` (D6 / AGENT-SPEC). On 2026-06-13 every
+decision-tier session began failing — the Max token returned "model may not exist or you may
+not have access" — though it had worked the day before. **Decision:** Point `MODELS.decision`
+at `claude-opus-4-8` (the flagship the Max token reaches); `GRQ_MODEL_DECISION` overrides
+per-env, triage stays on Haiku 4.5. **Consequences:** Research, EOD/weekly reports, dossiers,
+and chat run on Opus 4.8; marginal cost stays ≈$0 on the Max plan (D6). Surfaced a latent bug
+— failed sessions were silently marked DONE — fixed the same day (the research queue now marks
+FAILED honestly and requeues orphaned RUNNING on boot).
+
+### D18 — Conviction gate, take-profit, penny=research-only, paid data (Graham + Cam, 2026-06-14)
+From Graham's system review, decided with Cam:
+- **Conviction gate:** the agent may not BUY below **75% thesis confidence**
+  (`HARD.minBuyConfidence`, validator). A *quality* bar, not a cadence change — buy/sell timing
+  still follows the existing §6 rules; this only blocks low-conviction entries.
+- **Take-profit exits:** every position now carries a deterministic **take-profit** alongside the
+  stop-loss — sell to claim the gain at +15/25/40% over ACB by dial (`DialPolicy.takeProfitPct`,
+  enforced in the runner next to the stop). Both rest in code like a broker bracket.
+- **Penny / high-growth = research-and-surface ONLY.** The research tool may hunt under-the-radar,
+  high-upside small-caps and show their expected %, but the hard guardrails (price ≥ $2,
+  ADV ≥ 100k, no OTC/warrants) are unchanged — moonshots are surfaced, never auto-traded.
+  Loosening the floors stays a deliberate future human decision (likely a separate small
+  high-risk sleeve, not the $5k).
+- **Paid data approved.** Members fund one data API; recommendation is **FMP Professional
+  (~$69 USD/mo)** for analyst price targets + fundamentals + insider/13F with TSX coverage
+  (`docs/DATA-PROCUREMENT.md`), wired analyst-targets-first.
