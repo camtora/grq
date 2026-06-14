@@ -8,6 +8,7 @@ import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import StockAvatar from "@/components/StockAvatar";
+import Term from "@/components/Term";
 import { dailyQuote } from "@/lib/dailyquote";
 
 function Sources({ sourcesJson }: { sourcesJson: string | null }) {
@@ -116,7 +117,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers] =
+  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch] =
     await Promise.all([
       getPortfolio(),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } } }),
@@ -133,8 +134,13 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         orderBy: { at: "desc" },
         take: 8,
       }),
+      prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" } }, orderBy: { at: "desc" } }),
+      prisma.journalEntry.findFirst({ where: { kind: "RESEARCH" }, orderBy: { at: "desc" } }),
     ]);
   const timeline = entries.filter((e) => e.id !== plan?.id);
+  // The lead is never empty: today's plan, else the most recent game plan, else
+  // the latest research the agent has filed (so quiet days still read like a paper).
+  const leadEntry = plan ?? latestPlan ?? latestResearch;
 
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
   const dayPnl = pf.navCents - dayOpenNav;
@@ -201,10 +207,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">Net asset value</div>
+            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
+              <Term k="nav" align="right">Net asset value</Term>
+            </div>
             <div className="text-3xl font-bold tabular-nums text-teal-50">{money(pf.navCents)}</div>
             <div className="text-sm">
-              <Pnl cents={dayPnl} /> <span className="text-teal-200/50">({signedPct(Math.round(dayPnlPct * 10_000))} today)</span>
+              <Pnl cents={dayPnl} />{" "}
+              <span className="text-teal-200/50">
+                ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
+              </span>
             </div>
           </div>
         </div>
@@ -220,7 +231,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             <span className={dayClass(dayPnl)}>({signedMoney(dayPnl)})</span>
             {pf.benchmarkCents !== null && (
               <>
-                {" · "}vs XIC <span className={dayClass(pf.navCents - pf.benchmarkCents)}>{signedMoney(pf.navCents - pf.benchmarkCents)}</span>
+                {" · "}
+                <Term k="vs-xic" align="right">vs XIC</Term>{" "}
+                <span className={dayClass(pf.navCents - pf.benchmarkCents)}>{signedMoney(pf.navCents - pf.benchmarkCents)}</span>
               </>
             )}
           </span>
@@ -247,7 +260,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Lead story + Market Movers rail */}
       <section className="grid items-start gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <SectionTitle>{eod ? "The Close" : "Today's Lead"}</SectionTitle>
+          <SectionTitle>{eod ? "The Close" : plan ? "Today's Lead" : "From the desk"}</SectionTitle>
           <Card className="p-5">
             {eod ? (
               <>
@@ -264,17 +277,22 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                 )}
                 <CollapsibleMd text={eod.body} threshold={1400} />
               </>
-            ) : plan ? (
+            ) : leadEntry ? (
               <>
-                <div className="mb-2 text-lg font-semibold text-teal-50">{plan.title}</div>
-                <CollapsibleMd text={plan.body} threshold={1400}>
-                  <Sources sourcesJson={plan.sourcesJson} />
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <span className="text-lg font-semibold text-teal-50">{leadEntry.title}</span>
+                  {etDateStr(leadEntry.at) !== dateStr && (
+                    <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(leadEntry.at)}</span>
+                  )}
+                </div>
+                <CollapsibleMd text={leadEntry.body} threshold={1400}>
+                  <Sources sourcesJson={leadEntry.sourcesJson} />
                 </CollapsibleMd>
               </>
             ) : (
               <p className="text-sm text-teal-200/40">
                 {isToday
-                  ? "The agent's wrap lands around 16:15 ET on market days. Until then it's reading the tape and the news so you don't have to."
+                  ? "Quiet so far — the agent's morning research lands around 9:00 ET on market days."
                   : "No report filed this day (weekend, holiday, or pre-agent era)."}
               </p>
             )}

@@ -21,10 +21,12 @@ couldn't explain — is what this pillar exists to prevent.
 
 ## Mechanisms
 
-1. **Glossary / clickable terms** *(planned)* — a `<Term>` component underlines jargon and
-   pops a plain-English definition. Seed a static dictionary for the app's own vocabulary
-   (NAV, ACB, ADV, RSI, MACD, superficial-loss, drawdown, kill switch, round-trip, …) and
-   render terms clickable everywhere they appear.
+1. **Glossary / clickable terms** *(v1 shipped 2026-06-13)* — `components/Term.tsx` underlines
+   a term and pops a plain-English definition on hover/tap; `lib/glossary.ts` is the seed
+   dictionary for the app's own vocabulary (NAV, ACB, day/total P&L, vs-XIC, drawdown, kill
+   switch, cash floor, superficial-loss, round-trip, RSI, MACD, SMA, recommendation, dossier,
+   soak). Wired into the Today masthead/Tape first; reusable everywhere. Next: auto-tag terms
+   inside the agent's markdown, not just the chrome.
 2. **Agent explainers** *(planned)* — an "explain this" affordance asks the agent for a
    3-sentence plain-language box on a concept surfaced in research/news (e.g. *"why would
    someone use a shell company?"*), **cached in the DB** so the second reader pays $0 and
