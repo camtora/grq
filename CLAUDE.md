@@ -30,7 +30,10 @@ account (both applied 2026-06-12).
    OFF and stays off until Cam flips it after the paper soak.
 4. **Money is integer cents, quantities are whole shares.** No floats, anywhere, ever.
 5. **`.env` is chmod 600, never committed**; any value containing `$` must be single-quoted
-   (house-wide rule — unquoted `$` kills scripts that source `.env`).
+   (house-wide rule — unquoted `$` kills scripts that source `.env`). **But never wrap a
+   docker-compose `env_file` value in quotes** — legacy compose v1 passes the quote
+   characters into the container *literally* (this silently broke `FMP_API_KEY` 2026-06-15:
+   the container saw `'key'` and FMP rejected it). Quote only shell-sourced `$` values.
 6. **Real money never trades until the soak gate passes:** ≥ 4 clean weeks total on
    sim/paper, of which ≥ 2 on IBKR paper. Defined precisely in `PROJECT_PLAN.md` §9.
 7. Trading hours are 9:30–16:00 ET (TSX & NYSE close at 4:00pm, not 4:30).
