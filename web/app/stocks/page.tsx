@@ -9,6 +9,9 @@ import SignalStrip from "@/components/SignalStrip";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import StockFilters from "@/components/StockFilters";
+import WatchButton from "@/components/WatchButton";
+import ScreenerAddButton from "@/components/ScreenerAddButton";
+import { getSession } from "@/lib/session";
 
 type Row = UniverseRow & {
   lastCents: number | null;
@@ -133,13 +136,15 @@ function StocksTable({ rows, filterable = true }: { rows: Row[]; filterable?: bo
 }
 
 export default async function Stocks() {
-  const [universe, positions, watchlist, directives, journalCounts] = await Promise.all([
+  const [universe, positions, watchlist, directives, journalCounts, session] = await Promise.all([
     activeUniverse(),
     prisma.position.findMany(),
     prisma.watchlist.findMany(),
     prisma.symbolDirective.findMany(),
     prisma.journalEntry.groupBy({ by: ["symbol"], _count: { id: true }, where: { symbol: { not: null } } }),
+    getSession(),
   ]);
+  const isMember = session?.role === "member";
   const quotes = await getQuotes(universe.map((u) => u.symbol));
   const candidateCount = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
   const stanceRows = await prisma.journalEntry.findMany({
@@ -184,6 +189,10 @@ export default async function Stocks() {
   const watched = sortRows(rows.filter((r) => !r.pinnedBy && r.watched));
   const rest = sortRows(rows.filter((r) => !r.pinnedBy && !r.watched));
   const watchlistRows = [...pinned, ...watched];
+  // Watched names that aren't in the tradeable universe — the watchlist is first-class.
+  const universeSymbols = new Set(universe.map((u) => u.symbol));
+  const extraWatched = watchlist.filter((w) => !universeSymbols.has(w.symbol));
+  const extraQuotes = await getQuotes(extraWatched.map((w) => w.symbol));
 
   // Filter options from whatever fundamentals are populated so far.
   const COUNTRY_LABEL: Record<string, string> = { CA: "Canada", US: "United States" };
@@ -220,6 +229,28 @@ export default async function Stocks() {
           </Link>{" "}
           and add it.
         </Card>
+      )}
+
+      {extraWatched.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] uppercase tracking-wider text-teal-200/40">Also watching · not in the tradeable universe</p>
+          {extraWatched.map((w) => {
+            const q = extraQuotes.get(w.symbol);
+            return (
+              <Card key={w.symbol} className="flex flex-wrap items-center gap-3 p-3">
+                <span className="font-bold text-teal-200">{w.symbol}</span>
+                {q && <span className="text-sm tabular-nums text-teal-100/80">{money(q.midCents)}</span>}
+                {w.note && <span className="text-xs text-teal-200/40">{w.note}</span>}
+                {isMember && (
+                  <span className="ml-auto flex gap-2">
+                    <WatchButton symbol={w.symbol} watched />
+                    <ScreenerAddButton symbol={w.symbol} />
+                  </span>
+                )}
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       <section className="mt-8">

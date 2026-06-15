@@ -4,6 +4,8 @@ import { getSession } from "@/lib/session";
 import { money } from "@/lib/money";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import ScreenerAddButton from "@/components/ScreenerAddButton";
+import WatchButton from "@/components/WatchButton";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +44,13 @@ const selectCls =
   "rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-sm text-teal-100 outline-none";
 
 export default async function Market({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const [sp, session] = await Promise.all([searchParams, getSession()]);
+  const [sp, session, wl] = await Promise.all([
+    searchParams,
+    getSession(),
+    prisma.watchlist.findMany({ select: { symbol: true } }),
+  ]);
   const isMember = session?.role === "member";
+  const watchedSet = new Set(wl.map((w) => w.symbol));
   const { exchange = "", sector = "", country = "", cap = "" } = sp;
   const capDef = CAPS.find((c) => c.v === cap);
   const hasFilter = !!(exchange || sector || country || cap);
@@ -165,7 +172,14 @@ export default async function Market({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
                     {r.priceCents !== null ? money(r.priceCents) : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right">{isMember && <ScreenerAddButton symbol={r.symbol} />}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {isMember && (
+                      <span className="inline-flex gap-1.5">
+                        <WatchButton symbol={r.symbol} watched={watchedSet.has(r.symbol.toUpperCase())} />
+                        <ScreenerAddButton symbol={r.symbol} />
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
