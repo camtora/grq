@@ -8,6 +8,7 @@ import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
 import Sparkline from "@/components/Sparkline";
 import KillSwitch from "@/components/KillSwitch";
 import ActivityFeed from "@/components/ActivityFeed";
+import Term from "@/components/Term";
 
 export default async function Overview() {
   const [session, pf, history, recentJournal, latestPlan] = await Promise.all([
@@ -51,6 +52,7 @@ export default async function Overview() {
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label="Net asset value"
+          term="nav"
           value={money(pf.navCents)}
           note={
             <>
@@ -60,6 +62,7 @@ export default async function Overview() {
         />
         <StatCard
           label="Total P&L"
+          term="total-pnl"
           value={signedMoney(pf.totalPnlCents)}
           valueClassName={pnlClass(pf.totalPnlCents)}
           note={
@@ -70,11 +73,13 @@ export default async function Overview() {
         />
         <StatCard
           label="Contributions"
+          term="contributions"
           value={money(pf.contributionsCents)}
           note="initial commitment"
         />
         <StatCard
           label="Fee budget"
+          term="fee-budget"
           value={`${money(pf.feeSpentMonthCents)} / ${money(pf.feeBudgetCentsMonth)}`}
           note={
             <span className="block">
@@ -122,11 +127,11 @@ export default async function Overview() {
                   <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
                     <th className="px-5 py-2">Symbol</th>
                     <th className="px-5 py-2 text-right">Qty</th>
-                    <th className="px-5 py-2 text-right">Avg cost</th>
+                    <th className="px-5 py-2 text-right"><Term k="acb" align="right">Avg cost</Term></th>
                     <th className="px-5 py-2 text-right">Last</th>
-                    <th className="px-5 py-2 text-right">Market value</th>
-                    <th className="px-5 py-2 text-right">Unrealized P&L</th>
-                    <th className="px-5 py-2 text-right">Weight</th>
+                    <th className="px-5 py-2 text-right"><Term k="market-value" align="right">Market value</Term></th>
+                    <th className="px-5 py-2 text-right"><Term k="unrealized-pnl" align="right">Unrealized P&L</Term></th>
+                    <th className="px-5 py-2 text-right"><Term k="weight" align="right">Weight</Term></th>
                   </tr>
                 </thead>
                 <tbody>

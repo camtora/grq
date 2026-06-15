@@ -6,6 +6,78 @@ import Term from "./Term";
 // hand-rolled mini-renderer (D15) once agent game plans and reports started
 // using headers, lists, and links for real.
 
+// Auto-link known glossary jargon the FIRST time it appears in agent prose, so
+// the literacy layer doesn't depend on the agent remembering to wrap each term.
+// Only unambiguous jargon (low false-positive risk); each maps to a glossary
+// slug → the `a` override renders it as a <Term>. Runs on hast text nodes only,
+// skipping code/links/headings, once per term per document.
+const GLOSSARY_TRIGGERS: [RegExp, string][] = [
+  [/\bnet asset value\b/i, "nav"],
+  [/\bNAV\b/, "nav"],
+  [/\badjusted cost base\b/i, "acb"],
+  [/\bACB\b/, "acb"],
+  [/\bfree cash flow\b/i, "free-cash-flow"],
+  [/\bmarket cap(?:italization|italisation)?\b/i, "market-cap"],
+  [/\bshort interest\b/i, "short-interest"],
+  [/\bshort squeeze\b/i, "short-interest"],
+  [/\bdividend yield\b/i, "dividend-yield"],
+  [/\bdilution\b/i, "dilution"],
+  [/\bdrawdown\b/i, "drawdown"],
+  [/\beconomic moat\b/i, "moat"],
+  [/\bmoat\b/i, "moat"],
+  [/\bstop[- ]?loss\b/i, "stop-loss"],
+  [/\btake[- ]?profit\b/i, "take-profit"],
+  [/\bswing trade\b/i, "swing-trade"],
+  [/\bsuperficial[- ]loss\b/i, "superficial-loss"],
+  [/\bRSI\b/, "rsi"],
+  [/\bMACD\b/, "macd"],
+  [/\bP\/E\b/, "pe"],
+  [/\bETF\b/, "etf"],
+];
+const SKIP_TAGS = new Set(["a", "code", "pre", "h1", "h2", "h3", "h4", "h5", "h6"]);
+
+function linkifyText(value: string, used: Set<string>): unknown[] {
+  let best: { index: number; len: number; slug: string; text: string } | null = null;
+  for (const [re, slug] of GLOSSARY_TRIGGERS) {
+    if (used.has(slug)) continue;
+    const m = re.exec(value);
+    if (m && (best === null || m.index < best.index)) best = { index: m.index, len: m[0].length, slug, text: m[0] };
+  }
+  if (!best) return [{ type: "text", value }];
+  used.add(best.slug);
+  const before = value.slice(0, best.index);
+  const after = value.slice(best.index + best.len);
+  const out: unknown[] = [];
+  if (before) out.push({ type: "text", value: before });
+  out.push({ type: "element", tagName: "a", properties: { href: `#explain:${best.slug}` }, children: [{ type: "text", value: best.text }] });
+  out.push(...linkifyText(after, used));
+  return out;
+}
+
+function autoGlossary() {
+  return (tree: unknown) => {
+    try {
+      const used = new Set<string>();
+      const walk = (node: { children?: unknown[] }, skip: boolean) => {
+        if (!Array.isArray(node.children)) return;
+        const out: unknown[] = [];
+        for (const child of node.children as Array<{ type?: string; tagName?: string; value?: string; children?: unknown[] }>) {
+          if (child.type === "text" && !skip) {
+            out.push(...linkifyText(child.value ?? "", used));
+          } else {
+            if (child.type === "element") walk(child, skip || SKIP_TAGS.has(child.tagName ?? ""));
+            out.push(child);
+          }
+        }
+        node.children = out;
+      };
+      walk(tree as { children?: unknown[] }, false);
+    } catch {
+      /* on any parsing surprise, leave the prose exactly as written */
+    }
+  };
+}
+
 const components: Components = {
   h1: ({ node: _n, ...props }) => <h3 className="mt-4 text-base font-bold text-teal-50 first:mt-0" {...props} />,
   h2: ({ node: _n, ...props }) => <h3 className="mt-4 text-base font-bold text-teal-50 first:mt-0" {...props} />,
@@ -44,7 +116,7 @@ export default function Md({ text, className = "" }: { text: string; className?:
   const processed = text.replace(/\[\[([^\][]{1,80})\]\]/g, (_m, t) => `[${t}](#explain:${encodeURIComponent(t.trim())})`);
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-teal-100/80 ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[autoGlossary]} components={components}>
         {processed}
       </ReactMarkdown>
     </div>

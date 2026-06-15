@@ -1,4 +1,5 @@
 import { money, signedMoney, pnlClass } from "@/lib/money";
+import Term from "./Term";
 
 export function Card({
   children,
@@ -19,15 +20,19 @@ export function StatCard({
   value,
   note,
   valueClassName = "text-teal-50",
+  term,
 }: {
   label: string;
   value: string;
   note?: React.ReactNode;
   valueClassName?: string;
+  term?: string;
 }) {
   return (
     <Card className="p-5">
-      <div className="text-xs uppercase tracking-wider text-teal-200/50">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-teal-200/50">
+        {term ? <Term k={term}>{label}</Term> : label}
+      </div>
       <div className={`mt-2 text-2xl font-semibold tabular-nums ${valueClassName}`}>{value}</div>
       {note ? <div className="mt-1 text-xs text-teal-200/40">{note}</div> : null}
     </Card>

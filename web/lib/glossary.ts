@@ -78,4 +78,84 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "Soak",
     def: "The trial run: the fund must trade clean for 4+ weeks (2 of them on real broker paper) before a single real dollar is at risk.",
   },
+  contributions: {
+    term: "Contributions",
+    def: "Every dollar Cam and Graham have put into the fund. Total P&L and the benchmark are both measured against this — it's the money that had to be beaten.",
+  },
+  "fee-budget": {
+    term: "Fee budget",
+    def: "A hard monthly ceiling on commissions. The order gate rejects any trade that would push this month's fees over the line — fees quietly kill small accounts.",
+  },
+  "market-value": {
+    term: "Market value",
+    def: "What a holding is worth right now: shares held × the latest price. Add them all up, plus cash, and you get NAV.",
+  },
+  "unrealized-pnl": {
+    term: "Unrealized P&L",
+    def: "Paper profit or loss on a holding you still own — what you'd lock in if you sold at the current price. It isn't real until you sell.",
+  },
+  weight: {
+    term: "Weight",
+    def: "How much of the fund one position is, as a share of NAV. The risk dial caps it so no single name can sink the whole boat.",
+  },
+  position: {
+    term: "Position",
+    def: "A holding: the shares of one stock the fund currently owns, with an average cost and a current value.",
+  },
+  "market-cap": {
+    term: "Market cap",
+    def: "A company's total stock-market value: share price × shares outstanding. Roughly what it would cost to buy the whole company.",
+  },
+  "free-cash-flow": {
+    term: "Free cash flow",
+    def: "The cash a business actually generates after running costs and reinvestment — money it's free to return to owners or stockpile. Harder to fake than reported earnings.",
+  },
+  "dividend-yield": {
+    term: "Dividend yield",
+    def: "The annual dividend as a percent of the share price. A $2 dividend on a $50 stock yields 4%.",
+  },
+  "short-interest": {
+    term: "Short interest",
+    def: "The share of a stock that traders have borrowed and sold, betting it falls. High short interest signals bearishness — and can fuel a sharp 'short squeeze' if the price rises instead.",
+  },
+  dilution: {
+    term: "Dilution",
+    def: "When a company issues new shares, each existing share owns a smaller slice. Common with cash-hungry small-caps — it can quietly erode your stake even as the business grows.",
+  },
+  "stop-loss": {
+    term: "Stop-loss",
+    def: "A pre-set exit: if a holding falls to this price, the agent sells to cap the damage. The level is set by the risk dial (e.g. −8% on Balanced).",
+  },
+  "take-profit": {
+    term: "Take-profit",
+    def: "The mirror of a stop: a pre-set level where the agent banks a winner so a paper gain doesn't evaporate. Also set by the risk dial.",
+  },
+  "expected-return": {
+    term: "Expected return",
+    def: "The upside the agent's price target implies from today's price — a hypothesis with a horizon, not a promise. The track record builds as targets resolve.",
+  },
+  "price-target": {
+    term: "Price target",
+    def: "Where the agent thinks a stock could trade — a near-term swing target and a 12-month view. The basis for expected return, judged honestly when it plays out.",
+  },
+  commission: {
+    term: "Commission",
+    def: "The broker's fee per trade. Small but relentless: GRQ won't take a trade unless it's worth at least 3× the round-trip commissions.",
+  },
+  moat: {
+    term: "Economic moat",
+    def: "A durable advantage that protects a company's profits from competitors — brand, network effects, low costs, switching costs. Wide moats compound for years.",
+  },
+  pe: {
+    term: "P/E — Price-to-Earnings",
+    def: "Share price divided by annual earnings per share — how many years of current profit you're paying for. High P/E = the market expects growth; low = skepticism or value.",
+  },
+  etf: {
+    term: "ETF — Exchange-Traded Fund",
+    def: "A basket of stocks bought as one ticker. XIC, for instance, holds the whole TSX — instant diversification in a single trade.",
+  },
+  "swing-trade": {
+    term: "Swing trade",
+    def: "Holding for days to a few weeks to catch a price 'swing' — longer than day-trading, shorter than buy-and-hold. GRQ's core style.",
+  },
 };
