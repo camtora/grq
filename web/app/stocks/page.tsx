@@ -7,6 +7,7 @@ import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
 import SignalRec from "@/components/SignalRec";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 
 type Row = UniverseRow & {
   lastCents: number | null;
@@ -21,6 +22,7 @@ type Row = UniverseRow & {
   upnlCents: number;
   signals: Signals | null;
   rec: Recommendation | null;
+  stance: string | null;
 };
 
 function sortRows(rows: Row[]): Row[] {
@@ -72,6 +74,18 @@ function SectionRows({ rows }: { rows: Row[] }) {
           <td className="px-4 py-2.5">
             <SignalRec rec={r.rec} signals={r.signals} />
           </td>
+          <td className="px-4 py-2.5">
+            {r.stance ? (
+              <span
+                className={`text-xs font-bold ${STANCE_TONE_CLASSES[stanceMeta(r.stance)!.tone].text}`}
+                title={`The agent's call: ${stanceMeta(r.stance)!.blurb}`}
+              >
+                {stanceMeta(r.stance)!.label}
+              </span>
+            ) : (
+              <span className="text-xs text-teal-200/25">—</span>
+            )}
+          </td>
           <td className="px-4 py-2.5 text-right tabular-nums text-teal-50">
             {r.held ? `${r.held.qty} sh · ${money(r.mvCents)}` : ""}
           </td>
@@ -86,7 +100,7 @@ function SectionRows({ rows }: { rows: Row[] }) {
 function SectionHeader({ label }: { label: string }) {
   return (
     <tr className="border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
-      <td colSpan={10} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
+      <td colSpan={11} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
         {label}
       </td>
     </tr>
@@ -103,6 +117,13 @@ export default async function Stocks() {
   ]);
   const quotes = await getQuotes(universe.map((u) => u.symbol));
   const candidateCount = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
+  const stanceRows = await prisma.journalEntry.findMany({
+    where: { stance: { not: null }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    select: { symbol: true, stance: true },
+  });
+  const stanceBy = new Map<string, string>();
+  for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
   const signalsList = await Promise.all(universe.map((u) => computeSignals(u.symbol).catch(() => null)));
   const sigBy = new Map(universe.map((u, i) => [u.symbol, signalsList[i]] as const));
 
@@ -130,6 +151,7 @@ export default async function Stocks() {
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
       signals: sig,
       rec: sig ? overallSignal(sig) : null,
+      stance: stanceBy.get(u.symbol) ?? null,
     };
   });
 
@@ -163,6 +185,7 @@ export default async function Stocks() {
               <th className="px-4 py-3 text-right">Day</th>
               <th className="px-4 py-3">Signals</th>
               <th className="px-4 py-3">Recommendation</th>
+              <th className="px-4 py-3">Agent&apos;s call</th>
               <th className="px-4 py-3 text-right">Position</th>
               <th className="px-4 py-3 text-right">Unrealized</th>
               <th className="px-4 py-3 text-right">Journal</th>
@@ -192,7 +215,8 @@ export default async function Stocks() {
         <span className="font-semibold text-teal-200/60">R</span> rsi ·{" "}
         <span className="font-semibold text-teal-200/60">M</span> macd ·{" "}
         <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
-        <span className="font-semibold text-teal-200/60">Recommendation</span> = confidence-weighted consensus of trend/rsi/macd (technical only; advisory — the agent's actual call lives in its journal).
+        <span className="font-semibold text-teal-200/60">Recommendation</span> = confidence-weighted consensus of trend/rsi/macd (technical only, advisory).{" "}
+        <span className="font-semibold text-teal-200/60">Agent&apos;s call</span> = the agent&apos;s own judgment from its latest dossier; where it disagrees with the formula is the part worth reading.
       </p>
       <p className="mt-1 text-xs text-teal-200/40">
         quotes delayed ~15 min · the risk dial gates which tiers the agent may buy ·{" "}
