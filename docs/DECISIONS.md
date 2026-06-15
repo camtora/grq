@@ -142,4 +142,32 @@ From Graham's system review, decided with Cam:
   high-risk sleeve, not the $5k).
 - **Paid data approved.** Members fund one data API; recommendation is **FMP Professional
   (~$69 USD/mo)** for analyst price targets + fundamentals + insider/13F with TSX coverage
-  (`docs/DATA-PROCUREMENT.md`), wired analyst-targets-first.
+  (`docs/DATA-PROCUREMENT.md`), wired analyst-targets-first. *(Provisioned 2026-06-15 on FMP
+  **Ultimate** — Cam's key. Use the `stable` API; v3/v4 are dead for newly-issued keys.
+  Analyst targets key to the US/primary listing, so strip `.TO`/`.V` — `% upside` is
+  currency-invariant. See `web/lib/fmp.ts`.)*
+
+### D19 — IBKR headless gateway: 2FA solved, blocked on account provisioning (2026-06-15)
+**Context:** First live bring-up of the IBeam gateway against both members' brand-new accounts
+(applied 2026-06-12). **Findings:**
+- **Headless 2FA works via IB Key push** — IBeam submits the login, IBKR pushes to the member's
+  **IB Key app**, the member taps **Approve** → SSO login succeeds. No code/TOTP injection
+  (IBeam has no 2FA handler wired). The IB Key app must be *activated*, not just installed; a
+  newly-added device can sit in an activation hold; `IBEAM_OAUTH_TIMEOUT=180` leaves time to tap.
+- **`env_file` values must be UNQUOTED** — a single-quoted `IBEAM_PASSWORD` made the gateway see
+  the quotes literally → `Invalid username password combination` (same docker-compose v1 trap as
+  the FMP key; CLAUDE.md rule 5). Cost the most time this session.
+- **A separate API username is not required to authenticate** — the member's own username + the
+  paper toggle (`IBEAM_USE_PAPER_ACCOUNT=True`) logs in, `competing:false` even sharing it (a
+  dedicated username is still recommended for steady-state session isolation).
+- **Blocked:** SSO succeeds but the brokerage **`iserver`** session won't connect
+  (`authenticated:false`; `invalid challenge` on `ssodh/init`), with 2FA *and* competing-sessions
+  both ruled out. On a 3-day-old account this is account provisioning — **pending approval /
+  unsigned agreements** (market-data, disclosures) on interactivebrokers.com.
+
+**Decision:** Park Phase 3 bring-up on the **account-setup** step (member completes pending
+agreements / confirms trading approval); the gateway + 2FA path is proven and reusable. Kept
+`IBEAM_MAX_FAILED_AUTH=1` (lockout-safe) while iterating; `BROKER` stays `sim`. The validated
+procedure + gotchas are in `docs/IBKR-PHASE3.md` (the "⚠️ Validated 2026-06-15" block).
+**Consequences:** Phase 3 stays blocked **only externally** — now on IBKR account provisioning,
+not our plumbing — and the sim soak continues uninterrupted.

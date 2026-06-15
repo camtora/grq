@@ -9,6 +9,44 @@ the account is approved.
 
 ---
 
+## ⚠️ Validated 2026-06-15 — what works, what's still blocked
+
+A live bring-up session against both members' brand-new accounts established:
+
+**Solved — the headless 2FA (the part everyone says is hard):**
+- The gateway logs in with the member's **own username + the paper toggle**
+  (`IBEAM_USE_PAPER_ACCOUNT=True`) — no separate API username is needed to get this far (a
+  dedicated one is still nice for session isolation, Step 1).
+- 2FA is **IB Key push**: IBeam submits → IBKR pushes to the **IB Key app** → the member taps
+  **Approve** → `Logging in succeeded`, SSO session live. The app must be **activated**
+  (downloading it isn't enough), a newly-added device can have an **activation hold**, and
+  `IBEAM_OAUTH_TIMEOUT` must be high enough (we used 180s) to leave time to approve.
+
+**The gotcha that cost us hours — never quote `env_file` values:**
+- Legacy docker-compose v1 passes quote characters **literally** into the container. A
+  single-quoted `IBEAM_PASSWORD='...'` made the gateway see `'...'` (quotes included) →
+  `Invalid username password combination`. **Set `IBEAM_ACCOUNT`/`IBEAM_PASSWORD` UNQUOTED.**
+  (Same trap that broke `FMP_API_KEY` — CLAUDE.md rule 5.) Verify with:
+  `docker-compose run --rm --no-deps --entrypoint sh ibeam -c 'echo passlen=${#IBEAM_PASSWORD}'`
+  — the length must match the raw password exactly.
+
+**Still blocked — the brokerage (`iserver`) session won't connect:**
+- After SSO login succeeds, the trading session stays `authenticated:false, connected:false`.
+  Ruled out **2FA** (solved) and **competing sessions** (`competing:false`, all other IBKR
+  logins closed, force-`reauthenticate` triggered). `/iserver/auth/ssodh/init` returned
+  `invalid challenge, machine id` — consistent with a not-yet-provisioned trading session.
+- On a **3-day-old account** this is almost always the account itself: **pending approval or
+  unsigned agreements** (market-data, disclosures). **Next step (member, on
+  interactivebrokers.com):** clear every pending task/agreement, confirm the account is
+  fully **approved for trading**, then re-run.
+
+**Operational reality:** IBKR expires the session ~midnight ET → a **daily IB Key approval**
+keeps the gateway alive. Full automation would need a TOTP-secret 2FA handler, if the account
+supports it. **Watch the gateway via the tickle** (`/v1/api/tickle`), NOT the IBeam logs —
+stale "Logging in failed/succeeded" lines cause false reads.
+
+---
+
 ## Step 1 — Graham, in IBKR Client Portal (~10 min)
 
 1. **Settings → Account Settings → Paper Trading Account → enable.** The free simulated twin
@@ -21,15 +59,26 @@ the account is approved.
 
 ## Step 2 — Credentials into `.env` (Cam or Graham, on the host)
 
-`~/grq/.env` is chmod 600 and never committed. Single-quote anything with a `$`. Add:
+`~/grq/.env` is chmod 600 and never committed. **Never quote `env_file` values** —
+docker-compose v1 passes the quote characters literally into the container (the 2026-06-15
+trap; CLAUDE.md rule 5). Add, UNQUOTED:
 
 ```
-IBEAM_ACCOUNT='paper-api-username'      # the dedicated secondary username
-IBEAM_PASSWORD='...'
+IBEAM_ACCOUNT=paper-or-login-username   # member's username; the paper toggle handles the rest
+IBEAM_PASSWORD=...                       # UNQUOTED, even if it contains punctuation
+IBEAM_USE_PAPER_ACCOUNT=True             # log into the simulated paper twin
+IBEAM_OAUTH_TIMEOUT=180                  # seconds — leave time to approve the IB Key push
+IBEAM_MAX_FAILED_AUTH=1                  # lockout-safe cap while testing (raise to ~5 steady-state)
 IBKR_GATEWAY_URL=https://ibeam:5000
 IBKR_ACCOUNT_ID=DU0000000               # the PAPER account id (starts with DU)
-IBKR_FLEX_TOKEN='...'
+IBKR_FLEX_TOKEN=...                      # also UNQUOTED (env_file)
 # leave BROKER=sim for now — do NOT flip until Step 4 verifies fills
+```
+
+Confirm the password survived the container boundary (length must match the raw password):
+
+```bash
+docker-compose run --rm --no-deps --entrypoint sh ibeam -c 'echo passlen=${#IBEAM_PASSWORD}'
 ```
 
 ## Step 3 — Bring up the gateway, verify auth
@@ -37,19 +86,27 @@ IBKR_FLEX_TOKEN='...'
 ```bash
 cd ~/grq
 docker-compose up -d ibeam            # starts only the IBeam gateway
-docker-compose logs -f ibeam          # watch the headless login; expect a 2FA prompt the first time
 ```
 
-IBKR almost always requires a **2FA approval** on first login (IBKR Mobile push). Approve it.
-Then verify the brokerage session is live (from inside the network):
+**2FA is an IB Key push** (validated 2026-06-15): within ~`OAUTH_TIMEOUT` seconds, IBKR pushes
+to the member's **IB Key app** → tap **Approve** → `Logging in succeeded`. Then verify — poll
+the **tickle**, not the logs (logs carry stale "Logging in failed/succeeded" lines that fool a
+grep):
 
 ```bash
-docker exec grq-agent sh -c 'curl -sk https://ibeam:5000/v1/api/iserver/auth/status -X POST'
-# want: {"authenticated":true,"connected":true,...}
+docker exec grq-ibeam sh -c 'curl -sk https://localhost:5000/v1/api/tickle'
+# SSO session: {"session":"...","userId":...,"iserver":{"authStatus":{...}}}
+
+docker exec grq-ibeam sh -c 'curl -sk https://localhost:5000/v1/api/iserver/auth/status'
+# WANT: {"authenticated":true,"connected":true,"competing":false,...}
 ```
 
-If that's green, the gateway works and we proceed to wiring. If it loops / won't authenticate,
-that's the known headless-auth pain — see "Realities" below.
+Two distinct sessions, in order: **SSO** (login + 2FA — solved) then the **brokerage
+`iserver`** session (trading). If SSO succeeds but `iserver` stays `authenticated:false`,
+force a re-auth: `curl -sk -X POST https://localhost:5000/v1/api/iserver/reauthenticate`.
+If it's `competing:true`, close every other IBKR login (website / TWS / mobile-trading). If
+neither clears it on a **fresh account**, the account isn't fully provisioned for trading yet
+— see the **2026-06-15** block above. Once both sessions are green, proceed to wiring.
 
 ## Step 4 — Live wiring (Claude, with the gateway up) — the actual build
 

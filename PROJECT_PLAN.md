@@ -6,8 +6,8 @@
 **Domain:** grq.camerontora.ca (live, SSO-protected, routed to port 3012)
 **Users:** Cam & Graham — equal access, both hold the kill switch
 **Initial contribution:** $5,000 CAD (Cam's money; a learning project for both)
-**Status:** Phases 0–2.5 shipped — agent live-fire on the sim since 2026-06-12 (soak running), plus backups, per-member themes, stocks one-pagers, signals v1, and the read-only agent chat. IBKR account opening is the only external dependency (gates Phase 3; both members applied 2026-06-12).
-**Last updated:** 2026-06-11
+**Status:** Phases 0–2.7 shipped — agent live-fire on the sim since 2026-06-12 (soak running), plus backups, per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives, UI-managed universe + research dossiers, read-only viewer tier, FMP Ultimate data (analyst targets/peers/news), literacy explainers, the IA restructure (Market/Ideas/Research tabs), and the read-only agent chat. **Phase 3 (IBKR paper) gateway is proven** — headless 2FA via IB Key push logs in (D19) — but blocked externally on **IBKR account provisioning** (the brokerage `iserver` session won't establish until both members' brand-new accounts clear pending approval/agreements; applied 2026-06-12).
+**Last updated:** 2026-06-15
 
 ---
 
