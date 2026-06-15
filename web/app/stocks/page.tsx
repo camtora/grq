@@ -228,12 +228,20 @@ export default async function Stocks() {
           <p className="text-sm text-teal-200/60">
             The agent&apos;s ideas — under-the-radar hunt finds, names with upside, and what smart money is buying.
           </p>
-          <Link
-            href="/ideas"
-            className="ml-auto rounded-xl border border-teal-400/40 bg-teal-400/10 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20"
-          >
-            See all ideas →
-          </Link>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Link
+              href="/market"
+              className="rounded-xl border border-teal-400/40 bg-teal-400/10 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20"
+            >
+              Browse the market →
+            </Link>
+            <Link
+              href="/ideas"
+              className="rounded-xl border border-teal-400/40 bg-teal-400/10 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20"
+            >
+              See all ideas →
+            </Link>
+          </div>
         </Card>
       </section>
 

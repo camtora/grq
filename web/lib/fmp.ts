@@ -93,6 +93,49 @@ export async function fmpProfile(symbol: string): Promise<FmpProfile | null> {
 // strip the exchange suffix before asking.
 const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN)$/i, "");
 
+export type ScreenerRow = {
+  symbol: string;
+  name: string;
+  priceCents: number | null;
+  marketCapM: number | null;
+  sector: string | null;
+  exchange: string | null;
+  country: string | null;
+  isEtf: boolean;
+};
+
+// Market-wide screener (FMP Ultimate). Browse the whole market by exchange /
+// sector / country / cap. Caps in actual dollars (the FMP param unit).
+export async function fmpScreener(opts: {
+  exchange?: string;
+  sector?: string;
+  country?: string;
+  marketCapMoreThan?: number;
+  marketCapLowerThan?: number;
+  limit?: number;
+}): Promise<ScreenerRow[]> {
+  const p = new URLSearchParams();
+  if (opts.exchange) p.set("exchange", opts.exchange);
+  if (opts.sector) p.set("sector", opts.sector);
+  if (opts.country) p.set("country", opts.country);
+  if (opts.marketCapMoreThan) p.set("marketCapMoreThan", String(opts.marketCapMoreThan));
+  if (opts.marketCapLowerThan) p.set("marketCapLowerThan", String(opts.marketCapLowerThan));
+  p.set("isActivelyTrading", "true");
+  p.set("limit", String(opts.limit ?? 50));
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`company-screener?${p.toString()}`);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => ({
+    symbol: String(r.symbol ?? ""),
+    name: String(r.companyName ?? ""),
+    priceCents: typeof r.price === "number" ? Math.round(r.price * 100) : null,
+    marketCapM: typeof r.marketCap === "number" ? Math.round(r.marketCap / 1_000_000) : null,
+    sector: (r.sector as string) || null,
+    exchange: (r.exchangeShortName as string) || (r.exchange as string) || null,
+    country: (r.country as string) || null,
+    isEtf: r.isEtf === true,
+  }));
+}
+
 export type FmpAnalyst = {
   upsidePct: number; // consensus vs the US-listing price — CURRENCY-INVARIANT, so it's valid for the TSX listing too
   consensusCents: number; // in the listing's own currency
