@@ -199,7 +199,7 @@ export default async function Ideas() {
     <main>
       <PageHeader
         title="Stocks you should look at"
-        sub="Under-the-radar names the agent has researched, ranked by expected upside — unfamiliar names first."
+        sub="Three ways in: the agent's hunt for under-the-radar names, what smart money is buying, and its researched ideas ranked by upside."
       />
 
       {huntFinds.length > 0 && (
@@ -247,6 +247,12 @@ export default async function Ideas() {
         </Card>
       )}
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Chip tone="teal">researched ideas</Chip>
+        <span className="text-sm text-teal-200/50">
+          names the agent has dossiered with price targets — ranked by expected upside, unfamiliar names first
+        </span>
+      </div>
       {ideas.length === 0 ? (
         <EmptyState
           title="No ideas with targets yet"
