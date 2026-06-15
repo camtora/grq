@@ -89,13 +89,37 @@ export async function fmpProfile(symbol: string): Promise<FmpProfile | null> {
   };
 }
 
-export type FmpTargets = { consensusCents: number; highCents: number; lowCents: number; medianCents: number } | null;
+// FMP keys analyst coverage to the US/primary listing, not the .TO ticker, so we
+// strip the exchange suffix before asking.
+const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN)$/i, "");
 
-/** Analyst price-target consensus (Wall Street's view, to set beside the agent's). */
-export async function fmpPriceTarget(symbol: string): Promise<FmpTargets> {
-  const raw = await fmpGet<Array<Record<string, number>>>(`price-target-consensus?symbol=${encodeURIComponent(symbol)}`);
-  const t = Array.isArray(raw) ? raw[0] : null;
-  if (!t || typeof t.targetConsensus !== "number") return null;
+export type FmpAnalyst = {
+  upsidePct: number; // consensus vs the US-listing price — CURRENCY-INVARIANT, so it's valid for the TSX listing too
+  consensusCents: number; // in the listing's own currency
+  highCents: number;
+  lowCents: number;
+  currency: string;
+};
+
+/** Analyst price-target consensus + the implied upside, as an outside check on
+ *  the agent's call. The % is computed against the same listing's price, which
+ *  makes it currency-invariant (a +13% target is +13% in CAD or USD). */
+export async function fmpAnalystTarget(symbol: string): Promise<FmpAnalyst | null> {
+  const base = stripSuffix(symbol);
+  const [tgt, prof] = await Promise.all([
+    fmpGet<Array<Record<string, number>>>(`price-target-consensus?symbol=${encodeURIComponent(base)}`),
+    fmpGet<Array<Record<string, unknown>>>(`profile?symbol=${encodeURIComponent(base)}`),
+  ]);
+  const t = Array.isArray(tgt) ? tgt[0] : null;
+  const p = Array.isArray(prof) ? prof[0] : null;
+  const usPrice = p && typeof p.price === "number" ? (p.price as number) : 0;
+  if (!t || typeof t.targetConsensus !== "number" || usPrice <= 0) return null;
   const c = (n: number | undefined) => (typeof n === "number" ? Math.round(n * 100) : 0);
-  return { consensusCents: c(t.targetConsensus), highCents: c(t.targetHigh), lowCents: c(t.targetLow), medianCents: c(t.targetMedian) };
+  return {
+    upsidePct: (t.targetConsensus - usPrice) / usPrice,
+    consensusCents: c(t.targetConsensus),
+    highCents: c(t.targetHigh),
+    lowCents: c(t.targetLow),
+    currency: String((p?.currency as string) ?? "USD"),
+  };
 }

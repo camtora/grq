@@ -170,4 +170,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "The agent's call",
     def: "The agent's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
   },
+  "analyst-target": {
+    term: "Analyst consensus target",
+    def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on the agent's call — when the agent and the street sharply disagree, it's worth asking who's right.",
+  },
 };

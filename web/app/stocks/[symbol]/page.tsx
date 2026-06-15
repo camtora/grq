@@ -11,6 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { fmpEnabled, fmpAnalystTarget } from "@/lib/fmp";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -55,7 +56,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -66,6 +67,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       computeSignals(symbol).catch(() => null),
       prisma.symbolDirective.findUnique({ where: { symbol } }),
       getScoreboard(symbol).catch(() => []),
+      fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
     ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -176,6 +178,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                       </span>
                     </>
                   )}
+                </p>
+              )}
+              {analyst && (
+                <p className="mt-2 text-sm text-teal-200/70">
+                  <Term k="analyst-target">Analyst consensus</Term>:{" "}
+                  <span className={analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}>
+                    {analyst.upsidePct > 0 ? "+" : ""}
+                    {pct(analyst.upsidePct, 0)} upside
+                  </span>
+                  <span className="text-xs text-teal-200/40"> · Wall St.{analyst.currency !== "CAD" ? " (US listing)" : ""}</span>
                 </p>
               )}
             </div>
