@@ -136,9 +136,9 @@ export async function fmpScreener(opts: {
   }));
 }
 
-export type NewsItem = { title: string; publisher: string; url: string; at: string };
+export type NewsItem = { title: string; publisher: string; url: string; at: string; image: string };
 
-// Latest general market news (the Stocks tab's market pulse). Best-effort.
+// Latest general market news (the Stocks-tab pulse + the Today brief's top stories).
 export async function fmpNews(limit = 8): Promise<NewsItem[]> {
   const raw = await fmpGet<Array<Record<string, unknown>>>(`news/general-latest?limit=${limit}`);
   if (!Array.isArray(raw)) return [];
@@ -148,8 +148,27 @@ export async function fmpNews(limit = 8): Promise<NewsItem[]> {
       publisher: String(n.publisher ?? n.site ?? ""),
       url: String(n.url ?? ""),
       at: String(n.publishedDate ?? ""),
+      image: String(n.image ?? ""),
     }))
     .filter((n) => n.title);
+}
+
+export type Mover = { symbol: string; name: string; changePct: number; priceCents: number; exchange: string };
+
+// The day's biggest market movers (gainers) — the Today brief's "top performers".
+export async function fmpGainers(): Promise<Mover[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`biggest-gainers`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m) => ({
+      symbol: String(m.symbol ?? ""),
+      name: String(m.name ?? ""),
+      changePct: typeof m.changesPercentage === "number" ? m.changesPercentage / 100 : 0,
+      priceCents: typeof m.price === "number" ? Math.round(m.price * 100) : 0,
+      exchange: String(m.exchange ?? ""),
+    }))
+    .filter((m) => m.symbol)
+    .slice(0, 6);
 }
 
 export type PeerStat = {

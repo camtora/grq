@@ -9,6 +9,8 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
+import { fmpEnabled, fmpNews, fmpGainers } from "@/lib/fmp";
+import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
 
 function Sources({ sourcesJson }: { sourcesJson: string | null }) {
@@ -168,7 +170,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch, ideaRows] =
+  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch, ideaRows, marketNews, marketGainers] =
     await Promise.all([
       getPortfolio(),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } } }),
@@ -197,7 +199,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         orderBy: { at: "desc" },
         take: 40,
       }),
+      fmpEnabled() ? fmpNews(6).catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
     ]);
+  const funFact = funFactOfDay();
   const timeline = entries.filter((e) => e.id !== plan?.id);
   // The lead adapts by edition and is never empty: today's midday brief (the
   // afternoon read), else today's plan, else the most recent plan/research.
@@ -419,6 +424,83 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </Card>
           <p className="mt-2 px-1 text-[10px] text-teal-200/40">biggest moves across the {universeRows.length} names we track</p>
         </aside>
+      </section>
+
+      {/* Top stories — the brief's headlines, with pictures */}
+      {marketNews.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle>Top stories</SectionTitle>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {marketNews.slice(0, 3).map((n, i) => (
+              <a
+                key={i}
+                href={n.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="group block overflow-hidden rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]"
+              >
+                {n.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={n.image} alt="" className="h-32 w-full object-cover transition-opacity group-hover:opacity-90" />
+                ) : (
+                  <div className="flex h-32 w-full items-center justify-center bg-teal-400/5 text-3xl">📰</div>
+                )}
+                <div className="p-3">
+                  <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
+                  <div className="mt-1 text-[11px] text-teal-200/40">
+                    {n.publisher}
+                    {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Today's biggest movers — the whole market */}
+      {marketGainers.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle>Today&apos;s biggest movers · the whole market</SectionTitle>
+          <Card className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {marketGainers.map((m) => {
+                  const inUniverse = universeRows.some((u) => u.symbol === m.symbol);
+                  return (
+                    <tr key={m.symbol} className="border-t border-teal-400/10 first:border-t-0">
+                      <td className="px-4 py-2">
+                        {inUniverse ? (
+                          <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
+                            {m.symbol}
+                          </Link>
+                        ) : (
+                          <span className="font-bold text-teal-200">{m.symbol}</span>
+                        )}
+                        <span className="ml-2 text-xs text-teal-200/50">{m.name}</span>
+                        <span className="ml-1 text-[10px] uppercase tracking-wider text-teal-200/30">{m.exchange}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-teal-100/70">{money(m.priceCents)}</td>
+                      <td className="px-4 py-2 text-right font-semibold tabular-nums text-emerald-400">+{pct(m.changePct, 0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+          <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — names we track link through.</p>
+        </section>
+      )}
+
+      {/* Financial-literacy fun fact */}
+      <section className="mt-8">
+        <Card className="flex items-start gap-3 p-5">
+          <span className="text-2xl leading-none">💡</span>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-teal-300/70">Did you know?</div>
+            <p className="mt-1 text-sm text-teal-100/80">{funFact}</p>
+          </div>
+        </Card>
       </section>
 
       {/* Top Hitters + On the Radar */}
