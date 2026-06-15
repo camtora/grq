@@ -119,7 +119,9 @@ function IdeaRow({ idea }: { idea: Idea }) {
               {idea.far > 0 ? "+" : ""}
               {pct(idea.far, 0)}
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">12-mo</div>
+            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
+              <Term k="expected-return" align="right">12-mo</Term>
+            </div>
           </div>
         )}
       </div>
@@ -323,7 +325,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* The Tape — the day's NAV, start → finish */}
       <Card className="mb-6 p-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">The Tape · the day's NAV</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+            <Term k="the-tape">The Tape</Term> · the day&apos;s NAV
+          </span>
           <span className="text-xs text-teal-200/40">
             opened {money(dayOpenNav)} → {isToday ? "now" : "close"} {money(pf.navCents)}{" "}
             <span className={dayClass(dayPnl)}>({signedMoney(dayPnl)})</span>

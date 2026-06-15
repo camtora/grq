@@ -135,7 +135,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               )}
               {(nearPct !== null || farPct !== null) && (
                 <p className="mt-3 text-sm text-teal-200/70">
-                  Target:{" "}
+                  <Term k="price-target">Target</Term>:{" "}
                   {nearPct !== null && (
                     <>
                       near{" "}

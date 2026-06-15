@@ -8,6 +8,7 @@ import { Card, PageHeader, EmptyState, Chip } from "@/components/ui";
 import StockLogo from "@/components/StockLogo";
 import RatingDial from "@/components/RatingDial";
 import CollapsibleMd from "@/components/CollapsibleMd";
+import Term from "@/components/Term";
 
 // Household names get deprioritised — "stocks you should look at" should lead
 // with names you do not already know (candidates / mid-caps over the big banks).
@@ -67,7 +68,9 @@ function IdeaCard({ idea }: { idea: Idea }) {
                   {idea.far > 0 ? "+" : ""}
                   {pct(idea.far, 0)}
                 </div>
-                <div className="text-[10px] uppercase tracking-wider text-teal-200/40">12-mo upside</div>
+                <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
+                  <Term k="expected-return" align="right">12-mo upside</Term>
+                </div>
               </div>
             )}
           </div>
@@ -84,7 +87,11 @@ function IdeaCard({ idea }: { idea: Idea }) {
               </span>
             )}
             {idea.far !== null && <span>≈ {signedMoney(Math.round(idea.far * 100_000))} on $1k</span>}
-            {idea.confidence != null && <span>conf {idea.confidence}%</span>}
+            {idea.confidence != null && (
+              <span>
+                <Term k="confidence">conf</Term> {idea.confidence}%
+              </span>
+            )}
           </div>
 
           <div className="mt-3">

@@ -158,4 +158,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "Swing trade",
     def: "Holding for days to a few weeks to catch a price 'swing' — longer than day-trading, shorter than buy-and-hold. GRQ's core style.",
   },
+  confidence: {
+    term: "Confidence",
+    def: "How sure the agent (or a signal) is about a call, 0–100. A self-assessment, not a probability — and the agent needs ≥75% conviction before the gate will let it buy.",
+  },
+  "the-tape": {
+    term: "The Tape",
+    def: "The fund's value through the trading day, open to now — the intraday line of NAV. (Old trading-floor slang: the ticker 'tape' that printed live prices.)",
+  },
 };
