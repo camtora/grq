@@ -12,6 +12,7 @@ import StockFilters from "@/components/StockFilters";
 import WatchButton from "@/components/WatchButton";
 import ScreenerAddButton from "@/components/ScreenerAddButton";
 import { getSession } from "@/lib/session";
+import { fmpEnabled, fmpNews } from "@/lib/fmp";
 
 type Row = UniverseRow & {
   lastCents: number | null;
@@ -136,13 +137,14 @@ function StocksTable({ rows, filterable = true }: { rows: Row[]; filterable?: bo
 }
 
 export default async function Stocks() {
-  const [universe, positions, watchlist, directives, journalCounts, session] = await Promise.all([
+  const [universe, positions, watchlist, directives, journalCounts, session, news] = await Promise.all([
     activeUniverse(),
     prisma.position.findMany(),
     prisma.watchlist.findMany(),
     prisma.symbolDirective.findMany(),
     prisma.journalEntry.groupBy({ by: ["symbol"], _count: { id: true }, where: { symbol: { not: null } } }),
     getSession(),
+    fmpEnabled() ? fmpNews(8).catch(() => []) : Promise.resolve([]),
   ]);
   const isMember = session?.role === "member";
   const quotes = await getQuotes(universe.map((u) => u.symbol));
@@ -275,6 +277,39 @@ export default async function Stocks() {
           </div>
         </Card>
       </section>
+
+      {news.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Market pulse</h2>
+          <Card className="divide-y divide-[color:var(--card-border)]">
+            {news.map((n, i) => {
+              const inner = (
+                <>
+                  <span className="min-w-0 flex-1 text-sm text-teal-100/80">{n.title}</span>
+                  <span className="shrink-0 text-[11px] text-teal-200/40">{n.publisher}</span>
+                  <span className="shrink-0 text-[11px] text-teal-200/30">{n.at.slice(0, 10)}</span>
+                </>
+              );
+              return n.url ? (
+                <a
+                  key={i}
+                  href={n.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 hover:bg-teal-400/[0.04]"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5">
+                  {inner}
+                </div>
+              );
+            })}
+          </Card>
+          <p className="mt-2 text-[11px] text-teal-200/40">Latest market headlines via FMP — context, not signals.</p>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The tradeable universe</h2>

@@ -136,6 +136,22 @@ export async function fmpScreener(opts: {
   }));
 }
 
+export type NewsItem = { title: string; publisher: string; url: string; at: string };
+
+// Latest general market news (the Stocks tab's market pulse). Best-effort.
+export async function fmpNews(limit = 8): Promise<NewsItem[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`news/general-latest?limit=${limit}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((n) => ({
+      title: String(n.title ?? ""),
+      publisher: String(n.publisher ?? n.site ?? ""),
+      url: String(n.url ?? ""),
+      at: String(n.publishedDate ?? ""),
+    }))
+    .filter((n) => n.title);
+}
+
 export type PeerStat = {
   symbol: string;
   name: string;
