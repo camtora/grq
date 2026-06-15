@@ -46,6 +46,21 @@ export const SOURCES = [
 
 export const MACRO_SWEEP = ["gold", "oil (WTI/WCS)", "CAD/USD", "Bank of Canada / Fed rates", "geopolitics affecting the TSX"];
 
+// Account type → the CRA tax treatment the agent must reason about. Cam framed
+// it as "we'll pay capital gains on profits", so the default is a non-registered
+// (taxable) account; a TFSA (GRQ_ACCOUNT_TYPE=TFSA) makes gains tax-free. The
+// owner/account decision lives in docs/OWNERSHIP.md.
+export const ACCOUNT_TYPE = (process.env.GRQ_ACCOUNT_TYPE ?? "UNREGISTERED").toUpperCase();
+
+export const TAX_CONTEXT: Record<string, string> = {
+  TFSA: "Account: TFSA — realized gains are tax-FREE. But the CRA can reclassify a frequently-trading TFSA as carrying on a business and tax all of it, so keep the swing-trade cadence (never day-trading) to protect the shelter. No capital-gains tax to model — just don't churn.",
+  RRSP: "Account: RRSP — tax-deferred; there's no capital-gains event on trades inside it (withdrawals are taxed as income).",
+  UNREGISTERED:
+    "Account: non-registered (taxable). Realized gains are capital gains — half the gain is taxable at the members' marginal rate, so a 10% gross gain is worth noticeably less after tax. Factor the AFTER-TAX gain into every thesis, prefer letting winners run over churning short-term gains, and harvest losses against gains where it's clean — never tripping the superficial-loss rule (already enforced in code).",
+};
+
+export const taxContext = (): string => TAX_CONTEXT[ACCOUNT_TYPE] ?? TAX_CONTEXT.UNREGISTERED;
+
 export const MODELS = {
   // Decision tier: Opus 4.8 (2026-06-13 — Fable 5 access broke overnight, the
   // Max token returns "model may not exist or you may not have access"; Opus is

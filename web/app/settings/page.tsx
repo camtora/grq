@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { USERS } from "@/lib/users";
 import { getSession } from "@/lib/session";
+import { ACCOUNT_TYPE } from "@/agent/policy";
 import { getBroker } from "@/lib/broker";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import SettingsForm from "@/components/SettingsForm";
@@ -74,6 +75,17 @@ export default async function Settings() {
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Agent</dt>
                 <dd className="text-teal-50">{settings?.agentVersion ?? "—"} — on duty</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-teal-200/50">Account &amp; tax</dt>
+                <dd className="text-right text-teal-100/70">
+                  {ACCOUNT_TYPE === "TFSA"
+                    ? "TFSA — gains tax-free"
+                    : ACCOUNT_TYPE === "RRSP"
+                      ? "RRSP — tax-deferred"
+                      : "Non-registered (taxable) — gains are capital gains"}
+                  <span className="block text-[11px] text-teal-200/40">the agent factors this in · set via GRQ_ACCOUNT_TYPE</span>
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Universe ({symbols.length})</dt>

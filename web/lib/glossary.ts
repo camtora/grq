@@ -174,4 +174,16 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "Analyst consensus target",
     def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on the agent's call — when the agent and the street sharply disagree, it's worth asking who's right.",
   },
+  "capital-gains": {
+    term: "Capital gains tax",
+    def: "Tax on the profit when you sell for more than you paid. In Canada (non-registered accounts), half the gain is taxable at your marginal rate — so a 10% gain is worth less after tax. Inside a TFSA, gains are tax-free.",
+  },
+  tfsa: {
+    term: "TFSA — Tax-Free Savings Account",
+    def: "A registered account where investment gains are tax-free. The catch: trade too actively and the CRA can reclassify it as a business and tax everything — so a swing-trade cadence (not day-trading) matters.",
+  },
+  rrsp: {
+    term: "RRSP — Registered Retirement Savings Plan",
+    def: "A registered account: contributions reduce this year's taxable income and growth is tax-deferred — you pay tax as income when you withdraw in retirement.",
+  },
 };
