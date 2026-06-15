@@ -34,13 +34,13 @@ function sortRows(rows: Row[]): Row[] {
   });
 }
 
-function SectionRows({ rows }: { rows: Row[] }) {
+function SectionRows({ rows, filterable = true }: { rows: Row[]; filterable?: boolean }) {
   return (
     <>
       {rows.map((r) => (
         <tr
           key={r.symbol}
-          className={`stock-row border-t border-teal-400/10 ${r.held ? "bg-teal-400/[0.05]" : ""}`}
+          className={`${filterable ? "stock-row " : ""}border-t border-teal-400/10 ${r.held ? "bg-teal-400/[0.05]" : ""}`}
           data-country={r.country ?? ""}
           data-exchange={r.exchange ?? ""}
           data-sector={r.sector ?? ""}
@@ -106,13 +106,29 @@ function SectionRows({ rows }: { rows: Row[] }) {
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
+function StocksTable({ rows, filterable = true }: { rows: Row[]; filterable?: boolean }) {
   return (
-    <tr className="section-header border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
-      <td colSpan={10} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
-        {label}
-      </td>
-    </tr>
+    <Card className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+            <th className="px-4 py-3">Symbol</th>
+            <th className="px-4 py-3">Name</th>
+            <th className="px-4 py-3">Tier</th>
+            <th className="px-4 py-3 text-right">Last</th>
+            <th className="px-4 py-3 text-right">Day</th>
+            <th className="px-4 py-3">Signals</th>
+            <th className="px-4 py-3">Agent&apos;s call</th>
+            <th className="px-4 py-3 text-right">Position</th>
+            <th className="px-4 py-3 text-right">Unrealized</th>
+            <th className="px-4 py-3 text-right">Journal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <SectionRows rows={rows} filterable={filterable} />
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
@@ -167,6 +183,7 @@ export default async function Stocks() {
   const pinned = sortRows(rows.filter((r) => r.pinnedBy));
   const watched = sortRows(rows.filter((r) => !r.pinnedBy && r.watched));
   const rest = sortRows(rows.filter((r) => !r.pinnedBy && !r.watched));
+  const watchlistRows = [...pinned, ...watched];
 
   // Filter options from whatever fundamentals are populated so far.
   const COUNTRY_LABEL: Record<string, string> = { CA: "Canada", US: "United States" };
@@ -182,10 +199,9 @@ export default async function Stocks() {
     <main>
       <PageHeader
         title="Stocks"
-        sub="The tradeable universe — pinned names first, then the agent's watchlist, then the bench."
+        sub="Your watchlist and the agent's suggestions up top — the tradeable universe is the plumbing below."
         right={
           <div className="flex gap-2">
-            <Chip tone="teal">universe {universe.length}</Chip>
             <Link href="/research">
               <Chip tone="dim">research {candidateCount} →</Chip>
             </Link>
@@ -193,42 +209,42 @@ export default async function Stocks() {
         }
       />
 
-      <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
+      <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Your watchlist</h2>
+      {watchlistRows.length > 0 ? (
+        <StocksTable rows={watchlistRows} filterable={false} />
+      ) : (
+        <Card className="p-6 text-sm text-teal-200/40">
+          Nothing on your watchlist yet — look up a name on the{" "}
+          <Link href="/research" className="text-teal-300 hover:underline">
+            Research tab
+          </Link>{" "}
+          and add it.
+        </Card>
+      )}
 
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
-              <th className="px-4 py-3">Symbol</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Tier</th>
-              <th className="px-4 py-3 text-right">Last</th>
-              <th className="px-4 py-3 text-right">Day</th>
-              <th className="px-4 py-3">Signals</th>
-              <th className="px-4 py-3">Agent&apos;s call</th>
-              <th className="px-4 py-3 text-right">Position</th>
-              <th className="px-4 py-3 text-right">Unrealized</th>
-              <th className="px-4 py-3 text-right">Journal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pinned.length > 0 && (
-              <>
-                <SectionHeader label="Pinned" />
-                <SectionRows rows={pinned} />
-              </>
-            )}
-            {watched.length > 0 && (
-              <>
-                <SectionHeader label="Watchlist" />
-                <SectionRows rows={watched} />
-              </>
-            )}
-            <SectionHeader label="Universe" />
-            <SectionRows rows={rest} />
-          </tbody>
-        </table>
-      </Card>
+      <section className="mt-8">
+        <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Suggested to watch</h2>
+        <Card className="flex flex-wrap items-center gap-3 p-5">
+          <p className="text-sm text-teal-200/60">
+            The agent&apos;s ideas — under-the-radar hunt finds, names with upside, and what smart money is buying.
+          </p>
+          <Link
+            href="/ideas"
+            className="ml-auto rounded-xl border border-teal-400/40 bg-teal-400/10 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20"
+          >
+            See all ideas →
+          </Link>
+        </Card>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The tradeable universe</h2>
+        <p className="mb-2 text-xs text-teal-200/40">
+          What the agent is allowed to buy — managed behind the scenes; members promote names in from research.
+        </p>
+        <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
+        <StocksTable rows={rest} filterable={true} />
+      </section>
       <p className="mt-3 text-xs text-teal-200/40">
         <span className="font-semibold text-teal-200/60">Signals</span> (hover for detail):{" "}
         <span className="font-semibold text-teal-200/60">T</span> trend ·{" "}
