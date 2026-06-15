@@ -6,7 +6,7 @@ import { computeSignals, overallSignal, type Recommendation } from "@/agent/sign
 import { money, pct, signedMoney, fmtWhen } from "@/lib/money";
 import { Card, PageHeader, EmptyState, Chip } from "@/components/ui";
 import StockLogo from "@/components/StockLogo";
-import RatingDial from "@/components/RatingDial";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Term from "@/components/Term";
 
@@ -44,12 +44,14 @@ type Idea = {
   nearDays: number | null;
   confidence: number | null;
   rec: Recommendation | null;
+  stance: string | null;
   body: string;
   sourcesJson: string | null;
   obscurity: number;
 };
 
 function IdeaCard({ idea }: { idea: Idea }) {
+  const sm = stanceMeta(idea.stance);
   return (
     <Card className="p-5">
       <div className="grid gap-5 lg:grid-cols-3">
@@ -102,10 +104,19 @@ function IdeaCard({ idea }: { idea: Idea }) {
         </div>
 
         <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
-          {idea.rec ? (
-            <RatingDial rec={idea.rec} />
+          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
+            <Term k="agent-call">The agent&apos;s call</Term>
+          </div>
+          {sm ? (
+            <div className="mt-1">
+              <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[sm.tone].text}`}>{sm.label}</span>
+              <p className="mt-1 text-xs text-teal-200/50">{sm.blurb}</p>
+            </div>
           ) : (
-            <p className="text-sm text-teal-200/40">No signal read yet.</p>
+            <p className="mt-1 text-sm text-teal-200/40">Not yet rated by the agent.</p>
+          )}
+          {idea.rec && (
+            <p className="mt-3 text-[11px] text-teal-200/40">technicals lean {idea.rec.label} — an input, not the call</p>
           )}
           <Link href={`/stocks/${idea.sym}`} className="mt-4 inline-block text-xs text-teal-300 hover:underline">
             full dossier →
@@ -157,6 +168,7 @@ export default async function Ideas() {
         nearDays: d.targetNearDays ?? null,
         confidence: d.confidence,
         rec: sig ? overallSignal(sig) : null,
+        stance: d.stance,
         body: d.body,
         sourcesJson: d.sourcesJson,
         obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
