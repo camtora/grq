@@ -6,7 +6,6 @@ import { money, pct } from "@/lib/money";
 import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
-import SignalRec from "@/components/SignalRec";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 
 type Row = UniverseRow & {
@@ -72,15 +71,16 @@ function SectionRows({ rows }: { rows: Row[] }) {
             <SignalStrip signals={r.signals} />
           </td>
           <td className="px-4 py-2.5">
-            <SignalRec rec={r.rec} signals={r.signals} />
-          </td>
-          <td className="px-4 py-2.5">
             {r.stance ? (
               <span
                 className={`text-xs font-bold ${STANCE_TONE_CLASSES[stanceMeta(r.stance)!.tone].text}`}
                 title={`The agent's call: ${stanceMeta(r.stance)!.blurb}`}
               >
                 {stanceMeta(r.stance)!.label}
+              </span>
+            ) : r.rec ? (
+              <span className="text-xs text-teal-200/40" title="No agent call yet — technical lean only (an input, not a verdict)">
+                {r.rec.label} <span className="text-[9px] text-teal-200/30">tech</span>
               </span>
             ) : (
               <span className="text-xs text-teal-200/25">—</span>
@@ -100,7 +100,7 @@ function SectionRows({ rows }: { rows: Row[] }) {
 function SectionHeader({ label }: { label: string }) {
   return (
     <tr className="border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
-      <td colSpan={11} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
+      <td colSpan={10} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
         {label}
       </td>
     </tr>
@@ -184,7 +184,6 @@ export default async function Stocks() {
               <th className="px-4 py-3 text-right">Last</th>
               <th className="px-4 py-3 text-right">Day</th>
               <th className="px-4 py-3">Signals</th>
-              <th className="px-4 py-3">Recommendation</th>
               <th className="px-4 py-3">Agent&apos;s call</th>
               <th className="px-4 py-3 text-right">Position</th>
               <th className="px-4 py-3 text-right">Unrealized</th>
@@ -215,8 +214,8 @@ export default async function Stocks() {
         <span className="font-semibold text-teal-200/60">R</span> rsi ·{" "}
         <span className="font-semibold text-teal-200/60">M</span> macd ·{" "}
         <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
-        <span className="font-semibold text-teal-200/60">Recommendation</span> = confidence-weighted consensus of trend/rsi/macd (technical only, advisory).{" "}
-        <span className="font-semibold text-teal-200/60">Agent&apos;s call</span> = the agent&apos;s own judgment from its latest dossier; where it disagrees with the formula is the part worth reading.
+        These signals are <span className="font-semibold text-teal-200/60">inputs</span>, not the verdict.{" "}
+        <span className="font-semibold text-teal-200/60">Agent&apos;s call</span> = the rating — the agent&apos;s own judgment from its latest dossier. A muted &ldquo;tech&rdquo; lean stands in until the agent has weighed in.
       </p>
       <p className="mt-1 text-xs text-teal-200/40">
         quotes delayed ~15 min · the risk dial gates which tiers the agent may buy ·{" "}

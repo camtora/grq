@@ -10,14 +10,13 @@ import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { stanceMeta, stanceDirection, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
-import RatingDial from "@/components/RatingDial";
 import SignalStrip from "@/components/SignalStrip";
 import Term from "@/components/Term";
 
@@ -82,9 +81,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // The agent's OWN call (judgment), distinct from the signal formula (rec).
   const stanceEntry = journal.find((j) => j.stance);
   const stance = stanceMeta(stanceEntry?.stance);
-  const signalDir = rec?.signal === "BUY" ? 1 : rec?.signal === "SELL" ? -1 : 0;
-  const stanceDir = stanceDirection(stanceEntry?.stance);
-  const divergent = stance !== null && stanceDir !== 0 && signalDir !== 0 && stanceDir !== signalDir;
 
   return (
     <main>
@@ -128,32 +124,34 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         {isMember && <AskGrq symbol={symbol} />}
       </div>
 
-      {rec && (
+      {(stance || rec) && (
         <Card className="mb-6 border-teal-400/30 p-5">
           <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
-          {stance && (
-            <div
-              className={`mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border p-4 ${STANCE_TONE_CLASSES[stance.tone].border} ${STANCE_TONE_CLASSES[stance.tone].bg}`}
-            >
-              <span className="text-[10px] uppercase tracking-wider text-teal-200/50">
-                <Term k="agent-call">The agent&apos;s call</Term>
-              </span>
-              <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
-              <span className="text-sm text-teal-200/60">{stance.blurb}</span>
-              {divergent && rec && (
-                <span className="ml-auto text-[11px] text-amber-300/80">
-                  ↔ signals read <b>{rec.label}</b> — the divergence is the point; see why below
-                </span>
-              )}
-            </div>
-          )}
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              <RatingDial rec={rec} />
+              {/* THE rating — the agent's judgment. Technicals are an input below, not a competing verdict. */}
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
+                <Term k="agent-call">The agent&apos;s call</Term>
+              </div>
+              {stance ? (
+                <div className="flex flex-wrap items-baseline gap-x-3">
+                  <span className={`text-3xl font-black ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
+                  <span className="text-sm text-teal-200/60">{stance.blurb}</span>
+                </div>
+              ) : (
+                <div className="text-sm text-teal-200/50">
+                  Not yet rated — the agent hasn&apos;t filed a call on this name. The technical read below is only an input.
+                </div>
+              )}
               {signals && (
-                <div className="mt-3 flex items-center gap-2">
-                  <SignalStrip signals={signals} />
-                  <span className="text-[10px] uppercase tracking-wider text-teal-200/40">signals</span>
+                <div className="mt-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SignalStrip signals={signals} />
+                    <span className="text-[10px] uppercase tracking-wider text-teal-200/40">
+                      technicals{rec ? ` · lean ${rec.label}` : ""}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-teal-200/35">An input the agent weighs — trend/momentum only, not the call.</p>
                 </div>
               )}
               {(nearPct !== null || farPct !== null) && (
@@ -191,12 +189,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 </>
               ) : (
                 <p className="text-sm text-teal-100/80">
-                  {`The signals read ${rec.label.toLowerCase()}${signals ? ` — ${signalsOneLine(signals)}.` : "."} The agent's plain-English "why" appears here once it dossiers this name.`}
+                  The agent&apos;s plain-English &ldquo;why&rdquo; appears here once it files a dossier on this name.
+                  {signals ? ` For now, the technical read: ${signalsOneLine(signals)}.` : ""}
                 </p>
               )}
               <p className="mt-3 text-[11px] text-teal-200/40">
-                Rating is the technical consensus of trend/rsi/macd (advisory). The reasons are the agent research read; the
-                trade it actually makes lives in its journal below.
+                The rating above is <span className="text-teal-200/60">the agent&apos;s call</span> — its judgment. The technical
+                signals are an input, not the verdict; the trade it actually places lives in its journal below.
               </p>
             </div>
           </div>
