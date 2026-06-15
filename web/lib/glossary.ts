@@ -166,4 +166,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "The Tape",
     def: "The fund's value through the trading day, open to now — the intraday line of NAV. (Old trading-floor slang: the ticker 'tape' that printed live prices.)",
   },
+  "agent-call": {
+    term: "The agent's call",
+    def: "The agent's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
+  },
 };

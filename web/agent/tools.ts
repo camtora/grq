@@ -66,7 +66,7 @@ const getJournalTool = tool(
 
 const writeJournalTool = tool(
   "write_journal",
-  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page.",
+  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page. ALSO set stance: YOUR OWN call on the name — one of BUY, ACCUMULATE, HOLD, WATCH, TRIM, AVOID, SELL. This is your judgment as the fund's manager and may differ from the deterministic technical signal consensus; when it does, make the bottomLine say why. It surfaces as 'the agent's call' on the stock page, next to the signal read.",
   {
     kind: z.enum(["RESEARCH", "RETRO", "LESSON"]),
     symbol: z.string().optional(),
@@ -78,6 +78,7 @@ const writeJournalTool = tool(
     targetNearDays: z.number().int().min(5).max(120).optional(),
     targetFarCents: z.number().int().positive().optional(),
     bottomLine: z.string().max(2000).optional(),
+    stance: z.enum(["BUY", "ACCUMULATE", "HOLD", "WATCH", "TRIM", "AVOID", "SELL"]).optional(),
   },
   async (args) => {
     const e = await prisma.journalEntry.create({
@@ -92,6 +93,7 @@ const writeJournalTool = tool(
         targetNearDays: args.targetNearDays,
         targetFarCents: args.targetFarCents,
         bottomLine: args.bottomLine,
+        stance: args.stance,
         agentVersion: AGENT_VERSION,
       },
     });

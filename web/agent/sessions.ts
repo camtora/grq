@@ -180,6 +180,7 @@ you genuinely have no view. Also set **bottomLine**: 3–5 short plain-English b
 "- " each) a non-expert can read on why this stock is a buy/sell/hold for us — the real reasons
 (does the business make money? recent news/lawsuits/catalysts? the key risk?), concrete and
 palatable. This is the at-a-glance "why" shown on the stock page.
+Finally, set **stance** — YOUR call on this name as the fund's manager, one of BUY / ACCUMULATE / HOLD / WATCH / TRIM / AVOID / SELL. This is your judgment, all things considered; it may agree with OR DISAGREE with the deterministic technical signal consensus (a formula). When it disagrees, that divergence is the most useful thing on the page — make the bottomLine and Verdict explain it.
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
 Research only — no trades, no watchlist changes (you don't have those tools here).`;
   return runSession({

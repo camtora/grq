@@ -156,6 +156,10 @@ model JournalEntry {
   // Plain-English "why" — 3–5 palatable bullets a non-expert can read, explaining
   // the agent's read on the stock. Surfaced on the stock page's bottom-line card.
   bottomLine      String?
+  // The agent's OWN call (its judgment), distinct from the deterministic signal
+  // consensus (a technicals formula). One of BUY/ACCUMULATE/HOLD/WATCH/TRIM/AVOID/SELL.
+  // Where this diverges from the signal read, that divergence is the point.
+  stance          String?
   agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])

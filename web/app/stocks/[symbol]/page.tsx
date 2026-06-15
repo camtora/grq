@@ -10,6 +10,7 @@ import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
+import { stanceMeta, stanceDirection, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -78,6 +79,12 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const nearPct = targetEntry?.targetNearCents != null && cur ? (targetEntry.targetNearCents - cur) / cur : null;
   const farPct = targetEntry?.targetFarCents != null && cur ? (targetEntry.targetFarCents - cur) / cur : null;
   const bottomLineEntry = journal.find((j) => j.bottomLine);
+  // The agent's OWN call (judgment), distinct from the signal formula (rec).
+  const stanceEntry = journal.find((j) => j.stance);
+  const stance = stanceMeta(stanceEntry?.stance);
+  const signalDir = rec?.signal === "BUY" ? 1 : rec?.signal === "SELL" ? -1 : 0;
+  const stanceDir = stanceDirection(stanceEntry?.stance);
+  const divergent = stance !== null && stanceDir !== 0 && signalDir !== 0 && stanceDir !== signalDir;
 
   return (
     <main>
@@ -124,6 +131,22 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       {rec && (
         <Card className="mb-6 border-teal-400/30 p-5">
           <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
+          {stance && (
+            <div
+              className={`mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border p-4 ${STANCE_TONE_CLASSES[stance.tone].border} ${STANCE_TONE_CLASSES[stance.tone].bg}`}
+            >
+              <span className="text-[10px] uppercase tracking-wider text-teal-200/50">
+                <Term k="agent-call">The agent&apos;s call</Term>
+              </span>
+              <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
+              <span className="text-sm text-teal-200/60">{stance.blurb}</span>
+              {divergent && rec && (
+                <span className="ml-auto text-[11px] text-amber-300/80">
+                  ↔ signals read <b>{rec.label}</b> — the divergence is the point; see why below
+                </span>
+              )}
+            </div>
+          )}
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
               <RatingDial rec={rec} />
