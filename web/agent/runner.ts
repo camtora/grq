@@ -11,6 +11,7 @@ import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
+import { backfillFundamentals } from "../lib/fundamentals";
 import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
@@ -29,6 +30,7 @@ let decisionSessionsToday = 0;
 let decisionsDate = "";
 let lastBarsDay = "";
 let lastLogoBackfill = 0;
+let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
@@ -305,6 +307,13 @@ async function tick() {
     lastLogoBackfill = Date.now();
     const n = await backfillLogos().catch(() => 0);
     if (n > 0) console.log(`[logos] resolved ${n} company logo(s)`);
+  }
+
+  // FMP fundamentals backfill (hourly, a few at a time) — sector/cap/country for the filters.
+  if (Date.now() - lastFundamentalsBackfill > 60 * 60_000) {
+    lastFundamentalsBackfill = Date.now();
+    const n = await backfillFundamentals().catch(() => 0);
+    if (n > 0) console.log(`[fmp] refreshed ${n} fundamentals`);
   }
 
   await maybeScheduledSessions();

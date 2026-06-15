@@ -7,6 +7,8 @@ import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
+import StockFilters from "@/components/StockFilters";
 
 type Row = UniverseRow & {
   lastCents: number | null;
@@ -36,7 +38,14 @@ function SectionRows({ rows }: { rows: Row[] }) {
   return (
     <>
       {rows.map((r) => (
-        <tr key={r.symbol} className={`border-t border-teal-400/10 ${r.held ? "bg-teal-400/[0.05]" : ""}`}>
+        <tr
+          key={r.symbol}
+          className={`stock-row border-t border-teal-400/10 ${r.held ? "bg-teal-400/[0.05]" : ""}`}
+          data-country={r.country ?? ""}
+          data-exchange={r.exchange ?? ""}
+          data-sector={r.sector ?? ""}
+          data-cap={capTier(r.marketCapM) ?? ""}
+        >
           <td className="px-4 py-2.5">
             <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-300 hover:underline">
               {r.symbol}
@@ -99,7 +108,7 @@ function SectionRows({ rows }: { rows: Row[] }) {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <tr className="border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
+    <tr className="section-header border-t-2 border-teal-400/25 bg-teal-400/[0.03]">
       <td colSpan={10} className="px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-teal-200/50">
         {label}
       </td>
@@ -159,6 +168,16 @@ export default async function Stocks() {
   const watched = sortRows(rows.filter((r) => !r.pinnedBy && r.watched));
   const rest = sortRows(rows.filter((r) => !r.pinnedBy && !r.watched));
 
+  // Filter options from whatever fundamentals are populated so far.
+  const COUNTRY_LABEL: Record<string, string> = { CA: "Canada", US: "United States" };
+  const distinct = (vals: (string | null)[]) => [...new Set(vals.filter((v): v is string => !!v))].sort();
+  const countryOpts = distinct(rows.map((r) => r.country)).map((v) => ({ value: v, label: COUNTRY_LABEL[v] ?? v }));
+  const exchangeOpts = distinct(rows.map((r) => r.exchange)).map((v) => ({ value: v, label: v }));
+  const sectorOpts = distinct(rows.map((r) => r.sector)).map((v) => ({ value: v, label: v }));
+  const capPresent = new Set(rows.map((r) => capTier(r.marketCapM)).filter((c): c is CapTier => !!c));
+  const capOrder: CapTier[] = ["mega", "large", "mid", "small", "micro"];
+  const capOpts = capOrder.filter((c) => capPresent.has(c)).map((c) => ({ value: c, label: CAP_LABEL[c] }));
+
   return (
     <main>
       <PageHeader
@@ -173,6 +192,8 @@ export default async function Stocks() {
           </div>
         }
       />
+
+      <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
 
       <Card className="overflow-x-auto">
         <table className="w-full text-sm">

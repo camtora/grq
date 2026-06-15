@@ -19,6 +19,12 @@ export type UniverseRow = {
   promotionRequestedBy: string | null;
   proposedTier: string | null;
   logoUrl: string | null;
+  sector: string | null;
+  industry: string | null;
+  country: string | null;
+  currency: string | null;
+  exchange: string | null;
+  marketCapM: number | null;
 };
 
 export const BENCHMARK = "XIC";
@@ -51,6 +57,12 @@ async function load(): Promise<UniverseRow[]> {
     promotionRequestedBy: r.promotionRequestedBy,
     proposedTier: r.proposedTier,
     logoUrl: r.logoUrl,
+    sector: r.sector,
+    industry: r.industry,
+    country: r.country,
+    currency: r.currency,
+    exchange: r.exchange,
+    marketCapM: r.marketCapM,
   }));
   cache = { at: Date.now(), rows: mapped };
   return mapped;

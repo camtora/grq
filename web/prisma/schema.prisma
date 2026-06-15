@@ -237,6 +237,17 @@ model UniverseMember {
   // Resolved company logo URL (favicon by domain; FMP logos later). Lifecycle:
   // null = not yet resolved, "" = resolved but none found, URL = use it.
   logoUrl              String?
+  // Fundamentals from FMP (refreshed by the agent runner) — power the stock
+  // filters (country / exchange / industry / cap) and per-name context.
+  // marketCapM is millions in the listing's own currency; bucketing the cap for
+  // filters makes the currency moot. fmpAt = last refresh (null = never).
+  sector               String?
+  industry             String?
+  country              String?
+  currency             String?
+  exchange             String?
+  marketCapM           Int?
+  fmpAt                DateTime?
   updatedAt            DateTime       @updatedAt
 }
 
