@@ -6,7 +6,6 @@ import {
   invalidateUniverseCache,
   BENCHMARK,
   CANDIDATE_CAP,
-  ON_DEMAND_RESEARCH_PER_DAY,
 } from "@/lib/universe";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
 import { refreshQuotesFor, getQuote } from "@/lib/broker/quotes";
@@ -112,14 +111,7 @@ export async function POST(req: Request) {
     if (entry.status === "RETIRED") return bad(`${symbol} is retired — re-add it first.`);
     const pending = await prisma.researchRequest.count({ where: { symbol, status: { in: ["QUEUED", "RUNNING"] } } });
     if (pending > 0) return bad(`${symbol} already has research in flight.`);
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const usedToday = await prisma.researchRequest.count({
-      where: { requestedBy: { not: "rotation" }, at: { gte: dayStart } },
-    });
-    if (usedToday >= ON_DEMAND_RESEARCH_PER_DAY) {
-      return bad(`On-demand research budget used (${ON_DEMAND_RESEARCH_PER_DAY}/day) — the rotation will get to it.`);
-    }
+    // No daily cap — Cam lifted it 2026-06-15 (research as much as we want).
     await prisma.researchRequest.create({ data: { symbol, requestedBy: who } });
     await sendDiscord("info", `${who} queued research on ${symbol}`);
     return NextResponse.json({ ok: true, queued: true });

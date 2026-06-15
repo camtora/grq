@@ -11,7 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpAnalystTarget } from "@/lib/fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison } from "@/lib/fmp";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -56,7 +56,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -68,6 +68,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       prisma.symbolDirective.findUnique({ where: { symbol } }),
       getScoreboard(symbol).catch(() => []),
       fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
     ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -79,6 +80,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const cur = quote?.midCents ?? null;
   const nearPct = targetEntry?.targetNearCents != null && cur ? (targetEntry.targetNearCents - cur) / cur : null;
   const farPct = targetEntry?.targetFarCents != null && cur ? (targetEntry.targetFarCents - cur) / cur : null;
+  const selfPeer = peers.find((p) => p.self);
+  const peerPes = peers.filter((p) => !p.self && p.peTtm != null).map((p) => p.peTtm as number);
+  const avgPeerPe = peerPes.length ? peerPes.reduce((a, b) => a + b, 0) / peerPes.length : null;
   const bottomLineEntry = journal.find((j) => j.bottomLine);
   // The agent's OWN call (judgment), distinct from the signal formula (rec).
   const stanceEntry = journal.find((j) => j.stance);
@@ -211,6 +215,49 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </p>
             </div>
           </div>
+        </Card>
+      )}
+
+      {peers.length > 1 && (
+        <Card className="mb-6 p-5">
+          <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Valuation vs peers</div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+                <th className="py-1">Company</th>
+                <th className="py-1 text-right">
+                  <Term k="pe" align="right">P/E</Term>
+                </th>
+                <th className="py-1 text-right">P/B</th>
+                <th className="py-1 text-right">
+                  <Term k="market-cap" align="right">Cap</Term>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {peers.map((p) => {
+                const capM = p.self && p.marketCapM == null ? entry.marketCapM : p.marketCapM;
+                return (
+                  <tr key={p.symbol} className={`border-t border-teal-400/10 ${p.self ? "bg-teal-400/[0.06]" : ""}`}>
+                    <td className={`py-1.5 ${p.self ? "font-bold text-teal-200" : "text-teal-100/70"}`}>
+                      {p.self ? `${symbol} · this stock` : p.symbol}
+                      {!p.self && p.name && <span className="ml-2 text-xs text-teal-200/40">{p.name}</span>}
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-teal-100/80">{p.peTtm != null ? `${p.peTtm.toFixed(1)}×` : "—"}</td>
+                    <td className="py-1.5 text-right tabular-nums text-teal-200/60">{p.pbTtm != null ? `${p.pbTtm.toFixed(1)}×` : "—"}</td>
+                    <td className="py-1.5 text-right tabular-nums text-teal-200/60">
+                      {capM ? (capM >= 1000 ? `$${Math.round(capM / 1000)}B` : `$${capM}M`) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[11px] text-teal-200/40">
+            {selfPeer?.peTtm != null && avgPeerPe != null
+              ? `At ${selfPeer.peTtm.toFixed(1)}× earnings, ${symbol} trades ${selfPeer.peTtm < avgPeerPe ? "cheaper than" : "richer than"} its peers' average of ${avgPeerPe.toFixed(1)}×. Cheap can mean value — or trouble.`
+              : "P/E and P/B against the company's closest peers (FMP)."}
+          </p>
         </Card>
       )}
 

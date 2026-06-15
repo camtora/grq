@@ -348,8 +348,8 @@ async function maybeWeeklyRefreshEnqueue() {
 }
 
 // Work the research queue one dossier at a time. Uncapped (Cam removed the daily
-// ceiling 2026-06-13); still bounded upstream by the weekly-refresh size and the
-// on-demand per-day cap (ON_DEMAND_RESEARCH_PER_DAY, enforced in the API route).
+// ceiling 2026-06-13 and the on-demand cap 2026-06-15); the weekly-refresh size
+// is the only remaining upstream bound.
 async function processResearchQueue() {
   if (sessionRunning) return;
   const next = await prisma.researchRequest.findFirst({

@@ -136,6 +136,46 @@ export async function fmpScreener(opts: {
   }));
 }
 
+export type PeerStat = {
+  symbol: string;
+  name: string;
+  peTtm: number | null;
+  pbTtm: number | null;
+  marketCapM: number | null;
+  self: boolean;
+};
+
+// Valuation vs peers (Graham's ask). Peers come from FMP's stock-peers (keyed to
+// the US/primary listing); P/E and P/B are ratios so they compare cleanly across
+// currencies. Bounded to a few peers + parallel ratio calls to keep it light.
+export async function fmpPeerComparison(symbol: string): Promise<PeerStat[]> {
+  const base = stripSuffix(symbol);
+  const peersRaw = await fmpGet<Array<{ symbol: string; companyName: string; mktCap: number }>>(
+    `stock-peers?symbol=${encodeURIComponent(base)}`,
+  );
+  const peers = Array.isArray(peersRaw) ? peersRaw.slice(0, 4) : [];
+  if (peers.length === 0) return [];
+  const symbols = [base, ...peers.map((p) => p.symbol)];
+  const ratios = await Promise.all(
+    symbols.map((s) => fmpGet<Array<Record<string, number>>>(`ratios-ttm?symbol=${encodeURIComponent(s)}`)),
+  );
+  const nameBy = new Map(peers.map((p) => [p.symbol, p.companyName]));
+  const capBy = new Map(peers.map((p) => [p.symbol, p.mktCap]));
+  return symbols.map((s, i) => {
+    const r = Array.isArray(ratios[i]) ? ratios[i]![0] : null;
+    const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : null);
+    const cap = capBy.get(s);
+    return {
+      symbol: s,
+      name: i === 0 ? "" : nameBy.get(s) ?? s,
+      peTtm: num(r?.priceToEarningsRatioTTM),
+      pbTtm: num(r?.priceToBookRatioTTM),
+      marketCapM: typeof cap === "number" ? Math.round(cap / 1_000_000) : null,
+      self: i === 0,
+    };
+  });
+}
+
 export type FmpAnalyst = {
   upsidePct: number; // consensus vs the US-listing price — CURRENCY-INVARIANT, so it's valid for the TSX listing too
   consensusCents: number; // in the listing's own currency
