@@ -326,6 +326,18 @@ model Explainer {
   at   DateTime @default(now())
 }
 
+// Human research notes — Cam & Graham's own desk (the Research tab is for human
+// research, distinct from the agent's auto-dossiers). Optionally tagged to a symbol.
+model Note {
+  id     Int      @id @default(autoincrement())
+  at     DateTime @default(now())
+  author String
+  symbol String?
+  body   String
+
+  @@index([at])
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)
