@@ -67,17 +67,20 @@ export async function POST(req: Request) {
     if (!entry) {
       const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
       if (candidates >= CANDIDATE_CAP) return bad(`Candidate cap reached (${CANDIDATE_CAP}) — retire something first.`);
-      // TSX / TSX-V only until Phase 5 (US market).
-      const base = symbol.replace(/\./g, "-");
+      // Resolve to a live Yahoo quote: try the symbol as given (US listings,
+      // ADRs, or already-suffixed names like SHOP.TO), then TSX/TSX-V for a bare
+      // ticker. US names are allowed as RESEARCH candidates (research-only;
+      // promoting one to tradeable waits on the multi-currency work — Phase 3+).
+      const tries = symbol.includes(".") ? [symbol] : [symbol, `${symbol}.TO`, `${symbol}.V`];
       let resolved: { yahoo: string; priceCents: number; name: string | null } | null = null;
-      for (const yahoo of [`${base}.TO`, `${base}.V`]) {
+      for (const yahoo of tries) {
         const probe = await probeYahooSymbol(yahoo);
         if (probe) {
           resolved = { yahoo, ...probe };
           break;
         }
       }
-      if (!resolved) return bad(`Couldn't find ${symbol} on TSX or TSX-V (US names wait for Phase 5).`, 404);
+      if (!resolved) return bad(`Couldn't find a live quote for ${symbol} (tried: ${tries.join(", ")}).`, 404);
       await prisma.universeMember.create({
         data: {
           symbol,
