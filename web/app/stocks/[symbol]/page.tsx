@@ -11,7 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison } from "@/lib/fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades } from "@/lib/fmp";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -56,7 +56,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -69,6 +69,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       getScoreboard(symbol).catch(() => []),
       fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpEarnings(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpStockNews(entry.yahoo, 5).catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
     ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -87,6 +90,22 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // The agent's OWN call (judgment), distinct from the signal formula (rec).
   const stanceEntry = journal.find((j) => j.stance);
   const stance = stanceMeta(stanceEntry?.stance);
+
+  // The 10-tier data-coverage map (docs/DATA-SOURCES.md) for THIS name: what's
+  // wired & live, what's partial, and — honestly — why the rest is dark.
+  type Cov = { tier: number; name: string; status: "live" | "partial" | "none"; detail: string };
+  const coverage: Cov[] = [
+    { tier: 1, name: "Price/vol", status: closes.length > 1 ? "live" : "partial", detail: `${closes.length} sessions of OHLCV → signals` },
+    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
+    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? `${earnings.upcoming ? "next" : "last"} ${earnings.date}` : "no FMP coverage for this name" },
+    { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
+    { tier: 9, name: "Macro", status: "partial", detail: "agent's morning macro sweep (qualitative)" },
+    { tier: 4, name: "Insider", status: "none", detail: "Canadian issuers file on SEDI, not SEC — not wired" },
+    { tier: 5, name: "Institutional", status: "none", detail: "13F is US-listed holdings; thin for TSX — not wired" },
+    { tier: 3, name: "Options flow", status: "none", detail: "never traded; flow is US-centric — later" },
+    { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
+    { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
+  ];
 
   return (
     <main>
@@ -395,13 +414,95 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             emptyText="No graded calls on this name yet — retros fill this in."
           />
 
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Future data tiers</h2>
-          <Card className="p-4 text-sm">
-            <ul className="space-y-2 text-teal-200/50">
-              <li>📊 Tier 6 — earnings: <span className="text-teal-200/40">lights up with earnings tracking</span></li>
-              <li>📰 Tier 7 — news: <span className="text-teal-200/40">mentions land via research sessions</span></li>
-              <li>🧑‍💼 Tier 4 — insiders (SEDI): <span className="text-teal-200/40">future</span></li>
+          {earnings && (
+            <>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+                Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+              </h2>
+              <Card className="p-4 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
+                  <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
+                  {earnings.epsEstimated != null && (
+                    <span>
+                      EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
+                      {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
+                    </span>
+                  )}
+                  {earnings.revenueEstimated != null && (
+                    <span>
+                      Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
+              </Card>
+            </>
+          )}
+
+          {grades && (
+            <>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+              <Card className="p-4 text-sm">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <span className="font-bold text-teal-100/90">{grades.consensus}</span>
+                  <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
+                </div>
+                <div className="flex h-2 overflow-hidden rounded-full bg-teal-400/10">
+                  {([["bg-emerald-500", grades.strongBuy], ["bg-emerald-400", grades.buy], ["bg-teal-400/30", grades.hold], ["bg-red-400", grades.sell], ["bg-red-500", grades.strongSell]] as const).map(
+                    ([cls, n], i) => (n > 0 ? <span key={i} className={cls} style={{ width: `${(n / grades.total) * 100}%` }} /> : null),
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-teal-200/50">
+                  <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
+                  <span>hold {grades.hold}</span>
+                  <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
+                </div>
+              </Card>
+            </>
+          )}
+
+          {news.length > 0 && (
+            <>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+                Recent news <span className="normal-case text-teal-200/40">· Tier 7</span>
+              </h2>
+              <Card className="divide-y divide-[color:var(--card-border)]">
+                {news.map((n, i) => (
+                  <a key={i} href={n.url} target="_blank" rel="noreferrer" className="block px-4 py-2.5 hover:bg-teal-400/[0.04]">
+                    <div className="text-sm text-teal-100/80">{n.title}</div>
+                    <div className="mt-0.5 text-[11px] text-teal-200/40">
+                      {n.publisher} · {n.at}
+                    </div>
+                  </a>
+                ))}
+              </Card>
+            </>
+          )}
+
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Data coverage</h2>
+          <Card className="p-4">
+            <ul className="space-y-1.5 text-sm">
+              {coverage.map((c) => (
+                <li key={c.tier} className="flex items-baseline gap-2.5">
+                  <span
+                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                      c.status === "live" ? "bg-emerald-400" : c.status === "partial" ? "bg-amber-400" : "bg-teal-400/20"
+                    }`}
+                  />
+                  <span className="w-24 shrink-0 text-teal-200/70">
+                    T{c.tier} {c.name}
+                  </span>
+                  <span className="text-xs text-teal-200/40">{c.detail}</span>
+                </li>
+              ))}
             </ul>
+            <p className="mt-3 text-[11px] text-teal-200/40">
+              Green = wired &amp; live for this name · amber = partial · grey = not yet wired (why on the right). Insider &amp;
+              institutional need Canadian sources (SEDI/SEDAR) — a separate build, not an FMP flip.
+            </p>
           </Card>
         </div>
       </section>

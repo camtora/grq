@@ -241,3 +241,69 @@ export async function fmpAnalystTarget(symbol: string): Promise<FmpAnalyst | nul
     currency: String((p?.currency as string) ?? "USD"),
   };
 }
+
+const numOrNull = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : null);
+
+// --- Tier 6: earnings intelligence --------------------------------------------
+export type FmpEarnings = {
+  date: string; // YYYY-MM-DD
+  upcoming: boolean;
+  epsEstimated: number | null;
+  epsActual: number | null;
+  revenueEstimated: number | null;
+  revenueActual: number | null;
+};
+
+/** Next earnings date + estimate (or the most recent result if none upcoming).
+ *  Company-level + analyst-driven, so it covers cross-listed TSX names by their
+ *  bare ticker. Tier 6. */
+export async function fmpEarnings(symbol: string): Promise<FmpEarnings | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`earnings?symbol=${encodeURIComponent(stripSuffix(symbol))}&limit=8`);
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = raw
+    .map((r) => ({
+      date: String(r.date ?? ""),
+      epsEstimated: numOrNull(r.epsEstimated),
+      epsActual: numOrNull(r.epsActual),
+      revenueEstimated: numOrNull(r.revenueEstimated),
+      revenueActual: numOrNull(r.revenueActual),
+    }))
+    .filter((r) => r.date);
+  const upcoming = rows.filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+  const past = rows.filter((r) => r.date < today).sort((a, b) => b.date.localeCompare(a.date));
+  const pick = upcoming[0] ?? past[0];
+  if (!pick) return null;
+  return { ...pick, upcoming: pick.date >= today };
+}
+
+// --- Tier 7: per-stock news ---------------------------------------------------
+export type StockNews = { title: string; publisher: string; url: string; at: string; image: string };
+
+export async function fmpStockNews(symbol: string, limit = 5): Promise<StockNews[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`news/stock?symbols=${encodeURIComponent(stripSuffix(symbol))}&limit=${limit}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((n) => ({
+      title: String(n.title ?? ""),
+      publisher: String(n.publisher ?? n.site ?? ""),
+      url: String(n.url ?? ""),
+      at: String(n.publishedDate ?? "").slice(0, 10),
+      image: String(n.image ?? ""),
+    }))
+    .filter((n) => n.title);
+}
+
+// --- Tier 2 deepening: analyst rating breakdown -------------------------------
+export type FmpGrades = { strongBuy: number; buy: number; hold: number; sell: number; strongSell: number; consensus: string; total: number };
+
+export async function fmpGrades(symbol: string): Promise<FmpGrades | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`grades-consensus?symbol=${encodeURIComponent(stripSuffix(symbol))}`);
+  const g = Array.isArray(raw) ? raw[0] : null;
+  if (!g) return null;
+  const n = (v: unknown) => (typeof v === "number" ? v : 0);
+  const strongBuy = n(g.strongBuy), buy = n(g.buy), hold = n(g.hold), sell = n(g.sell), strongSell = n(g.strongSell);
+  const total = strongBuy + buy + hold + sell + strongSell;
+  if (total === 0) return null;
+  return { strongBuy, buy, hold, sell, strongSell, consensus: String(g.consensus ?? ""), total };
+}
