@@ -1,7 +1,7 @@
 import Foundation
 
-// Codable structs mirroring ../shared/contract.ts. Money is integer cents; day
-// moves are basis points; dates are ISO strings on the wire.
+// Codable structs mirroring ../shared/contract.ts. Money is integer cents; rates and
+// day moves are basis points; dates are ISO strings on the wire.
 
 enum RiskLevel: String, Codable { case CAUTIOUS, BALANCED, AGGRESSIVE
     var label: String { rawValue.capitalized }
@@ -48,6 +48,22 @@ struct Portfolio: Codable {
     let killSwitch: Bool
     let killSwitchBy: String?
     let quotesAsOf: String?
+}
+
+struct FundSettings: Codable {
+    let riskLevel: RiskLevel
+    let cashFloorBps: Int
+    let maxPositionBps: Int
+    let stopLossBps: Int
+    let takeProfitBps: Int
+    let feeBudgetCentsMonth: Int
+    let feeSpentMonthCents: Int
+    let killSwitch: Bool
+    let killSwitchBy: String?
+    let soakDaysClean: Int
+    let soakDaysRequired: Int
+    let soakPaperDaysClean: Int
+    let soakPaperDaysRequired: Int
 }
 
 struct Signals: Codable {

@@ -10,6 +10,7 @@ struct PortfolioView: View {
                 if let pf {
                     VStack(alignment: .leading, spacing: 16) {
                         stats(pf)
+                        riskFees(pf)
                         holdings(pf)
                         Text("Tap a term like ACB or weight for a plain-English definition.")
                             .font(.caption)
@@ -43,31 +44,59 @@ struct PortfolioView: View {
         }
     }
 
+    private func riskFees(_ pf: Portfolio) -> some View {
+        let pal = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Risk").foregroundStyle(pal.textMuted)
+                    Spacer()
+                    Chip(text: pf.riskLevel.label, tone: .teal)
+                }
+                .font(.subheadline)
+                KeyValueRow(label: "Fees this month",
+                            value: "\(Fmt.money(pf.feeSpentMonthCents)) / \(Fmt.money(pf.feeBudgetCentsMonth))",
+                            term: "fee-budget")
+                KeyValueRow(label: "Contributions", value: Fmt.money(pf.contributionsCents), term: "contributions")
+            }
+        }
+    }
+
     private func holdings(_ pf: Portfolio) -> some View {
         let pal = Theme.palette(scheme)
         return Card {
             VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: "Holdings")
-                ForEach(pf.positions) { pos in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(pos.symbol).font(.subheadline.weight(.semibold))
-                                .foregroundStyle(pal.textPrimary)
-                            Text("\(pos.qty) sh · avg \(Fmt.money(pos.avgCostCents))")
-                                .font(.caption).foregroundStyle(pal.textMuted)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            MoneyText(cents: pos.marketValueCents).font(.subheadline)
-                                .foregroundStyle(pal.textPrimary)
-                            HStack(spacing: 6) {
-                                Pnl(cents: pos.unrealizedPnlCents).font(.caption)
-                                Text(weight(pos.marketValueCents, pf.navCents))
-                                    .font(.caption2).foregroundStyle(pal.textMuted)
+                if pf.positions.isEmpty {
+                    Text("Nothing held yet. The robot is still shopping.")
+                        .font(.subheadline).foregroundStyle(pal.textMuted)
+                } else {
+                    ForEach(pf.positions) { pos in
+                        VStack(spacing: 6) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(pos.symbol).font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(pal.textPrimary)
+                                        BpsBadge(bps: pos.dayChangeBps).font(.caption2)
+                                    }
+                                    Text("\(pos.qty) sh · avg \(Fmt.money(pos.avgCostCents))")
+                                        .font(.caption).foregroundStyle(pal.textMuted)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    MoneyText(cents: pos.marketValueCents).font(.subheadline)
+                                        .foregroundStyle(pal.textPrimary)
+                                    HStack(spacing: 6) {
+                                        Pnl(cents: pos.unrealizedPnlCents).font(.caption)
+                                        Text(weight(pos.marketValueCents, pf.navCents))
+                                            .font(.caption2).foregroundStyle(pal.textMuted)
+                                    }
+                                }
                             }
+                            if pos.id != pf.positions.last?.id { Divider().overlay(pal.cardBorder) }
                         }
                     }
-                    if pos.id != pf.positions.last?.id { Divider().overlay(pal.cardBorder) }
                 }
             }
         }

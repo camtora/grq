@@ -37,6 +37,7 @@ final class APIClient {
 
     func me() async -> Me { MockData.me }
     func portfolio() async -> Portfolio { MockData.portfolio }
+    func settings() async -> FundSettings { MockData.settings }
     func today() async -> Today { MockData.today }
     func market() async -> (universe: [MarketName], watchlist: [MarketName]) {
         (MockData.universe, MockData.watchlist)
@@ -71,6 +72,15 @@ enum MockData {
                   benchmarkCents: 304_500, feeSpentMonthCents: 320, feeBudgetCentsMonth: 2_000,
                   riskLevel: .BALANCED, killSwitch: false, killSwitchBy: nil,
                   quotesAsOf: "2026-06-15T16:00:00Z")
+    }
+
+    static var settings: FundSettings {
+        FundSettings(riskLevel: .BALANCED, cashFloorBps: 1_000, maxPositionBps: 2_500,
+                     stopLossBps: 800, takeProfitBps: 2_000,
+                     feeBudgetCentsMonth: 2_000, feeSpentMonthCents: 320,
+                     killSwitch: false, killSwitchBy: nil,
+                     soakDaysClean: 3, soakDaysRequired: 28,
+                     soakPaperDaysClean: 0, soakPaperDaysRequired: 14)
     }
 
     static let tape: [NavPoint] = [

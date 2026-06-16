@@ -11,16 +11,26 @@ struct SplashView: View {
         let p = Theme.palette(scheme)
         ZStack {
             p.bodyBg.ignoresSafeArea()
-            if !reduceMotion {
-                MoneyRainView()
-                    .ignoresSafeArea()
-                    .opacity(showWelcome ? 0.3 : 1)
-                    .animation(.easeOut(duration: 0.6), value: showWelcome)
+
+            // Full-page money rain — the hero.
+            if reduceMotion {
+                Text("💵").font(.system(size: 96)).opacity(0.25)
+            } else {
+                MoneyRainView().ignoresSafeArea()
             }
-            VStack(spacing: 12) {
+
+            // A soft scrim so the wordmark + greeting stay legible over the rain.
+            RadialGradient(colors: [p.bodyBg.opacity(0.88), p.bodyBg.opacity(0.0)],
+                           center: .center, startRadius: 6, endRadius: 280)
+                .ignoresSafeArea()
+                .opacity(showWelcome ? 1 : 0)
+                .animation(.easeOut(duration: 0.6), value: showWelcome)
+
+            VStack(spacing: 14) {
                 Text("GRQ")
-                    .font(.system(size: 68, weight: .black, design: .rounded))
+                    .font(.system(size: 78, weight: .black, design: .rounded))
                     .foregroundStyle(Theme.brandGradient)
+                    .shadow(color: .black.opacity(0.3), radius: 10, y: 2)
                 if showWelcome {
                     Text(welcomeLine)
                         .font(.title3.weight(.semibold))
@@ -36,9 +46,9 @@ struct SplashView: View {
             .padding(32)
         }
         .task {
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
             withAnimation(.easeOut(duration: 0.5)) { showWelcome = true }
-            try? await Task.sleep(nanoseconds: 1_300_000_000)
+            try? await Task.sleep(nanoseconds: 1_700_000_000)
             done()
         }
     }
@@ -53,17 +63,25 @@ struct SplashView: View {
     }
 }
 
-/// "Make it rain" — bills fall + tumble via a Canvas. Swap 💵 for an asset later.
+/// Full-page "make it rain": ~46 bills in two depth layers (near = big/opaque,
+/// far = small/faint), spanning edge to edge, tumbling continuously. Swap 💵 for an
+/// asset by drawing an Image instead of Text in the Canvas.
 private struct MoneyRainView: View {
     private struct Bill {
         let x: CGFloat, size: CGFloat
-        let speed: Double, offset: Double, sway: Double, spin: Double, phase: Double
+        let speed: Double, offset: Double, sway: Double, spin: Double, phase: Double, opacity: Double
     }
-    @State private var bills: [Bill] = (0..<26).map { _ in
-        Bill(x: .random(in: 0...1), size: .random(in: 22...40),
-             speed: .random(in: 0.12...0.26), offset: .random(in: 0...1.2),
-             sway: .random(in: 0.6...1.6), spin: .random(in: 0.6...1.8),
-             phase: .random(in: 0...6.28))
+    @State private var bills: [Bill] = (0..<46).map { _ in
+        let near = Bool.random()
+        return Bill(
+            x: .random(in: -0.05...1.05),
+            size: near ? .random(in: 30...52) : .random(in: 16...28),
+            speed: near ? .random(in: 0.16...0.30) : .random(in: 0.10...0.18),
+            offset: .random(in: 0...1.3),
+            sway: .random(in: 0.5...1.7),
+            spin: .random(in: 0.5...2.0),
+            phase: .random(in: 0...6.28),
+            opacity: near ? 1.0 : 0.6)
     }
     @State private var start = Date()
 
@@ -72,12 +90,13 @@ private struct MoneyRainView: View {
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSince(start)
                 for b in bills {
-                    let cycle = (t * b.speed + b.offset).truncatingRemainder(dividingBy: 1.2)
-                    let py = CGFloat(cycle) * (size.height + 80) - 40
-                    let px = b.x * size.width + CGFloat(sin(t * b.sway + b.phase)) * 18
+                    let cycle = (t * b.speed + b.offset).truncatingRemainder(dividingBy: 1.3)
+                    let py = CGFloat(cycle) * (size.height + 120) - 60
+                    let px = b.x * size.width + CGFloat(sin(t * b.sway + b.phase)) * 22
                     var c = ctx
+                    c.opacity = b.opacity
                     c.translateBy(x: px, y: py)
-                    c.rotate(by: .degrees(sin(t * b.spin + b.phase) * 35))
+                    c.rotate(by: .degrees(sin(t * b.spin + b.phase) * 40))
                     c.draw(Text("💵").font(.system(size: b.size)), at: .zero)
                 }
             }

@@ -6,12 +6,12 @@
  *
  * Conventions:
  *  - Money is integer CENTS, never floats. Money fields end in `Cents`.
- *  - Day moves are basis points (`Bps`, 1% = 100 bps), matching lib/portfolio.ts.
+ *  - Rates/moves are basis points (`Bps`, 1% = 100 bps), matching lib/portfolio.ts.
  *  - Dates are ISO-8601 strings on the wire (Swift decodes with `.iso8601`).
  *
  * Status (2026-06-15): Portfolio + Auth mirror web/lib/portfolio.ts exactly.
- * Today / Market / Ideas are **v0** — reconcile field-by-field when the GET
- * endpoints are built (the web reads Prisma in server components today; see
+ * Today / Market / Ideas / Settings are **v0** — reconcile field-by-field when the
+ * GET endpoints are built (the web reads Prisma in server components today; see
  * docs/IOS-CONTENT.md and docs/IOS-PLAN.md).
  */
 import { z } from "zod";
@@ -61,6 +61,23 @@ export const Portfolio = z.object({
   killSwitch: z.boolean(),
   killSwitchBy: z.string().nullable(),
   quotesAsOf: z.string().nullable(),
+});
+
+/* ---------- fund settings / risk dial (v0; mirrors web Settings + soak gate) ---------- */
+export const FundSettings = z.object({
+  riskLevel: RiskLevel,
+  cashFloorBps: z.number().int(),       // min cash as a share of NAV
+  maxPositionBps: z.number().int(),     // max weight per name
+  stopLossBps: z.number().int(),
+  takeProfitBps: z.number().int(),
+  feeBudgetCentsMonth: z.number().int(),
+  feeSpentMonthCents: z.number().int(),
+  killSwitch: z.boolean(),
+  killSwitchBy: z.string().nullable(),
+  soakDaysClean: z.number().int(),
+  soakDaysRequired: z.number().int(),
+  soakPaperDaysClean: z.number().int(),
+  soakPaperDaysRequired: z.number().int(),
 });
 
 /* ---------- signals (advisory technicals consensus; see glossary) — v0 ---------- */
@@ -137,7 +154,6 @@ export const Today = z.object({
   movers: z.array(Mover),                     // biggest universe moves
   topHitters: z.array(Mover),                 // holdings by day move
   onTheRadar: z.array(Idea),                  // ideas w/ targets, unfamiliar first
-  // The masthead quote + fun fact are chosen on-device from shared/content/daily.json.
 });
 
 /* ---------- inferred TS types (Swift structs are generated separately) ---------- */
@@ -145,6 +161,7 @@ export type MeResponse = z.infer<typeof MeResponse>;
 export type AuthResponse = z.infer<typeof AuthResponse>;
 export type Position = z.infer<typeof Position>;
 export type Portfolio = z.infer<typeof Portfolio>;
+export type FundSettings = z.infer<typeof FundSettings>;
 export type Signals = z.infer<typeof Signals>;
 export type MarketName = z.infer<typeof MarketName>;
 export type MarketResponse = z.infer<typeof MarketResponse>;

@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/market", label: "Ideas" },
   { href: "/market/browse", label: "Browse" },
-  { href: "/market/research", label: "Research" },
+  { href: "/market/watchlist", label: "Watchlist" },
 ];
 
 export default function MarketTabs() {

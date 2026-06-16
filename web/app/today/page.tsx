@@ -9,6 +9,7 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpNews, fmpGainers } from "@/lib/fmp";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
@@ -100,11 +101,13 @@ type Idea = {
   far: number | null;
   nearDays: number | null;
   confidence: number | null;
+  stance: string | null;
   obscurity: number;
   logoUrl: string | null;
 };
 
 function IdeaRow({ idea }: { idea: Idea }) {
+  const sm = stanceMeta(idea.stance);
   return (
     <li className="px-3 py-2.5">
       <div className="flex items-center gap-3">
@@ -128,6 +131,11 @@ function IdeaRow({ idea }: { idea: Idea }) {
         )}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 text-xs text-teal-200/50">
+        {sm && (
+          <span className={`font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
+            {sm.label}
+          </span>
+        )}
         {idea.near !== null && (
           <span>
             near{idea.nearDays ? ` ~${Math.max(1, Math.round(idea.nearDays / 5))}w` : ""}{" "}
@@ -266,6 +274,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         far: cur && d.targetFarCents ? (d.targetFarCents - cur) / cur : null,
         nearDays: d.targetNearDays ?? null,
         confidence: d.confidence,
+        stance: d.stance ?? null,
         obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
         logoUrl: logoBy.get(sym) ?? null,
       };

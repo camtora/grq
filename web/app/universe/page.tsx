@@ -1,17 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { activeUniverse, allUniverse, type UniverseRow } from "@/lib/universe";
+import { activeUniverse, type UniverseRow } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
-import { money, pct, fmtDay } from "@/lib/money";
-import { Card, PageHeader, Chip, Pnl, EmptyState } from "@/components/ui";
+import { money, pct } from "@/lib/money";
+import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import StockFilters from "@/components/StockFilters";
-import AddTicker from "@/components/AddTicker";
-import UniverseActions from "@/components/UniverseActions";
-import { getSession, displayName } from "@/lib/session";
 import Term from "@/components/Term";
 
 export const dynamic = "force-dynamic";
@@ -134,19 +131,14 @@ function UniverseTable({ rows }: { rows: Row[] }) {
 }
 
 export default async function Universe() {
-  const [active, allRows, positions, directives, journalCounts, session] = await Promise.all([
+  const [active, positions, directives, journalCounts] = await Promise.all([
     activeUniverse(),
-    allUniverse(),
     prisma.position.findMany(),
     prisma.symbolDirective.findMany(),
     prisma.journalEntry.groupBy({ by: ["symbol"], _count: { id: true }, where: { symbol: { not: null } } }),
-    getSession(),
   ]);
-  const isMember = session?.role === "member";
-  const me = displayName(session);
-  const candidates = allRows.filter((u) => u.status === "CANDIDATE");
 
-  const allSyms = [...active, ...candidates].map((u) => u.symbol);
+  const allSyms = active.map((u) => u.symbol);
   const quotes = await getQuotes(allSyms);
 
   const stanceRows = await prisma.journalEntry.findMany({
@@ -186,7 +178,6 @@ export default async function Universe() {
   };
 
   const activeRows = sortActive(active.map(toRow));
-  const candidateRows = candidates.map(toRow).sort((a, b) => (a.pinnedBy ? -1 : b.pinnedBy ? 1 : a.symbol.localeCompare(b.symbol)));
 
   const heldCount = activeRows.filter((r) => r.held).length;
   const investedCents = activeRows.reduce((s, r) => s + r.mvCents, 0);
@@ -205,10 +196,10 @@ export default async function Universe() {
     <main>
       <PageHeader
         title="Universe"
-        sub="Everything that's ours — the names the agent can invest in, and the watchlist it's researching toward."
+        sub="The names GRQ can invest in. New names start on the watchlist (Market ▸ Watchlist) and get promoted in."
         right={
-          <Link href="/market">
-            <Chip tone="teal">browse the market →</Chip>
+          <Link href="/market/watchlist">
+            <Chip tone="teal">watchlist →</Chip>
           </Link>
         }
       />
@@ -224,73 +215,6 @@ export default async function Universe() {
         </div>
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
         <UniverseTable rows={activeRows} />
-      </section>
-
-      <section className="mt-10">
-        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
-            <Term k="watchlist">Watchlist</Term> — {candidates.length} tracked
-          </h2>
-          <p className="text-xs text-teal-200/40">
-            Names you&apos;re tracking — the agent dossiers them, but it can&apos;t trade them until you both promote one into the universe.
-          </p>
-        </div>
-
-        {isMember && (
-          <div className="mb-4">
-            <AddTicker />
-          </div>
-        )}
-
-        {candidateRows.length === 0 ? (
-          <EmptyState
-            title="Nothing on the watchlist"
-            body="Watch a name above, or find one on the Market tab — the agent starts researching it the moment you do."
-          />
-        ) : (
-          <div className="space-y-3">
-            {candidateRows.map((c) => {
-              const research = c.note ?? null;
-              return (
-                <Card key={c.symbol} className="p-4">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <Link href={`/stocks/${c.symbol}`} className="text-lg font-bold text-teal-300 hover:underline">
-                      {c.symbol}
-                    </Link>
-                    <span className="text-sm text-teal-100/70">{c.name}</span>
-                    {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
-                    {c.lastCents !== null && (
-                      <span className="text-sm tabular-nums text-teal-100/80">
-                        {money(c.lastCents)}{" "}
-                        <span className={(c.dayBps ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>
-                          {pct((c.dayBps ?? 0) / 10_000, 2)}
-                        </span>
-                      </span>
-                    )}
-                    <SignalStrip signals={c.signals} />
-                    <StanceCell stance={c.stance} rec={c.rec} />
-                    <span className="ml-auto text-xs text-teal-200/40">
-                      {c.journal > 0 ? `${c.journal} journal` : "no dossier yet"}
-                      {c.addedBy ? ` · added by ${c.addedBy}` : ""}
-                    </span>
-                  </div>
-                  {research && <p className="mt-2 text-xs text-teal-200/50">{research}</p>}
-                  {isMember && (
-                    <div className="mt-3">
-                      <UniverseActions
-                        symbol={c.symbol}
-                        status="CANDIDATE"
-                        pendingBy={c.promotionRequestedBy}
-                        proposedTier={c.proposedTier}
-                        currentUser={me}
-                      />
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
       </section>
 
       <p className="mt-6 text-xs text-teal-200/40">

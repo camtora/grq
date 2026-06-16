@@ -10,22 +10,23 @@ struct SignInView: View {
             p.bodyBg.ignoresSafeArea()
             VStack(spacing: 16) {
                 Spacer()
-                Text("GRQ")
-                    .font(.system(size: 56, weight: .black, design: .rounded))
+                Text("GRQ").font(.system(size: 60, weight: .black, design: .rounded))
                     .foregroundStyle(Theme.brandGradient)
+                Text(Strings.shared.s("brand.tagline", "Get rich quick, slowly, with receipts."))
+                    .font(.footnote).foregroundStyle(p.textMuted).multilineTextAlignment(.center)
+                Spacer()
                 Text(Strings.shared.s("auth.signInTitle", "Sign in to your fund."))
                     .font(.title3.weight(.semibold)).foregroundStyle(p.textPrimary)
                 Text(Strings.shared.s("auth.signInSubtitle", "GRQ is invite-only — Cam & Graham."))
-                    .font(.subheadline).foregroundStyle(p.textMuted)
-                    .multilineTextAlignment(.center)
-                Spacer()
-                Text("Mock sign-in — pick a member (no Google SDK yet)")
-                    .font(.caption).foregroundStyle(p.textMuted.opacity(0.7))
+                    .font(.subheadline).foregroundStyle(p.textMuted).multilineTextAlignment(.center)
                 HStack(spacing: 12) {
                     memberButton("Cam", "cameron.tora@gmail.com", p)
                     memberButton("Graham", "g.j.appleby@gmail.com", p)
                 }
-                Spacer().frame(height: 40)
+                .padding(.top, 4)
+                Text("Mock sign-in — Google + JWT land with the backend.")
+                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.6))
+                Spacer().frame(height: 24)
             }
             .padding(28)
         }

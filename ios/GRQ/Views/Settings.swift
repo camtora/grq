@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: ThemeManager
     @Environment(\.colorScheme) private var scheme
+    @State private var settings: FundSettings?
     @State private var killOn = false
     @State private var showKillConfirm = false
 
@@ -11,27 +12,108 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    riskCard
+                    memberCard
+                    if let s = settings {
+                        riskCard(s)
+                        feesCard(s)
+                        killCard
+                        soakCard(s)
+                    } else {
+                        ProgressView().padding(.vertical, 20)
+                    }
                     themeCard
-                    killCard
-                    membersCard
-                    signOut
+                    signOutButton
                 }
                 .padding(16)
             }
             .navigationTitle("Settings")
         }
+        .task {
+            let s = await APIClient.shared.settings()
+            settings = s
+            killOn = s.killSwitch
+        }
     }
 
-    private var riskCard: some View {
+    private var memberCard: some View {
         let p = Theme.palette(scheme)
         return Card {
             HStack {
-                Text("Risk dial").foregroundStyle(p.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(auth.currentUser?.name ?? "Member").font(.headline).foregroundStyle(p.textPrimary)
+                    Text(auth.currentUser?.email ?? "").font(.caption).foregroundStyle(p.textMuted)
+                }
                 Spacer()
-                Chip(text: "Balanced", tone: .teal)
+                Chip(text: auth.currentUser?.role.rawValue ?? "member", tone: .teal)
             }
-            .font(.subheadline)
+        }
+    }
+
+    private func riskCard(_ s: FundSettings) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Risk dial").font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                    Spacer()
+                    Chip(text: s.riskLevel.label, tone: .teal)
+                }
+                KeyValueRow(label: "Cash floor", value: Fmt.pctBps(s.cashFloorBps), term: "cash-floor")
+                KeyValueRow(label: "Max position", value: Fmt.pctBps(s.maxPositionBps), term: "weight")
+                KeyValueRow(label: "Stop-loss", value: Fmt.pctBps(s.stopLossBps), term: "stop-loss")
+                KeyValueRow(label: "Take-profit", value: Fmt.pctBps(s.takeProfitBps), term: "take-profit")
+            }
+        }
+    }
+
+    private func feesCard(_ s: FundSettings) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Fees")
+                KeyValueRow(label: "Budget this month", value: Fmt.money(s.feeBudgetCentsMonth), term: "fee-budget")
+                KeyValueRow(label: "Spent", value: Fmt.money(s.feeSpentMonthCents))
+            }
+        }
+    }
+
+    private var killCard: some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    TermLink(slug: "kill-switch", label: "Kill switch").font(.subheadline.weight(.bold))
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { killOn }, set: { _ in showKillConfirm = true }))
+                        .labelsHidden().tint(p.neg)
+                }
+                Text(killOn
+                     ? Strings.shared.s("guardrails.killEngaged", "Kill switch ENGAGED. Nothing trades until a member releases it.")
+                     : "Halt all trading instantly. Either member can flip it.")
+                    .font(.caption).foregroundStyle(killOn ? p.neg : p.textMuted)
+                Text(Strings.shared.s("guardrails.faceIdReason", "Confirm it's you before changing the fund."))
+                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+            }
+        }
+        .alert(killOn ? "Resume trading?" : "Halt all trading now?", isPresented: $showKillConfirm) {
+            Button(killOn ? "Resume trading" : "Engage",
+                   role: killOn ? .cancel : .destructive) { killOn.toggle() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(killOn ? "The order gate opens again."
+                        : "Nothing trades until a member turns it back on.")
+        }
+    }
+
+    private func soakCard(_ s: FundSettings) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                TermLink(slug: "soak", label: "Soak").font(.subheadline.weight(.bold))
+                KeyValueRow(label: "Clean (total)", value: "\(s.soakDaysClean) / \(s.soakDaysRequired) days")
+                KeyValueRow(label: "On IBKR paper", value: "\(s.soakPaperDaysClean) / \(s.soakPaperDaysRequired) days")
+                Text("Real money never trades until the soak gate passes.")
+                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+            }
         }
     }
 
@@ -50,46 +132,7 @@ struct SettingsView: View {
         }
     }
 
-    private var killCard: some View {
-        let p = Theme.palette(scheme)
-        return Card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    TermLink(slug: "kill-switch", label: "Kill switch").font(.subheadline.weight(.bold))
-                    Spacer()
-                    Toggle("", isOn: Binding(get: { killOn }, set: { _ in showKillConfirm = true }))
-                        .labelsHidden().tint(p.neg)
-                }
-                Text(killOn
-                     ? Strings.shared.s("guardrails.killEngaged", "Kill switch ENGAGED. Nothing trades until a member releases it.")
-                     : "Halt all trading instantly. Either member can flip it.")
-                    .font(.caption)
-                    .foregroundStyle(killOn ? p.neg : p.textMuted)
-            }
-        }
-        .alert(killOn ? "Resume trading?" : "Halt all trading now?", isPresented: $showKillConfirm) {
-            Button(killOn ? "Resume trading" : "Engage",
-                   role: killOn ? .cancel : .destructive) { killOn.toggle() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(killOn ? "The order gate opens again."
-                        : "Nothing trades until a member turns it back on.")
-        }
-    }
-
-    private var membersCard: some View {
-        let p = Theme.palette(scheme)
-        return Card {
-            HStack {
-                Text("Members").foregroundStyle(p.textMuted)
-                Spacer()
-                Text("Cam · Graham").foregroundStyle(p.textPrimary)
-            }
-            .font(.subheadline)
-        }
-    }
-
-    private var signOut: some View {
+    private var signOutButton: some View {
         Button(role: .destructive) { auth.signOut() } label: {
             Text(Strings.shared.s("auth.signOut", "Sign out")).frame(maxWidth: .infinity)
         }

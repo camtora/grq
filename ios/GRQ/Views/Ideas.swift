@@ -8,7 +8,7 @@ struct IdeasView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionTitle(text: "Ideas")
+                    SectionTitle(text: "Ideas — the agent's calls")
                     ForEach(ideas) { idea in
                         NavigationLink { StockDetailView(symbol: idea.symbol) } label: { card(idea) }
                             .buttonStyle(.plain)
@@ -24,23 +24,41 @@ struct IdeasView: View {
     private func card(_ idea: Idea) -> some View {
         let p = Theme.palette(scheme)
         return Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(idea.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                     Text(idea.name).font(.caption).foregroundStyle(p.textMuted)
                     Spacer()
+                    if idea.unfamiliar { Chip(text: "new", tone: .dim) }
                     if let c = idea.call { Chip(text: c.rawValue, tone: .green) }
                 }
-                if let er = idea.target.expectedReturnBps {
-                    HStack(spacing: 8) {
-                        TermLink(slug: "expected-return", label: "\(Fmt.bps(er)) expected")
-                        if let conf = idea.target.confidence {
-                            Text("· \(conf)% conf").foregroundStyle(p.textMuted)
+                HStack(alignment: .top, spacing: 16) {
+                    if let near = idea.target.nearCents {
+                        target("Near", Fmt.money(near), idea.target.nearHorizon, p)
+                    }
+                    if let far = idea.target.farCents {
+                        target("12-mo", Fmt.money(far), nil, p)
+                    }
+                    Spacer()
+                    if let er = idea.target.expectedReturnBps {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(Fmt.bps(er)).font(.subheadline.weight(.semibold)).foregroundStyle(p.pos)
+                            if let c = idea.target.confidence {
+                                Text("\(c)% conf").font(.caption2).foregroundStyle(p.textMuted)
+                            }
                         }
                     }
-                    .font(.caption)
                 }
+                TermLink(slug: "expected-return", label: "hypothesis, not a promise").font(.caption2)
             }
+        }
+    }
+
+    private func target(_ label: String, _ value: String, _ horizon: String?, _ p: Palette) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label.uppercased()).font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+            Text(value).font(.subheadline).monospacedDigit().foregroundStyle(p.textPrimary)
+            if let horizon { Text(horizon).font(.caption2).foregroundStyle(p.textMuted) }
         }
     }
 }
@@ -58,8 +76,11 @@ struct StockDetailView: View {
                     targets(d)
                     fundamentals(d)
                     Card {
-                        Text(d.bodyMarkdown).font(.callout)
-                            .foregroundStyle(Theme.palette(scheme).textMuted)
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionTitle(text: "Dossier")
+                            Text(d.bodyMarkdown).font(.callout)
+                                .foregroundStyle(Theme.palette(scheme).textPrimary.opacity(0.9))
+                        }
                     }
                 }
                 .padding(16)
@@ -75,74 +96,51 @@ struct StockDetailView: View {
     private func header(_ d: Dossier) -> some View {
         let p = Theme.palette(scheme)
         return Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(d.name).font(.title3.weight(.bold)).foregroundStyle(p.textPrimary)
                 HStack(spacing: 8) {
-                    if let c = d.call {
-                        TermLink(slug: "agent-call", label: c.rawValue.capitalized)
-                    }
+                    if let c = d.call { Chip(text: c.rawValue, tone: .green) }
                     if let s = d.signals {
-                        Text("· rec \(s.recommendationPct)%").foregroundStyle(p.textMuted)
+                        TermLink(slug: "recommendation", label: "rec \(s.recommendationPct)%").font(.caption)
                     }
+                    Spacer()
                 }
-                .font(.subheadline)
+                if let s = d.signals { SignalStrip(signals: s) }
             }
         }
     }
 
     private func targets(_ d: Dossier) -> some View {
-        let p = Theme.palette(scheme)
+        let pos = Theme.palette(scheme).pos
         return Card {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Targets")
                 if let near = d.target.nearCents {
-                    row("Near-term", Fmt.money(near), d.target.nearHorizon ?? "", p)
+                    KeyValueRow(label: "Near-term" + (d.target.nearHorizon.map { " (\($0))" } ?? ""),
+                                value: Fmt.money(near), term: "price-target")
                 }
-                if let far = d.target.farCents { row("12-month", Fmt.money(far), "", p) }
+                if let far = d.target.farCents {
+                    KeyValueRow(label: "12-month", value: Fmt.money(far), term: "price-target")
+                }
+                if let er = d.target.expectedReturnBps {
+                    KeyValueRow(label: "Expected return", value: Fmt.bps(er), term: "expected-return", valueColor: pos)
+                }
                 if let a = d.analystTargetCents {
-                    HStack {
-                        TermLink(slug: "analyst-target", label: "Analyst consensus")
-                        Spacer()
-                        MoneyText(cents: a).foregroundStyle(p.textPrimary)
-                    }
-                    .font(.subheadline)
+                    KeyValueRow(label: "Analyst consensus", value: Fmt.money(a), term: "analyst-target")
                 }
-                TermLink(slug: "price-target", label: "Targets are hypotheses, judged when they resolve.")
-                    .font(.caption2)
             }
         }
     }
 
     private func fundamentals(_ d: Dossier) -> some View {
-        let p = Theme.palette(scheme)
-        return Card {
+        Card {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Fundamentals")
-                if let mc = d.marketCapCents { kv("Market cap", Fmt.money(mc), "market-cap", p) }
-                if let pe = d.peRatio { kv("P/E", String(format: "%.1f", pe), "pe", p) }
-                if let fcf = d.freeCashFlowCents { kv("Free cash flow", Fmt.money(fcf), "free-cash-flow", p) }
+                if let mc = d.marketCapCents { KeyValueRow(label: "Market cap", value: Fmt.money(mc), term: "market-cap") }
+                if let pe = d.peRatio { KeyValueRow(label: "P/E", value: String(format: "%.1f", pe), term: "pe") }
+                if let fcf = d.freeCashFlowCents { KeyValueRow(label: "Free cash flow", value: Fmt.money(fcf), term: "free-cash-flow") }
+                if let dy = d.dividendYieldBps { KeyValueRow(label: "Dividend yield", value: Fmt.pctBps(dy), term: "dividend-yield") }
             }
         }
-    }
-
-    private func row(_ label: String, _ value: String, _ note: String, _ p: Palette) -> some View {
-        HStack {
-            Text(label).foregroundStyle(p.textMuted)
-            Spacer()
-            Text(value).monospacedDigit().foregroundStyle(p.textPrimary)
-            if !note.isEmpty {
-                Text(note).font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
-            }
-        }
-        .font(.subheadline)
-    }
-
-    private func kv(_ label: String, _ value: String, _ term: String, _ p: Palette) -> some View {
-        HStack {
-            TermLink(slug: term, label: label)
-            Spacer()
-            Text(value).monospacedDigit().foregroundStyle(p.textPrimary)
-        }
-        .font(.subheadline)
     }
 }

@@ -9,8 +9,8 @@ struct MarketView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    section("Universe", universe, term: "universe")
-                    section("Watchlist", watchlist, term: "watchlist")
+                    section("Universe", universe, term: "universe", caption: "the agent can buy these")
+                    section("Watchlist", watchlist, term: "watchlist", caption: "researched, not yet tradable")
                 }
                 .padding(16)
             }
@@ -23,9 +23,13 @@ struct MarketView: View {
         }
     }
 
-    private func section(_ title: String, _ names: [MarketName], term: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TermLink(slug: term, label: title).font(.caption.weight(.bold))
+    private func section(_ title: String, _ names: [MarketName], term: String, caption: String) -> some View {
+        let p = Theme.palette(scheme)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                TermLink(slug: term, label: title).font(.caption.weight(.bold))
+                Text("· \(caption)").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+            }
             ForEach(names) { n in
                 NavigationLink { StockDetailView(symbol: n.symbol) } label: { row(n) }
                     .buttonStyle(.plain)
@@ -36,19 +40,27 @@ struct MarketView: View {
     private func row(_ n: MarketName) -> some View {
         let p = Theme.palette(scheme)
         return Card {
-            HStack(spacing: 12) {
-                avatar(n.symbol, p)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(n.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                    Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    avatar(n.symbol, p)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(n.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                        Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        MoneyText(cents: n.lastCents).font(.subheadline).foregroundStyle(p.textPrimary)
+                        BpsBadge(bps: n.dayChangeBps).font(.caption)
+                    }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    MoneyText(cents: n.lastCents).font(.subheadline).foregroundStyle(p.textPrimary)
-                    Text(Fmt.bps(n.dayChangeBps)).font(.caption.monospacedDigit())
-                        .foregroundStyle(n.dayChangeBps >= 0 ? p.pos : p.neg)
+                HStack(spacing: 8) {
+                    if let s = n.signals {
+                        TermLink(slug: "recommendation", label: "\(s.recommendationPct)%").font(.caption2)
+                    }
+                    if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
+                    Spacer()
+                    if let s = n.signals { SignalStrip(signals: s) }
                 }
-                if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
             }
         }
     }

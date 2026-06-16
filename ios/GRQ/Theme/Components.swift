@@ -16,8 +16,10 @@ enum Fmt {
         let s = money(abs(cents))
         return cents < 0 ? "−\(s)" : "+\(s)"
     }
-    /// Basis points → percent. 60 bps → "+0.60%".
+    /// Signed percent from basis points. 60 bps → "+0.60%".
     static func bps(_ b: Int) -> String { String(format: "%+.2f%%", Double(b) / 100) }
+    /// Unsigned whole percent from basis points. 1000 bps → "10%".
+    static func pctBps(_ b: Int) -> String { String(format: "%.0f%%", Double(b) / 100) }
 }
 
 struct Card<Content: View>: View {
@@ -101,6 +103,17 @@ struct MoneyText: View {
     var body: some View { Text(Fmt.money(cents)).monospacedDigit() }
 }
 
+/// A signed percent (from bps) with up/down color. Used for day moves.
+struct BpsBadge: View {
+    @Environment(\.colorScheme) private var scheme
+    let bps: Int
+    var body: some View {
+        let p = Theme.palette(scheme)
+        Text(Fmt.bps(bps)).monospacedDigit()
+            .foregroundStyle(bps > 0 ? p.pos : bps < 0 ? p.neg : p.textMuted)
+    }
+}
+
 /// An underlined term that pops its plain-English definition (the literacy pillar).
 struct TermLink: View {
     @EnvironmentObject private var glossary: GlossaryPresenter
@@ -123,6 +136,48 @@ struct SectionTitle: View {
             .font(.caption.weight(.bold)).tracking(1.2)
             .foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A label/value row (value right-aligned, monospaced); label optionally a TermLink.
+struct KeyValueRow: View {
+    @Environment(\.colorScheme) private var scheme
+    let label: String
+    let value: String
+    var term: String? = nil
+    var valueColor: Color? = nil
+    var body: some View {
+        let p = Theme.palette(scheme)
+        HStack {
+            if let term { TermLink(slug: term, label: label) }
+            else { Text(label).foregroundStyle(p.textMuted) }
+            Spacer()
+            Text(value).monospacedDigit().foregroundStyle(valueColor ?? p.textPrimary)
+        }
+        .font(.subheadline)
+    }
+}
+
+/// Compact trend / RSI / MACD pills (advisory technicals; see glossary).
+struct SignalStrip: View {
+    @Environment(\.colorScheme) private var scheme
+    let signals: Signals
+    var body: some View {
+        HStack(spacing: 6) {
+            pill("trend", signals.trend)
+            if let rsi = signals.rsi { pill("rsi", String(format: "%.0f", rsi)) }
+            if let macd = signals.macd { pill("macd", macd) }
+        }
+        .font(.caption2)
+    }
+    private func pill(_ k: String, _ v: String) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 3) {
+            Text(k.uppercased()).foregroundStyle(p.textMuted.opacity(0.7))
+            Text(v).foregroundStyle(p.textPrimary)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(Capsule().fill(p.accent.opacity(0.10)))
     }
 }
 
