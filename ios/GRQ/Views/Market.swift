@@ -1,15 +1,26 @@
 import SwiftUI
 
-struct MarketView: View {
+/// The Universe — the investable set GRQ may buy, plus the watchlist of candidates.
+/// Member actions (pin / no-fly directives, promote, propose) are mock here; the real
+/// ones hit /api/stocks/directive + /api/universe (member + Face ID — see IOS-PLAN.md).
+struct UniverseView: View {
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var universe: [MarketName] = []
     @State private var watchlist: [MarketName] = []
+    @State private var showPropose = false
+    @State private var proposeSymbol = ""
+    @State private var promoteTarget: MarketName?
+    @State private var showPromote = false
+
+    private var isMember: Bool { auth.currentUser?.role == .member }
 
     var body: some View {
         NavigationStack {
-            GRQScreen(title: "Market", subtitle: "Universe & Watchlist") {
-                section("Universe", universe, term: "universe", caption: "the agent can buy these")
-                section("Watchlist", watchlist, term: "watchlist", caption: "researched, not yet tradable")
+            GRQScreen(title: "Universe", subtitle: "what GRQ may buy") {
+                summaryCard
+                universeSection
+                watchlistSection
             }
         }
         .task {
@@ -17,22 +28,64 @@ struct MarketView: View {
             universe = m.universe
             watchlist = m.watchlist
         }
+        .alert("Propose a name", isPresented: $showPropose) {
+            TextField("Ticker — e.g. NVDA", text: $proposeSymbol)
+                .textInputAutocapitalization(.characters)
+            Button("Add to watchlist") { addProposed() }
+            Button("Cancel", role: .cancel) { proposeSymbol = "" }
+        } message: {
+            Text("Adds a candidate to the watchlist for the agent to research. It can't be traded until it's promoted into the universe.")
+        }
+        .confirmationDialog("Promote \(promoteTarget?.symbol ?? "") to the universe?",
+                            isPresented: $showPromote, titleVisibility: .visible) {
+            Button("Promote — GRQ may buy it") { promote() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("On the real fund this needs both members plus a liquidity screen.")
+        }
     }
 
-    private func section(_ title: String, _ names: [MarketName], term: String, caption: String) -> some View {
+    // MARK: - Cards
+
+    private var summaryCard: some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("\(universe.count)")
+                        .font(.system(size: 40, weight: .black, design: .rounded))
+                        .foregroundStyle(Theme.brandGradient)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("INVESTABLE NAMES").font(.caption2.weight(.bold)).foregroundStyle(p.textMuted)
+                        Text("the agent only ever trades these").font(.caption).foregroundStyle(p.textMuted)
+                    }
+                    Spacer()
+                }
+                if isMember {
+                    Button { proposeSymbol = ""; showPropose = true } label: {
+                        Label("Propose a name", systemImage: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(p.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var universeSection: some View {
         let p = Theme.palette(scheme)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                TermLink(slug: term, label: title).font(.caption.weight(.bold))
-                Text("· \(caption)").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+                TermLink(slug: "universe", label: "Universe").font(.caption.weight(.bold))
+                Text("· GRQ's investable set").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
                 Spacer()
             }
             Card {
                 VStack(spacing: 0) {
-                    ForEach(Array(names.enumerated()), id: \.element.id) { idx, n in
-                        NavigationLink { StockDetailView(symbol: n.symbol) } label: { row(n) }
-                            .buttonStyle(.plain)
-                        if idx < names.count - 1 {
+                    ForEach(Array(universe.enumerated()), id: \.element.id) { idx, n in
+                        universeRow(n)
+                        if idx < universe.count - 1 {
                             Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
                         }
                     }
@@ -41,29 +94,103 @@ struct MarketView: View {
         }
     }
 
-    private func row(_ n: MarketName) -> some View {
+    private var watchlistSection: some View {
         let p = Theme.palette(scheme)
-        return VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 12) {
-                avatar(n.symbol, p)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(n.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
-                    Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
-                }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                TermLink(slug: "watchlist", label: "Watchlist").font(.caption.weight(.bold))
+                Text("· candidates, not yet tradable").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
                 Spacer()
+            }
+            Card {
+                VStack(spacing: 0) {
+                    if watchlist.isEmpty {
+                        Text("No candidates. Propose one above.")
+                            .font(.subheadline).foregroundStyle(p.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ForEach(Array(watchlist.enumerated()), id: \.element.id) { idx, n in
+                            watchRow(n)
+                            if idx < watchlist.count - 1 {
+                                Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Rows
+
+    private func universeRow(_ n: MarketName) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 12) {
+            NavigationLink { StockDetailView(symbol: n.symbol) } label: { nameBlock(n) }
+                .buttonStyle(.plain)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                MoneyText(cents: n.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                BpsBadge(bps: n.dayChangeBps).font(.caption)
+            }
+            if isMember { directiveControls(n) }
+        }
+        .opacity(n.directive == .noFly ? 0.5 : 1)
+    }
+
+    private func watchRow(_ n: MarketName) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 12) {
+            NavigationLink { StockDetailView(symbol: n.symbol) } label: { nameBlock(n) }
+                .buttonStyle(.plain)
+            Spacer(minLength: 8)
+            if n.lastCents > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
                     MoneyText(cents: n.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                     BpsBadge(bps: n.dayChangeBps).font(.caption)
                 }
-                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(p.textMuted.opacity(0.4))
             }
-            HStack(spacing: 8) {
-                if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
-                Spacer()
+            if isMember {
+                Button { promoteTarget = n; showPromote = true } label: {
+                    Text("Promote").font(.caption.weight(.bold))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(p.accent.opacity(0.15)))
+                        .foregroundStyle(p.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func nameBlock(_ n: MarketName) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 12) {
+            avatar(n.symbol, p)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(n.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                    if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
+                }
+                Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
                 if let s = n.signals { SignalStrip(signals: s) }
             }
         }
-        .contentShape(Rectangle())
+    }
+
+    private func directiveControls(_ n: MarketName) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 14) {
+            Button { toggleDirective(n, .pin) } label: {
+                Image(systemName: n.directive == .pin ? "star.fill" : "star")
+                    .foregroundStyle(n.directive == .pin ? p.accent : p.textMuted.opacity(0.45))
+            }
+            Button { toggleDirective(n, .noFly) } label: {
+                Image(systemName: "nosign")
+                    .foregroundStyle(n.directive == .noFly ? p.neg : p.textMuted.opacity(0.45))
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.subheadline)
     }
 
     private func avatar(_ symbol: String, _ p: Palette) -> some View {
@@ -81,5 +208,29 @@ struct MarketView: View {
         case .avoid, .sell, .trim: return .red
         default: return .dim
         }
+    }
+
+    // MARK: - Actions (mock; real ones are member + Face ID gated server-side)
+
+    private func toggleDirective(_ n: MarketName, _ d: Directive) {
+        guard let i = universe.firstIndex(where: { $0.symbol == n.symbol }) else { return }
+        universe[i].directive = (universe[i].directive == d) ? nil : d
+    }
+
+    private func promote() {
+        guard let t = promoteTarget, let i = watchlist.firstIndex(where: { $0.symbol == t.symbol }) else { return }
+        watchlist.remove(at: i)
+        universe.append(MarketName(symbol: t.symbol, name: t.name, lastCents: t.lastCents,
+                                   dayChangeBps: t.dayChangeBps, inUniverse: true,
+                                   agentCall: t.agentCall, directive: nil, signals: t.signals))
+        promoteTarget = nil
+    }
+
+    private func addProposed() {
+        let sym = proposeSymbol.trimmingCharacters(in: .whitespaces).uppercased()
+        proposeSymbol = ""
+        guard !sym.isEmpty, !(universe + watchlist).contains(where: { $0.symbol == sym }) else { return }
+        watchlist.append(MarketName(symbol: sym, name: sym, lastCents: 0, dayChangeBps: 0,
+                                    inUniverse: false, agentCall: nil, directive: nil, signals: nil))
     }
 }

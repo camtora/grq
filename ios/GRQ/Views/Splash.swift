@@ -6,20 +6,21 @@ struct SplashView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
     @State private var showWelcome = false
+    @State private var hintPulse = false
 
     var body: some View {
         let p = Theme.palette(scheme)
         ZStack {
             p.bodyBg.ignoresSafeArea()
 
-            // Full-page money rain — the hero.
+            // Full-page money rain — keeps falling until tapped.
             if reduceMotion {
                 Text("💵").font(.system(size: 96)).opacity(0.25)
             } else {
                 MoneyRainView().ignoresSafeArea()
             }
 
-            // A soft scrim so the wordmark + greeting stay legible over the rain.
+            // Soft scrim so the wordmark + greeting stay legible over the rain.
             RadialGradient(colors: [p.bodyBg.opacity(0.88), p.bodyBg.opacity(0.0)],
                            center: .center, startRadius: 6, endRadius: 280)
                 .ignoresSafeArea()
@@ -44,12 +45,30 @@ struct SplashView: View {
                 }
             }
             .padding(32)
+
+            // Tap hint — pulses to show the splash is dismissed by tapping.
+            VStack {
+                Spacer()
+                if showWelcome {
+                    Text("Tap to continue")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(p.textMuted)
+                        .opacity(hintPulse ? 1 : 0.35)
+                        .padding(.bottom, 44)
+                        .transition(.opacity)
+                }
+            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { done() }       // stays up until tapped
         .task {
-            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            try? await Task.sleep(nanoseconds: 800_000_000)
             withAnimation(.easeOut(duration: 0.5)) { showWelcome = true }
-            try? await Task.sleep(nanoseconds: 1_700_000_000)
-            done()
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                hintPulse = true
+            }
         }
     }
 

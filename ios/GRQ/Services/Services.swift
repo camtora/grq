@@ -119,7 +119,7 @@ enum MockData {
 
     static let universe: [MarketName] = [
         MarketName(symbol: "SHOP.TO", name: "Shopify", lastCents: 11_800, dayChangeBps: 210, inUniverse: true,
-                   agentCall: .hold, signals: Signals(recommendationPct: 61, trend: "uptrend", rsi: 58, macd: "rising")),
+                   agentCall: .hold, directive: .pin, signals: Signals(recommendationPct: 61, trend: "uptrend", rsi: 58, macd: "rising")),
         MarketName(symbol: "ENB.TO", name: "Enbridge", lastCents: 6_010, dayChangeBps: 90, inUniverse: true,
                    agentCall: .accumulate, signals: Signals(recommendationPct: 55, trend: "uptrend", rsi: 49, macd: "flat")),
         MarketName(symbol: "XIC.TO", name: "iShares Core S&P/TSX", lastCents: 3_340, dayChangeBps: 40, inUniverse: true,

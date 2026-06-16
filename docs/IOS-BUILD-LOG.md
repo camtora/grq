@@ -89,14 +89,27 @@ The project **bundles `../shared/content/*.json` + `tokens.json` as resources** 
 
 ## State of play
 
-- **Builds & runs in mock mode** — splash → tap Cam/Graham → themed 5-tab app on mock data;
-  tappable glossary terms; kill-switch confirm. No backend, no Google SDK.
-- **Verified (from Linux):** all JSON valid; `contract.ts` is standard zod; `project.pbxproj`
-  structurally sound (58/58 object refs resolve, 13 sources == files on disk, shared
-  resource paths resolve).
-- **NOT verified:** the Swift does not compile here — **no iOS SDK on the Linux box.** First
-  real build happens on Cam's Mac. If Xcode flags anything, it's most likely a small
-  type-inference nit, not structural.
+- **Builds and RUNS on a real iPhone (2026-06-15)** — the blind-authored SwiftUI compiled and
+  ran on device on the first Mac build. A flashy pass is applied: elevated glass cards, hero
+  NAV, gradient area-chart Tape, ambient glow, and one bold gradient header per screen via
+  `GRQScreen` (system bar hidden → no doubled headers). The splash money-rain replays on
+  **every open** (cold launch + return from background, via `scenePhase`).
+- **App icon added** — `AppIcon.appiconset/AppIcon-1024.png` (teal "GRQ" wordmark, opaque /
+  no alpha). Fixes the TestFlight rejections (`CFBundleIconName` missing + no 120px icon) and
+  the blank home-screen icon. `Assets.xcassets` is a folder reference, so the icon is picked
+  up on the next archive with **no project-file change** — Xcode generates all sizes from the
+  single 1024.
+- **Verified (from Linux):** JSON valid; `project.pbxproj` sound (object refs resolve, 13
+  sources == files on disk, shared resources resolve). Swift can't be compiled here (no iOS
+  SDK) — that's the Mac's job, now proven on device.
+- **Universe screen + tap-to-dismiss splash (2026-06-15):** the second tab is now **Universe** —
+  the investable set with GRQ's call + signal strip, **member directives (pin / no-fly)**,
+  **promote-from-watchlist**, and **propose-a-name** (all mock; the real ones hit
+  `/api/stocks/directive` + `/api/universe`, member + Face ID). `Directive` added to
+  `shared/contract.ts` (mirrors `SymbolDirective`). The splash is now **full-page money rain on
+  every open that stays until tapped** (no auto-advance).
+- **Still pending:** TestFlight re-archive + upload (with the icon); push notifications (P3,
+  not built); the live-data web wiring (below) + a `/api/quotes` poll for a live price ticker.
 
 ## Pending — needs Cam's go (edits to existing files)
 

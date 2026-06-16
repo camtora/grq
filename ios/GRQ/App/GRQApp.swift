@@ -63,7 +63,7 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }
-            MarketView().tabItem { Label("Market", systemImage: "chart.line.uptrend.xyaxis") }
+            UniverseView().tabItem { Label("Universe", systemImage: "square.grid.2x2.fill") }
             PortfolioView().tabItem { Label("Portfolio", systemImage: "briefcase.fill") }
             IdeasView().tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
             SettingsView().tabItem { Label("Settings", systemImage: "gearshape.fill") }

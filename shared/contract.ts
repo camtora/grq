@@ -22,6 +22,8 @@ export const Role = z.enum(["member", "viewer"]);
 export const Theme = z.enum(["light", "dark"]);
 /** The agent's own call on a name (glossary: "the-agent's-call"). */
 export const AgentCall = z.enum(["buy", "accumulate", "hold", "watch", "trim", "avoid", "sell"]);
+/** Member directive on a name (mirrors prisma SymbolDirective / DirectiveType). */
+export const Directive = z.enum(["pin", "no_fly"]);
 
 /* ---------- auth ---------- */
 export const MeResponse = z.object({
@@ -96,6 +98,7 @@ export const MarketName = z.object({
   dayChangeBps: z.number().int(),
   inUniverse: z.boolean(), // false = watchlist candidate (not yet tradable)
   agentCall: AgentCall.nullable(),
+  directive: Directive.nullable(), // member pin / no-fly
   signals: Signals.nullable(),
 });
 export const MarketResponse = z.object({
@@ -164,6 +167,7 @@ export type Portfolio = z.infer<typeof Portfolio>;
 export type FundSettings = z.infer<typeof FundSettings>;
 export type Signals = z.infer<typeof Signals>;
 export type MarketName = z.infer<typeof MarketName>;
+export type Directive = z.infer<typeof Directive>;
 export type MarketResponse = z.infer<typeof MarketResponse>;
 export type PriceTarget = z.infer<typeof PriceTarget>;
 export type Idea = z.infer<typeof Idea>;

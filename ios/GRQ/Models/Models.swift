@@ -9,6 +9,10 @@ enum RiskLevel: String, Codable { case CAUTIOUS, BALANCED, AGGRESSIVE
 enum Role: String, Codable { case member, viewer }
 enum AppTheme: String, Codable { case light, dark }
 enum AgentCall: String, Codable { case buy, accumulate, hold, watch, trim, avoid, sell }
+enum Directive: String, Codable {
+    case pin, noFly = "no_fly"
+    var label: String { self == .pin ? "Pinned" : "No-fly" }
+}
 enum Edition: String, Codable { case morning, midday, evening, weekend
     var label: String { rawValue.capitalized }
 }
@@ -80,6 +84,7 @@ struct MarketName: Codable, Identifiable {
     let dayChangeBps: Int
     let inUniverse: Bool
     let agentCall: AgentCall?
+    var directive: Directive? = nil
     let signals: Signals?
     var id: String { symbol }
 }
