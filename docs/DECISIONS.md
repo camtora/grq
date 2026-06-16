@@ -196,5 +196,9 @@ with no page/signals/call. **Decisions (with Cam):**
   decoupled from the focus table. Candidate cap lifted 20 → 200 (a guard, not a budget).
 **Consequences:** `/stocks`→`/universe`, `/ideas`→`/market`, `/research`→`/market/research`,
 `/activity`→`/journal`. Verified live end-to-end. The agent loop behaviour is unchanged (the
-focus tool was renamed, same logic). Deferred: physical table rename off `@@map`; the AAPL
-data artifact (a US name sitting as ACTIVE) wants cleanup.
+focus tool was renamed, same logic). Deferred: physical table rename off `@@map`. (Investigated
+the suspected "AAPL artifact" — it's **not** one: AAPL is the **AAPL.TO CDR**, a real
+CAD-denominated Apple depositary receipt on a Canadian exchange, correctly ACTIVE. CDRs
+(`.TO`/`.NE`) are a path to trade US megacaps in CAD *without* multi-currency — a future
+product call; NVDA/COST currently resolved to their USD listings, so they sit as research-only
+candidates, but their CDRs would be promotable.)
