@@ -391,3 +391,38 @@ export async function fmpInstitutional(symbol: string): Promise<FmpInstitutional
   }
   return null;
 }
+
+// --- Market indices + commodities strip (Today's "live until close" ticker) -----
+// Index levels / commodity prices are reference figures, not fund money — kept as
+// plain numbers (not cents). FMP batch-quote-short serves all of these.
+export type IndexQuote = { symbol: string; label: string; price: number; change: number; changePct: number };
+
+const INDEX_DEFS: { symbol: string; label: string }[] = [
+  { symbol: "^GSPTSE", label: "TSX Comp" },
+  { symbol: "^GSPC", label: "S&P 500" },
+  { symbol: "^DJI", label: "DJIA" },
+  { symbol: "^IXIC", label: "NASDAQ" },
+  { symbol: "GCUSD", label: "Gold (USD)" },
+  { symbol: "CLUSD", label: "Oil (USD)" },
+];
+
+export async function fmpIndices(): Promise<IndexQuote[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(
+    `batch-quote-short?symbols=${encodeURIComponent(INDEX_DEFS.map((d) => d.symbol).join(","))}`,
+  );
+  const by = new Map<string, { price: number; change: number }>();
+  if (Array.isArray(raw)) {
+    for (const q of raw) {
+      const s = String(q.symbol ?? "");
+      const price = typeof q.price === "number" ? q.price : null;
+      const change = typeof q.change === "number" ? q.change : 0;
+      if (s && price !== null) by.set(s, { price, change });
+    }
+  }
+  return INDEX_DEFS.flatMap((d) => {
+    const v = by.get(d.symbol);
+    if (!v) return [];
+    const prev = v.price - v.change;
+    return [{ symbol: d.symbol, label: d.label, price: v.price, change: v.change, changePct: prev !== 0 ? (v.change / prev) * 100 : 0 }];
+  });
+}

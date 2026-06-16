@@ -10,7 +10,8 @@ import Sparkline from "@/components/Sparkline";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpNews, fmpGainers } from "@/lib/fmp";
+import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile } from "@/lib/fmp";
+import MarketIndices from "@/components/MarketIndices";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
 
@@ -187,7 +188,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch, ideaRows, marketNews, marketGainers] =
+  const [pf, plan, eod, weekly, entries, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, latestPlan, latestResearch, ideaRows, marketNews, marketGainers, marketIndices] =
     await Promise.all([
       getPortfolio(),
       prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } } }),
@@ -216,9 +217,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         orderBy: { at: "desc" },
         take: 40,
       }),
-      fmpEnabled() ? fmpNews(6).catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpNews(12).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpIndices().catch(() => []) : Promise.resolve([]),
     ]);
+  // Per-mover detail for the expandable whole-market movers (best-effort).
+  const gainerProfiles = await Promise.all(
+    marketGainers.map((g) => (fmpEnabled() ? fmpProfile(g.symbol).catch(() => null) : Promise.resolve(null))),
+  );
+  const profileBy = new Map(marketGainers.map((g, i) => [g.symbol, gainerProfiles[i]]));
   const funFact = funFactOfDay();
   const timeline = entries.filter((e) => e.id !== plan?.id);
 
@@ -369,6 +376,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <p className="mt-3 border-t border-teal-400/10 pt-3 text-sm italic text-teal-200/60">{dailyQuote(anchor)}</p>
       </header>
 
+      {/* Market indices — live until the close (the screenshot strip). */}
+      <MarketIndices initial={marketIndices} />
+
       {/* Headlines — today's news, at the top of the page (Graham 2026-06-16) */}
       {marketNews.length > 0 && (
         <section className="mb-6">
@@ -398,6 +408,31 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               </a>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Market pulse — more headlines, 3×3 (moved from Discover; Cam 2026-06-16) */}
+      {marketNews.length > 3 && (
+        <section className="mb-6">
+          <SectionTitle>Market pulse · more headlines</SectionTitle>
+          <div className="grid gap-x-6 sm:grid-cols-3">
+            {marketNews.slice(3, 12).map((n, i) => (
+              <a
+                key={i}
+                href={n.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="block border-t border-teal-400/10 py-2 hover:bg-teal-400/[0.03]"
+              >
+                <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
+                <div className="mt-0.5 text-[11px] text-teal-200/40">
+                  {n.publisher}
+                  {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                </div>
+              </a>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-teal-200/40">Latest market headlines via FMP — context, not signals.</p>
         </section>
       )}
 
@@ -501,43 +536,55 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <p className="mt-2 px-1 text-[10px] text-teal-200/40">biggest moves across the {universeRows.length} names we track</p>
       </section>
 
-      {/* Today's biggest movers — the whole market */}
+      {/* Biggest movers + industry breakdown, side by side (Graham 2026-06-16) */}
+      {(marketGainers.length > 0 || sectors.length > 0) && (
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
       {marketGainers.length > 0 && (
-        <section className="mt-8">
+        <section>
           <SectionTitle>Today&apos;s biggest movers · the whole market</SectionTitle>
-          <Card className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <tbody>
-                {marketGainers.map((m) => {
-                  const inUniverse = universeRows.some((u) => u.symbol === m.symbol);
-                  return (
-                    <tr key={m.symbol} className="border-t border-teal-400/10 first:border-t-0">
-                      <td className="px-4 py-2">
-                        {inUniverse ? (
-                          <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
-                            {m.symbol}
-                          </Link>
-                        ) : (
-                          <span className="font-bold text-teal-200">{m.symbol}</span>
-                        )}
-                        <span className="ml-2 text-xs text-teal-200/50">{m.name}</span>
-                        <span className="ml-1 text-[10px] uppercase tracking-wider text-teal-200/30">{m.exchange}</span>
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-teal-100/70">{money(m.priceCents)}</td>
-                      <td className="px-4 py-2 text-right font-semibold tabular-nums text-emerald-400">+{pct(m.changePct, 0)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <Card className="overflow-hidden p-1">
+            {marketGainers.map((m) => {
+              const inUniverse = universeRows.some((u) => u.symbol === m.symbol);
+              const prof = profileBy.get(m.symbol);
+              const cap =
+                prof && prof.marketCap > 0
+                  ? prof.marketCap >= 1e9
+                    ? `$${(prof.marketCap / 1e9).toFixed(0)}B`
+                    : `$${Math.round(prof.marketCap / 1e6)}M`
+                  : null;
+              return (
+                <details key={m.symbol} className="group border-t border-teal-400/10 first:border-t-0">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
+                    <span className="text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
+                    {inUniverse ? (
+                      <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
+                        {m.symbol}
+                      </Link>
+                    ) : (
+                      <span className="font-bold text-teal-200">{m.symbol}</span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{m.name}</span>
+                    <span className="tabular-nums text-teal-100/70">{money(m.priceCents)}</span>
+                    <span className="font-semibold tabular-nums text-emerald-400">+{pct(m.changePct, 0)}</span>
+                  </summary>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2.5 pl-9 text-[11px] text-teal-200/55">
+                    {prof?.sector && <span className="text-teal-200/70">{prof.sector}</span>}
+                    {prof?.industry && <span>{prof.industry}</span>}
+                    {cap && <span>cap {cap}</span>}
+                    {prof?.country && <span>{prof.country}</span>}
+                    <span className="uppercase tracking-wider text-teal-200/30">{m.exchange}</span>
+                    {inUniverse && <span className="text-emerald-300/70">✓ in your universe</span>}
+                    {!prof && <span className="text-teal-200/40">no extra detail available</span>}
+                  </div>
+                </details>
+              );
+            })}
           </Card>
           <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — names we track link through.</p>
         </section>
       )}
-
-      {/* Industry breakdown — how sectors are moving today (Graham 2026-06-16) */}
       {sectors.length > 0 && (
-        <section className="mt-8">
+        <section>
           <SectionTitle>By industry · how sectors are moving</SectionTitle>
           <Card className="overflow-hidden p-1">
             <ul className="divide-y divide-teal-400/10">
@@ -554,6 +601,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </Card>
           <p className="mt-2 px-1 text-[10px] text-teal-200/40">Average move today across the names we track, grouped by sector.</p>
         </section>
+      )}
+      </div>
       )}
 
       {/* Financial-literacy fun fact */}

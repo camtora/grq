@@ -179,6 +179,21 @@ async function maybeScheduledSessions() {
   const m = p.minutesSinceMidnight;
   const dayStart = (await import("./calendar")).startOfEtDay();
 
+  // On-demand hunt refresh — a member hit "refresh" on the Discover tab. Runs the
+  // hunt off-schedule (any time), then clears the flag so it fires once per request.
+  const state = await prisma.agentState.findUnique({ where: { id: 1 } });
+  if (state?.huntRequestedAt) {
+    await prisma.agentState.update({ where: { id: 1 }, data: { huntRequestedAt: null, huntRequestedBy: null } });
+    sessionRunning = true;
+    try {
+      await runDiscoveryHunt();
+      await alert("info", "Hunt refreshed on request", "Fresh under-the-radar names on the Discover tab.");
+    } finally {
+      sessionRunning = false;
+    }
+    return;
+  }
+
   // 9:00–9:30 pre-market research on market days
   if (isMarketDay() && m >= 9 * 60 && m < 9 * 60 + 30) {
     const existing = await prisma.journalEntry.count({

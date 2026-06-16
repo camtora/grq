@@ -40,6 +40,7 @@ enum JournalKind {
   TRADE
   RETRO
   LESSON
+  NOTE // a human note added on a stock page ("The record")
 }
 
 enum ReportKind {
@@ -353,5 +354,9 @@ model AgentState {
   lastTickAt    DateTime?
   lastSessionAt DateTime?
   note          String?
+  // On-demand discovery-hunt refresh: a member sets this from the Discover tab; the
+  // runner's tick picks it up, runs the hunt off-schedule, and clears it.
+  huntRequestedAt DateTime?
+  huntRequestedBy String?
   updatedAt     DateTime  @updatedAt
 }

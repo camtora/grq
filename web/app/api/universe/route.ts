@@ -147,6 +147,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key });
   }
 
+  // ---------- dismiss (a hunt proposal we don't want → RETIRED so it can't resurface) ----------
+  if (action === "dismiss") {
+    if (entry) {
+      if (entry.status !== "RETIRED") {
+        await prisma.universeMember.update({ where: { symbol }, data: { status: "RETIRED" } });
+        invalidateUniverseCache();
+        await journal(symbol, `${who} dismissed ${symbol}`, "Marked RETIRED — out of the hunt and the watchlist; re-add any time.");
+      }
+      return NextResponse.json({ ok: true, status: "RETIRED" });
+    }
+    // A hunt name isn't a UniverseMember yet — record it RETIRED so the hunt's
+    // "already tracked" list skips it and it lands in Retired research.
+    await prisma.universeMember.create({
+      data: {
+        symbol,
+        yahoo: `${bareTicker(symbol)}.TO`,
+        name: typeof body.name === "string" ? body.name.slice(0, 120) : symbol,
+        status: "RETIRED",
+        addedBy: who,
+      },
+    });
+    invalidateUniverseCache();
+    await journal(symbol, `${who} dismissed ${symbol} from the hunt`, "Marked RETIRED — the hunt won't resurface it. Re-add from the watchlist any time.");
+    await sendDiscord("info", `${who} dismissed ${symbol} from the hunt`);
+    return NextResponse.json({ ok: true, status: "RETIRED" });
+  }
+
   if (!entry) return bad(`${symbol} is not tracked — add it first.`, 404);
 
   // ---------- on-demand research ----------
@@ -223,5 +250,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, status: "RETIRED" });
   }
 
-  return bad("action must be add | research | promote | demote | retire.");
+  return bad("action must be add | dismiss | research | promote | demote | retire.");
 }

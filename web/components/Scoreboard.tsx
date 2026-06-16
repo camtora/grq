@@ -6,19 +6,23 @@ export default function Scoreboard({
   rows,
   title = "Source scoreboard",
   emptyText = "No grades yet — the agent grades every cited source in its retros, and trust accrues here.",
+  className,
 }: {
   rows: SourceScore[];
   title?: string;
   emptyText?: string;
+  className?: string;
 }) {
   return (
-    <Card className="p-5">
-      <div className="mb-3 flex items-baseline justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">{title}</span>
-        <span className="text-[10px] uppercase tracking-wider text-teal-200/30">
-          +1 right · −1 misleading · ranked after 3 grades
-        </span>
-      </div>
+    <Card className={`p-5 ${className ?? ""}`}>
+      {title && (
+        <div className="mb-3 flex items-baseline justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">{title}</span>
+          <span className="text-[10px] uppercase tracking-wider text-teal-200/30">
+            +1 right · −1 misleading · ranked after 3 grades
+          </span>
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="text-sm text-teal-200/40">{emptyText}</p>
       ) : (

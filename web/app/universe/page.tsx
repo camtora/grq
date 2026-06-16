@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { activeUniverse, type UniverseRow } from "@/lib/universe";
+import { activeUniverse, allUniverse, type UniverseRow } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
-import { money, pct } from "@/lib/money";
+import { money, pct, fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
-import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { stanceMeta } from "@/lib/stance";
+import RatingBar from "@/components/RatingBar";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import { getSession, displayName } from "@/lib/session";
 import StockFilters from "@/components/StockFilters";
@@ -23,6 +24,7 @@ type Row = UniverseRow & {
   pinnedBy: string | null;
   blocked: boolean;
   journal: number;
+  lastResearchedAt: Date | null;
   mvCents: number;
   upnlCents: number;
   signals: Signals | null;
@@ -31,22 +33,11 @@ type Row = UniverseRow & {
 };
 
 function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendation | null }) {
-  if (stance) {
-    const sm = stanceMeta(stance)!;
-    return (
-      <span className={`text-xs font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
-        {sm.label}
-      </span>
-    );
-  }
-  if (rec) {
-    return (
-      <span className="text-xs text-teal-200/40" title="No agent call yet — technical lean only (an input, not a verdict)">
-        {rec.label} <span className="text-[9px] text-teal-200/30">tech</span>
-      </span>
-    );
-  }
-  return <span className="text-xs text-teal-200/25">—</span>;
+  const m = stance ? stanceMeta(stance) : null;
+  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="GRQ's call" title={`GRQ's call: ${m.blurb}`} />;
+  const sm = rec ? stanceMeta(rec.label) : null;
+  if (sm) return <RatingBar label={sm.label} tone={sm.tone} pos={sm.pos} note="technical lean" title="No GRQ call yet — technical signal only (an input, not a verdict)" />;
+  return <span className="text-xs text-teal-200/25">— no read yet</span>;
 }
 
 function sortActive(rows: Row[]): Row[] {
@@ -74,6 +65,7 @@ function UniverseTable({ rows, isMember, currentUser }: { rows: Row[]; isMember:
             <th className="px-4 py-3 text-right">Position</th>
             <th className="px-4 py-3 text-right">Unrealized</th>
             <th className="px-4 py-3 text-right">Journal</th>
+            <th className="px-4 py-3 text-right">Researched</th>
             {isMember && <th className="px-4 py-3 text-right">Manage</th>}
           </tr>
         </thead>
@@ -126,6 +118,9 @@ function UniverseTable({ rows, isMember, currentUser }: { rows: Row[]; isMember:
               </td>
               <td className="px-4 py-2.5 text-right">{r.held ? <Pnl cents={r.upnlCents} className="text-sm" /> : ""}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-teal-200/50">{r.journal > 0 ? r.journal : ""}</td>
+              <td className="px-4 py-2.5 text-right text-xs tabular-nums text-teal-200/40" title="Last completed research">
+                {r.lastResearchedAt ? fmtWhen(r.lastResearchedAt) : "—"}
+              </td>
               {isMember && (
                 <td className="px-4 py-2.5 text-right">
                   <UniverseActions symbol={r.symbol} status="ACTIVE" pendingBy={null} proposedTier={null} currentUser={currentUser} />
@@ -150,7 +145,24 @@ export default async function Universe() {
   const me = displayName(session);
   const isMember = session?.role === "member";
 
-  const allSyms = active.map((u) => u.symbol);
+  // Demoted shelf — CANDIDATEs that were pulled out of the universe (they carry a
+  // demote journal). Shown below the active table for reference; they're back on
+  // the watchlist and the agent won't buy them (Cam 2026-06-16).
+  const [allRows, demoteJournals] = await Promise.all([
+    allUniverse(),
+    prisma.journalEntry.findMany({
+      where: { kind: "SYSTEM", title: { contains: "demoted" } },
+      orderBy: { at: "desc" },
+      select: { symbol: true, title: true, at: true },
+    }),
+  ]);
+  const demotedBy = new Map<string, { at: Date; by: string }>();
+  for (const j of demoteJournals) {
+    if (j.symbol && !demotedBy.has(j.symbol)) demotedBy.set(j.symbol, { at: j.at, by: j.title.split(" demoted ")[0] ?? "" });
+  }
+  const demoted = allRows.filter((u) => u.status === "CANDIDATE" && demotedBy.has(u.symbol));
+
+  const allSyms = [...active.map((u) => u.symbol), ...demoted.map((u) => u.symbol)];
   const quotes = await getQuotes(allSyms);
 
   const stanceRows = await prisma.journalEntry.findMany({
@@ -168,6 +180,15 @@ export default async function Universe() {
   const dirBy = new Map(directives.map((d) => [d.symbol, d]));
   const jcBy = new Map(journalCounts.map((j) => [j.symbol as string, j._count.id]));
 
+  // When each name was last researched (latest completed research request) — shown
+  // for reference next to the "research now" control.
+  const researchedAgg = await prisma.researchRequest.groupBy({
+    by: ["symbol"],
+    where: { status: "DONE", completedAt: { not: null } },
+    _max: { completedAt: true },
+  });
+  const researchedBy = new Map(researchedAgg.map((r) => [r.symbol, r._max.completedAt]));
+
   const toRow = (u: UniverseRow): Row => {
     const q = quotes.get(u.symbol);
     const p = posBy.get(u.symbol);
@@ -181,6 +202,7 @@ export default async function Universe() {
       pinnedBy: d?.directive === "PINNED" ? d.by : null,
       blocked: d?.directive === "BLOCKED",
       journal: jcBy.get(u.symbol) ?? 0,
+      lastResearchedAt: researchedBy.get(u.symbol) ?? null,
       mvCents: p && q ? p.qty * q.midCents : 0,
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
       signals: sig,
@@ -229,6 +251,40 @@ export default async function Universe() {
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
         <UniverseTable rows={activeRows} isMember={isMember} currentUser={me} />
       </section>
+
+      {demoted.length > 0 && (
+        <section className="mt-8 border-t border-teal-400/10 pt-6">
+          <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Demoted ({demoted.length})</h2>
+          <p className="mb-3 text-xs text-teal-200/40">
+            Pulled out of the universe — back on the watchlist, the agent won&apos;t buy them. Re-promote or retire below.
+          </p>
+          <div className="space-y-2">
+            {demoted.map((u) => {
+              const q = quotes.get(u.symbol);
+              const info = demotedBy.get(u.symbol);
+              return (
+                <Card key={u.symbol} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
+                  <Link href={`/stocks/${u.symbol}`} className="font-semibold text-teal-300 hover:underline">
+                    {u.symbol}
+                  </Link>
+                  <span className="text-sm text-teal-200/60">{u.name}</span>
+                  {q && <span className="text-sm tabular-nums text-teal-100/70">{money(q.midCents, u.currency)}</span>}
+                  {info && (
+                    <span className="text-xs text-teal-200/40">
+                      demoted{info.by ? ` by ${info.by}` : ""} · {fmtWhen(info.at)}
+                    </span>
+                  )}
+                  {isMember && (
+                    <div className="ml-auto">
+                      <UniverseActions symbol={u.symbol} status="CANDIDATE" pendingBy={u.promotionRequestedBy} proposedTier={u.proposedTier} currentUser={me} />
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <p className="mt-6 text-xs text-teal-200/40">
         <span className="font-semibold text-teal-200/60">Signals</span> (hover for detail):{" "}

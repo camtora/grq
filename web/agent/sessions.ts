@@ -100,7 +100,7 @@ You are hunting for stocks Cam & Graham have NOT heard of: under-covered, smalle
 
 We already track these — do NOT re-suggest them: ${have || "(none)"}.
 
-Use WebSearch (and WebFetch for promising leads) to find 3–6 genuinely interesting candidates: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on.
+Use WebSearch (and WebFetch for promising leads) to find 8–12 genuinely interesting candidates: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on.
 
 For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
 - symbol = the bare ticker (e.g. "PRL")
@@ -116,7 +116,7 @@ For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journ
 Lead with WHY it matters, not just what the company is. These are PROPOSALS — you cannot add them to the universe; Cam & Graham decide what to research further. Be honest: flag the lottery tickets vs. the real businesses.
 
 Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. These are PROPOSALS; you cannot add them to the universe — Cam & Graham decide what to research further.`;
-  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
+  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
 }
 
 /** Smart-money scan (2026-06-14) — what notable, disclosure-required public

@@ -8,6 +8,7 @@ import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
+import AddNote from "@/components/AddNote";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta } from "@/lib/stance";
@@ -329,8 +330,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
-      {peers.length > 1 && (
-        <Card className="mb-6 p-5">
+      <section className="mb-6 grid items-start gap-6 lg:grid-cols-3">
+        {peers.length > 1 && (
+        <Card className="p-5 lg:col-span-2">
           <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Valuation vs peers</div>
           <table className="w-full text-sm">
             <thead>
@@ -370,7 +372,34 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               : "P/E and P/B against the company's closest peers (FMP)."}
           </p>
         </Card>
-      )}
+        )}
+        <div className={`space-y-2 ${peers.length > 1 ? "" : "lg:col-span-3"}`}>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
+          </h2>
+          <Card className="p-4">
+            {!signals ? (
+              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {signals.families.map((f) => (
+                  <li key={f.family} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
+                        {f.family}
+                      </Term>
+                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
+                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
+                  </li>
+                ))}
+                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
+              </ul>
+            )}
+          </Card>
+        </div>
+      </section>
 
       {position && quote && (
         <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -408,47 +437,44 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
-      {/* Key data panels, side by side under the price chart (signals · scoreboard · earnings · analyst). */}
-      <section className="mb-6 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
-          </h2>
-          <Card className="p-4">
-            {!signals ? (
-              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {signals.families.map((f) => (
-                  <li key={f.family} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
-                        {f.family}
-                      </Term>
-                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
-                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
-                  </li>
-                ))}
-                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
-              </ul>
-            )}
-          </Card>
+      {/* Key data panels under the chart — institutional · scoreboard · earnings · analyst, equal height. */}
+      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {institutional && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+            </h2>
+            <Card className="p-4 text-sm flex-1">
+              <div className="flex items-baseline justify-between">
+                <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
+                <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {institutional.investorsHoldingChange >= 0 ? "+" : ""}
+                  {institutional.investorsHoldingChange} QoQ
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] text-teal-200/40">
+                From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
+              </p>
+            </Card>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
+          <Scoreboard
+            rows={symbolScores}
+            title=""
+            emptyText="No graded calls on this name yet — retros fill this in."
+            className="flex-1"
+          />
         </div>
 
-        <Scoreboard
-          rows={symbolScores}
-          title={`Scoreboard — ${symbol}`}
-          emptyText="No graded calls on this name yet — retros fill this in."
-        />
-
         {earnings && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
               Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
             </h2>
-            <Card className="p-4 text-sm">
+            <Card className="p-4 text-sm flex-1">
               <div className="flex items-baseline justify-between">
                 <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
                 <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
@@ -472,9 +498,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         )}
 
         {grades && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
-            <Card className="p-4 text-sm">
+            <Card className="p-4 text-sm flex-1">
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="font-bold text-teal-100/90">{grades.consensus}</span>
                 <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
@@ -511,19 +537,22 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       )}
 
       <div className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Agent intelligence ({journal.length})
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              The record ({journal.length})
+            </h2>
+            {isMember && <AddNote symbol={symbol} />}
+          </div>
           {journal.length === 0 ? (
             <Card className="p-6 text-sm text-teal-200/40">
-              The agent hasn&rsquo;t written anything about {symbol} yet — entries appear here
-              the moment it researches, decides, trades, or retros this name.
+              Nothing on the record yet — the agent&rsquo;s research, decisions, and trades on {symbol} land here,
+              alongside any notes you add.
             </Card>
           ) : (
             journal.map((j) => (
               <Card key={j.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Chip tone={j.kind === "TRADE" ? "green" : j.kind === "LESSON" ? "teal" : "dim"}>{j.kind}</Chip>
+                  <Chip tone={j.kind === "TRADE" ? "green" : j.kind === "NOTE" || j.kind === "LESSON" ? "teal" : "dim"}>{j.kind}</Chip>
                   <span className="text-sm font-medium text-teal-50">{j.title}</span>
                   <span className="ml-auto text-xs text-teal-200/40">
                     {fmtWhen(j.at)} · {j.agentVersion}
@@ -560,26 +589,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </ul>
             )}
           </Card>
-
-          {institutional && (
-            <>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-                Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
-              </h2>
-              <Card className="p-4 text-sm">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
-                  <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {institutional.investorsHoldingChange >= 0 ? "+" : ""}
-                    {institutional.investorsHoldingChange} QoQ
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px] text-teal-200/40">
-                  From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
-                </p>
-              </Card>
-            </>
-          )}
 
           {news.length > 0 && (
             <>

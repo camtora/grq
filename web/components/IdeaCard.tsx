@@ -1,27 +1,36 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
-import { allUniverse } from "@/lib/universe";
-import { getQuotes } from "@/lib/broker/quotes";
-import { getSession } from "@/lib/session";
-import { computeSignals, overallSignal, type Recommendation } from "@/agent/signals";
-import { money, pct, signedMoney, fmtWhen } from "@/lib/money";
-import { Card, PageHeader, Chip } from "@/components/ui";
-import StockLogo from "@/components/StockLogo";
+import { money, pct, signedMoney } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import type { Recommendation } from "@/agent/signals";
+import { Card } from "@/components/ui";
+import StockLogo from "@/components/StockLogo";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Term from "@/components/Term";
-import MarketTabs from "@/components/MarketTabs";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
-import RefreshHuntButton from "@/components/RefreshHuntButton";
-import DismissButton from "@/components/DismissButton";
 
-export const dynamic = "force-dynamic";
+// The "researched idea" card — GRQ's call + targets + the dossier body. Shared by
+// the Discover tab (the hunt + the agent's ideas) AND the Watchlist (a row expands
+// into this — Cam 2026-06-16). `compact` is the small grid tile; the default is the
+// full two-column card.
+export type Idea = {
+  sym: string;
+  name: string;
+  logoUrl: string | null;
+  currency: string | null;
+  cur: number | null;
+  near: number | null;
+  far: number | null;
+  nearDays: number | null;
+  confidence: number | null;
+  rec: Recommendation | null;
+  stance: string | null;
+  body: string;
+  sourcesJson: string | null;
+  obscurity: number;
+  watch: WatchState;
+};
 
-// Household names get deprioritised — "stocks you should look at" should lead
-// with names you do not already know (candidates / mid-caps over the big banks).
-const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
-
-function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
+export function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   if (!sourcesJson) return null;
   let sources: string[] = [];
   try {
@@ -41,25 +50,7 @@ function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   );
 }
 
-type Idea = {
-  sym: string;
-  name: string;
-  logoUrl: string | null;
-  currency: string | null;
-  cur: number | null;
-  near: number | null;
-  far: number | null;
-  nearDays: number | null;
-  confidence: number | null;
-  rec: Recommendation | null;
-  stance: string | null;
-  body: string;
-  sourcesJson: string | null;
-  obscurity: number;
-  watch: WatchState;
-};
-
-function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: boolean; compact?: boolean }) {
+export default function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: boolean; compact?: boolean }) {
   const sm = stanceMeta(idea.stance);
   if (compact) {
     return (
@@ -186,117 +177,5 @@ function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: b
         </div>
       </div>
     </Card>
-  );
-}
-
-export default async function Market() {
-  const session = await getSession();
-  const isMember = session?.role === "member";
-
-  const universe = await allUniverse();
-  const uBy = new Map(universe.map((u) => [u.symbol, u]));
-  const statusBy = new Map(universe.map((u) => [u.symbol, u.status]));
-  const watchOf = (sym: string): WatchState => {
-    const s = statusBy.get(sym);
-    return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
-  };
-
-  const [huntRaw, smartMoney] = await Promise.all([
-    prisma.journalEntry.findMany({
-      where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
-      orderBy: { at: "desc" },
-      take: 24,
-    }),
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
-  ]);
-  const huntSeen = new Set<string>();
-  const huntFinds = huntRaw
-    .filter((d) => {
-      if (!d.symbol || huntSeen.has(d.symbol)) return false;
-      huntSeen.add(d.symbol);
-      return true;
-    })
-    .slice(0, 12);
-
-  // The hunt names render through the IdeaCard (compact); smart money is a roundup,
-  // styled apart.
-  const quotes = await getQuotes(huntFinds.map((d) => d.symbol as string));
-  const toIdea = async (d: (typeof huntFinds)[number]): Promise<Idea> => {
-    const sym = d.symbol as string;
-    const u = uBy.get(sym);
-    const cur = quotes.get(sym)?.midCents ?? null;
-    const sig = await computeSignals(sym).catch(() => null);
-    const tier = u?.tier ?? null;
-    return {
-      sym,
-      name: u?.name ?? sym,
-      logoUrl: u?.logoUrl ?? null,
-      currency: u?.currency ?? null,
-      cur,
-      near: cur && d.targetNearCents != null ? (d.targetNearCents - cur) / cur : null,
-      far: cur && d.targetFarCents != null ? (d.targetFarCents - cur) / cur : null,
-      nearDays: d.targetNearDays ?? null,
-      confidence: d.confidence,
-      rec: sig ? overallSignal(sig) : null,
-      stance: d.stance,
-      body: d.body,
-      sourcesJson: d.sourcesJson,
-      obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
-      watch: watchOf(sym),
-    };
-  };
-  const huntIdeas: Idea[] = await Promise.all(huntFinds.map(toIdea));
-
-  return (
-    <main>
-      <PageHeader title="Discover" sub="The agent's hunt for under-the-radar names, and what notable public portfolios are buying." />
-      <MarketTabs />
-
-      {smartMoney && (
-        <Card className="mb-8 p-5">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <Chip tone="dim">smart money</Chip>
-            <span className="text-sm font-medium text-teal-50">{smartMoney.title}</span>
-            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(smartMoney.at)}</span>
-          </div>
-          <CollapsibleMd text={smartMoney.body}>
-            <SourceChips sourcesJson={smartMoney.sourcesJson} />
-          </CollapsibleMd>
-          <p className="mt-2 text-[11px] text-teal-200/40">What notable public portfolios (congress, funds, insiders) are buying — colour, not gospel; disclosures lag.</p>
-        </Card>
-      )}
-
-      {huntIdeas.length > 0 && (
-        <section className="mb-8">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Chip tone="teal">the hunt</Chip>
-            <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — earlier-stage finds, often before a price target</span>
-            {isMember && (
-              <span className="ml-auto">
-                <RefreshHuntButton />
-              </span>
-            )}
-          </div>
-          <div className="grid items-start gap-4 sm:grid-cols-2">
-            {huntIdeas.map((idea) => (
-              <div key={idea.sym} className="flex flex-col gap-1.5">
-                <IdeaCard idea={idea} isMember={isMember} compact />
-                {isMember && (
-                  <div className="flex justify-end px-1">
-                    <DismissButton symbol={idea.sym} name={idea.name} />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like, or dismiss the ones you don&apos;t.</p>
-        </section>
-      )}
-
-      <p className="mt-4 text-xs text-teal-200/40">
-        The agent surfaces ideas; it does not auto-trade anything outside the guardrailed universe. Targets are the agent&apos;s
-        hypotheses, not promises — a track record builds as they resolve.
-      </p>
-    </main>
   );
 }

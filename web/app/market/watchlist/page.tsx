@@ -12,6 +12,7 @@ import RatingBar from "@/components/RatingBar";
 import MarketTabs from "@/components/MarketTabs";
 import AddTicker from "@/components/AddTicker";
 import UniverseActions from "@/components/UniverseActions";
+import IdeaCard, { type Idea } from "@/components/IdeaCard";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ type Row = UniverseRow & {
   stance: string | null;
   pinnedBy: string | null;
   journal: number;
+  idea: Idea; // the researched-ideas card the row expands into
 };
 
 export default async function Watchlist() {
@@ -69,20 +71,52 @@ export default async function Watchlist() {
   });
   const jcBy = new Map(jc.map((j) => [j.symbol as string, j._count.id]));
 
+  // Latest dossier per candidate — body + targets + sources feed the expandable card.
+  const dossiers = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: candidates.map((c) => c.symbol) } },
+    orderBy: { at: "desc" },
+  });
+  const dossierBy = new Map<string, (typeof dossiers)[number]>();
+  for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
+
   const rows: Row[] = candidates
     .map((c, i) => {
       const q = quotes.get(c.symbol);
       const sig = sigList[i];
       const d = dirBy.get(c.symbol);
+      const doss = dossierBy.get(c.symbol);
+      const cur = q?.midCents ?? null;
+      const rec = sig ? overallSignal(sig) : null;
+      const stance = stanceBy.get(c.symbol) ?? null;
+      const idea: Idea = {
+        sym: c.symbol,
+        name: c.name,
+        logoUrl: c.logoUrl,
+        currency: c.currency,
+        cur,
+        near: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
+        far: cur && doss?.targetFarCents != null ? (doss.targetFarCents - cur) / cur : null,
+        nearDays: doss?.targetNearDays ?? null,
+        confidence: doss?.confidence ?? null,
+        rec,
+        stance,
+        body:
+          doss?.body ??
+          "No dossier filed yet — GRQ writes the business, the bull and bear case, and a verdict here once it researches this name.",
+        sourcesJson: doss?.sourcesJson ?? null,
+        obscurity: 0,
+        watch: "watching",
+      };
       return {
         ...c,
         lastCents: q?.midCents ?? null,
         dayBps: q?.dayChangeBps ?? null,
         signals: sig,
-        rec: sig ? overallSignal(sig) : null,
-        stance: stanceBy.get(c.symbol) ?? null,
+        rec,
+        stance,
         pinnedBy: d?.directive === "PINNED" ? d.by : null,
         journal: jcBy.get(c.symbol) ?? 0,
+        idea,
       };
     })
     .sort((a, b) => (a.pinnedBy ? -1 : b.pinnedBy ? 1 : a.symbol.localeCompare(b.symbol)));
@@ -114,7 +148,7 @@ export default async function Watchlist() {
         {rows.length === 0 ? (
           <EmptyState
             title="Nothing on the watchlist"
-            body="Watch a name above, or find one on Browse / Ideas — GRQ starts researching it the moment you do."
+            body="Watch a name above, or find one on Browse / Discover — GRQ starts researching it the moment you do."
           />
         ) : (
           <div className="space-y-3">
@@ -130,6 +164,7 @@ export default async function Watchlist() {
                     <span className="min-w-0 flex-1 truncate text-sm text-teal-100/70">{c.name}</span>
                     {c.currency && c.currency !== "CAD" && <Chip tone="dim">{c.currency}</Chip>}
                     {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
+                    <SignalStrip signals={c.signals} />
                     {c.lastCents !== null && (
                       <span className="text-sm tabular-nums text-teal-100/80">
                         {money(c.lastCents, c.currency)}{" "}
@@ -139,14 +174,8 @@ export default async function Watchlist() {
                     <StanceCell stance={c.stance} rec={c.rec} />
                   </summary>
                   <div className="border-t border-teal-400/10 p-4">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                      <SignalStrip signals={c.signals} />
-                      <span className="ml-auto text-xs text-teal-200/40">
-                        {c.journal > 0 ? `${c.journal} journal` : "no dossier yet"}
-                        {c.addedBy ? ` · added by ${c.addedBy}` : ""}
-                      </span>
-                    </div>
-                    {c.note && <p className="mt-2 text-xs text-teal-200/50">{c.note}</p>}
+                    <IdeaCard idea={c.idea} isMember={isMember} />
+                    {c.note && <p className="mt-3 text-xs text-teal-200/50">Your note: {c.note}</p>}
                     {isMember && (
                       <div className="mt-3">
                         <UniverseActions symbol={c.symbol} status="CANDIDATE" pendingBy={c.promotionRequestedBy} proposedTier={c.proposedTier} currentUser={me} />
