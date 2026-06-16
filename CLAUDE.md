@@ -112,6 +112,14 @@ hides/disables member-only controls and shows a "read-only" badge, but that's
 defense-in-depth — the route guards are the lock. Promote a viewer to member:
 edit `lib/users.ts` (named) or `GRQ_ALLOWED_EMAILS` (anonymous), rebuild web.
 
+**Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
+cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**
+(`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at
+`POST /api/auth/google` for that JWT; `middleware.ts` admits `/api/auth/*` + the
+listed mobile read routes (Bearer present) while keeping chat/explain/quotes
+cookie-only. Members-only on mobile. The GRQ-iOS OAuth client + an nginx
+bypass-location are the remaining human steps before a phone can fetch live.
+
 ## File map
 
 | Path | What |
@@ -131,6 +139,9 @@ edit `lib/users.ts` (named) or `GRQ_ALLOWED_EMAILS` (anonymous), rebuild web.
 | `docs/NEWSPAPER.md` | "The Daily" — Today-as-newspaper: editions by time of day, sections, imagery roadmap |
 | `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` |
 | `web/agent/` | The agent worker (Phase 2): `runner.ts` (orchestrator/tick loop), `validator.ts` (§6 gate), `policy.ts` (hard limits + model IDs), `sessions.ts` (LLM sessions), `tools.ts`, `context.ts`, `signals.ts`, `calendar.ts`, `alerts.ts`, `chat-server.ts` |
+| `web/lib/feed.ts` · `web/lib/auth-jwt.ts` | Mobile API: contract-shaped builders + GRQ-JWT mint/verify. Routes: `web/app/api/{portfolio,market,ideas,today,dossier/[symbol],auth/google,auth/me,auth/dev}` + GET on `settings`. Verify: `web/scripts/verify-mobile-api.ts` |
+| `ios/GRQ/Services/Services.swift` | iOS data layer: `APIClient` (real URLSession GETs, Bearer), `AuthManager` (Keychain token, Google/dev login), `GoogleAuth` stub |
+| `shared/contract.ts` | The one wire-shape source (zod → TS + Swift). Keep in lockstep with `lib/feed.ts` |
 | `web/prisma/schema.prisma` | Data model (int cents everywhere) |
 | `web/prisma/seed.ts` | Destructive sim reset + demo trades |
 | `web/lib/users.ts` | Member list (the app-level allowlist) |

@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+
 @main
 struct GRQApp: App {
     @StateObject private var auth = AuthManager()
@@ -16,6 +20,13 @@ struct GRQApp: App {
                 .preferredColorScheme(theme.colorScheme)
                 .sheet(item: $glossary.entry) { entry in
                     GlossarySheet(entry: entry)
+                }
+                .onOpenURL { url in
+                    // GoogleSignIn completes its flow by reopening the app via the
+                    // reversed-client-id URL scheme; hand the callback to the SDK.
+                    #if canImport(GoogleSignIn)
+                    _ = GIDSignIn.sharedInstance.handle(url)
+                    #endif
                 }
         }
     }

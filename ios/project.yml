@@ -14,6 +14,11 @@ settings:
     # Set your team in Xcode (Signing & Capabilities) — left blank for the repo.
     DEVELOPMENT_TEAM: ""
 
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: "7.1.0"
+
 targets:
   GRQ:
     type: application
@@ -28,14 +33,31 @@ targets:
           - "*.md"
       - path: ../shared/tokens.json
         buildPhase: resources
+    dependencies:
+      - package: GoogleSignIn
+        product: GoogleSignIn
+    # Explicit Info.plist (xcodegen writes GRQ/Info.plist) — needed because the
+    # GoogleSignIn redirect requires a CFBundleURLTypes scheme, which the auto-
+    # generated plist can't express. The launch/orientation keys below reproduce
+    # what GENERATE_INFOPLIST_FILE previously did.
+    info:
+      path: GRQ/Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # GoogleSignIn: the iOS OAuth client id + its reversed-id URL scheme so
+        # Google can redirect back into the app (docs/IOS-PLAN.md).
+        GIDClientID: 848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf.apps.googleusercontent.com
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.googleusercontent.apps.848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.camerontora.grq
         PRODUCT_NAME: GRQ
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"

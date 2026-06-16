@@ -1,177 +1,215 @@
 import SwiftUI
+import Security
+import UIKit
 
-/// Stub auth for the skeleton. Real flow (docs/IOS-PLAN.md): Google Sign-In →
-/// POST /api/auth/google (verified server-side) → GRQ JWT in Keychain, Face ID on
-/// member actions. For now, "sign in" picks a mock member and remembers it.
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+
+// Live data layer for the GRQ app. The app is a thin client: it computes no money
+// and holds no guardrails — it renders the API and posts intents through the same
+// guarded routes the web uses (docs/IOS-PLAN.md). Auth is a GRQ-JWT held in the
+// Keychain; every request carries it as `Authorization: Bearer`.
+
+// MARK: - Keychain (it's a finance app — the token lives in the Keychain, not UserDefaults)
+
+enum Keychain {
+    private static func query(_ key: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: key]
+    }
+
+    static func save(_ key: String, _ value: String) {
+        let data = Data(value.utf8)
+        SecItemDelete(query(key) as CFDictionary)
+        var add = query(key)
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(add as CFDictionary, nil)
+    }
+
+    static func read(_ key: String) -> String? {
+        var q = query(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess,
+              let data = out as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(_ key: String) {
+        SecItemDelete(query(key) as CFDictionary)
+    }
+}
+
+// MARK: - Auth
+
 @MainActor
 final class AuthManager: ObservableObject {
     @Published var currentUser: Me?
+    @Published var authError: String?
+    @Published var signingIn = false
     var isAuthenticated: Bool { currentUser != nil }
-    private let key = "grq.mockMember"
+
+    private static let tokenKey = "grq.token"
 
     init() {
-        if let email = UserDefaults.standard.string(forKey: key) {
-            currentUser = MockData.member(email)
+        // Restore the session: load the token, then validate it by fetching /me.
+        if let token = Keychain.read(Self.tokenKey) {
+            APIClient.shared.token = token
+            Task { await restore() }
         }
     }
 
+    /// Validate the stored token against the server. 401/expired → sign out cleanly.
+    func restore() async {
+        guard APIClient.shared.token != nil else { return }
+        if let me = await APIClient.shared.me() {
+            currentUser = me
+        } else {
+            signOut()
+        }
+    }
+
+    /// Real login — trade a verified Google ID token for a GRQ-JWT. The Google
+    /// step is behind GoogleAuth (SDK added via SPM on the Mac, P0 in IOS-PLAN).
+    func signInWithGoogle() async {
+        authError = nil
+        signingIn = true
+        defer { signingIn = false }
+        do {
+            let idToken = try await GoogleAuth.signIn()
+            await authenticate(path: "auth/google", body: ["idToken": idToken])
+        } catch {
+            authError = error.localizedDescription
+        }
+    }
+
+    /// Dev login — mints a token without Google, for testing before the OAuth
+    /// client exists. Only works when the server has GRQ_DEV_LOGIN=1 (off in prod).
+    /// Wired to the existing "Continue as …" buttons.
     func signIn(_ email: String) {
-        currentUser = MockData.member(email)
-        UserDefaults.standard.set(email, forKey: key)
-        APIClient.shared.token = "mock-token"
+        Task {
+            authError = nil
+            signingIn = true
+            defer { signingIn = false }
+            await authenticate(path: "auth/dev", body: ["email": email])
+        }
+    }
+
+    private func authenticate(path: String, body: [String: String]) async {
+        guard let auth = await APIClient.shared.login(path: path, body: body) else {
+            authError = "Sign-in failed. Use Google, or (testing) ensure the server has GRQ_DEV_LOGIN=1."
+            return
+        }
+        APIClient.shared.token = auth.token
+        Keychain.save(Self.tokenKey, auth.token)
+        currentUser = auth.me
     }
 
     func signOut() {
         currentUser = nil
-        UserDefaults.standard.removeObject(forKey: key)
         APIClient.shared.token = nil
+        Keychain.delete(Self.tokenKey)
     }
 }
 
-/// Bearer-ready client. Live calls return mock data in the skeleton; swap each to a
-/// real `GET /api/*` once the read endpoints land (docs/IOS-PLAN.md).
+// MARK: - API client
+
+struct AuthPayload: Codable { let token: String; let me: Me }
+private struct MarketPayload: Codable { let universe: [MarketName]; let watchlist: [MarketName] }
+
 final class APIClient {
     static let shared = APIClient()
-    var baseURL = "https://grq.camerontora.ca/api"
+
+    // Prod by default; overridable for the simulator via `defaults`-style key so
+    // the app can point at the LAN box before the nginx mobile route is live.
+    var baseURL: String = UserDefaults.standard.string(forKey: "grq.apiBase") ?? "https://grq.camerontora.ca/api"
     var token: String?
 
-    func me() async -> Me { MockData.me }
-    func portfolio() async -> Portfolio { MockData.portfolio }
-    func settings() async -> FundSettings { MockData.settings }
-    func today() async -> Today { MockData.today }
-    func market() async -> (universe: [MarketName], watchlist: [MarketName]) {
-        (MockData.universe, MockData.watchlist)
+    private let decoder = JSONDecoder()
+
+    private func request(_ method: String, _ path: String, body: [String: String]? = nil) -> URLRequest? {
+        guard let url = URL(string: "\(baseURL)/\(path)") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.timeoutInterval = 20
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        }
+        return req
     }
-    func ideas() async -> [Idea] { MockData.ideas }
-    func dossier(_ symbol: String) async -> Dossier { MockData.dossier(symbol) }
+
+    private func send<T: Decodable>(_ req: URLRequest) async -> T? {
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    private func get<T: Decodable>(_ path: String) async -> T? {
+        guard let req = request("GET", path) else { return nil }
+        return await send(req)
+    }
+
+    /// Login POST (Google or dev). Returns token + me, or nil on any non-2xx.
+    func login(path: String, body: [String: String]) async -> AuthPayload? {
+        guard let req = request("POST", path, body: body) else { return nil }
+        return await send(req)
+    }
+
+    // Read endpoints (shared/contract.ts). Optional = "couldn't load" → the view
+    // keeps its spinner rather than showing stale or fake numbers.
+    func me() async -> Me? { await get("auth/me") }
+    func portfolio() async -> Portfolio? { await get("portfolio") }
+    func settings() async -> FundSettings? { await get("fund-settings") }
+    func today() async -> Today? { await get("today") }
+    func ideas() async -> [Idea] { await get("ideas") ?? [] }
+    func dossier(_ symbol: String) async -> Dossier? { await get("dossier/\(symbol)") }
+
+    func market() async -> (universe: [MarketName], watchlist: [MarketName]) {
+        let r: MarketPayload? = await get("market")
+        return (r?.universe ?? [], r?.watchlist ?? [])
+    }
 }
 
-/// Sample data so the UI is real to review. Numbers are internally consistent:
-/// cash + positions = NAV = contributions + total P&L (a small "up" day).
-enum MockData {
-    static func member(_ email: String) -> Me {
-        let isCam = email.lowercased().contains("cameron")
-        return Me(email: email, name: isCam ? "Cam" : "Graham",
-                  role: .member, theme: isCam ? .light : .dark,
-                  totalPnlCents: 6_150, contributionsCents: 300_000)
-    }
-    static var me: Me { member("cameron.tora@gmail.com") }
+// MARK: - Google Sign-In seam
 
-    static let positions: [Position] = [
-        Position(symbol: "SHOP.TO", qty: 8, avgCostCents: 11_500, lastCents: 11_800,
-                 marketValueCents: 94_400, unrealizedPnlCents: 2_400, dayChangeBps: 210, openedAt: "2026-05-02"),
-        Position(symbol: "ENB.TO", qty: 9, avgCostCents: 5_800, lastCents: 6_010,
-                 marketValueCents: 54_090, unrealizedPnlCents: 1_890, dayChangeBps: 90, openedAt: "2026-04-18"),
-        Position(symbol: "XIC.TO", qty: 12, avgCostCents: 3_300, lastCents: 3_340,
-                 marketValueCents: 40_080, unrealizedPnlCents: 480, dayChangeBps: 40, openedAt: "2026-03-30"),
-    ]
-
-    static var portfolio: Portfolio {
-        Portfolio(cashCents: 117_580, positions: positions, positionsCents: 188_570,
-                  navCents: 306_150, contributionsCents: 300_000, totalPnlCents: 6_150,
-                  benchmarkCents: 304_500, feeSpentMonthCents: 320, feeBudgetCentsMonth: 2_000,
-                  riskLevel: .BALANCED, killSwitch: false, killSwitchBy: nil,
-                  quotesAsOf: "2026-06-15T16:00:00Z")
+/// The native Google flow (docs/IOS-PLAN.md). Presents Google Sign-In, returns the
+/// Google ID token (its audience = the GRQ-iOS OAuth client, GIDClientID in
+/// Info.plist) for the backend to verify at POST /api/auth/google. The `canImport`
+/// guard keeps the app compiling even if the SPM package isn't resolved yet.
+enum GoogleAuth {
+    @MainActor
+    static func signIn() async throws -> String {
+        #if canImport(GoogleSignIn)
+        guard let presenter = rootViewController() else {
+            throw NSError(domain: "GRQ", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "No window available to present Google Sign-In."])
+        }
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
+        guard let idToken = result.user.idToken?.tokenString else {
+            throw NSError(domain: "GRQ", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "Google returned no ID token."])
+        }
+        return idToken
+        #else
+        throw NSError(domain: "GRQ", code: -1,
+                      userInfo: [NSLocalizedDescriptionKey: "GoogleSignIn SDK isn't linked — add it via SPM (docs/IOS-PLAN.md). Use a dev login for now."])
+        #endif
     }
 
-    static var settings: FundSettings {
-        FundSettings(riskLevel: .BALANCED, cashFloorBps: 1_000, maxPositionBps: 2_500,
-                     stopLossBps: 800, takeProfitBps: 2_000,
-                     feeBudgetCentsMonth: 2_000, feeSpentMonthCents: 320,
-                     killSwitch: false, killSwitchBy: nil,
-                     soakDaysClean: 3, soakDaysRequired: 28,
-                     soakPaperDaysClean: 0, soakPaperDaysRequired: 14)
-    }
-
-    static let tape: [NavPoint] = [
-        NavPoint(at: "09:30", navCents: 304_330),
-        NavPoint(at: "11:00", navCents: 305_100),
-        NavPoint(at: "13:00", navCents: 304_800),
-        NavPoint(at: "15:00", navCents: 305_900),
-        NavPoint(at: "16:00", navCents: 306_150),
-    ]
-
-    static let lead = """
-    The robot kept it boring, as instructed. A small green day — Shopify did the heavy \
-    lifting, Constellation gave a little back, and we're a hair ahead of XIC. No trades: \
-    nothing cleared the 3× round-trip bar, so today's receipts stay short.
-    """
-
-    static let movers: [Mover] = [
-        Mover(symbol: "SHOP.TO", name: "Shopify", lastCents: 11_800, dayChangeBps: 210),
-        Mover(symbol: "ENB.TO", name: "Enbridge", lastCents: 6_010, dayChangeBps: 90),
-        Mover(symbol: "CSU.TO", name: "Constellation Software", lastCents: 480_000, dayChangeBps: -120),
-    ]
-    static let hitters: [Mover] = [
-        Mover(symbol: "SHOP.TO", name: "Shopify", lastCents: 11_800, dayChangeBps: 210),
-        Mover(symbol: "ENB.TO", name: "Enbridge", lastCents: 6_010, dayChangeBps: 90),
-        Mover(symbol: "XIC.TO", name: "iShares Core TSX", lastCents: 3_340, dayChangeBps: 40),
-    ]
-
-    static let ideas: [Idea] = [
-        Idea(symbol: "LMN.TO", name: "Lumine Group", call: .accumulate,
-             target: PriceTarget(nearCents: 4_200, nearHorizon: "2–6 weeks", farCents: 4_800,
-                                  expectedReturnBps: 1_800, confidence: 72), unfamiliar: true),
-        Idea(symbol: "DSG.TO", name: "Descartes Systems", call: .watch,
-             target: PriceTarget(nearCents: 14_500, nearHorizon: "1–3 months", farCents: 16_000,
-                                  expectedReturnBps: 900, confidence: 64), unfamiliar: true),
-    ]
-
-    static let universe: [MarketName] = [
-        MarketName(symbol: "SHOP.TO", name: "Shopify", lastCents: 11_800, dayChangeBps: 210, inUniverse: true,
-                   agentCall: .hold, directive: .pin, signals: Signals(recommendationPct: 61, trend: "uptrend", rsi: 58, macd: "rising")),
-        MarketName(symbol: "ENB.TO", name: "Enbridge", lastCents: 6_010, dayChangeBps: 90, inUniverse: true,
-                   agentCall: .accumulate, signals: Signals(recommendationPct: 55, trend: "uptrend", rsi: 49, macd: "flat")),
-        MarketName(symbol: "XIC.TO", name: "iShares Core S&P/TSX", lastCents: 3_340, dayChangeBps: 40, inUniverse: true,
-                   agentCall: .hold, signals: Signals(recommendationPct: 50, trend: "mixed", rsi: 52, macd: "flat")),
-    ]
-    static let watchlist: [MarketName] = [
-        MarketName(symbol: "LMN.TO", name: "Lumine Group", lastCents: 4_050, dayChangeBps: 150, inUniverse: false,
-                   agentCall: .accumulate, signals: Signals(recommendationPct: 68, trend: "uptrend", rsi: 61, macd: "rising")),
-        MarketName(symbol: "DSG.TO", name: "Descartes Systems", lastCents: 14_200, dayChangeBps: -30, inUniverse: false,
-                   agentCall: .watch, signals: Signals(recommendationPct: 47, trend: "mixed", rsi: 45, macd: "falling")),
-    ]
-
-    static func dossier(_ symbol: String) -> Dossier {
-        let n = (universe + watchlist).first { $0.symbol == symbol }
-        return Dossier(
-            symbol: symbol,
-            name: n?.name ?? symbol,
-            bodyMarkdown: """
-            Business — \(n?.name ?? symbol) is a placeholder dossier in the skeleton. The real one \
-            is the agent's write-up: the business, recent news, the bull and bear case, and a verdict.
-
-            Bull — durable demand, a widening moat, sensible capital allocation.
-
-            Bear — valuation leaves little room for a stumble; watch the next print.
-            """,
-            call: n?.agentCall ?? .watch,
-            target: PriceTarget(nearCents: 4_200, nearHorizon: "2–6 weeks", farCents: 4_800,
-                                expectedReturnBps: 1_800, confidence: 72),
-            signals: n?.signals,
-            analystTargetCents: 4_600,
-            marketCapCents: 85_000_000_000,
-            peRatio: 34.2,
-            freeCashFlowCents: 1_250_000_000,
-            dividendYieldBps: 0,
-            filedAt: "2026-06-14")
-    }
-
-    static var currentEdition: Edition {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/Toronto") ?? .current
-        let h = cal.component(.hour, from: Date())
-        let wd = cal.component(.weekday, from: Date()) // 1 = Sun, 7 = Sat
-        if wd == 1 || wd == 7 { return .weekend }
-        if h < 9 { return .morning }
-        if h < 16 { return .midday }
-        return .evening
-    }
-
-    static var today: Today {
-        Today(edition: currentEdition, dateISO: "2026-06-15",
-              navCents: 306_150, dayPnlCents: 1_820, dayPnlBps: 60, benchmarkBps: 40,
-              tape: tape, leadStoryMarkdown: lead,
-              movers: movers, topHitters: hitters, onTheRadar: ideas)
+    @MainActor
+    private static func rootViewController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        var vc = scene?.keyWindow?.rootViewController
+        while let presented = vc?.presentedViewController { vc = presented }
+        return vc
     }
 }

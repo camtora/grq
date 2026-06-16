@@ -16,12 +16,39 @@ const DENIED_HTML = `<!doctype html>
 <p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">No identity on this request — reach GRQ through the front door.</p>
 </div></body></html>`;
 
+// Mobile-app API surface (docs/IOS-PLAN.md). The native app authenticates with a
+// GRQ-JWT Bearer token, not the oauth2-proxy cookie, so these routes can't pass
+// the cookie door — they self-guard in the Node runtime via lib/session.ts
+// (which verifies the token) + memberFromRequest for any writes. We only need to
+// let the edge admit them; no token is checked here (no Edge-runtime JWT).
+// Listed explicitly so sensitive routes (chat, explain, quotes) stay cookie-only.
+const MOBILE_API = [
+  "/api/portfolio",
+  "/api/market",
+  "/api/ideas",
+  "/api/today",
+  "/api/dossier",
+  "/api/fund-settings",
+];
+
+function isMobileApi(path: string): boolean {
+  return MOBILE_API.some((p) => path === p || path.startsWith(p + "/"));
+}
+
 export function middleware(req: NextRequest) {
   const email =
     req.headers.get("x-forwarded-email") ??
     (process.env.NODE_ENV !== "production" ? (process.env.GRQ_DEV_EMAIL ?? null) : null);
 
   if (!roleForEmail(email)) {
+    const path = req.nextUrl.pathname;
+    // Auth routes (login + me) are public at the edge and self-guard. Other mobile
+    // read routes need a Bearer present (the route verifies it); without one, the
+    // request is a browser hitting the door → the 403 page.
+    const hasBearer = req.headers.get("authorization")?.toLowerCase().startsWith("bearer ");
+    if (path.startsWith("/api/auth/") || (hasBearer && isMobileApi(path))) {
+      return NextResponse.next();
+    }
     return new NextResponse(DENIED_HTML, {
       status: 403,
       headers: { "content-type": "text/html; charset=utf-8" },

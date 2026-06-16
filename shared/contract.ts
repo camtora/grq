@@ -9,10 +9,12 @@
  *  - Rates/moves are basis points (`Bps`, 1% = 100 bps), matching lib/portfolio.ts.
  *  - Dates are ISO-8601 strings on the wire (Swift decodes with `.iso8601`).
  *
- * Status (2026-06-15): Portfolio + Auth mirror web/lib/portfolio.ts exactly.
- * Today / Market / Ideas / Settings are **v0** — reconcile field-by-field when the
- * GET endpoints are built (the web reads Prisma in server components today; see
- * docs/IOS-CONTENT.md and docs/IOS-PLAN.md).
+ * Status (2026-06-16): ALL shapes are now served by live GET endpoints
+ * (web/lib/feed.ts → /api/{portfolio,market,ideas,today,dossier/[symbol],settings,auth/me}),
+ * built from the same Prisma source the web pages read and verified against these
+ * zod schemas by web/scripts/verify-mobile-api.ts. Today/Market/Ideas/Dossier/Settings
+ * were "v0" guesses; they now reflect what the feed actually emits — keep this file and
+ * lib/feed.ts in lockstep. See docs/IOS-PLAN.md.
  */
 import { z } from "zod";
 

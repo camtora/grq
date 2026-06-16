@@ -20,13 +20,23 @@ struct SignInView: View {
                 Text(Strings.shared.s("auth.signInSubtitle", "GRQ is invite-only — Cam & Graham."))
                     .font(.footnote).foregroundStyle(p.textMuted)
                 VStack(spacing: 12) {
-                    Button("Continue as Cam") { auth.signIn("cameron.tora@gmail.com") }
+                    Button("Sign in with Google") { Task { await auth.signInWithGoogle() } }
                         .buttonStyle(GradientButtonStyle())
-                    Button("Continue as Graham") { auth.signIn("g.j.appleby@gmail.com") }
-                        .buttonStyle(GradientButtonStyle())
+                        .disabled(auth.signingIn)
+                    // Dev logins — work only against a server with GRQ_DEV_LOGIN=1.
+                    HStack(spacing: 12) {
+                        Button("Dev · Cam") { auth.signIn("cameron.tora@gmail.com") }
+                        Button("Dev · Graham") { auth.signIn("g.j.appleby@gmail.com") }
+                    }
+                    .font(.footnote).foregroundStyle(p.accent).disabled(auth.signingIn)
                 }
-                Text("Mock sign-in — Google + JWT land with the backend.")
-                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.6))
+                if let err = auth.authError {
+                    Text(err).font(.caption2).foregroundStyle(p.neg)
+                        .multilineTextAlignment(.center).padding(.horizontal)
+                } else {
+                    Text("Bearer-JWT sessions, signed by the GRQ backend.")
+                        .font(.caption2).foregroundStyle(p.textMuted.opacity(0.6))
+                }
                 Spacer().frame(height: 20)
             }
             .padding(28)

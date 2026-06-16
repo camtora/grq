@@ -5,6 +5,10 @@ import { money } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
+// NOTE: this route is browser-fetched (the dashboard's settings form PUTs here),
+// so it stays behind the oauth2-proxy cookie door — it is NOT in the nginx mobile
+// bypass. The mobile app reads the same data via GET /api/fund-settings instead.
+
 const RISK_LEVELS = ["CAUTIOUS", "BALANCED", "AGGRESSIVE"] as const;
 type Risk = (typeof RISK_LEVELS)[number];
 

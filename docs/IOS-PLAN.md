@@ -53,20 +53,38 @@ viewer read-only, order gate) works unchanged.**
 
 ### Required backend changes (all on the existing Next.js `web` service — no new backend)
 
-- **`web/lib/session.ts`** — if no `X-Forwarded-Email`, resolve email from a Bearer JWT
-  verified with **`jsonwebtoken`** (the same lib whosup uses; runs in the Node route
-  runtime). `roleForEmail` / `memberFromRequest` untouched. *(edit — needs Cam's go)*
-- **`web/middleware.ts`** — exclude the mobile API paths from the 403-HTML door (like
-  `/api/health` already is); those routes self-guard via `session.ts`. No token check at
-  the edge, so no `jose` and no Edge-runtime concern. *(edit — needs go)*
-- **New GET read endpoints** — the web pages read Prisma directly in server components
-  (`/today`, `/portfolio`, `/market`, `/ideas`, `/stocks/[symbol]` have no JSON API).
-  iOS needs GET routes returning the `shared/contract.ts` shapes. *(new files)*
-- **`POST /api/auth/google`**, **`GET /api/auth/me`** (name + totalPnlCents +
-  contributionsCents for the splash greeting). *(new files)*
+**SHIPPED 2026-06-16** — the dual-auth seam + the read API are built, deployed, and
+verified in production (curl over both the Bearer and X-Forwarded-Email paths; the
+existing dashboard + no-auth-403 door are unchanged). What landed:
+
+- **`web/lib/auth-jwt.ts`** *(new)* — mint/verify the GRQ-JWT (HS256, `GRQ_JWT_SECRET`,
+  `jsonwebtoken`). 30-day TTL for internal TestFlight; add a refresh token before public.
+- **`web/lib/session.ts`** — `X-Forwarded-Email` still wins; else resolve email from a
+  verified `Authorization: Bearer` GRQ-JWT, else `GRQ_DEV_EMAIL`. `roleForEmail` /
+  `memberFromRequest` untouched. ✅
+- **`web/middleware.ts`** — the 403 door now admits `/api/auth/*` (public; self-guarding)
+  and the listed mobile read paths **when a Bearer is present**; everything else (chat,
+  explain, quotes) stays cookie-only. No Edge JWT check. ✅
+- **`web/lib/feed.ts`** *(new)* — builders that emit the exact `shared/contract.ts` shapes
+  from the same Prisma source the web pages read (so the app sees the same universe / NAV /
+  calls — no second source of truth). Verified against the zod contract by
+  `web/scripts/verify-mobile-api.ts`.
+- **GET read endpoints** *(new)* — `/api/portfolio`, `/api/market`, `/api/ideas`,
+  `/api/today`, `/api/dossier/[symbol]`, and a GET on `/api/settings`. Dossier lives at
+  `/api/dossier/*` (NOT `/api/stocks/*`) so it never collides with the mutating
+  `/api/stocks/directive`. Each self-guards via `sessionFromRequest`. ✅
+- **`POST /api/auth/google`**, **`GET /api/auth/me`** *(new)*, plus a local-only
+  **`POST /api/auth/dev`** (gated by `GRQ_DEV_LOGIN=1`, 404 otherwise) so the app can be
+  exercised before the OAuth client exists. ✅
+
+**Still blocked on Cam / the Mac (the app can't fetch live until these land):**
+
 - **nginx** — a GRQ location for the mobile API that **bypasses oauth2-proxy** (clone
   `infrastructure/nginx/conf.d/03-whosup.conf`) and never forwards a client-supplied
-  `X-Forwarded-Email`. *(infra repo)*
+  `X-Forwarded-Email`. *(infra repo — without it a phone can't reach `/api/*` through the
+  front door; for now point the simulator at the LAN box via the `grq.apiBase` default.)*
+- **GRQ-iOS Google OAuth client** → set `GRQ_IOS_GOOGLE_CLIENT_ID` in `.env` (until then
+  `POST /api/auth/google` returns 503). `GRQ_JWT_SECRET` is already generated in `.env`.
 
 ## Guardrails preserved
 
@@ -101,8 +119,12 @@ the public App Store (guideline 4.8) — Google-only is fine for internal TestFl
 ## Phasing
 
 - **P0** — `shared/contract.ts` + dual-auth seam + nginx + Google Sign-In → first
-  authenticated `GET` from the app.
-- **P1** — read-only iOS: Splash, Today (The Daily), Portfolio, Market.
+  authenticated `GET` from the app. **Backend half DONE (2026-06-16):** seam + read API
+  live & verified; the iOS client now does real `URLSession` GETs with a Keychain-held
+  Bearer (all `MockData` deleted). Remaining: nginx route, the GRQ-iOS OAuth client, and
+  dropping the GoogleSignIn SDK in via SPM on the Mac (the `GoogleAuth` stub marks the spot).
+- **P1** — read-only iOS: Splash, Today (The Daily), Portfolio, Market. **Client wired
+  (2026-06-16)** — goes live the moment auth + nginx land; no view rewrites needed.
 - **P2** — member actions (kill switch, order, directives) behind member role + Face ID.
 - **P3** — push (APNs) + agent chat.
 - **P4** — TestFlight to Cam & Graham; parity enforced from here on.

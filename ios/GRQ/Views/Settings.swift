@@ -26,7 +26,7 @@ struct SettingsView: View {
         .task {
             let s = await APIClient.shared.settings()
             settings = s
-            killOn = s.killSwitch
+            killOn = s?.killSwitch ?? false
         }
     }
 
