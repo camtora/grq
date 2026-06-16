@@ -9,7 +9,17 @@ import { useRouter } from "next/navigation";
 // shown as a badge, not a toggle.
 export type WatchState = "none" | "watching" | "universe";
 
-export default function WatchButton({ symbol, state: initial = "none" }: { symbol: string; state?: WatchState }) {
+export default function WatchButton({
+  symbol,
+  exchange,
+  currency,
+  state: initial = "none",
+}: {
+  symbol: string;
+  exchange?: string;
+  currency?: string;
+  state?: WatchState;
+}) {
   const router = useRouter();
   const [state, setState] = useState<WatchState>(initial);
   const [busy, setBusy] = useState(false);
@@ -20,10 +30,12 @@ export default function WatchButton({ symbol, state: initial = "none" }: { symbo
     setBusy(true);
     setErr("");
     try {
+      // Pass the listing (exchange + currency) so the server resolves THIS one,
+      // not a ".TO" guess or a colliding CDR (D24).
       const res = await fetch("/api/universe", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, symbol }),
+        body: JSON.stringify(action === "add" ? { action, symbol, exchange, currency } : { action, symbol }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {

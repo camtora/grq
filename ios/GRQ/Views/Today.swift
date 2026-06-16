@@ -96,7 +96,7 @@ struct TodayView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
-                                MoneyText(cents: m.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                MoneyText(cents: m.lastCents, currency: m.currency).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                                 BpsBadge(bps: m.dayChangeBps).font(.caption)
                             }
                         }

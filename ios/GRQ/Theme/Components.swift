@@ -9,8 +9,27 @@ enum Fmt {
         f.locale = Locale(identifier: "en_CA")
         return f
     }()
-    static func money(_ cents: Int) -> String {
-        cad.string(from: NSNumber(value: Double(cents) / 100)) ?? "$0.00"
+    // Plain grouped decimal — we prefix the currency symbol ourselves rather than
+    // trust NumberFormatter's currency style, which renders USD as a bare "$" in a
+    // CAD locale on iOS (the "$208.88 should be US$208.88" bug — D24).
+    private static let dec: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 2
+        f.maximumFractionDigits = 2
+        f.locale = Locale(identifier: "en_CA")
+        return f
+    }()
+    /// CAD stays a bare "$"; a non-CAD listing gets an explicit symbol — "US$208.88"
+    /// — so a US name can never be misread as CAD (D24).
+    static func money(_ cents: Int, _ currency: String? = nil) -> String {
+        let code = (currency ?? "CAD").uppercased()
+        if code == "CAD" {
+            return cad.string(from: NSNumber(value: Double(cents) / 100)) ?? "$0.00"
+        }
+        let body = dec.string(from: NSNumber(value: Double(cents) / 100)) ?? String(format: "%.2f", Double(cents) / 100)
+        let symbol = code == "USD" ? "US$" : "\(code) "
+        return "\(symbol)\(body)"
     }
     static func signed(_ cents: Int) -> String {
         let s = money(abs(cents))
@@ -188,7 +207,8 @@ struct Pnl: View {
 
 struct MoneyText: View {
     let cents: Int
-    var body: some View { Text(Fmt.money(cents)).monospacedDigit() }
+    var currency: String? = nil
+    var body: some View { Text(Fmt.money(cents, currency)).monospacedDigit() }
 }
 
 struct BpsBadge: View {

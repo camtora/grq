@@ -44,6 +44,7 @@ type Idea = {
   sym: string;
   name: string;
   logoUrl: string | null;
+  currency: string | null;
   cur: number | null;
   near: number | null;
   far: number | null;
@@ -80,7 +81,7 @@ function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: b
           ) : null}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/50">
-          {idea.cur !== null && <span>now {money(idea.cur)}</span>}
+          {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
           {idea.far !== null && (
             <span className={idea.far > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
               12-mo {idea.far > 0 ? "+" : ""}
@@ -133,7 +134,7 @@ function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: b
           </div>
 
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-teal-200/60">
-            {idea.cur !== null && <span>now {money(idea.cur)}</span>}
+            {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
             {idea.near !== null && (
               <span>
                 near{idea.nearDays ? ` ~${Math.max(1, Math.round(idea.nearDays / 5))}w` : ""}{" "}
@@ -249,6 +250,7 @@ export default async function Market() {
       sym,
       name: u?.name ?? sym,
       logoUrl: u?.logoUrl ?? null,
+      currency: u?.currency ?? null,
       cur,
       near: cur && d.targetNearCents != null ? (d.targetNearCents - cur) / cur : null,
       far: cur && d.targetFarCents != null ? (d.targetFarCents - cur) / cur : null,

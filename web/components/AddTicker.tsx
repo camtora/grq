@@ -32,21 +32,23 @@ export default function AddTicker() {
     }
   }
 
-  async function add(symbol: string) {
+  async function add(m: FmpMatch) {
     if (adding) return;
-    setAdding(symbol);
+    setAdding(m.symbol);
     setMsg(null);
     try {
+      // Send the listing the user actually picked (exchange + currency), so the
+      // server stores THAT listing — not a ".TO" guess or a colliding CDR (D24).
       const res = await fetch("/api/universe", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "add", symbol }),
+        body: JSON.stringify({ action: "add", symbol: m.symbol, exchange: m.exchange, currency: m.currency, name: m.name }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMsg({ ok: false, text: data.error ?? `HTTP ${res.status}` });
       } else {
-        setMsg({ ok: true, text: `${symbol} is on your watchlist (${data.yahoo ?? symbol}) — the agent's dossiering it now.` });
+        setMsg({ ok: true, text: `${data.symbol ?? m.symbol} is on your watchlist (${data.yahoo ?? m.symbol}) — the agent's dossiering it now.` });
         setMatches(null);
         setQ("");
         router.refresh();
@@ -90,7 +92,7 @@ export default function AddTicker() {
                 {m.currency ? ` · ${m.currency}` : ""}
               </span>
               <button
-                onClick={() => add(m.symbol)}
+                onClick={() => add(m)}
                 disabled={adding !== null}
                 className="rounded-lg border border-teal-400/40 bg-teal-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20 disabled:opacity-40"
               >

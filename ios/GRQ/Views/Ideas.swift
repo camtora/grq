@@ -29,10 +29,10 @@ struct IdeasView: View {
                 }
                 HStack(alignment: .bottom, spacing: 16) {
                     if let near = idea.target.nearCents {
-                        target("Near", Fmt.money(near), idea.target.nearHorizon, p)
+                        target("Near", Fmt.money(near, idea.currency), idea.target.nearHorizon, p)
                     }
                     if let far = idea.target.farCents {
-                        target("12-mo", Fmt.money(far), nil, p)
+                        target("12-mo", Fmt.money(far, idea.currency), nil, p)
                     }
                     Spacer()
                     if let er = idea.target.expectedReturnBps {
@@ -101,7 +101,7 @@ struct StockDetailView: View {
                 Text(d.name).font(.system(.title2, design: .rounded).weight(.bold)).foregroundStyle(p.textPrimary)
                 if let last = d.lastCents {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(Fmt.money(last)).font(.system(.title, design: .rounded).weight(.black))
+                        Text(Fmt.money(last, d.currency)).font(.system(.title, design: .rounded).weight(.black))
                             .monospacedDigit().foregroundStyle(Theme.brandGradient)
                         Text("per share").font(.caption2).foregroundStyle(p.textMuted)
                     }
@@ -125,16 +125,16 @@ struct StockDetailView: View {
                 SectionTitle(text: "Targets")
                 if let near = d.target.nearCents {
                     KeyValueRow(label: "Near-term" + (d.target.nearHorizon.map { " (\($0))" } ?? ""),
-                                value: Fmt.money(near), term: "price-target")
+                                value: Fmt.money(near, d.currency), term: "price-target")
                 }
                 if let far = d.target.farCents {
-                    KeyValueRow(label: "12-month", value: Fmt.money(far), term: "price-target")
+                    KeyValueRow(label: "12-month", value: Fmt.money(far, d.currency), term: "price-target")
                 }
                 if let er = d.target.expectedReturnBps {
                     KeyValueRow(label: "Expected return", value: Fmt.bps(er), term: "expected-return", valueColor: pos)
                 }
                 if let a = d.analystTargetCents {
-                    KeyValueRow(label: "Analyst consensus", value: Fmt.money(a), term: "analyst-target")
+                    KeyValueRow(label: "Analyst consensus", value: Fmt.money(a, d.currency), term: "analyst-target")
                 }
             }
         }
@@ -144,9 +144,9 @@ struct StockDetailView: View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Fundamentals")
-                if let mc = d.marketCapCents { KeyValueRow(label: "Market cap", value: Fmt.money(mc), term: "market-cap") }
+                if let mc = d.marketCapCents { KeyValueRow(label: "Market cap", value: Fmt.money(mc, d.currency), term: "market-cap") }
                 if let pe = d.peRatio { KeyValueRow(label: "P/E", value: String(format: "%.1f", pe), term: "pe") }
-                if let fcf = d.freeCashFlowCents { KeyValueRow(label: "Free cash flow", value: Fmt.money(fcf), term: "free-cash-flow") }
+                if let fcf = d.freeCashFlowCents { KeyValueRow(label: "Free cash flow", value: Fmt.money(fcf, d.currency), term: "free-cash-flow") }
                 if let dy = d.dividendYieldBps { KeyValueRow(label: "Dividend yield", value: Fmt.pctBps(dy), term: "dividend-yield") }
             }
         }

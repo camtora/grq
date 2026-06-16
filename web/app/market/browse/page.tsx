@@ -165,10 +165,10 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/70">{capLabel(r.marketCapM)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
-                    {r.priceCents !== null ? money(r.priceCents) : "—"}
+                    {r.priceCents !== null ? money(r.priceCents, r.currency) : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    {isMember && <WatchButton symbol={stripSuffix(r.symbol)} state={watchState(r.symbol)} />}
+                    {isMember && <WatchButton symbol={stripSuffix(r.symbol)} exchange={r.exchange ?? undefined} state={watchState(r.symbol)} />}
                   </td>
                 </tr>
               ))}

@@ -10,7 +10,9 @@ import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { stanceMeta } from "@/lib/stance";
+import RatingBar from "@/components/RatingBar";
+import WatchButton from "@/components/WatchButton";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
 import LiveQuote from "@/components/LiveQuote";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
@@ -47,11 +49,76 @@ function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
 export default async function StockPage({ params }: { params: Promise<{ symbol: string }> }) {
   const { symbol: raw } = await params;
   const symbol = raw.toUpperCase();
-  const entry = await universeEntry(symbol);
-  if (!entry) notFound();
   const session = await getSession();
   const me = displayName(session);
   const isMember = session?.role === "member";
+  const entry = await universeEntry(symbol);
+
+  // Not in the universe yet — but if the agent has researched it (e.g. flagged it in
+  // the discovery hunt), show that dossier with a "Watch to add" CTA instead of a
+  // 404. A genuinely unknown symbol (no journal at all) still 404s.
+  if (!entry) {
+    const [pquote, pjournal, psignals] = await Promise.all([
+      getQuote(symbol).catch(() => null),
+      prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 30 }),
+      computeSignals(symbol).catch(() => null),
+    ]);
+    if (pjournal.length === 0) notFound();
+    const lead = pjournal.find((j) => j.kind === "RESEARCH") ?? pjournal[0];
+    return (
+      <main>
+        <Link href="/market" className="text-xs text-teal-300 hover:underline">
+          ← discoveries
+        </Link>
+        <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+          <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
+          <Chip tone="dim">not tracked</Chip>
+          <Chip tone="teal">agent-flagged</Chip>
+          {pquote && (
+            <span className="ml-auto flex items-baseline gap-2">
+              <LiveQuote
+                symbol={symbol}
+                initialCents={pquote.midCents}
+                initialChangePct={(pquote.dayChangeBps ?? 0) / 10_000}
+                className="text-2xl font-semibold text-teal-50"
+              />
+            </span>
+          )}
+        </div>
+        <Card className="mb-6 border-teal-400/30 p-5">
+          <p className="text-sm text-teal-100/80">
+            The agent flagged <b className="text-teal-200">{symbol}</b> in its discovery hunt — an early-stage idea it
+            can&apos;t add to the universe itself.
+            {isMember ? " Watch it to put it on your watchlist, and the agent will write a full dossier." : ""}
+          </p>
+          {isMember && (
+            <div className="mt-3">
+              <WatchButton symbol={symbol} state="none" />
+            </div>
+          )}
+        </Card>
+        {lead && (
+          <Card className="mb-6 p-5">
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <Chip tone="teal">hunt dossier</Chip>
+              <span className="text-sm font-medium text-teal-50">{lead.title}</span>
+              <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(lead.at)}</span>
+            </div>
+            <CollapsibleMd text={lead.body}>
+              <SourceChips sourcesJson={lead.sourcesJson} />
+            </CollapsibleMd>
+          </Card>
+        )}
+        {psignals && (
+          <Card className="p-5">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Technical signals</div>
+            <SignalStrip signals={psignals} />
+          </Card>
+        )}
+      </main>
+    );
+  }
+
   const researchInFlight =
     (await prisma.researchRequest.count({
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
@@ -92,6 +159,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // The agent's OWN call (judgment), distinct from the signal formula (rec).
   const stanceEntry = journal.find((j) => j.stance);
   const stance = stanceMeta(stanceEntry?.stance);
+  // Fallback rating when GRQ hasn't filed a call: the technical signal lean (tagged
+  // as such), so the header always shows the buy→sell slider like the watchlist.
+  const recMeta = rec ? stanceMeta(rec.label) : null;
 
   // The 10-tier data-coverage map (docs/DATA-SOURCES.md) for THIS name: what's
   // wired & live, what's partial, and — honestly — why the rest is dark.
@@ -126,6 +196,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
         <span className="text-teal-200/60">{entry.name}</span>
         <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
+        {entry.currency && entry.currency !== "CAD" && <Chip tone="teal">{entry.currency}</Chip>}
         {entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
         {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">agent watching</Chip>}
@@ -135,6 +206,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               symbol={symbol}
               initialCents={quote.midCents}
               initialChangePct={dayBps / 10_000}
+              currency={entry.currency}
               className="text-2xl font-semibold text-teal-50"
             />
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
@@ -174,13 +246,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 <Term k="agent-call">GRQ&apos;s call</Term>
               </div>
               {stance ? (
-                <div className="flex flex-wrap items-baseline gap-x-3">
-                  <span className={`text-3xl font-black ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} />
                   <span className="text-sm text-teal-200/60">{stance.blurb}</span>
+                </div>
+              ) : recMeta ? (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" />
+                  <span className="text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</span>
                 </div>
               ) : (
                 <div className="text-sm text-teal-200/50">
-                  Not yet rated — the agent hasn&apos;t filed a call on this name. The technical read below is only an input.
+                  Not yet rated — the agent hasn&apos;t filed a call on this name.
                 </div>
               )}
               {signals && (
@@ -324,12 +401,98 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <div className="mb-2 flex items-baseline justify-between">
             <span className="text-xs uppercase tracking-wider text-teal-200/50">Price — {closes.length} sessions</span>
             <span className="text-xs text-teal-200/40">
-              {money(closes[0].closeCents)} → {money(closes[closes.length - 1].closeCents)}
+              {money(closes[0].closeCents, entry.currency)} → {money(closes[closes.length - 1].closeCents, entry.currency)}
             </span>
           </div>
-          <Sparkline values={closes.map((c) => c.closeCents)} dates={closes.map((c) => c.date)} format={money} axes />
+          <Sparkline values={closes.map((c) => c.closeCents)} dates={closes.map((c) => c.date)} format={(c) => money(c, entry.currency)} axes />
         </Card>
       )}
+
+      {/* Key data panels, side by side under the price chart (signals · scoreboard · earnings · analyst). */}
+      <section className="mb-6 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
+          </h2>
+          <Card className="p-4">
+            {!signals ? (
+              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {signals.families.map((f) => (
+                  <li key={f.family} className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
+                        {f.family}
+                      </Term>
+                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
+                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
+                  </li>
+                ))}
+                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <Scoreboard
+          rows={symbolScores}
+          title={`Scoreboard — ${symbol}`}
+          emptyText="No graded calls on this name yet — retros fill this in."
+        />
+
+        {earnings && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+            </h2>
+            <Card className="p-4 text-sm">
+              <div className="flex items-baseline justify-between">
+                <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
+                <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
+                {earnings.epsEstimated != null && (
+                  <span>
+                    EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
+                    {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
+                  </span>
+                )}
+                {earnings.revenueEstimated != null && (
+                  <span>
+                    Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
+            </Card>
+          </div>
+        )}
+
+        {grades && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+            <Card className="p-4 text-sm">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="font-bold text-teal-100/90">{grades.consensus}</span>
+                <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
+              </div>
+              <div className="flex h-2 overflow-hidden rounded-full bg-teal-400/10">
+                {([["bg-emerald-500", grades.strongBuy], ["bg-emerald-400", grades.buy], ["bg-teal-400/30", grades.hold], ["bg-red-400", grades.sell], ["bg-red-500", grades.strongSell]] as const).map(
+                  ([cls, n], i) => (n > 0 ? <span key={i} className={cls} style={{ width: `${(n / grades.total) * 100}%` }} /> : null),
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-teal-200/50">
+                <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
+                <span>hold {grades.hold}</span>
+                <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
+              </div>
+            </Card>
+          </div>
+        )}
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
@@ -397,87 +560,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </ul>
             )}
           </Card>
-
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
-          </h2>
-          <Card className="p-4">
-            {!signals ? (
-              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {signals.families.map((f) => (
-                  <li key={f.family} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
-                        {f.family}
-                      </Term>
-                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
-                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
-                  </li>
-                ))}
-                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
-              </ul>
-            )}
-          </Card>
-
-          <Scoreboard
-            rows={symbolScores}
-            title={`Scoreboard — ${symbol}`}
-            emptyText="No graded calls on this name yet — retros fill this in."
-          />
-
-          {earnings && (
-            <>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-                Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
-              </h2>
-              <Card className="p-4 text-sm">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
-                  <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
-                  {earnings.epsEstimated != null && (
-                    <span>
-                      EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
-                      {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
-                    </span>
-                  )}
-                  {earnings.revenueEstimated != null && (
-                    <span>
-                      Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
-              </Card>
-            </>
-          )}
-
-          {grades && (
-            <>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
-              <Card className="p-4 text-sm">
-                <div className="mb-2 flex items-baseline justify-between">
-                  <span className="font-bold text-teal-100/90">{grades.consensus}</span>
-                  <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
-                </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-teal-400/10">
-                  {([["bg-emerald-500", grades.strongBuy], ["bg-emerald-400", grades.buy], ["bg-teal-400/30", grades.hold], ["bg-red-400", grades.sell], ["bg-red-500", grades.strongSell]] as const).map(
-                    ([cls, n], i) => (n > 0 ? <span key={i} className={cls} style={{ width: `${(n / grades.total) * 100}%` }} /> : null),
-                  )}
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-teal-200/50">
-                  <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
-                  <span>hold {grades.hold}</span>
-                  <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
-                </div>
-              </Card>
-            </>
-          )}
 
           {institutional && (
             <>

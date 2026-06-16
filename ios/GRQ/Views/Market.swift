@@ -168,7 +168,7 @@ struct WatchlistView: View {
                 .buttonStyle(.plain)
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
-                MoneyText(cents: n.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                MoneyText(cents: n.lastCents, currency: n.currency).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                 BpsBadge(bps: n.dayChangeBps).font(.caption)
             }
             if isMember { directiveControls(n) }
@@ -184,7 +184,7 @@ struct WatchlistView: View {
             Spacer(minLength: 8)
             if n.lastCents > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    MoneyText(cents: n.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    MoneyText(cents: n.lastCents, currency: n.currency).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                     BpsBadge(bps: n.dayChangeBps).font(.caption)
                 }
             }
@@ -207,6 +207,7 @@ struct WatchlistView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(n.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                    if let c = n.currency, c != "CAD" { Chip(text: c, tone: .teal) }
                     if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
                 }
                 Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)

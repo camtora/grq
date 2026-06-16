@@ -184,6 +184,7 @@ export async function marketResponse() {
     return {
       symbol: r.symbol,
       name: r.name,
+      currency: r.currency ?? "CAD",
       lastCents: q?.midCents ?? 0,
       dayChangeBps: q?.dayChangeBps ?? 0,
       inUniverse: r.status === "ACTIVE",
@@ -204,6 +205,7 @@ export async function marketResponse() {
 type IdeaShape = {
   symbol: string;
   name: string;
+  currency: string;
   call: AgentCall | null;
   target: { nearCents: number | null; nearHorizon: string | null; farCents: number | null; expectedReturnBps: number | null; confidence: number | null };
   unfamiliar: boolean;
@@ -213,6 +215,7 @@ export async function ideasResponse(limit = 12): Promise<IdeaShape[]> {
   const all = await allUniverse();
   const nameBy = new Map(all.map((u) => [u.symbol, u.name]));
   const tierBy = new Map(all.map((u) => [u.symbol, u.tier]));
+  const currencyBy = new Map(all.map((u) => [u.symbol, u.currency]));
 
   // Latest dossier-with-a-target per symbol (mirrors the Today page's ideas).
   const rows = await prisma.journalEntry.findMany({
@@ -241,6 +244,7 @@ export async function ideasResponse(limit = 12): Promise<IdeaShape[]> {
     return {
       symbol: sym,
       name: nameBy.get(sym) ?? sym,
+      currency: currencyBy.get(sym) ?? "CAD",
       call: stanceToCall(d.stance),
       target: {
         nearCents: d.targetNearCents ?? null,
@@ -278,6 +282,7 @@ export async function todayResponse() {
   ]);
 
   const nameBy = new Map(all.map((u) => [u.symbol, u.name]));
+  const currencyBy = new Map(all.map((u) => [u.symbol, u.currency]));
   const trackedSymbols = all.filter((u) => u.status !== "RETIRED").map((u) => u.symbol);
   const quotes = await getQuotes(trackedSymbols);
 
@@ -295,13 +300,13 @@ export async function todayResponse() {
   // Movers across the universe, biggest up then biggest down.
   const moverRows = [...quotes.entries()]
     .filter(([sym]) => nameBy.has(sym))
-    .map(([sym, q]) => ({ symbol: sym, name: nameBy.get(sym) ?? sym, lastCents: q.midCents, dayChangeBps: q.dayChangeBps ?? 0 }))
+    .map(([sym, q]) => ({ symbol: sym, name: nameBy.get(sym) ?? sym, currency: currencyBy.get(sym) ?? "CAD", lastCents: q.midCents, dayChangeBps: q.dayChangeBps ?? 0 }))
     .sort((a, b) => b.dayChangeBps - a.dayChangeBps);
   const movers = [...moverRows.filter((m) => m.dayChangeBps > 0).slice(0, 5), ...moverRows.filter((m) => m.dayChangeBps < 0).slice(-5).reverse()];
 
   const topHitters = [...pf.positions]
     .sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps))
-    .map((p) => ({ symbol: p.symbol, name: nameBy.get(p.symbol) ?? p.symbol, lastCents: p.lastCents, dayChangeBps: p.dayChangeBps }));
+    .map((p) => ({ symbol: p.symbol, name: nameBy.get(p.symbol) ?? p.symbol, currency: currencyBy.get(p.symbol) ?? "CAD", lastCents: p.lastCents, dayChangeBps: p.dayChangeBps }));
 
   const lead = eod ?? midday ?? plan ?? latestPlan ?? latestResearch;
   // Title by WHAT the lead is, mirroring the web Today page's section header —
@@ -362,6 +367,7 @@ export async function dossierResponse(symbol: string) {
   return {
     symbol: sym,
     name: entry.name,
+    currency: entry.currency ?? "CAD",
     lastCents: cur,
     bodyMarkdown: body,
     call: stanceToCall(stanceEntry?.stance),

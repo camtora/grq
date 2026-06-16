@@ -118,6 +118,7 @@ export type ScreenerRow = {
   sector: string | null;
   exchange: string | null;
   country: string | null;
+  currency: string | null;
   isEtf: boolean;
 };
 
@@ -149,6 +150,7 @@ export async function fmpScreener(opts: {
     sector: (r.sector as string) || null,
     exchange: (r.exchangeShortName as string) || (r.exchange as string) || null,
     country: (r.country as string) || null,
+    currency: (r.currency as string) || null,
     isEtf: r.isEtf === true,
   }));
 }

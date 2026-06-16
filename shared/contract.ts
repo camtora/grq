@@ -96,6 +96,9 @@ export const Signals = z.object({
 export const MarketName = z.object({
   symbol: z.string(),
   name: z.string(),
+  // Listing currency ("CAD" | "USD" | …) — labels the price so a US name reads as
+  // US$ vs C$ (native, labelled — D24). Defaults CAD for the all-CAD universe.
+  currency: z.string().default("CAD"),
   lastCents: z.number().int(),
   dayChangeBps: z.number().int(),
   inUniverse: z.boolean(), // false = watchlist candidate (not yet tradable)
@@ -119,6 +122,7 @@ export const PriceTarget = z.object({
 export const Idea = z.object({
   symbol: z.string(),
   name: z.string(),
+  currency: z.string().default("CAD"), // labels target prices (US$ vs C$)
   call: AgentCall.nullable(),
   target: PriceTarget,
   unfamiliar: z.boolean(), // On the Radar surfaces unfamiliar names first
@@ -126,6 +130,7 @@ export const Idea = z.object({
 export const Dossier = z.object({
   symbol: z.string(),
   name: z.string(),
+  currency: z.string().default("CAD"), // labels price/targets/cap (US$ vs C$)
   lastCents: z.number().int().nullable(), // current (delayed) share price
   bodyMarkdown: z.string(),
   call: AgentCall.nullable(),
@@ -145,6 +150,7 @@ export const NavPoint = z.object({ at: z.string(), navCents: z.number().int() })
 export const Mover = z.object({
   symbol: z.string(),
   name: z.string(),
+  currency: z.string().default("CAD"), // labels the price (US$ vs C$)
   lastCents: z.number().int(),
   dayChangeBps: z.number().int(),
 });

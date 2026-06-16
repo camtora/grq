@@ -1,23 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { money } from "@/lib/money";
 
 // On-page live price. Renders the SSR snapshot immediately, then polls
 // /api/quotes (FMP) every ~2.5s and updates in place — flashing green/red on a
-// move. initialChangePct is a FRACTION (0.0017 = +0.17%).
-const fmtMoney = (c: number) => `$${(c / 100).toFixed(2)}`;
+// move. initialChangePct is a FRACTION (0.0017 = +0.17%). `currency` labels a
+// non-CAD listing (US$ vs $) so a US name can't be misread as CAD (D24).
 const fmtPct = (f: number) => `${f >= 0 ? "+" : ""}${(f * 100).toFixed(2)}%`;
 
 export default function LiveQuote({
   symbol,
   initialCents,
   initialChangePct = null,
+  currency = "CAD",
   className = "",
   showChange = true,
 }: {
   symbol: string;
   initialCents: number | null;
   initialChangePct?: number | null;
+  currency?: string | null;
   className?: string;
   showChange?: boolean;
 }) {
@@ -57,7 +60,7 @@ export default function LiveQuote({
 
   return (
     <span className={`tabular-nums transition-colors duration-500 ${flash === "up" ? "text-emerald-300" : flash === "down" ? "text-red-300" : ""} ${className}`}>
-      {cents !== null ? fmtMoney(cents) : "—"}
+      {cents !== null ? money(cents, currency) : "—"}
       {showChange && chg !== null && <span className={`ml-1.5 text-xs ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(chg)}</span>}
     </span>
   );

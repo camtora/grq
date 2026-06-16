@@ -6,6 +6,9 @@ import {
   invalidateUniverseCache,
   BENCHMARK,
   CANDIDATE_CAP,
+  yahooForListing,
+  bareTicker,
+  isCadTradeable,
 } from "@/lib/universe";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
 import { refreshQuotesFor, getQuote } from "@/lib/broker/quotes";
@@ -23,6 +26,17 @@ function bad(error: string, status = 400) {
 
 async function journal(symbol: string, title: string, body: string) {
   await prisma.journalEntry.create({ data: { kind: "SYSTEM", symbol, title, body } });
+}
+
+/** Best-effort country from the picked listing (powers the stock filters). */
+function inferCountry(currency: string | null, exchange: string | null): string | null {
+  const c = (currency ?? "").toUpperCase();
+  if (c === "CAD") return "CA";
+  if (c === "USD") return "US";
+  const e = (exchange ?? "").toUpperCase();
+  if (["TSX", "TSE", "TSXV", "NEO", "CSE", "CNSX"].includes(e)) return "CA";
+  if (["NYSE", "NASDAQ", "AMEX", "NYSEARCA", "BATS"].includes(e)) return "US";
+  return null;
 }
 
 /** The automated promotion screen: price ≥ $2, 20d ADV ≥ 100k sh, ≥30 bars. */
@@ -48,13 +62,16 @@ export async function POST(req: Request) {
   if (!session) return bad("Members only — read-only access.", 403);
   const who = displayName(session);
 
-  let body: { action?: unknown; symbol?: unknown; tier?: unknown; note?: unknown };
+  let body: {
+    action?: unknown; symbol?: unknown; tier?: unknown; note?: unknown;
+    exchange?: unknown; currency?: unknown; name?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return bad("Invalid JSON.");
   }
-  if (typeof body.symbol !== "string" || !/^[A-Za-z0-9.\-]{1,8}$/.test(body.symbol.trim())) {
+  if (typeof body.symbol !== "string" || !/^[A-Za-z0-9.\-]{1,10}$/.test(body.symbol.trim())) {
     return bad("Invalid symbol.");
   }
   const symbol = body.symbol.trim().toUpperCase();
@@ -63,15 +80,35 @@ export async function POST(req: Request) {
 
   // ---------- add (or revive a retired name) ----------
   if (action === "add") {
-    if (entry && entry.status !== "RETIRED") return bad(`${symbol} is already tracked (${entry.status}).`);
-    if (!entry) {
+    // Listing-aware (D24): the search/browse pick carries the exchange + currency,
+    // so we resolve the EXACT listing chosen — no blind ".TO" guessing — and never
+    // collide a US listing with its CDR on one bare ticker (the SPCX bug).
+    const pickExchange = typeof body.exchange === "string" ? body.exchange : null;
+    const pickCurrency = typeof body.currency === "string" ? body.currency.toUpperCase() : null;
+    const pickName = typeof body.name === "string" ? body.name.slice(0, 120) : null;
+    const explicit = !!(pickExchange || symbol.includes("."));
+    const intendedYahoo = explicit ? yahooForListing(symbol, pickExchange) : null;
+    const bare = bareTicker(symbol);
+
+    // Storage key: the bare ticker if free (or it's already this same listing),
+    // else the exchange-qualified symbol so two listings of one ticker coexist.
+    let key = bare;
+    if (intendedYahoo) {
+      const atBare = await universeEntry(bare);
+      if (atBare && atBare.yahoo.toUpperCase() !== intendedYahoo.toUpperCase()) {
+        key = intendedYahoo.toUpperCase() === bare ? `${bare}.US` : intendedYahoo.toUpperCase();
+      }
+    }
+    const keyed = await universeEntry(key);
+    if (keyed && keyed.status !== "RETIRED") return bad(`${keyed.name} (${keyed.yahoo}) is already tracked (${keyed.status}).`);
+
+    if (!keyed) {
       const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
       if (candidates >= CANDIDATE_CAP) return bad(`Candidate cap reached (${CANDIDATE_CAP}) — retire something first.`);
-      // Resolve to a live Yahoo quote: try the symbol as given (US listings,
-      // ADRs, or already-suffixed names like SHOP.TO), then TSX/TSX-V for a bare
-      // ticker. US names are allowed as RESEARCH candidates (research-only;
-      // promoting one to tradeable waits on the multi-currency work — Phase 3+).
-      const tries = symbol.includes(".") ? [symbol] : [symbol, `${symbol}.TO`, `${symbol}.V`];
+      // With an explicit pick, probe ONLY that listing; else fall back to the
+      // legacy try-order for a bare ticker (US, then TSX/TSX-V). US names are
+      // RESEARCH candidates — tradeable only once they're CAD or we trade USD.
+      const tries = intendedYahoo ? [intendedYahoo] : symbol.includes(".") ? [symbol] : [symbol, `${symbol}.TO`, `${symbol}.V`];
       let resolved: { yahoo: string; priceCents: number; name: string | null } | null = null;
       for (const yahoo of tries) {
         const probe = await probeYahooSymbol(yahoo);
@@ -83,28 +120,31 @@ export async function POST(req: Request) {
       if (!resolved) return bad(`Couldn't find a live quote for ${symbol} (tried: ${tries.join(", ")}).`, 404);
       await prisma.universeMember.create({
         data: {
-          symbol,
+          symbol: key,
           yahoo: resolved.yahoo,
-          name: resolved.name ?? symbol,
+          name: pickName ?? resolved.name ?? bare,
           status: "CANDIDATE",
           addedBy: who,
+          currency: pickCurrency,
+          exchange: pickExchange,
+          country: inferCountry(pickCurrency, pickExchange),
           note: typeof body.note === "string" ? body.note.slice(0, 200) : null,
         },
       });
       invalidateUniverseCache();
-      await refreshQuotesFor([symbol]).catch(() => 0);
-      await refreshBars([symbol], "1y").catch(() => 0);
-      await prisma.researchRequest.create({ data: { symbol, requestedBy: who } });
-      await journal(symbol, `${who} added ${symbol} to research`, `${resolved.name ?? symbol} (${resolved.yahoo}) is now a CANDIDATE — researched, not tradeable. Dossier queued. Promotion to the universe requires both members + the automated screen.`);
-      await sendDiscord("info", `${who} added ${symbol} to research`, `${resolved.name ?? ""} — dossier queued.`);
-      return NextResponse.json({ ok: true, status: "CANDIDATE", yahoo: resolved.yahoo, name: resolved.name });
+      await refreshQuotesFor([key]).catch(() => 0);
+      await refreshBars([key], "1y").catch(() => 0);
+      await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });
+      await journal(key, `${who} added ${key} to research`, `${pickName ?? resolved.name ?? bare} (${resolved.yahoo}${pickCurrency ? `, ${pickCurrency}` : ""}) is now a CANDIDATE — researched, not tradeable. Dossier queued. Promotion to the universe requires both members + the automated screen.`);
+      await sendDiscord("info", `${who} added ${key} to research`, `${pickName ?? resolved.name ?? ""} — dossier queued.`);
+      return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key, yahoo: resolved.yahoo, name: pickName ?? resolved.name });
     }
-    // revive
-    await prisma.universeMember.update({ where: { symbol }, data: { status: "CANDIDATE", addedBy: who } });
+    // revive (same listing, was retired)
+    await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: who } });
     invalidateUniverseCache();
-    await journal(symbol, `${who} re-opened research on ${symbol}`, "Back to CANDIDATE — history was kept.");
-    await sendDiscord("info", `${who} re-opened research on ${symbol}`);
-    return NextResponse.json({ ok: true, status: "CANDIDATE" });
+    await journal(key, `${who} re-opened research on ${key}`, "Back to CANDIDATE — history was kept.");
+    await sendDiscord("info", `${who} re-opened research on ${key}`);
+    return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key });
   }
 
   if (!entry) return bad(`${symbol} is not tracked — add it first.`, 404);
@@ -123,10 +163,11 @@ export async function POST(req: Request) {
   // ---------- promote: two-person rule ----------
   if (action === "promote") {
     if (entry.status !== "CANDIDATE") return bad(`${symbol} is ${entry.status} — only candidates get promoted.`);
-    // Research-only listings: a non-Canadian listing can be watched + dossiered,
-    // but not promoted to tradeable until GRQ trades multiple currencies (Phase 3+).
-    if (!entry.yahoo.endsWith(".TO") && !entry.yahoo.endsWith(".V")) {
-      return bad(`${symbol} is a non-Canadian listing (${entry.yahoo}) — research-only until GRQ trades multiple currencies (Phase 3+). It stays on the watchlist.`, 422);
+    // Tradeable only if CAD-denominated (CDRs qualify; true-USD listings are
+    // research-only until GRQ trades multiple currencies — Phase 3+). Ties the
+    // gate to the actual money constraint, not the exchange suffix (D24).
+    if (!isCadTradeable(entry.currency, entry.yahoo)) {
+      return bad(`${symbol} is a ${entry.currency ?? "non-CAD"} listing (${entry.yahoo}) — research-only until GRQ trades multiple currencies (Phase 3+). It stays on the watchlist.`, 422);
     }
     const tier = typeof body.tier === "string" && (TIERS as readonly string[]).includes(body.tier) ? body.tier : entry.proposedTier;
     if (!tier) return bad("Pick a tier (etf | large | mid).");

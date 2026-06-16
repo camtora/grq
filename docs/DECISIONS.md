@@ -298,3 +298,35 @@ would need currency-aware NAV/sizing + an FX leg + the FX-approval guardrail. On
 a CDR force that decision.
 **iOS (parallel):** the app + `shared/contract.ts`/`web/lib/feed.ts` updated to mirror the IA
 (Universe→**Watchlist** + search, `leadTitle`, dossier `lastCents`).
+
+### D24 — US research first-class: listing-aware identity + native-labelled currency (Cam, 2026-06-16)
+**Context:** Graham has US names to research. Triggered by a concrete bug — Cam searched `SPCX`, picked
+the **Nasdaq·USD** listing, and the app re-added the **`SPCX.TO` CDR** (D23) instead. Root cause was
+threefold: (1) `UniverseMember` is keyed by the **bare ticker**, so a US listing and its CDR collide on
+one PK; (2) the add flow POSTed only `{symbol}` — **the listing the user picked (exchange/currency) was
+thrown away**; (3) the route then matched the bare ticker and revived the stale (CDR) row. The
+disambiguation UI was cosmetic. (Aside found in the data: `TSM` had slipped into the universe as
+**ACTIVE + USD** — a tradeable name the single-currency sim would have booked at a USD price as CAD.)
+**Scope chosen (3-way fork, Cam):** **US research, first-class** — watch/dossier/compare US names,
+currency-aware — but they stay **research-only**. US *trading* (multi-currency NAV/ACB/sizing + FX leg)
+stays deferred per D23; CDRs remain the CAD-tradeable path for megacaps.
+**Layer 0 — listing-aware identity (the fix):** `lib/universe.ts` gains `yahooForListing` (exchange→Yahoo
+suffix), `bareTicker`, `isCadTradeable`. `POST /api/universe` `add` now resolves the **exact picked
+listing** (probes only it), stores `currency`/`exchange`/`country` on add, and uses **collision-safe
+keying** — bare ticker if free, else the exchange-qualified symbol — so a US listing and its CDR coexist.
+`AddTicker`/`WatchButton`/Browse transmit the chosen `exchange`+`currency`. **Promotion is now gated on
+currency** (`isCadTradeable`), not the `.TO` suffix — CDRs stay promotable, true-USD stays research-only.
+No schema migration (the columns already existed).
+**Data reconcile:** moved the SpaceX CDR `SPCX`→`SPCX.TO` (freeing the bare ticker for the US listing,
+carrying its quote/bars/journal/research), and **demoted `TSM` USD ACTIVE→CANDIDATE** (no USD name is
+tradeable). Verified live: adding `SPCX`/Nasdaq/USD now creates a bare `SPCX` (USD) row, distinct from
+`SPCX.TO`.
+**Layer 1 — native, labelled currency (Cam's pick over CAD-normalize):** `lib/money.ts` `money(cents,
+currency)` — CAD stays a bare `$`, non-CAD renders its own symbol (`en-CA` ⇒ **`US$170.50`**), so a US
+name can't be misread as CAD. Wired across Browse / Watchlist / Discoveries / stock page (+ `LiveQuote`,
+currency chip). `shared/contract.ts` gains `currency` on `MarketName`/`Mover`/`Idea`/`Dossier`;
+`web/lib/feed.ts` populates it; iOS mirrors — `Fmt.money(cents, currency)` + `MoneyText` currency-aware,
+Models gain `currency`, Market/Today/Ideas/Dossier pass it (NAV/cash/fees stay CAD). *iOS compiled in
+Xcode by the user — not buildable on the Linux host.*
+**Deferred:** US macro for the agent context (FRED feed — Fed funds/UST/US CPI alongside BoC) needs a
+free FRED key; and full US *trading* (multi-currency) remains a Phase-3+ decision, unchanged from D23.

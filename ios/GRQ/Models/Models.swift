@@ -80,6 +80,7 @@ struct Signals: Codable {
 struct MarketName: Codable, Identifiable {
     let symbol: String
     let name: String
+    var currency: String? = nil   // listing currency — labels the price (US$ vs C$), nil ⇒ CAD
     let lastCents: Int
     let dayChangeBps: Int
     let inUniverse: Bool
@@ -100,6 +101,7 @@ struct PriceTarget: Codable {
 struct Idea: Codable, Identifiable {
     let symbol: String
     let name: String
+    var currency: String? = nil   // labels target prices (US$ vs C$), nil ⇒ CAD
     let call: AgentCall?
     let target: PriceTarget
     let unfamiliar: Bool
@@ -109,6 +111,7 @@ struct Idea: Codable, Identifiable {
 struct Dossier: Codable, Identifiable {
     let symbol: String
     let name: String
+    var currency: String? = nil   // labels price/targets/cap (US$ vs C$), nil ⇒ CAD
     let lastCents: Int?
     let bodyMarkdown: String
     let call: AgentCall?
@@ -126,6 +129,7 @@ struct Dossier: Codable, Identifiable {
 struct Mover: Codable, Identifiable {
     let symbol: String
     let name: String
+    var currency: String? = nil   // labels the price (US$ vs C$), nil ⇒ CAD
     let lastCents: Int
     let dayChangeBps: Int
     var id: String { symbol }

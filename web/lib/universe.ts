@@ -108,6 +108,39 @@ export async function toYahoo(symbol: string): Promise<string> {
   return e?.yahoo ?? `${symbol.toUpperCase().replace(".", "-")}.TO`;
 }
 
+// Exchange (FMP shortName) → Yahoo suffix. US venues are bare; Canadian venues
+// carry a suffix. This is what lets the add flow resolve the EXACT listing the
+// user picked instead of blindly trying ".TO" (the SPCX collision — D24).
+const EXCHANGE_SUFFIX: Record<string, string> = {
+  TSX: ".TO", TSE: ".TO", TORONTO: ".TO", "TSX-TORONTO": ".TO",
+  TSXV: ".V", "TSX VENTURE": ".V", VENTURE: ".V",
+  NEO: ".NE", "CBOE CA": ".NE", "CBOE CANADA": ".NE", "AEQUITAS NEO": ".NE",
+  CSE: ".CN", CNSX: ".CN",
+};
+
+/** The Yahoo symbol for a listing the user explicitly picked, e.g.
+ *  ("RY","TSX")→"RY.TO", ("NVDA","NASDAQ")→"NVDA". Already-suffixed input trusted. */
+export function yahooForListing(symbol: string, exchange?: string | null): string {
+  const s = symbol.trim().toUpperCase();
+  if (/\.[A-Z]{1,3}$/.test(s)) return s; // FMP often already qualifies (RY.TO)
+  const suf = exchange ? EXCHANGE_SUFFIX[exchange.trim().toUpperCase()] : undefined;
+  return suf ? `${s}${suf}` : s;
+}
+
+/** Bare ticker (suffix stripped) — the natural storage key when it's free. */
+export function bareTicker(symbol: string): string {
+  return symbol.trim().toUpperCase().replace(/\.(TO|V|NE|CN)$/i, "");
+}
+
+/** Tradeable in the CAD sim only if the listing is CAD-denominated — CDRs qualify;
+ *  true-USD listings are research-only until the multi-currency work (Phase 3+).
+ *  Falls back to a suffix heuristic when currency is unknown. */
+export function isCadTradeable(currency?: string | null, yahoo?: string | null): boolean {
+  if (currency) return currency.trim().toUpperCase() === "CAD";
+  const y = (yahoo ?? "").toUpperCase();
+  return y.endsWith(".TO") || y.endsWith(".V") || y.endsWith(".NE") || y.endsWith(".CN");
+}
+
 // The original hand-screened list — seeds UniverseMember as ACTIVE.
 export const SEED: { symbol: string; yahoo: string; name: string; tier: Tier }[] = [
   { symbol: "XIC", yahoo: "XIC.TO", name: "iShares Core S&P/TSX Capped Composite", tier: "etf" },

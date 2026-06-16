@@ -198,7 +198,7 @@ async function maybeScheduledSessions() {
   // 10:00–10:30 discovery hunt on market days (once/day) — surfaces new names.
   if (isMarketDay() && m >= 10 * 60 && m < 10 * 60 + 30) {
     const existing = await prisma.journalEntry.count({
-      where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Hunt —" } },
+      where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Hunt dossier" } },
     });
     if (existing === 0) {
       sessionRunning = true;

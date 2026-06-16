@@ -128,10 +128,11 @@ export default async function Watchlist() {
                       {c.symbol}
                     </Link>
                     <span className="min-w-0 flex-1 truncate text-sm text-teal-100/70">{c.name}</span>
+                    {c.currency && c.currency !== "CAD" && <Chip tone="dim">{c.currency}</Chip>}
                     {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
                     {c.lastCents !== null && (
                       <span className="text-sm tabular-nums text-teal-100/80">
-                        {money(c.lastCents)}{" "}
+                        {money(c.lastCents, c.currency)}{" "}
                         <span className={(c.dayBps ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>{pct((c.dayBps ?? 0) / 10_000, 2)}</span>
                       </span>
                     )}
