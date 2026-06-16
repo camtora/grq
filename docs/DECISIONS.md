@@ -330,3 +330,36 @@ Models gain `currency`, Market/Today/Ideas/Dossier pass it (NAV/cash/fees stay C
 Xcode by the user — not buildable on the Linux host.*
 **Deferred:** US macro for the agent context (FRED feed — Fed funds/UST/US CPI alongside BoC) needs a
 free FRED key; and full US *trading* (multi-currency) remains a Phase-3+ decision, unchanged from D23.
+
+### D25 — Market/Discover restructure + Today/Universe/stock UI overhaul (Cam, 2026-06-16)
+A large UI/IA pass on the Market section and the dashboards, built in verified chunks.
+**Navigation:** Market sub-tabs reordered to **Watchlist · Universe · Discover · Browse**; "Discoveries"
+→ **Discover**. The **Research desk tab is removed** — human notes now live per-stock (`/market/research`
++ `/research` redirect to Watchlist).
+**Watchlist:** rows render Universe-style (condensed: ticker → stock page · name · currency · signals ·
+price/day · **RatingBar** call) and **expand into the researched-ideas card**. That card was extracted to
+a single shared **`components/IdeaCard.tsx`** (`Idea` type + `SourceChips` ride along); Discover's old
+local copy was consolidated into it (one source of truth).
+**Universe:** GRQ's call column → the **RatingBar** slider; a **"Demoted" shelf** below the active table
+lists CANDIDATEs that carry a demote journal (back on the watchlist; the agent won't buy them).
+**Discover:** trimmed to **the hunt + smart money** (researched-ideas + market-pulse sections removed).
+The hunt asks for **8–12** names (was 3–6); a **↻ refresh** button sets `AgentState.huntRequestedAt`
+that the agent's tick loop picks up and runs the hunt **off-schedule** (the web/alpine container can't run
+a Claude session — only the agent/debian can — so a flag is the bridge); a per-card **✕ dismiss** marks a
+name **RETIRED** (`/api/universe` `dismiss` — creates the retired record since hunt names aren't members
+yet) so the hunt skips it and it lands in Retired research.
+**Stock page:** the journal section is renamed **"The record"** with an **"+ add note"** control; notes
+save as a new **`JournalKind.NOTE`** entry (`/api/note`) inline with the agent's. Also rearranged: Signals
+sits **beside Valuation vs peers**, Institutional moved **into the panel row** (where Signals was), the
+**Scoreboard got a header**, and the four panels are **equal height** (`flex-1`). Non-universe researched
+names (hunt finds) now render a **dossier preview + "Watch to add"** instead of 404; the hunt's once/day
+guard was fixed (`"Hunt —"`→`"Hunt dossier"`).
+**Today:** a **live market-indices strip** (TSX/S&P/DJIA/NASDAQ/Gold/Oil via `fmpIndices` → `/api/indices`
+→ `MarketIndices`, polling 15s **until the 4pm close** then frozen); **biggest movers beside the industry
+breakdown**, movers **expandable** (sector/industry/cap via `fmpProfile`); and the **Market pulse** (3×3
+headlines) moved here from Discover, under Headlines. Money renders native+labelled (US$ vs C$, D24).
+**Universe** also gained a **"Researched"** (last-completed-research) timestamp column.
+**Schema (additive, pushed):** `AgentState.huntRequestedAt`/`huntRequestedBy`; `JournalKind.NOTE`.
+**New:** `components/{IdeaCard,MarketIndices,AddNote,DismissButton,RefreshHuntButton}.tsx`; routes
+`/api/{indices,note,hunt/refresh}`. **Open:** the "Demoted" shelf is empty until a name is actually
+demoted; FRED US-macro (D24) still pending.

@@ -1,193 +1,22 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession } from "@/lib/session";
-import { computeSignals, overallSignal, type Recommendation } from "@/agent/signals";
-import { money, pct, signedMoney, fmtWhen } from "@/lib/money";
+import { computeSignals, overallSignal } from "@/agent/signals";
+import { fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip } from "@/components/ui";
-import StockLogo from "@/components/StockLogo";
-import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import Term from "@/components/Term";
 import MarketTabs from "@/components/MarketTabs";
-import WatchButton, { type WatchState } from "@/components/WatchButton";
+import { type WatchState } from "@/components/WatchButton";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
 import DismissButton from "@/components/DismissButton";
+import IdeaCard, { type Idea, SourceChips } from "@/components/IdeaCard";
 
 export const dynamic = "force-dynamic";
 
 // Household names get deprioritised — "stocks you should look at" should lead
 // with names you do not already know (candidates / mid-caps over the big banks).
 const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
-
-function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
-  if (!sourcesJson) return null;
-  let sources: string[] = [];
-  try {
-    sources = JSON.parse(sourcesJson);
-  } catch {
-    return null;
-  }
-  if (sources.length === 0) return null;
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {sources.map((s, i) => (
-        <span key={i} className="rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[10px] text-teal-200/60">
-          {s}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-type Idea = {
-  sym: string;
-  name: string;
-  logoUrl: string | null;
-  currency: string | null;
-  cur: number | null;
-  near: number | null;
-  far: number | null;
-  nearDays: number | null;
-  confidence: number | null;
-  rec: Recommendation | null;
-  stance: string | null;
-  body: string;
-  sourcesJson: string | null;
-  obscurity: number;
-  watch: WatchState;
-};
-
-function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: boolean; compact?: boolean }) {
-  const sm = stanceMeta(idea.stance);
-  if (compact) {
-    return (
-      <Card className="flex h-full flex-col p-4">
-        <div className="flex items-center gap-2.5">
-          <StockLogo symbol={idea.sym} logoUrl={idea.logoUrl} className="h-8 w-8 text-[10px]" />
-          <Link href={`/stocks/${idea.sym}`} className="font-bold text-teal-200 hover:underline">
-            {idea.sym}
-          </Link>
-          <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{idea.name}</span>
-          {sm ? (
-            <span className={`shrink-0 text-sm font-black ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
-              {sm.label}
-            </span>
-          ) : idea.far !== null ? (
-            <span className={`shrink-0 text-sm font-black ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {idea.far > 0 ? "+" : ""}
-              {pct(idea.far, 0)}
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/50">
-          {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
-          {idea.far !== null && (
-            <span className={idea.far > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
-              12-mo {idea.far > 0 ? "+" : ""}
-              {pct(idea.far, 0)}
-            </span>
-          )}
-          {idea.confidence != null && <span>conf {idea.confidence}%</span>}
-        </div>
-        <div className="mt-2 grow">
-          <CollapsibleMd text={idea.body} threshold={180}>
-            <SourceChips sourcesJson={idea.sourcesJson} />
-          </CollapsibleMd>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Link href={`/stocks/${idea.sym}`} className="text-xs text-teal-300 hover:underline">
-            full dossier →
-          </Link>
-          {isMember && idea.watch === "universe" ? (
-            <span className="text-[11px] font-semibold text-emerald-300/70">✓ universe</span>
-          ) : isMember ? (
-            <WatchButton symbol={idea.sym} state={idea.watch} />
-          ) : null}
-        </div>
-      </Card>
-    );
-  }
-  return (
-    <Card className="p-5">
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-3">
-            <StockLogo symbol={idea.sym} logoUrl={idea.logoUrl} className="h-10 w-10 text-xs" />
-            <div className="min-w-0">
-              <Link href={`/stocks/${idea.sym}`} className="text-lg font-bold text-teal-200 hover:underline">
-                {idea.sym}
-              </Link>
-              <div className="truncate text-sm text-teal-200/50">{idea.name}</div>
-            </div>
-            {idea.far !== null && (
-              <div className="ml-auto shrink-0 text-right">
-                <div className={`text-2xl font-black tabular-nums ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {idea.far > 0 ? "+" : ""}
-                  {pct(idea.far, 0)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
-                  <Term k="expected-return" align="right">12-mo upside</Term>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-teal-200/60">
-            {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
-            {idea.near !== null && (
-              <span>
-                near{idea.nearDays ? ` ~${Math.max(1, Math.round(idea.nearDays / 5))}w` : ""}{" "}
-                <b className={idea.near > 0 ? "text-emerald-400" : "text-red-400"}>
-                  {idea.near > 0 ? "+" : ""}
-                  {pct(idea.near, 0)}
-                </b>
-              </span>
-            )}
-            {idea.far !== null && <span>≈ {signedMoney(Math.round(idea.far * 100_000))} on $1k</span>}
-            {idea.confidence != null && (
-              <span>
-                <Term k="confidence">conf</Term> {idea.confidence}%
-              </span>
-            )}
-          </div>
-
-          <div className="mt-3">
-            <CollapsibleMd text={idea.body} threshold={280}>
-              <SourceChips sourcesJson={idea.sourcesJson} />
-            </CollapsibleMd>
-          </div>
-        </div>
-
-        <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
-          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-            <Term k="agent-call">GRQ&apos;s call</Term>
-          </div>
-          {sm ? (
-            <div className="mt-1">
-              <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[sm.tone].text}`}>{sm.label}</span>
-              <p className="mt-1 text-xs text-teal-200/50">{sm.blurb}</p>
-            </div>
-          ) : (
-            <p className="mt-1 text-sm text-teal-200/40">Not yet rated by GRQ.</p>
-          )}
-          {idea.rec && <p className="mt-3 text-[11px] text-teal-200/40">technicals lean {idea.rec.label} — an input, not the call</p>}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Link href={`/stocks/${idea.sym}`} className="text-xs text-teal-300 hover:underline">
-              full dossier →
-            </Link>
-            {isMember && idea.watch === "universe" ? (
-              <span className="text-[11px] font-semibold text-emerald-300/70">✓ in your universe</span>
-            ) : isMember ? (
-              <WatchButton symbol={idea.sym} state={idea.watch} />
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 export default async function Market() {
   const session = await getSession();

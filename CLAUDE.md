@@ -19,10 +19,13 @@ on the stock pages (honest 10-tier coverage map) AND fed into the agent's decisi
 tier-4 insider via the agent's per-dossier web research (paid INK feed deferred). **Real-time
 on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
 market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
-vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v3 (D23):** top-nav Market
-lands on **Watchlist** (primary); **Universe** is a background sub-tab; "Ideas"→**Discoveries**;
-**Research** = your human notes desk (agent queue behind the scenes); Watchlist rows
-condensed→expand; Today/Brief = news-banner-on-top + industry breakdown + full-width game plan;
+vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v4 (D25):** Market sub-tabs
+**Watchlist · Universe · Discover · Browse** (Research tab removed — notes now per-stock in **"The
+record"** = `JournalKind.NOTE`). **Watchlist** rows are Universe-style and **expand into the
+researched-ideas card** (shared `components/IdeaCard.tsx`); **Universe**+Watchlist show GRQ's call as the
+**RatingBar**, Universe has a **Demoted** shelf; **Discover** = the hunt (8–12 names · **↻ refresh** via
+`AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED) + smart money; **Today** gained a **live indices
+strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**.
 stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper CONNECTED (D22):**
 the gateway authenticates + reconciles the paper account **`DUQ774890`** (CAD 5k mirrored) via a
 **loopback proxy** (`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`); the
