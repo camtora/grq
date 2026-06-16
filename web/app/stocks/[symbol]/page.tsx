@@ -11,7 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades } from "@/lib/fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -56,7 +56,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -72,6 +72,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       fmpEnabled() ? fmpEarnings(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpStockNews(entry.yahoo, 5).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpInstitutional(entry.yahoo).catch(() => null) : Promise.resolve(null),
     ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -99,9 +100,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
     { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? `${earnings.upcoming ? "next" : "last"} ${earnings.date}` : "no FMP coverage for this name" },
     { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
-    { tier: 9, name: "Macro", status: "partial", detail: "agent's morning macro sweep (qualitative)" },
-    { tier: 4, name: "Insider", status: "none", detail: "Canadian issuers file on SEDI, not SEC — not wired" },
-    { tier: 5, name: "Institutional", status: "none", detail: "13F is US-listed holdings; thin for TSX — not wired" },
+    { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
+    { tier: 4, name: "Insider", status: "none", detail: "Canadian issuers file on SEDI, not SEC — paid feed pending" },
+    {
+      tier: 5,
+      name: "Institutional",
+      status: institutional ? "live" : "none",
+      detail: institutional
+        ? `${institutional.investorsHolding.toLocaleString()} institutions · ${institutional.investorsHoldingChange >= 0 ? "+" : ""}${institutional.investorsHoldingChange} QoQ`
+        : "13F is US-listed holdings — empty for pure-TSX issuers",
+    },
     { tier: 3, name: "Options flow", status: "none", detail: "never traded; flow is US-centric — later" },
     { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
     { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
@@ -460,6 +468,26 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   <span>hold {grades.hold}</span>
                   <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
                 </div>
+              </Card>
+            </>
+          )}
+
+          {institutional && (
+            <>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+                Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+              </h2>
+              <Card className="p-4 text-sm">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
+                  <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {institutional.investorsHoldingChange >= 0 ? "+" : ""}
+                    {institutional.investorsHoldingChange} QoQ
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] text-teal-200/40">
+                  From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
+                </p>
               </Card>
             </>
           )}

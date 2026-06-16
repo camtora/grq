@@ -307,3 +307,44 @@ export async function fmpGrades(symbol: string): Promise<FmpGrades | null> {
   if (total === 0) return null;
   return { strongBuy, buy, hold, sell, strongSell, consensus: String(g.consensus ?? ""), total };
 }
+
+// --- Tier 5: institutional ownership (13F summary) ----------------------------
+// 13F covers US-traded securities, so it carries cross-listed TSX names (RY, SHOP)
+// by their bare ticker — but NOT pure-Canadian issuers. Quarterly + ~45d lagged.
+export type FmpInstitutional = {
+  date: string;
+  investorsHolding: number;
+  investorsHoldingChange: number;
+  shares: number;
+  sharesChange: number;
+};
+
+export async function fmpInstitutional(symbol: string): Promise<FmpInstitutional | null> {
+  const base = stripSuffix(symbol);
+  // Walk back recent quarters in parallel (13F lags); take the freshest with data.
+  const now = new Date();
+  const cands: { year: number; quarter: number }[] = [];
+  let y = now.getUTCFullYear();
+  let q = Math.floor(now.getUTCMonth() / 3) + 1;
+  for (let i = 0; i < 4; i++) {
+    cands.push({ year: y, quarter: q });
+    q -= 1;
+    if (q < 1) { q = 4; y -= 1; }
+  }
+  const results = await Promise.all(
+    cands.map((c) => fmpGet<Array<Record<string, unknown>>>(`institutional-ownership/symbol-positions-summary?symbol=${encodeURIComponent(base)}&year=${c.year}&quarter=${c.quarter}`)),
+  );
+  for (const raw of results) {
+    const r = Array.isArray(raw) ? raw[0] : null;
+    if (r && typeof r.investorsHolding === "number") {
+      return {
+        date: String(r.date ?? ""),
+        investorsHolding: r.investorsHolding,
+        investorsHoldingChange: typeof r.investorsHoldingChange === "number" ? r.investorsHoldingChange : 0,
+        shares: typeof r.numberOf13Fshares === "number" ? r.numberOf13Fshares : 0,
+        sharesChange: typeof r.numberOf13FsharesChange === "number" ? r.numberOf13FsharesChange : 0,
+      };
+    }
+  }
+  return null;
+}

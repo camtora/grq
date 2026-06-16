@@ -9,9 +9,10 @@ import Sparkline from "@/components/Sparkline";
 import KillSwitch from "@/components/KillSwitch";
 import ActivityFeed from "@/components/ActivityFeed";
 import Term from "@/components/Term";
+import { getMacro, macroLine } from "@/lib/macro";
 
 export default async function Overview() {
-  const [session, pf, history, recentJournal, latestPlan] = await Promise.all([
+  const [session, pf, history, recentJournal, latestPlan, macro] = await Promise.all([
     getSession(),
     getPortfolio(),
     getNavHistory(60),
@@ -20,6 +21,7 @@ export default async function Overview() {
       where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
       orderBy: { at: "desc" },
     }),
+    getMacro().catch(() => null),
   ]);
   const name = session?.user?.name ?? "friend";
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
@@ -93,6 +95,14 @@ export default async function Overview() {
           }
         />
       </section>
+
+      {macro && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
+          <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
+          <span className="text-teal-100/70">{macroLine(macro)}</span>
+          <span className="ml-auto text-teal-200/30">Bank of Canada · as of {macro.asOf}</span>
+        </div>
+      )}
 
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
         {/* Main column: NAV, positions, latest journal */}

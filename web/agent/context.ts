@@ -5,6 +5,7 @@ import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
 import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
 import { fmpEnabled, fmpEarnings } from "../lib/fmp";
+import { getMacro, macroLine } from "../lib/macro";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
 
 function money(c: number): string {
@@ -14,7 +15,7 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard] =
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -25,6 +26,7 @@ export async function buildContext(): Promise<string> {
       prisma.symbolDirective.findMany(),
       superficialLossWindows().catch(() => []),
       getScoreboard().catch(() => []),
+      getMacro().catch(() => null),
     ]);
   const dialName = settings?.riskLevel ?? "BALANCED";
   const dial = DIALS[dialName];
@@ -97,6 +99,9 @@ ${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? `
 
 ## Upcoming earnings (next 3 weeks — a catalyst; size and time around it)
 ${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => `  ${e.symbol}: reports ${e.date} (in ${e.days}d)${e.eps != null ? `, EPS est ${e.eps}` : ""}`).join("\n")}
+
+## Macro (Bank of Canada — live structured feed; rate-sensitive names move on this)
+${macro ? `  ${macroLine(macro)} (as of ${macro.asOf})` : "  (unavailable)"}
 
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
