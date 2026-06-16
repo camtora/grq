@@ -6,17 +6,12 @@ struct IdeasView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionTitle(text: "Ideas — the agent's calls")
-                    ForEach(ideas) { idea in
-                        NavigationLink { StockDetailView(symbol: idea.symbol) } label: { card(idea) }
-                            .buttonStyle(.plain)
-                    }
+            GRQScreen(title: "Ideas", subtitle: "the agent's calls") {
+                ForEach(ideas) { idea in
+                    NavigationLink { StockDetailView(symbol: idea.symbol) } label: { card(idea) }
+                        .buttonStyle(.plain)
                 }
-                .padding(16)
             }
-            .navigationTitle("Ideas")
         }
         .task { ideas = await APIClient.shared.ideas() }
     }
@@ -24,15 +19,15 @@ struct IdeasView: View {
     private func card(_ idea: Idea) -> some View {
         let p = Theme.palette(scheme)
         return Card {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(idea.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    Text(idea.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
                     Text(idea.name).font(.caption).foregroundStyle(p.textMuted)
                     Spacer()
                     if idea.unfamiliar { Chip(text: "new", tone: .dim) }
                     if let c = idea.call { Chip(text: c.rawValue, tone: .green) }
                 }
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .bottom, spacing: 16) {
                     if let near = idea.target.nearCents {
                         target("Near", Fmt.money(near), idea.target.nearHorizon, p)
                     }
@@ -42,22 +37,27 @@ struct IdeasView: View {
                     Spacer()
                     if let er = idea.target.expectedReturnBps {
                         VStack(alignment: .trailing, spacing: 1) {
-                            Text(Fmt.bps(er)).font(.subheadline.weight(.semibold)).foregroundStyle(p.pos)
+                            Text(Fmt.bps(er)).font(.title3.weight(.black).monospacedDigit()).foregroundStyle(p.pos)
                             if let c = idea.target.confidence {
                                 Text("\(c)% conf").font(.caption2).foregroundStyle(p.textMuted)
                             }
                         }
                     }
                 }
-                TermLink(slug: "expected-return", label: "hypothesis, not a promise").font(.caption2)
+                HStack {
+                    TermLink(slug: "expected-return", label: "hypothesis, not a promise").font(.caption2)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(p.textMuted.opacity(0.4))
+                }
             }
+            .contentShape(Rectangle())
         }
     }
 
     private func target(_ label: String, _ value: String, _ horizon: String?, _ p: Palette) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label.uppercased()).font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
-            Text(value).font(.subheadline).monospacedDigit().foregroundStyle(p.textPrimary)
+            Text(value).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(p.textPrimary)
             if let horizon { Text(horizon).font(.caption2).foregroundStyle(p.textMuted) }
         }
     }
@@ -70,8 +70,8 @@ struct StockDetailView: View {
 
     var body: some View {
         ScrollView {
-            if let d {
-                VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
+                if let d {
                     header(d)
                     targets(d)
                     fundamentals(d)
@@ -82,12 +82,13 @@ struct StockDetailView: View {
                                 .foregroundStyle(Theme.palette(scheme).textPrimary.opacity(0.9))
                         }
                     }
+                } else {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
                 }
-                .padding(16)
-            } else {
-                ProgressView().padding(40)
             }
+            .padding(.horizontal, 16).padding(.vertical, 12)
         }
+        .background(ScreenBackground().ignoresSafeArea())
         .navigationTitle(symbol)
         .navigationBarTitleDisplayMode(.inline)
         .task { d = await APIClient.shared.dossier(symbol) }
@@ -96,8 +97,8 @@ struct StockDetailView: View {
     private func header(_ d: Dossier) -> some View {
         let p = Theme.palette(scheme)
         return Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(d.name).font(.title3.weight(.bold)).foregroundStyle(p.textPrimary)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(d.name).font(.system(.title2, design: .rounded).weight(.bold)).foregroundStyle(p.textPrimary)
                 HStack(spacing: 8) {
                     if let c = d.call { Chip(text: c.rawValue, tone: .green) }
                     if let s = d.signals {

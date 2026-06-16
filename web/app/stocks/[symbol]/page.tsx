@@ -12,6 +12,7 @@ import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
+import LiveQuote from "@/components/LiveQuote";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -129,10 +130,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">agent watching</Chip>}
         {quote && (
-          <span className="ml-auto flex items-baseline gap-3">
-            <span className="text-2xl font-semibold tabular-nums text-teal-50">{money(quote.midCents)}</span>
-            <span className={`tabular-nums ${dayBps > 0 ? "text-emerald-400" : dayBps < 0 ? "text-red-400" : "text-teal-200/50"}`}>
-              {pct(dayBps / 10_000, 2)} today
+          <span className="ml-auto flex items-baseline gap-2">
+            <LiveQuote
+              symbol={symbol}
+              initialCents={quote.midCents}
+              initialChangePct={dayBps / 10_000}
+              className="text-2xl font-semibold text-teal-50"
+            />
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              live
             </span>
           </span>
         )}

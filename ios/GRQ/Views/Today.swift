@@ -6,94 +6,67 @@ struct TodayView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                if let t = today {
-                    VStack(alignment: .leading, spacing: 16) {
-                        masthead(t)
-                        tape(t)
-                        leadStory(t)
-                        moversCard("Market Movers", t.movers)
-                        moversCard("Top Hitters", t.topHitters)
-                        radar(t)
-                        funFactCard
-                    }
-                    .padding(16)
-                } else {
-                    ProgressView().padding(40)
+            if let t = today {
+                GRQScreen(title: "GRQ Daily", subtitle: "\(t.edition.label) Edition · \(t.dateISO)") {
+                    heroCard(t)
+                    tapeCard(t)
+                    leadCard(t)
+                    moversCard("Market Movers", t.movers)
+                    moversCard("Top Hitters", t.topHitters)
+                    radarCard(t)
+                    funFact
                 }
+            } else {
+                ZStack { ScreenBackground().ignoresSafeArea(); ProgressView().tint(Theme.brandAccent) }
+                    .toolbar(.hidden, for: .navigationBar)
             }
-            .navigationTitle("The Daily")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { today = await APIClient.shared.today() }
     }
 
-    private func leadTitle(_ e: Edition) -> String {
-        switch e {
-        case .morning: return "The Plan"
-        case .midday: return "Midday"
-        case .evening: return "The Close"
-        case .weekend: return "Weekend Wrap"
-        }
-    }
-
-    private func masthead(_ t: Today) -> some View {
-        let p = Theme.palette(scheme)
-        return Card {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("GRQ DAILY").font(.title2.weight(.black)).foregroundStyle(Theme.brandGradient)
-                Text("\(t.edition.label) Edition · \(t.dateISO)").font(.caption).foregroundStyle(p.textMuted)
-                Divider().overlay(p.cardBorder)
-                HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        TermLink(slug: "nav", label: "NAV").font(.caption2)
-                        MoneyText(cents: t.navCents)
-                            .font(.system(.title, design: .rounded).weight(.bold))
-                            .foregroundStyle(p.textPrimary)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        TermLink(slug: "day-pnl", label: "Day").font(.caption2)
-                        HStack(spacing: 6) {
-                            Pnl(cents: t.dayPnlCents).font(.title3.weight(.semibold))
-                            BpsBadge(bps: t.dayPnlBps).font(.subheadline)
-                        }
-                    }
-                }
-                Text(Content.shared.dailyQuote()).font(.callout.italic())
-                    .foregroundStyle(p.textMuted)
-            }
-        }
-    }
-
-    private func tape(_ t: Today) -> some View {
+    private func heroCard(_ t: Today) -> some View {
         let p = Theme.palette(scheme)
         return Card {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    TermLink(slug: "the-tape", label: "The Tape").font(.caption.weight(.bold))
+                    TermLink(slug: "nav", label: "NAV").font(.caption.weight(.bold))
                     Spacer()
                     if let b = t.benchmarkBps {
                         HStack(spacing: 4) {
-                            TermLink(slug: "vs-xic", label: "vs XIC").font(.caption)
-                            BpsBadge(bps: b).font(.caption)
+                            TermLink(slug: "vs-xic", label: "vs XIC").font(.caption2)
+                            BpsBadge(bps: b).font(.caption2)
                         }
                     }
                 }
-                Sparkline(points: t.tape.map { Double($0.navCents) })
-                    .stroke(p.accent, lineWidth: 2)
-                    .frame(height: 56)
-                HStack {
-                    Text("Open \(Fmt.money(t.tape.first?.navCents ?? t.navCents))")
-                        .font(.caption2).foregroundStyle(p.textMuted)
-                    Spacer()
-                    Text("Now \(Fmt.money(t.navCents))")
-                        .font(.caption2).foregroundStyle(p.textMuted)
+                HeroAmount(cents: t.navCents)
+                HStack(spacing: 8) {
+                    Pnl(cents: t.dayPnlCents).font(.headline.weight(.bold))
+                    BpsBadge(bps: t.dayPnlBps).font(.subheadline)
+                    Text("today").font(.caption).foregroundStyle(p.textMuted)
                 }
+                Text(Content.shared.dailyQuote()).font(.callout.italic())
+                    .foregroundStyle(p.textMuted).padding(.top, 2)
             }
         }
     }
 
-    private func leadStory(_ t: Today) -> some View {
+    private func tapeCard(_ t: Today) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                TermLink(slug: "the-tape", label: "The Tape").font(.caption.weight(.bold))
+                TapeChart(points: t.tape.map { Double($0.navCents) }).frame(height: 84)
+                HStack {
+                    Text("Open \(Fmt.money(t.tape.first?.navCents ?? t.navCents))")
+                    Spacer()
+                    Text("Now \(Fmt.money(t.navCents))")
+                }
+                .font(.caption2).foregroundStyle(p.textMuted)
+            }
+        }
+    }
+
+    private func leadCard(_ t: Today) -> some View {
         let p = Theme.palette(scheme)
         return Card {
             VStack(alignment: .leading, spacing: 8) {
@@ -105,27 +78,34 @@ struct TodayView: View {
         }
     }
 
+    private func leadTitle(_ e: Edition) -> String {
+        switch e {
+        case .morning: return "The Plan"
+        case .midday: return "Midday"
+        case .evening: return "The Close"
+        case .weekend: return "Weekend Wrap"
+        }
+    }
+
     private func moversCard(_ title: String, _ movers: [Mover]) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: title)
-                ForEach(movers) { m in moverRow(m) }
+                ForEach(Array(movers.enumerated()), id: \.element.id) { idx, m in
+                    HStack {
+                        Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                        Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+                        Spacer()
+                        BpsBadge(bps: m.dayChangeBps).font(.subheadline)
+                    }
+                    if idx < movers.count - 1 { Divider().overlay(p.cardBorder.opacity(0.5)) }
+                }
             }
         }
     }
 
-    private func moverRow(_ m: Mover) -> some View {
-        let p = Theme.palette(scheme)
-        return HStack(spacing: 8) {
-            Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-            Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
-            Spacer()
-            MoneyText(cents: m.lastCents).font(.caption).foregroundStyle(p.textMuted)
-            BpsBadge(bps: m.dayChangeBps).font(.subheadline)
-        }
-    }
-
-    private func radar(_ t: Today) -> some View {
+    private func radarCard(_ t: Today) -> some View {
         let p = Theme.palette(scheme)
         return Card {
             VStack(alignment: .leading, spacing: 12) {
@@ -140,27 +120,25 @@ struct TodayView: View {
                         }
                         if let er = idea.target.expectedReturnBps {
                             HStack(spacing: 6) {
-                                Text("\(Fmt.bps(er)) expected").foregroundStyle(p.pos)
+                                Text("\(Fmt.bps(er)) expected").font(.caption.weight(.semibold)).foregroundStyle(p.pos)
                                 if let c = idea.target.confidence {
-                                    Text("· \(c)% conf").foregroundStyle(p.textMuted)
+                                    Text("· \(c)% conf").font(.caption).foregroundStyle(p.textMuted)
                                 }
                             }
-                            .font(.caption)
                         }
-                        TermLink(slug: "expected-return", label: "hypothesis, not a promise").font(.caption2)
                     }
                 }
+                TermLink(slug: "expected-return", label: "targets are hypotheses, not promises").font(.caption2)
             }
         }
     }
 
-    private var funFactCard: some View {
+    private var funFact: some View {
         let p = Theme.palette(scheme)
-        return Card {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "sparkles").foregroundStyle(p.accent)
-                Text(Content.shared.funFact()).font(.footnote).foregroundStyle(p.textMuted)
-            }
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkles").foregroundStyle(p.accent)
+            Text(Content.shared.funFact()).font(.caption).foregroundStyle(p.textMuted)
         }
+        .padding(.horizontal, 4)
     }
 }

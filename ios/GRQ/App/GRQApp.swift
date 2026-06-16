@@ -37,12 +37,13 @@ final class GlossaryPresenter: ObservableObject {
 struct RootView: View {
     @EnvironmentObject var auth: AuthManager
     @EnvironmentObject var theme: ThemeManager
-    @State private var splashDone = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showSplash = true
 
     var body: some View {
         Group {
-            if !splashDone {
-                SplashView(done: { splashDone = true })
+            if showSplash {
+                SplashView(done: { showSplash = false })
             } else if auth.isAuthenticated {
                 MainTabView()
             } else {
@@ -51,22 +52,21 @@ struct RootView: View {
         }
         .onAppear { if let t = auth.currentUser?.theme { theme.apply(t) } }
         .onChange(of: auth.currentUser?.theme) { _, t in if let t { theme.apply(t) } }
+        .onChange(of: scenePhase) { old, new in
+            // Make it rain on every open — cold launch and every return from background.
+            if new == .active && old == .background { showSplash = true }
+        }
     }
 }
 
 struct MainTabView: View {
     var body: some View {
         TabView {
-            TodayView()
-                .tabItem { Label(Strings.shared.s("tabs.today.label", "Today"), systemImage: "newspaper") }
-            MarketView()
-                .tabItem { Label(Strings.shared.s("tabs.market.label", "Market"), systemImage: "chart.line.uptrend.xyaxis") }
-            PortfolioView()
-                .tabItem { Label(Strings.shared.s("tabs.portfolio.label", "Portfolio"), systemImage: "briefcase") }
-            IdeasView()
-                .tabItem { Label(Strings.shared.s("tabs.ideas.label", "Ideas"), systemImage: "lightbulb") }
-            SettingsView()
-                .tabItem { Label(Strings.shared.s("tabs.settings.label", "Settings"), systemImage: "gearshape") }
+            TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }
+            MarketView().tabItem { Label("Market", systemImage: "chart.line.uptrend.xyaxis") }
+            PortfolioView().tabItem { Label("Portfolio", systemImage: "briefcase.fill") }
+            IdeasView().tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
+            SettingsView().tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
     }
 }

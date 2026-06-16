@@ -7,14 +7,10 @@ struct MarketView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    section("Universe", universe, term: "universe", caption: "the agent can buy these")
-                    section("Watchlist", watchlist, term: "watchlist", caption: "researched, not yet tradable")
-                }
-                .padding(16)
+            GRQScreen(title: "Market", subtitle: "Universe & Watchlist") {
+                section("Universe", universe, term: "universe", caption: "the agent can buy these")
+                section("Watchlist", watchlist, term: "watchlist", caption: "researched, not yet tradable")
             }
-            .navigationTitle("Market")
         }
         .task {
             let m = await APIClient.shared.market()
@@ -29,47 +25,54 @@ struct MarketView: View {
             HStack(spacing: 6) {
                 TermLink(slug: term, label: title).font(.caption.weight(.bold))
                 Text("· \(caption)").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+                Spacer()
             }
-            ForEach(names) { n in
-                NavigationLink { StockDetailView(symbol: n.symbol) } label: { row(n) }
-                    .buttonStyle(.plain)
+            Card {
+                VStack(spacing: 0) {
+                    ForEach(Array(names.enumerated()), id: \.element.id) { idx, n in
+                        NavigationLink { StockDetailView(symbol: n.symbol) } label: { row(n) }
+                            .buttonStyle(.plain)
+                        if idx < names.count - 1 {
+                            Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
+                        }
+                    }
+                }
             }
         }
     }
 
     private func row(_ n: MarketName) -> some View {
         let p = Theme.palette(scheme)
-        return Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    avatar(n.symbol, p)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(n.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                        Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        MoneyText(cents: n.lastCents).font(.subheadline).foregroundStyle(p.textPrimary)
-                        BpsBadge(bps: n.dayChangeBps).font(.caption)
-                    }
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 12) {
+                avatar(n.symbol, p)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(n.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                    Text(n.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
                 }
-                HStack(spacing: 8) {
-                    if let s = n.signals {
-                        TermLink(slug: "recommendation", label: "\(s.recommendationPct)%").font(.caption2)
-                    }
-                    if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
-                    Spacer()
-                    if let s = n.signals { SignalStrip(signals: s) }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    MoneyText(cents: n.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    BpsBadge(bps: n.dayChangeBps).font(.caption)
                 }
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(p.textMuted.opacity(0.4))
+            }
+            HStack(spacing: 8) {
+                if let call = n.agentCall { Chip(text: call.rawValue, tone: tone(call)) }
+                Spacer()
+                if let s = n.signals { SignalStrip(signals: s) }
             }
         }
+        .contentShape(Rectangle())
     }
 
     private func avatar(_ symbol: String, _ p: Palette) -> some View {
         Text(String(symbol.prefix(1)))
-            .font(.headline.weight(.bold)).foregroundStyle(p.accent)
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(p.accent.opacity(0.15)))
+            .font(.headline.weight(.black))
+            .foregroundStyle(Theme.brandGradient)
+            .frame(width: 38, height: 38)
+            .background(Circle().fill(p.accent.opacity(0.14)))
+            .overlay(Circle().strokeBorder(p.accent.opacity(0.25), lineWidth: 1))
     }
 
     private func tone(_ c: AgentCall) -> Chip.Tone {

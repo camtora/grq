@@ -308,6 +308,30 @@ export async function fmpGrades(symbol: string): Promise<FmpGrades | null> {
   return { strongBuy, buy, hold, sell, strongSell, consensus: String(g.consensus ?? ""), total };
 }
 
+// --- Live ticker quotes (FMP Ultimate batch-quote-short) ----------------------
+// One call returns {symbol, price, change, volume} for many symbols — real-time
+// for US; TSX freshness depends on FMP's exchange entitlement (verified live).
+export type LiveQuote = { symbol: string; priceCents: number; changePct: number };
+
+export async function fmpBatchQuotes(fmpSymbols: string[]): Promise<LiveQuote[]> {
+  const list = [...new Set(fmpSymbols.map((s) => s.toUpperCase()).filter(Boolean))];
+  if (list.length === 0) return [];
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`batch-quote-short?symbols=${encodeURIComponent(list.join(","))}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((q) => {
+      const price = typeof q.price === "number" ? q.price : null;
+      const change = typeof q.change === "number" ? q.change : 0;
+      const prev = price !== null ? price - change : null;
+      return {
+        symbol: String(q.symbol ?? ""),
+        priceCents: price !== null ? Math.round(price * 100) : 0,
+        changePct: prev && prev !== 0 ? (change / prev) * 100 : 0,
+      };
+    })
+    .filter((q) => q.symbol && q.priceCents > 0);
+}
+
 // --- Tier 5: institutional ownership (13F summary) ----------------------------
 // 13F covers US-traded securities, so it carries cross-listed TSX names (RY, SHOP)
 // by their bare ticker — but NOT pure-Canadian issuers. Quarterly + ~45d lagged.

@@ -10,23 +10,18 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    memberCard
-                    if let s = settings {
-                        riskCard(s)
-                        feesCard(s)
-                        killCard
-                        soakCard(s)
-                    } else {
-                        ProgressView().padding(.vertical, 20)
-                    }
-                    themeCard
-                    signOutButton
+            GRQScreen(title: "Settings", subtitle: "risk dial & controls") {
+                memberCard
+                if let s = settings {
+                    riskCard(s)
+                    killCard
+                    soakCard(s)
+                } else {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
                 }
-                .padding(16)
+                themeCard
+                signOutButton
             }
-            .navigationTitle("Settings")
         }
         .task {
             let s = await APIClient.shared.settings()
@@ -38,7 +33,10 @@ struct SettingsView: View {
     private var memberCard: some View {
         let p = Theme.palette(scheme)
         return Card {
-            HStack {
+            HStack(spacing: 12) {
+                Circle().fill(Theme.brandGradient).frame(width: 44, height: 44)
+                    .overlay(Text(String((auth.currentUser?.name ?? "?").prefix(1)))
+                        .font(.headline.weight(.black)).foregroundStyle(Color.black.opacity(0.8)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.currentUser?.name ?? "Member").font(.headline).foregroundStyle(p.textPrimary)
                     Text(auth.currentUser?.email ?? "").font(.caption).foregroundStyle(p.textMuted)
@@ -62,16 +60,10 @@ struct SettingsView: View {
                 KeyValueRow(label: "Max position", value: Fmt.pctBps(s.maxPositionBps), term: "weight")
                 KeyValueRow(label: "Stop-loss", value: Fmt.pctBps(s.stopLossBps), term: "stop-loss")
                 KeyValueRow(label: "Take-profit", value: Fmt.pctBps(s.takeProfitBps), term: "take-profit")
-            }
-        }
-    }
-
-    private func feesCard(_ s: FundSettings) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(text: "Fees")
-                KeyValueRow(label: "Budget this month", value: Fmt.money(s.feeBudgetCentsMonth), term: "fee-budget")
-                KeyValueRow(label: "Spent", value: Fmt.money(s.feeSpentMonthCents))
+                Divider().overlay(p.cardBorder)
+                KeyValueRow(label: "Fees this month",
+                            value: "\(Fmt.money(s.feeSpentMonthCents)) / \(Fmt.money(s.feeBudgetCentsMonth))",
+                            term: "fee-budget")
             }
         }
     }
@@ -95,12 +87,10 @@ struct SettingsView: View {
             }
         }
         .alert(killOn ? "Resume trading?" : "Halt all trading now?", isPresented: $showKillConfirm) {
-            Button(killOn ? "Resume trading" : "Engage",
-                   role: killOn ? .cancel : .destructive) { killOn.toggle() }
+            Button(killOn ? "Resume trading" : "Engage", role: killOn ? .cancel : .destructive) { killOn.toggle() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(killOn ? "The order gate opens again."
-                        : "Nothing trades until a member turns it back on.")
+            Text(killOn ? "The order gate opens again." : "Nothing trades until a member turns it back on.")
         }
     }
 
@@ -136,6 +126,6 @@ struct SettingsView: View {
         Button(role: .destructive) { auth.signOut() } label: {
             Text(Strings.shared.s("auth.signOut", "Sign out")).frame(maxWidth: .infinity)
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
     }
 }
