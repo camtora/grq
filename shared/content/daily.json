@@ -1,0 +1,72 @@
+{
+  "_note": "Daily, deterministic content shared by web and iOS. Selection algorithm is specified in README.md — both platforms MUST match it so the paper reads identically on both screens.",
+  "quotes": [
+    "“The stock market is a device for transferring money from the impatient to the patient.” — Warren Buffett",
+    "“In the short run the market is a voting machine; in the long run it is a weighing machine.” — Benjamin Graham",
+    "“Be fearful when others are greedy, and greedy when others are fearful.” — Warren Buffett",
+    "“The four most dangerous words in investing are: ‘this time it’s different.’” — John Templeton",
+    "“Know what you own, and know why you own it.” — Peter Lynch",
+    "“Risk comes from not knowing what you’re doing.” — Warren Buffett",
+    "“The investor’s chief problem — and even his worst enemy — is likely to be himself.” — Benjamin Graham",
+    "Time in the market beats timing the market. The robot keeps a sticky note to that effect.",
+    "Diversification: the art of being wrong in several places at once, comfortably.",
+    "A bull market is when your stocks go up; a bear market is when you discover humility.",
+    "Why did the trader bring a ladder to work? To buy on the dips.",
+    "My portfolio is like my coffee — I like it green, and I get nervous when it isn’t.",
+    "“The big money is not in the buying and the selling, but in the waiting.” — Charlie Munger",
+    "Compound interest: the eighth wonder of the world, and the only one you can own shares of."
+  ],
+  "funFacts": [
+    "The TSX is older than Canada's flag — it opened in 1861; the maple leaf arrived in 1965.",
+    "Compounding beats timing: $1 doubling every year for 20 years is over $1,000,000.",
+    "A 'bull' market is named for how a bull attacks — horns thrust UP; a bear swipes DOWN.",
+    "Warren Buffett made ~99% of his wealth after age 50 — investing rewards patience, not speed.",
+    "The S&P 500 has never lost money over any 20-year holding period in its history.",
+    "Over time, index funds beat most active managers — largely because of fees.",
+    "A TFSA isn't a savings account — you can hold stocks, ETFs and bonds in it, all tax-free.",
+    "Capital gains in Canada are only HALF-taxable — a quirk that rewards long-term gains.",
+    "The first stock exchange opened in Amsterdam in 1602, to trade Dutch East India Company shares.",
+    "The Rule of 72: divide 72 by your return % to estimate the years to double your money.",
+    "'Blue chip' comes from poker, where blue chips are the most valuable.",
+    "Most of the market's long-run return comes from a handful of its best days — so staying invested matters.",
+    "Market cap is price × shares — not how much cash a company has or makes.",
+    "Diversification is the only free lunch in investing: spreading risk costs you nothing.",
+    "Inflation is a silent tax — 3% a year halves your money's purchasing power in ~24 years.",
+    "Fees compound against you exactly like returns compound for you — 2% a year is brutal over decades.",
+    "Reinvested dividends have driven a huge share of the stock market's total return.",
+    "Short selling has unlimited downside — a stock can only fall to zero, but can rise forever.",
+    "Dollar-cost averaging — buying a fixed amount on a schedule — quietly removes the urge to time the market.",
+    "Your superficial-loss rule: sell at a loss and rebuy within 30 days, and the CRA denies the loss."
+  ],
+  "greetings": {
+    "_note": "Wealth-aware, deterministic per member per day. {name} is replaced at render. Loss jokes punch at the robot, never the member.",
+    "thresholds": { "soaring": 5, "up": 1, "flat": -1, "down": -5 },
+    "bands": {
+      "soaring": [
+        "Welcome back, oh prosperous one.",
+        "Welcome back, {name} — Midas mode engaged.",
+        "Welcome back, {name}. The robot requests a raise."
+      ],
+      "up": [
+        "Welcome back, {name} — green looks good on you.",
+        "Welcome back, {name}. The robot is earning its electricity.",
+        "Welcome back, {name}. Rich quick, slowly — as promised."
+      ],
+      "flat": [
+        "Welcome back, {name}.",
+        "Welcome back, {name}. Steady as she goes.",
+        "Welcome back, {name}. The receipts are in order."
+      ],
+      "down": [
+        "Welcome back, {name}. We don't talk about Tuesday.",
+        "Welcome back, {name}. The robot says drawdowns build character.",
+        "Welcome back, {name}. The robot apologizes in advance."
+      ],
+      "rough": [
+        "Welcome back, {name}. XIC would like a word.",
+        "Welcome back, {name}. Officially tuition, not losses.",
+        "Welcome back, {name}. The kill switch is right there. Just saying."
+      ]
+    }
+  }
+}

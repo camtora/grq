@@ -4,6 +4,7 @@ import { etParts, isMarketOpen, minutesToClose } from "./calendar";
 import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
 import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
+import { fmpEnabled, fmpEarnings } from "../lib/fmp";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
 
 function money(c: number): string {
@@ -45,6 +46,24 @@ export async function buildContext(): Promise<string> {
       ? `vs-XIC benchmark: same contributions in XIC would be ${money(pf.benchmarkCents)} (we are ${money(pf.navCents - pf.benchmarkCents)} ${pf.navCents >= pf.benchmarkCents ? "ahead" : "behind"})`
       : "vs-XIC benchmark: unavailable";
 
+  // Upcoming earnings on holdings + focus (Tier 6 awareness) — a catalyst to size
+  // and time around. Best-effort; empty if FMP is off or uncovered.
+  const earnSyms = [...new Set([...pf.positions.map((x) => x.symbol), ...focus.map((f) => f.symbol)])];
+  const earnings = fmpEnabled()
+    ? (
+        await Promise.all(
+          earnSyms.map(async (s) => {
+            const e = await fmpEarnings(s).catch(() => null);
+            if (!e?.upcoming) return null;
+            const days = Math.round((new Date(e.date).getTime() - Date.now()) / 86_400_000);
+            return days >= 0 && days <= 21 ? { symbol: s, date: e.date, days, eps: e.epsEstimated } : null;
+          }),
+        )
+      )
+        .filter((r): r is { symbol: string; date: string; days: number; eps: number | null } => !!r)
+        .sort((a, b) => a.days - b.days)
+    : [];
+
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
 Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — TSX session 9:30–16:00 ET.
@@ -75,6 +94,9 @@ ${
 
 ## Your focus (ACTIVE names you're monitoring for an entry — update via set_focus)
 ${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}
+
+## Upcoming earnings (next 3 weeks — a catalyst; size and time around it)
+${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => `  ${e.symbol}: reports ${e.date} (in ${e.days}d)${e.eps != null ? `, EPS est ${e.eps}` : ""}`).join("\n")}
 
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}

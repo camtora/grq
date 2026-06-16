@@ -168,34 +168,6 @@ export default async function Market() {
     const s = statusBy.get(sym);
     return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
   };
-  const quotes = await getQuotes(latest.map((d) => d.symbol as string));
-
-  const ideas: Idea[] = await Promise.all(
-    latest.map(async (d) => {
-      const sym = d.symbol as string;
-      const u = uBy.get(sym);
-      const cur = quotes.get(sym)?.midCents ?? null;
-      const sig = await computeSignals(sym).catch(() => null);
-      const tier = u?.tier ?? null;
-      return {
-        sym,
-        name: u?.name ?? sym,
-        logoUrl: u?.logoUrl ?? null,
-        cur,
-        near: cur && d.targetNearCents != null ? (d.targetNearCents - cur) / cur : null,
-        far: cur && d.targetFarCents != null ? (d.targetFarCents - cur) / cur : null,
-        nearDays: d.targetNearDays ?? null,
-        confidence: d.confidence,
-        rec: sig ? overallSignal(sig) : null,
-        stance: d.stance,
-        body: d.body,
-        sourcesJson: d.sourcesJson,
-        obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
-        watch: watchOf(sym),
-      };
-    }),
-  );
-  ideas.sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9));
 
   const [huntRaw, smartMoney, news] = await Promise.all([
     prisma.journalEntry.findMany({
@@ -215,43 +187,45 @@ export default async function Market() {
     })
     .slice(0, 8);
 
+  // The hunt and the targeted ideas render through the SAME IdeaCard — one visual
+  // language for "a name to look at"; the targeted ones just have more filled in
+  // (price targets, the agent's call). Smart money is a roundup, styled apart.
+  const quotes = await getQuotes([...latest, ...huntFinds].map((d) => d.symbol as string));
+  const toIdea = async (d: (typeof latest)[number]): Promise<Idea> => {
+    const sym = d.symbol as string;
+    const u = uBy.get(sym);
+    const cur = quotes.get(sym)?.midCents ?? null;
+    const sig = await computeSignals(sym).catch(() => null);
+    const tier = u?.tier ?? null;
+    return {
+      sym,
+      name: u?.name ?? sym,
+      logoUrl: u?.logoUrl ?? null,
+      cur,
+      near: cur && d.targetNearCents != null ? (d.targetNearCents - cur) / cur : null,
+      far: cur && d.targetFarCents != null ? (d.targetFarCents - cur) / cur : null,
+      nearDays: d.targetNearDays ?? null,
+      confidence: d.confidence,
+      rec: sig ? overallSignal(sig) : null,
+      stance: d.stance,
+      body: d.body,
+      sourcesJson: d.sourcesJson,
+      obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
+      watch: watchOf(sym),
+    };
+  };
+  const ideas: Idea[] = (await Promise.all(latest.map(toIdea))).sort(
+    (a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9),
+  );
+  const huntIdeas: Idea[] = await Promise.all(huntFinds.map(toIdea));
+
   return (
     <main>
       <PageHeader title="Market" sub="Discover names beyond GRQ's universe — the agent's ideas, the whole-market screener, and your research desk." />
       <MarketTabs />
 
-      {huntFinds.length > 0 && (
-        <section className="mb-6">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Chip tone="teal">the hunt</Chip>
-            <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — why we care up top, &ldquo;read more&rdquo; for the full dossier</span>
-          </div>
-          <div className="space-y-3">
-            {huntFinds.map((d) => (
-              <Card key={d.id} className="p-5">
-                <div className="mb-2 flex items-center gap-3">
-                  <StockLogo symbol={d.symbol as string} logoUrl={null} className="h-9 w-9 text-[11px]" />
-                  <Link href={`/stocks/${d.symbol}`} className="text-lg font-bold text-teal-200 hover:underline">
-                    {d.symbol}
-                  </Link>
-                  {d.confidence != null && <Chip tone="dim">conf {d.confidence}%</Chip>}
-                  {isMember && watchOf(d.symbol as string) !== "universe" && (
-                    <WatchButton symbol={d.symbol as string} state={watchOf(d.symbol as string)} />
-                  )}
-                  <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(d.at)}</span>
-                </div>
-                <CollapsibleMd text={d.body} threshold={320}>
-                  <SourceChips sourcesJson={d.sourcesJson} />
-                </CollapsibleMd>
-              </Card>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like to put them on your watchlist.</p>
-        </section>
-      )}
-
       {smartMoney && (
-        <Card className="mb-6 p-5">
+        <Card className="mb-8 p-5">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <Chip tone="dim">smart money</Chip>
             <span className="text-sm font-medium text-teal-50">{smartMoney.title}</span>
@@ -262,6 +236,21 @@ export default async function Market() {
           </CollapsibleMd>
           <p className="mt-2 text-[11px] text-teal-200/40">What notable public portfolios (congress, funds, insiders) are buying — colour, not gospel; disclosures lag.</p>
         </Card>
+      )}
+
+      {huntIdeas.length > 0 && (
+        <section className="mb-8">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Chip tone="teal">the hunt</Chip>
+            <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — earlier-stage finds, often before a price target</span>
+          </div>
+          <div className="space-y-4">
+            {huntIdeas.map((idea) => (
+              <IdeaCard key={idea.sym} idea={idea} isMember={isMember} />
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like to put them on your watchlist.</p>
+        </section>
       )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

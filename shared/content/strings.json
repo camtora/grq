@@ -1,0 +1,64 @@
+{
+  "_note": "UI copy shared by web and iOS. Voice rules in voice.md. {name} and {who} are replaced at render. Guardrail strings mirror the actual API responses (web/app/api/*) — keep them in sync.",
+  "brand": {
+    "name": "GRQ",
+    "wordmark": "GRQ Daily",
+    "tagline": "Get rich quick, slowly, with receipts.",
+    "taglineShort": "Rich quick, slowly."
+  },
+  "splash": {
+    "rainDurationMs": 1800,
+    "rainNote": "US dollar bills rain down, tumbling, then settle/fade into the welcome. Honor accessibilityReduceMotion → skip the rain, keep the welcome.",
+    "welcome": "Welcome back, {name}.",
+    "welcomeFallback": "Welcome back.",
+    "subtitle": "Rich quick, slowly.",
+    "welcomeSource": "Use the wealth-aware greeting from daily.json (banded by P&L). 'welcome' here is only the fallback before P&L loads — fetch /api/auth/me for name + totalPnlCents + contributionsCents to pick the right band on first paint."
+  },
+  "auth": {
+    "signInTitle": "Sign in to your fund.",
+    "signInSubtitle": "GRQ is invite-only — Cam & Graham.",
+    "signInGoogle": "Continue with Google",
+    "signInApple": "Continue with Apple",
+    "notAllowed": "That account isn't on the fund. GRQ is invite-only.",
+    "expired": "Session expired — sign in again to keep the receipts straight.",
+    "signOut": "Sign out"
+  },
+  "tabs": {
+    "today":     { "label": "Today",     "blurb": "The Daily — your fund as a newspaper." },
+    "market":    { "label": "Market",    "blurb": "The universe, the movers, and names worth a look." },
+    "portfolio": { "label": "Portfolio", "blurb": "What the fund holds, and how it's doing." },
+    "ideas":     { "label": "Ideas",     "blurb": "Dossiers, signals, and the agent's calls." },
+    "settings":  { "label": "Settings",  "blurb": "Risk dial, members, and the kill switch." }
+  },
+  "emptyStates": {
+    "noHoldings": "Nothing held yet. The robot is still shopping.",
+    "noIdeas": "No dossiers filed yet. The agent researches before it buys.",
+    "noActivity": "Quiet so far. The receipts will show up here.",
+    "noMovers": "Flat tape today. Even the robot is bored.",
+    "offline": "Can't reach the fund right now. Check your connection — your money is fine."
+  },
+  "loading": {
+    "default": "Counting the receipts…",
+    "quotes": "Pinging the tape…"
+  },
+  "guardrails": {
+    "viewerBlocked": "Members only — read-only access.",
+    "killEngaged": "Kill switch ENGAGED. Nothing trades until a member releases it.",
+    "killReleased": "Kill switch released — the order gate is open again.",
+    "faceIdReason": "Confirm it's you before changing the fund.",
+    "orderBlockedGeneric": "Trade blocked at the gate. The reason is shown plainly — the guardrails don't bend."
+  },
+  "actions": {
+    "killSwitch": {
+      "engage": "Engage kill switch",
+      "release": "Resume trading",
+      "confirmEngage": "Halt all trading now? Nothing trades until a member turns it back on.",
+      "confirmRelease": "Open the order gate again?"
+    }
+  },
+  "literacy": {
+    "termHint": "Tap any underlined term for a plain-English definition.",
+    "explainCta": "Explain this",
+    "hypothesisNote": "Price targets are the agent's hypothesis — not a promise."
+  }
+}
