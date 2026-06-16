@@ -167,8 +167,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     def: "The fund's value through the trading day, open to now — the intraday line of NAV. (Old trading-floor slang: the ticker 'tape' that printed live prices.)",
   },
   "agent-call": {
-    term: "The agent's call",
-    def: "The agent's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
+    term: "GRQ's call",
+    def: "GRQ's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
   },
   universe: {
     term: "The universe",
@@ -180,7 +180,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   "analyst-target": {
     term: "Analyst consensus target",
-    def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on the agent's call — when the agent and the street sharply disagree, it's worth asking who's right.",
+    def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on GRQ's call — when GRQ and the street sharply disagree, it's worth asking who's right.",
   },
   "capital-gains": {
     term: "Capital gains tax",

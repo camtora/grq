@@ -34,7 +34,7 @@ function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendatio
   if (stance) {
     const sm = stanceMeta(stance)!;
     return (
-      <span className={`text-xs font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`The agent's call: ${sm.blurb}`}>
+      <span className={`text-xs font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
         {sm.label}
       </span>
     );
@@ -70,7 +70,7 @@ function UniverseTable({ rows }: { rows: Row[] }) {
             <th className="px-4 py-3 text-right">Last</th>
             <th className="px-4 py-3 text-right">Day</th>
             <th className="px-4 py-3">Signals</th>
-            <th className="px-4 py-3">Agent&apos;s call</th>
+            <th className="px-4 py-3">GRQ&apos;s call</th>
             <th className="px-4 py-3 text-right">Position</th>
             <th className="px-4 py-3 text-right">Unrealized</th>
             <th className="px-4 py-3 text-right">Journal</th>
@@ -300,7 +300,7 @@ export default async function Universe() {
         <span className="font-semibold text-teal-200/60">M</span> macd ·{" "}
         <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
         These are <span className="font-semibold text-teal-200/60">inputs</span>, not the verdict.{" "}
-        <span className="font-semibold text-teal-200/60">Agent&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
+        <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
         quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
       </p>
     </main>

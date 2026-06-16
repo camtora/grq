@@ -57,8 +57,56 @@ type Idea = {
   watch: WatchState;
 };
 
-function IdeaCard({ idea, isMember }: { idea: Idea; isMember: boolean }) {
+function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: boolean; compact?: boolean }) {
   const sm = stanceMeta(idea.stance);
+  if (compact) {
+    return (
+      <Card className="flex h-full flex-col p-4">
+        <div className="flex items-center gap-2.5">
+          <StockLogo symbol={idea.sym} logoUrl={idea.logoUrl} className="h-8 w-8 text-[10px]" />
+          <Link href={`/stocks/${idea.sym}`} className="font-bold text-teal-200 hover:underline">
+            {idea.sym}
+          </Link>
+          <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{idea.name}</span>
+          {sm ? (
+            <span className={`shrink-0 text-sm font-black ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
+              {sm.label}
+            </span>
+          ) : idea.far !== null ? (
+            <span className={`shrink-0 text-sm font-black ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {idea.far > 0 ? "+" : ""}
+              {pct(idea.far, 0)}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/50">
+          {idea.cur !== null && <span>now {money(idea.cur)}</span>}
+          {idea.far !== null && (
+            <span className={idea.far > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
+              12-mo {idea.far > 0 ? "+" : ""}
+              {pct(idea.far, 0)}
+            </span>
+          )}
+          {idea.confidence != null && <span>conf {idea.confidence}%</span>}
+        </div>
+        <div className="mt-2 grow">
+          <CollapsibleMd text={idea.body} threshold={180}>
+            <SourceChips sourcesJson={idea.sourcesJson} />
+          </CollapsibleMd>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <Link href={`/stocks/${idea.sym}`} className="text-xs text-teal-300 hover:underline">
+            full dossier →
+          </Link>
+          {isMember && idea.watch === "universe" ? (
+            <span className="text-[11px] font-semibold text-emerald-300/70">✓ universe</span>
+          ) : isMember ? (
+            <WatchButton symbol={idea.sym} state={idea.watch} />
+          ) : null}
+        </div>
+      </Card>
+    );
+  }
   return (
     <Card className="p-5">
       <div className="grid gap-5 lg:grid-cols-3">
@@ -112,7 +160,7 @@ function IdeaCard({ idea, isMember }: { idea: Idea; isMember: boolean }) {
 
         <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
           <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-            <Term k="agent-call">The agent&apos;s call</Term>
+            <Term k="agent-call">GRQ&apos;s call</Term>
           </div>
           {sm ? (
             <div className="mt-1">
@@ -120,7 +168,7 @@ function IdeaCard({ idea, isMember }: { idea: Idea; isMember: boolean }) {
               <p className="mt-1 text-xs text-teal-200/50">{sm.blurb}</p>
             </div>
           ) : (
-            <p className="mt-1 text-sm text-teal-200/40">Not yet rated by the agent.</p>
+            <p className="mt-1 text-sm text-teal-200/40">Not yet rated by GRQ.</p>
           )}
           {idea.rec && <p className="mt-3 text-[11px] text-teal-200/40">technicals lean {idea.rec.label} — an input, not the call</p>}
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -244,9 +292,9 @@ export default async function Market() {
             <Chip tone="teal">the hunt</Chip>
             <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — earlier-stage finds, often before a price target</span>
           </div>
-          <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             {huntIdeas.map((idea) => (
-              <IdeaCard key={idea.sym} idea={idea} isMember={isMember} />
+              <IdeaCard key={idea.sym} idea={idea} isMember={isMember} compact />
             ))}
           </div>
           <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like to put them on your watchlist.</p>
