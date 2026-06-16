@@ -202,3 +202,32 @@ CAD-denominated Apple depositary receipt on a Canadian exchange, correctly ACTIV
 (`.TO`/`.NE`) are a path to trade US megacaps in CAD *without* multi-currency — a future
 product call; NVDA/COST currently resolved to their USD listings, so they sit as research-only
 candidates, but their CDRs would be promotable.)
+
+### D21 — Data layer built on FMP Ultimate + BoC; real-time ticker; insider via dossier (2026-06-15)
+**Context:** With **FMP Ultimate** (Cam, ~$250 — the paid backbone) + free Bank-of-Canada feeds,
+most of the 10-tier taxonomy (`docs/DATA-SOURCES.md`) went from "not started" to live, feeding
+both the stock pages AND the agent's decision context (so the data moves calls, not just
+displays). **Built:**
+- **Tiers 2/6/7 + analyst grades** on the stock page; an honest 10-tier **coverage map** replaced
+  the placeholder (green/amber/grey + *why* each dark one is dark).
+- **Tier 5 (13F)** — FMP institutional summary (US-listed; empty for pure-TSX issuers).
+- **Tier 9 (macro)** — structured **BoC Valet** feed (overnight / 5y GoC / CPI / USD-CAD,
+  `lib/macro.ts`) injected into the agent context + an Overview strip. Earnings dates also
+  injected — the agent now *uses* catalysts.
+- **Tier 4 (insider)** — the agent web-researches it per dossier (clusters of buying). The free
+  structured path is walled (canadianinsider = Cloudflare, Yahoo = crumb, SEDI = fragile
+  multi-POST CSRF form); a structured universe-wide feed needs a **paid** source (INK) — Cam's
+  call, deferred (task #15).
+- **Real-time quotes** — FMP Ultimate covers TSX (`.TO`); built `/api/quotes` (batch-quote-short,
+  micro-cached, our-symbol→`.TO` mapping) + `<LiveQuote>` (polls ~2.5s, flashes on a move) on the
+  stock-page price. **OPEN:** whether FMP serves real-time TSX or ~15-min delayed (exchange
+  entitlement) — verify at market open; truly-real-time TSX otherwise rides IBKR L1 at go-live (#16).
+
+**IA refinements (same session):** "the agent's call" → **"GRQ's call"** everywhere; the hunt
+renders 2-up compact; smart money leads Market▸Ideas; the **Watchlist moved to Market▸Watchlist**
+(Universe = just the investable set); Today's researched ideas now show GRQ's call.
+**Confirmed (not a change):** the risk dial (CAUTIOUS/BALANCED/AGGRESSIVE) is fully functional —
+it drives position size, cash floor, stop/take-profit distance, weekly-trade cap and buyable
+tiers in the validator + runner (`agent/policy.ts` DIALS).
+**Consequences:** FMP Ultimate is the paid data backbone. The two open data threads (structured
+insider, real-time-TSX) are both gated on external decisions — INK feed, and the market-open check.

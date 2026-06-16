@@ -8,14 +8,20 @@ Cam & Graham at https://grq.camerontora.ca. A trading agent (Phase 2+) manages a
 brokerage account within hard code-enforced guardrails; the web app is the dashboard.
 Tagline: *"Get rich quick, slowly, with receipts."*
 
-**Status (2026-06-13):** Phases 0–2.7 shipped — site live behind SSO; the agent is
+**Status (2026-06-15):** Phases 0–2.7 shipped — site live behind SSO; the agent is
 live-firing on the sim on real Yahoo-delayed quotes (soak running since 2026-06-12), with
 per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
 chat. Decision sessions run on **Opus 4.8** (`claude-opus-4-8`), triage on Haiku 4.5 — Fable 5
-access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). Next: Phase 2 has
-exited build and is soaking; Phase 3 (IBKR paper) is blocked only on Cam & Graham's IBKR
-account (both applied 2026-06-12).
+access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer now
+live on FMP Ultimate + free BoC feeds (D21):** earnings/news/grades/13F + structured macro,
+on the stock pages (honest 10-tier coverage map) AND fed into the agent's decision context;
+tier-4 insider via the agent's per-dossier web research (paid INK feed deferred). **Real-time
+on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
+market open*). **IA-v2:** "GRQ's call" everywhere; Watchlist → Market▸Watchlist (Universe = the
+investable set only). **Phase 3: the `IBKRBroker` adapter is code-complete behind the seam
+(609b0f9, inert until `BROKER=ibkr-paper`)** — flip-and-verify ready; blocked only on IBKR
+account provisioning (applied 2026-06-12).
 
 ---
 
