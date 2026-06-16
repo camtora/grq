@@ -7,7 +7,9 @@
 import { prisma } from "../lib/db";
 import { refreshAllQuotes, refreshQuotesFor, getQuotes } from "../lib/broker/quotes";
 import { BENCHMARK } from "../lib/universe";
-import { SimBroker, writeNavSnapshot } from "../lib/broker/sim";
+import { writeNavSnapshot } from "../lib/broker/sim";
+import { getBroker } from "../lib/broker";
+import { IBKRBroker } from "../lib/broker/ibkr";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
@@ -19,7 +21,7 @@ import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan } from "./sessions";
 
-const broker = new SimBroker();
+const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // In-memory day state (rebuilt from DB checks on restart, so restarts are safe).
@@ -282,6 +284,10 @@ async function tick() {
   await heartbeat({ lastTickAt: new Date(), note: open ? "market open" : "market closed" });
 
   if (open) {
+    if (broker.kind === "ibkr") {
+      await (broker as IBKRBroker).keepAlive();
+      await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e)));
+    }
     const swept = await broker.sweepPendingOrders();
     if (swept > 0) await alert("info", `Resting orders filled: ${swept}`);
     await enforceExits();

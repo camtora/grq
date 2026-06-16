@@ -1,5 +1,6 @@
 import { prisma } from "../lib/db";
-import { SimBroker, ibkrFixedCommissionCents } from "../lib/broker/sim";
+import { ibkrFixedCommissionCents } from "../lib/broker/sim";
+import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry } from "../lib/universe";
 import { getPortfolio } from "../lib/portfolio";
@@ -79,7 +80,7 @@ export async function superficialLossWindows(): Promise<{ symbol: string; until:
  * by the engine path or returned plainly so the model learns the rails.
  */
 export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promise<Verdict> {
-  const broker = new SimBroker();
+  const broker = getBroker();
   const symbol = order.symbol.toUpperCase();
 
   const refuse = (rejectReason: string): Verdict => ({ ok: false, rejectReason });

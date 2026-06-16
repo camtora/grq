@@ -32,4 +32,7 @@ export interface BrokerAdapter {
   /** Symbols this broker can currently price (sim: the synthetic universe). */
   listSymbols(): Promise<string[]>;
   placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult>;
+  /** Fill any crossable resting orders (the sim sweeps its own book; IBKR is a
+   *  no-op — resting limits live broker-side). Returns the count filled. */
+  sweepPendingOrders(): Promise<number>;
 }

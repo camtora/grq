@@ -47,6 +47,44 @@ stale "Logging in failed/succeeded" lines cause false reads.
 
 ---
 
+## ✅ Built 2026-06-15 — the adapter is wired (flip-and-verify ready)
+
+The `IBKRBroker` (`web/lib/broker/ibkr.ts`) is **code-complete and deployed, inert until
+`BROKER=ibkr-paper`**. The seam is routed — the runner + validator place through `getBroker()`,
+so the §6 gate still runs *above* the broker, unchanged. Built + typechecking clean:
+
+- **Scoped TLS** — gateway calls use a `node:https` agent with `rejectUnauthorized:false`, scoped
+  to `ibeam` only (never global `NODE_TLS_REJECT_UNAUTHORIZED`). No new dependency.
+- **`conidFor`** — `/iserver/secdef/search`, prefers the Toronto (TSE/TSX) listing among hits.
+- **`authStatus` / `keepAlive`** — health each tick; re-`reauthenticate`s a dropped session.
+- **`placeOrder`** — submits to `/iserver/account/{id}/orders`, clears the reply/confirm cascade,
+  polls the fill ~12s → records Order + Trade + TRADE journal entry (fill price & commission from
+  IBKR) → reconciles. Working-but-unfilled → PENDING, finalised on the next tick.
+- **`reconcile`** — mirrors IBKR positions + CAD cash into our DB each tick (**our DB becomes a
+  mirror of broker truth, not the source**). Deterministic stop/take-profit place real IBKR market
+  sells when triggered, so protection survives the broker swap.
+
+**Deferred (after the first clean paper fills — not blockers):** native bracket orders (stop +
+take-profit resting *at IBKR*); the Flex importer (historical trade/NAV reconciliation).
+
+**VERIFY-LIVE (best-effort against the docs; shake out on the live gateway, marked in code):** the
+conid pick across listings, the exact reply-cascade shape, and the fill/commission field names in
+the order-status response.
+
+### Tomorrow — flip & verify (during market hours, 9:30–16:00 ET)
+1. **Gateway up + connected:** `docker-compose up -d ibeam`, approve the IB Key push, confirm
+   `iserver` `authenticated:true` (the Step 3 tickle check). *This is the only real unknown left —
+   it needs the brokerage session to bridge, which it won't do off-hours.*
+2. **Paper account id into `.env`:** `IBKR_ACCOUNT_ID=DU…` (the paper account number).
+3. **Flip the seam:** set `BROKER=ibkr-paper`, `docker-compose up -d agent`.
+4. **One tiny test order** (agent path or a manual ticket) on a liquid TSX name — watch the log:
+   submit → reply cleared → fill → Trade + journal written → `reconcile` mirrors the position.
+   Cross-check the position/cash against Client Portal.
+5. If the fill + reconcile match broker truth, **the IBKR-paper soak clock starts** (≥ 2 clean
+   weeks). A misbehaving `VERIFY-LIVE` spot is a small field/selector tweak, not a rebuild.
+
+---
+
 ## Step 1 — Graham, in IBKR Client Portal (~10 min)
 
 1. **Settings → Account Settings → Paper Trading Account → enable.** The free simulated twin
