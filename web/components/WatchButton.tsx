@@ -3,43 +3,71 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// Toggle a ticker on/off your watchlist. Works for any symbol (universe or not).
-export default function WatchButton({ symbol, watched: initial }: { symbol: string; watched?: boolean }) {
-  const router = useRouter();
-  const [watched, setWatched] = useState(!!initial);
-  const [busy, setBusy] = useState(false);
+// One unified action across the app. Watching a stock makes it a research
+// CANDIDATE (your watchlist) — the agent dossiers it; it's not tradeable until
+// you both promote it into the universe. "universe" = already ACTIVE (ours),
+// shown as a badge, not a toggle.
+export type WatchState = "none" | "watching" | "universe";
 
-  async function toggle() {
+export default function WatchButton({ symbol, state: initial = "none" }: { symbol: string; state?: WatchState }) {
+  const router = useRouter();
+  const [state, setState] = useState<WatchState>(initial);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function call(action: "add" | "retire") {
     if (busy) return;
     setBusy(true);
+    setErr("");
     try {
-      const res = await fetch("/api/watchlist", {
+      const res = await fetch("/api/universe", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ symbol, action: watched ? "remove" : "add" }),
+        body: JSON.stringify({ action, symbol }),
       });
-      if (res.ok) {
-        const d = await res.json();
-        setWatched(!!d.watched);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(d.error ?? `HTTP ${res.status}`);
+      } else {
+        setState(action === "add" ? "watching" : "none");
         router.refresh();
       }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }
 
+  if (state === "universe") {
+    return (
+      <span
+        className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-300/80"
+        title="In the tradeable universe — the agent may buy it"
+      >
+        ✓ universe
+      </span>
+    );
+  }
+
+  const watching = state === "watching";
   return (
     <button
-      onClick={toggle}
+      onClick={() => call(watching ? "retire" : "add")}
       disabled={busy}
-      title={watched ? "On your watchlist — click to remove" : "Add to your watchlist"}
+      title={
+        err ||
+        (watching
+          ? "On your watchlist — the agent is researching it. Click to stop watching."
+          : "Watch — the agent dossiers it and it joins your watchlist")
+      }
       className={`rounded-lg border px-2 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
-        watched
+        watching
           ? "border-teal-400/50 bg-teal-400/15 text-teal-200"
           : "border-teal-400/25 text-teal-300/70 hover:bg-teal-400/10"
       }`}
     >
-      {busy ? "…" : watched ? "★ watching" : "☆ watch"}
+      {busy ? "…" : err ? "retry" : watching ? "★ watching" : "☆ watch"}
     </button>
   );
 }

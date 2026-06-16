@@ -101,14 +101,14 @@ const writeJournalTool = tool(
   },
 );
 
-const getWatchlistTool = tool("get_watchlist", "Current watchlist.", {}, async () => {
-  const w = await prisma.watchlist.findMany({ orderBy: { addedAt: "desc" } });
+const getFocusTool = tool("get_focus", "Your focus list — the ACTIVE universe names you're monitoring for an entry (NOT the human watchlist of candidates).", {}, async () => {
+  const w = await prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } });
   return text(w.map((x) => `${x.symbol}${x.note ? ` — ${x.note}` : ""}`).join("\n") || "(empty)");
 });
 
-const setWatchlistTool = tool(
-  "set_watchlist",
-  "Add or remove watchlist symbols (universe members only).",
+const setFocusTool = tool(
+  "set_focus",
+  "Add or remove names on your focus list — ACTIVE universe members you're monitoring for an entry, each with a short trigger note. This is your private setups list, not the human watchlist of candidates.",
   {
     add: z.array(z.object({ symbol: z.string(), note: z.string().optional() })).default([]),
     remove: z.array(z.string()).default([]),
@@ -122,7 +122,7 @@ const setWatchlistTool = tool(
         results.push(`SKIP ${sym}: not in the ACTIVE universe (${(await activeSymbols()).length} tradeable symbols).`);
         continue;
       }
-      await prisma.watchlist.upsert({
+      await prisma.agentFocus.upsert({
         where: { symbol: sym },
         create: { symbol: sym, note: a.note },
         update: { note: a.note },
@@ -136,7 +136,7 @@ const setWatchlistTool = tool(
         results.push(`SKIP remove ${sym}: pinned by ${directive.by} — members decide when it leaves.`);
         continue;
       }
-      await prisma.watchlist.deleteMany({ where: { symbol: sym } });
+      await prisma.agentFocus.deleteMany({ where: { symbol: sym } });
       results.push(`REMOVED ${sym}`);
     }
     return text(results.join("\n") || "no-op");
@@ -239,8 +239,8 @@ export const grqServer = createSdkMcpServer({
     getQuotesTool,
     getJournalTool,
     writeJournalTool,
-    getWatchlistTool,
-    setWatchlistTool,
+    getFocusTool,
+    setFocusTool,
     getSignalsTool,
     gradeSourcesTool,
     proposeOrderTool,
@@ -252,8 +252,8 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__get_quotes",
   "mcp__grq__get_journal",
   "mcp__grq__write_journal",
-  "mcp__grq__get_watchlist",
-  "mcp__grq__set_watchlist",
+  "mcp__grq__get_focus",
+  "mcp__grq__set_focus",
   "mcp__grq__get_signals",
   "mcp__grq__grade_sources",
   "mcp__grq__propose_order",
@@ -264,19 +264,19 @@ export const GRQ_TOOL_NAMES = [
 export const grqReadOnlyServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
-  tools: [getPortfolioTool, getQuotesTool, getJournalTool, getWatchlistTool, getSignalsTool],
+  tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool],
 });
 
 export const GRQ_READONLY_TOOL_NAMES = [
   "mcp__grq__get_portfolio",
   "mcp__grq__get_quotes",
   "mcp__grq__get_journal",
-  "mcp__grq__get_watchlist",
+  "mcp__grq__get_focus",
   "mcp__grq__get_signals",
 ];
 
 // Research variant for dossier sessions (2.7): reads + write_journal only —
-// dossiers document, they never trade or touch the watchlist.
+// dossiers document, they never trade or touch the focus list.
 export const grqResearchServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",

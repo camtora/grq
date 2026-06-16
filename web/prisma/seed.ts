@@ -22,7 +22,7 @@ async function main() {
     prisma.navSnapshot.deleteMany(),
     prisma.report.deleteMany(),
     prisma.contribution.deleteMany(),
-    prisma.watchlist.deleteMany(),
+    prisma.agentFocus.deleteMany(),
     prisma.account.deleteMany(),
     prisma.agentState.deleteMany(),
     prisma.settings.deleteMany(),

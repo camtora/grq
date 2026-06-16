@@ -1,14 +1,6 @@
-import { PageHeader } from "@/components/ui";
-import ActivityFeed from "@/components/ActivityFeed";
+import { redirect } from "next/navigation";
 
-export default async function Activity() {
-  return (
-    <main>
-      <PageHeader
-        title="Activity"
-        sub="Every order the engine has seen — fills, resting limits, and rejections with the guardrail that fired."
-      />
-      <ActivityFeed limit={100} />
-    </main>
-  );
+// /activity folded into the Journal page's order ledger (2.8 IA restructure).
+export default function Activity() {
+  redirect("/journal");
 }

@@ -46,7 +46,7 @@ export default function AddTicker() {
       if (!res.ok) {
         setMsg({ ok: false, text: data.error ?? `HTTP ${res.status}` });
       } else {
-        setMsg({ ok: true, text: `${symbol} added as a candidate (${data.yahoo ?? symbol}) — dossier queued.` });
+        setMsg({ ok: true, text: `${symbol} is on your watchlist (${data.yahoo ?? symbol}) — the agent's dossiering it now.` });
         setMatches(null);
         setQ("");
         router.refresh();
@@ -61,7 +61,7 @@ export default function AddTicker() {
   return (
     <div className="rounded-2xl border border-dashed border-teal-400/20 bg-teal-400/[0.02] p-4">
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Research a new stock</span>
+        <span className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Watch a new stock</span>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -76,7 +76,7 @@ export default function AddTicker() {
         >
           {searching ? "searching…" : "Search"}
         </button>
-        <span className="text-xs text-teal-200/40">pick the right listing, then it becomes a researched candidate — trading it needs both of you to promote it</span>
+        <span className="text-xs text-teal-200/40">pick the right listing — it joins your watchlist and the agent dossiers it; trading it still needs both of you to promote it</span>
       </div>
 
       {matches && matches.length > 0 && (

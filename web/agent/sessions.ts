@@ -78,9 +78,9 @@ export async function runMorningResearch(): Promise<void> {
 
 # TASK: Morning research (pre-market, ${etDateStr()})
 
-1. Work through your seed sources and the macro sweep with WebSearch (and WebFetch for promising articles). You're looking for anything that affects current holdings, the watchlist, or presents a swing opportunity in the universe.
+1. Work through your seed sources and the macro sweep with WebSearch (and WebFetch for promising articles). You're looking for anything that affects current holdings, your focus list, or presents a swing opportunity in the universe.
 2. Review every open position against its thesis — still valid?
-3. Update the watchlist (set_watchlist) to reflect today's best candidates.
+3. Update your focus list (set_focus) — the names you're monitoring for an entry today, each with its trigger.
 4. Write ONE RESEARCH journal entry (write_journal) titled "Game plan — ${etDateStr()}": today's read of the market, what you're watching, planned actions with conditions ("buy X if it holds above Y"), and cited sources. When a finding is specifically about one symbol, ALSO write a short symbol-tagged RESEARCH entry for it — the stock pages collect those.
 5. Do NOT place orders now — the market is closed and entries are blocked in the first 15 minutes anyway. Trades happen via your plan when conditions trigger, or at midday check-ins.
 
@@ -171,7 +171,7 @@ Research this stock thoroughly with WebSearch/WebFetch — the business, recent 
 results, catalysts, competitive position, risks. Then write EXACTLY ONE symbol-tagged
 RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
 markdown body with sections: **Snapshot** · **Recent developments** (dated, sourced) ·
-**Signals read** · **Bull case** · **Bear case** · **Verdict** (watchlist-worthy?
+**Signals read** · **Bull case** · **Bear case** · **Verdict** (worth watching?
 thesis-worthy? confidence 0–100, plus your **price targets**) · **Risks**. Cite every source in sources[].
 In the write_journal call, commit your expected prices as fields: **targetNearCents** (a
 near-term swing target ~4–8 weeks out) with **targetNearDays** (its horizon in trading days),
@@ -183,7 +183,7 @@ you genuinely have no view. Also set **bottomLine**: 3–5 short plain-English b
 palatable. This is the at-a-glance "why" shown on the stock page.
 Finally, set **stance** — YOUR call on this name as the fund's manager, one of BUY / ACCUMULATE / HOLD / WATCH / TRIM / AVOID / SELL. This is your judgment, all things considered; it may agree with OR DISAGREE with the deterministic technical signal consensus (a formula). When it disagrees, that divergence is the most useful thing on the page — make the bottomLine and Verdict explain it.
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
-Research only — no trades, no watchlist changes (you don't have those tools here).`;
+Research only — no trades, no focus changes (you don't have those tools here).`;
   return runSession({
     label: `dossier:${sym}`,
     prompt,
@@ -202,7 +202,7 @@ ${event}
 Should the decision-making agent be woken to consider acting? Reply with ONLY a JSON object, no other text:
 {"action": "ignore" | "note" | "escalate", "reason": "<one sentence>"}
 
-"escalate" is for material, actionable developments on holdings/watchlist. Routine volatility is "ignore". Newsworthy-but-not-actionable is "note".`;
+"escalate" is for material, actionable developments on holdings/focus names. Routine volatility is "ignore". Newsworthy-but-not-actionable is "note".`;
   const res = await runSession({ label: "triage", prompt, model: MODELS.triage, withTools: false, maxTurns: 1 });
   if (!res) return "ignore";
   try {
@@ -264,7 +264,7 @@ export async function runMiddayReport(): Promise<void> {
 
 # TASK: Midday brief — ${etDateStr()}
 
-Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or the watchlist, and what would make you act (or sit on your hands) before the close. 3–5 tight sentences, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
+Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or your focus names, and what would make you act (or sit on your hands) before the close. 3–5 tight sentences, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
   const body = await runSession({ label: "midday-report", prompt, model: MODELS.decision, withTools: false, maxTurns: 3 });
   if (!body) return;
   await prisma.journalEntry.create({

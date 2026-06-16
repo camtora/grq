@@ -171,3 +171,30 @@ agreements / confirms trading approval); the gateway + 2FA path is proven and re
 procedure + gotchas are in `docs/IBKR-PHASE3.md` (the "⚠️ Validated 2026-06-15" block).
 **Consequences:** Phase 3 stays blocked **only externally** — now on IBKR account provisioning,
 not our plumbing — and the sim soak continues uninterrupted.
+
+### D20 — IA restructure: Universe + Market, watch = candidate, agent focus renamed (Cam, 2026-06-15)
+**Context:** Four overlapping stock tabs (Stocks/Market/Ideas/Research) plus two conflated
+"watch" systems — a flat `Watchlist` table AND `UniverseMember` CANDIDATE status — produced
+incoherent UI: a "watchlist" that overlapped the universe, and a dead "also watching" stub
+with no page/signals/call. **Decisions (with Cam):**
+- **Two tabs, one funnel.** Collapse to **Universe** (what's ours: the investable ACTIVE set +
+  the watchlist) and **Market** (the world: Ideas / Browse / Research sub-tabs). A stock is in
+  exactly one state — **watchlist** (CANDIDATE) → promote → **universe** (ACTIVE) → or nothing.
+- **Watch = candidate.** One "Watch" action everywhere creates a CANDIDATE (the agent dossiers
+  it); the standalone flat watchlist and the separate "+research" button are gone. Promotion to
+  tradeable still needs **both members + the liquidity screen**; non-Canadian listings are
+  research-only until multi-currency.
+- **The `Watchlist` table was the agent's working memory, not redundant** — its rows are the
+  agent's entry-trigger setups on ACTIVE names, injected into every decision session. Renamed
+  the Prisma model **`Watchlist` → `AgentFocus`** (kept the physical table via `@@map`, so
+  zero migration / no downtime); agent tools `get/set_watchlist` → `get/set_focus`; the agent's
+  vocabulary "watchlist" → "focus". The human-facing "watchlist" is now candidates.
+- **Nav trimmed 10 → 7:** Stocks/Ideas/Research folded in; **Activity** removed — its order
+  feed folds into the **Journal** as an "Order ledger." Journal stays top-level (it's the
+  *receipts*, a product pillar — not a setting). Redirects preserve every old URL.
+- **PINNED** redefined as a pure priority flag (sorts to top, agent keeps it front-of-mind),
+  decoupled from the focus table. Candidate cap lifted 20 → 200 (a guard, not a budget).
+**Consequences:** `/stocks`→`/universe`, `/ideas`→`/market`, `/research`→`/market/research`,
+`/activity`→`/journal`. Verified live end-to-end. The agent loop behaviour is unchanged (the
+focus tool was renamed, same logic). Deferred: physical table rename off `@@map`; the AAPL
+data artifact (a US name sitting as ACTIVE) wants cleanup.

@@ -7,11 +7,8 @@ import ThemeToggle from "./ThemeToggle";
 const LINKS = [
   { href: "/", label: "Overview" },
   { href: "/today", label: "Today" },
-  { href: "/stocks", label: "Stocks" },
+  { href: "/universe", label: "Universe" },
   { href: "/market", label: "Market" },
-  { href: "/ideas", label: "Ideas" },
-  { href: "/research", label: "Research" },
-  { href: "/activity", label: "Activity" },
   { href: "/journal", label: "Journal" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },

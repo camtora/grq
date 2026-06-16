@@ -181,7 +181,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
       prisma.quote.findMany(),
       allUniverse(),
-      prisma.watchlist.findMany({ orderBy: { addedAt: "desc" } }),
+      prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } }),
       prisma.journalEntry.findMany({
         where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, at: { gte: start, lt: end }, symbol: { not: null } },
         orderBy: { at: "desc" },
@@ -229,10 +229,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const hitters = [...pf.positions].sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps));
 
-  // On the radar: watchlist first, then today's dossier'd names not already shown.
+  // On the radar: the agent's focus first, then today's dossier'd names not already shown.
   const seen = new Set(watchlist.map((w) => w.symbol));
   const radar = [
-    ...watchlist.map((w) => ({ symbol: w.symbol, note: "watchlist", tone: "teal" as const, logoUrl: logoBy.get(w.symbol) ?? null })),
+    ...watchlist.map((w) => ({ symbol: w.symbol, note: "agent watching", tone: "teal" as const, logoUrl: logoBy.get(w.symbol) ?? null })),
     ...dossiers
       .filter((d) => d.symbol && !seen.has(d.symbol))
       .map((d) => ({

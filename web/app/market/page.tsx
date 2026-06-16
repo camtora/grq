@@ -1,194 +1,316 @@
 import Link from "next/link";
-import { fmpEnabled, fmpScreener, type ScreenerRow } from "@/lib/fmp";
-import { getSession } from "@/lib/session";
-import { money } from "@/lib/money";
-import { Card, PageHeader, Chip } from "@/components/ui";
-import ScreenerAddButton from "@/components/ScreenerAddButton";
-import WatchButton from "@/components/WatchButton";
 import { prisma } from "@/lib/db";
+import { allUniverse } from "@/lib/universe";
+import { getQuotes } from "@/lib/broker/quotes";
+import { getSession } from "@/lib/session";
+import { computeSignals, overallSignal, type Recommendation } from "@/agent/signals";
+import { money, pct, signedMoney, fmtWhen } from "@/lib/money";
+import { Card, PageHeader, EmptyState, Chip } from "@/components/ui";
+import StockLogo from "@/components/StockLogo";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import CollapsibleMd from "@/components/CollapsibleMd";
+import Term from "@/components/Term";
+import MarketTabs from "@/components/MarketTabs";
+import WatchButton, { type WatchState } from "@/components/WatchButton";
+import { fmpEnabled, fmpNews } from "@/lib/fmp";
 
 export const dynamic = "force-dynamic";
 
-const EXCHANGES = ["TSX", "TSXV", "NYSE", "NASDAQ"];
-const SECTORS = [
-  "Technology",
-  "Financial Services",
-  "Energy",
-  "Healthcare",
-  "Industrials",
-  "Consumer Cyclical",
-  "Consumer Defensive",
-  "Basic Materials",
-  "Real Estate",
-  "Utilities",
-  "Communication Services",
-];
-const COUNTRIES = [
-  { v: "CA", l: "Canada" },
-  { v: "US", l: "United States" },
-];
-const CAPS: { v: string; l: string; more?: number; less?: number }[] = [
-  { v: "mega", l: "Mega ≥$200B", more: 200e9 },
-  { v: "large", l: "Large $10–200B", more: 10e9, less: 200e9 },
-  { v: "mid", l: "Mid $2–10B", more: 2e9, less: 10e9 },
-  { v: "small", l: "Small $300M–2B", more: 300e6, less: 2e9 },
-  { v: "micro", l: "Micro <$300M", less: 300e6 },
-];
+// Household names get deprioritised — "stocks you should look at" should lead
+// with names you do not already know (candidates / mid-caps over the big banks).
+const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
 
-function capLabel(m: number | null): string {
-  if (!m || m <= 0) return "—";
-  return m >= 1000 ? `$${Math.round(m / 1000)}B` : `$${m}M`;
+function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
+  if (!sourcesJson) return null;
+  let sources: string[] = [];
+  try {
+    sources = JSON.parse(sourcesJson);
+  } catch {
+    return null;
+  }
+  if (sources.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {sources.map((s, i) => (
+        <span key={i} className="rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[10px] text-teal-200/60">
+          {s}
+        </span>
+      ))}
+    </div>
+  );
 }
 
-const selectCls =
-  "rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-sm text-teal-100 outline-none";
+type Idea = {
+  sym: string;
+  name: string;
+  logoUrl: string | null;
+  cur: number | null;
+  near: number | null;
+  far: number | null;
+  nearDays: number | null;
+  confidence: number | null;
+  rec: Recommendation | null;
+  stance: string | null;
+  body: string;
+  sourcesJson: string | null;
+  obscurity: number;
+  watch: WatchState;
+};
 
-export default async function Market({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const [sp, session, wl] = await Promise.all([
-    searchParams,
-    getSession(),
-    prisma.watchlist.findMany({ select: { symbol: true } }),
-  ]);
+function IdeaCard({ idea, isMember }: { idea: Idea; isMember: boolean }) {
+  const sm = stanceMeta(idea.stance);
+  return (
+    <Card className="p-5">
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="flex items-center gap-3">
+            <StockLogo symbol={idea.sym} logoUrl={idea.logoUrl} className="h-10 w-10 text-xs" />
+            <div className="min-w-0">
+              <Link href={`/stocks/${idea.sym}`} className="text-lg font-bold text-teal-200 hover:underline">
+                {idea.sym}
+              </Link>
+              <div className="truncate text-sm text-teal-200/50">{idea.name}</div>
+            </div>
+            {idea.far !== null && (
+              <div className="ml-auto shrink-0 text-right">
+                <div className={`text-2xl font-black tabular-nums ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {idea.far > 0 ? "+" : ""}
+                  {pct(idea.far, 0)}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
+                  <Term k="expected-return" align="right">12-mo upside</Term>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-teal-200/60">
+            {idea.cur !== null && <span>now {money(idea.cur)}</span>}
+            {idea.near !== null && (
+              <span>
+                near{idea.nearDays ? ` ~${Math.max(1, Math.round(idea.nearDays / 5))}w` : ""}{" "}
+                <b className={idea.near > 0 ? "text-emerald-400" : "text-red-400"}>
+                  {idea.near > 0 ? "+" : ""}
+                  {pct(idea.near, 0)}
+                </b>
+              </span>
+            )}
+            {idea.far !== null && <span>≈ {signedMoney(Math.round(idea.far * 100_000))} on $1k</span>}
+            {idea.confidence != null && (
+              <span>
+                <Term k="confidence">conf</Term> {idea.confidence}%
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3">
+            <CollapsibleMd text={idea.body} threshold={280}>
+              <SourceChips sourcesJson={idea.sourcesJson} />
+            </CollapsibleMd>
+          </div>
+        </div>
+
+        <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
+          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
+            <Term k="agent-call">The agent&apos;s call</Term>
+          </div>
+          {sm ? (
+            <div className="mt-1">
+              <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[sm.tone].text}`}>{sm.label}</span>
+              <p className="mt-1 text-xs text-teal-200/50">{sm.blurb}</p>
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-teal-200/40">Not yet rated by the agent.</p>
+          )}
+          {idea.rec && <p className="mt-3 text-[11px] text-teal-200/40">technicals lean {idea.rec.label} — an input, not the call</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link href={`/stocks/${idea.sym}`} className="text-xs text-teal-300 hover:underline">
+              full dossier →
+            </Link>
+            {isMember && idea.watch === "universe" ? (
+              <span className="text-[11px] font-semibold text-emerald-300/70">✓ in your universe</span>
+            ) : isMember ? (
+              <WatchButton symbol={idea.sym} state={idea.watch} />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export default async function Market() {
+  const session = await getSession();
   const isMember = session?.role === "member";
-  const watchedSet = new Set(wl.map((w) => w.symbol));
-  const { exchange = "", sector = "", country = "", cap = "" } = sp;
-  const capDef = CAPS.find((c) => c.v === cap);
-  const hasFilter = !!(exchange || sector || country || cap);
 
-  let rows: ScreenerRow[] = [];
-  let note = "";
-  if (!fmpEnabled()) {
-    note = "Market browsing needs the FMP key in .env.";
-  } else {
-    rows = await fmpScreener({
-      exchange: exchange || undefined,
-      sector: sector || undefined,
-      country: country || undefined,
-      marketCapMoreThan: capDef?.more,
-      marketCapLowerThan: capDef?.less,
-      limit: 60,
-    });
-  }
+  const dossiers = await prisma.journalEntry.findMany({
+    where: {
+      kind: "RESEARCH",
+      title: { startsWith: "Dossier" },
+      symbol: { not: null },
+      OR: [{ targetNearCents: { not: null } }, { targetFarCents: { not: null } }],
+    },
+    orderBy: { at: "desc" },
+    take: 80,
+  });
+
+  const seen = new Set<string>();
+  const latest = dossiers.filter((d) => {
+    if (!d.symbol || seen.has(d.symbol)) return false;
+    seen.add(d.symbol);
+    return true;
+  });
+
+  const universe = await allUniverse();
+  const uBy = new Map(universe.map((u) => [u.symbol, u]));
+  const statusBy = new Map(universe.map((u) => [u.symbol, u.status]));
+  const watchOf = (sym: string): WatchState => {
+    const s = statusBy.get(sym);
+    return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
+  };
+  const quotes = await getQuotes(latest.map((d) => d.symbol as string));
+
+  const ideas: Idea[] = await Promise.all(
+    latest.map(async (d) => {
+      const sym = d.symbol as string;
+      const u = uBy.get(sym);
+      const cur = quotes.get(sym)?.midCents ?? null;
+      const sig = await computeSignals(sym).catch(() => null);
+      const tier = u?.tier ?? null;
+      return {
+        sym,
+        name: u?.name ?? sym,
+        logoUrl: u?.logoUrl ?? null,
+        cur,
+        near: cur && d.targetNearCents != null ? (d.targetNearCents - cur) / cur : null,
+        far: cur && d.targetFarCents != null ? (d.targetFarCents - cur) / cur : null,
+        nearDays: d.targetNearDays ?? null,
+        confidence: d.confidence,
+        rec: sig ? overallSignal(sig) : null,
+        stance: d.stance,
+        body: d.body,
+        sourcesJson: d.sourcesJson,
+        obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
+        watch: watchOf(sym),
+      };
+    }),
+  );
+  ideas.sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9));
+
+  const [huntRaw, smartMoney, news] = await Promise.all([
+    prisma.journalEntry.findMany({
+      where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      take: 16,
+    }),
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
+    fmpEnabled() ? fmpNews(8).catch(() => []) : Promise.resolve([]),
+  ]);
+  const huntSeen = new Set<string>();
+  const huntFinds = huntRaw
+    .filter((d) => {
+      if (!d.symbol || huntSeen.has(d.symbol)) return false;
+      huntSeen.add(d.symbol);
+      return true;
+    })
+    .slice(0, 8);
 
   return (
     <main>
-      <PageHeader
-        title="The market"
-        sub="Browse the whole market — not just GRQ's universe. Filter, then send the interesting ones to research."
-        right={
-          <Link href="/stocks">
-            <Chip tone="teal">← stocks</Chip>
-          </Link>
-        }
-      />
+      <PageHeader title="Market" sub="Discover names beyond GRQ's universe — the agent's ideas, the whole-market screener, and your research desk." />
+      <MarketTabs />
 
-      <form method="get" className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
-          Exchange
-          <select name="exchange" defaultValue={exchange} className={selectCls}>
-            <option value="">Any</option>
-            {EXCHANGES.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
+      {huntFinds.length > 0 && (
+        <section className="mb-6">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Chip tone="teal">the hunt</Chip>
+            <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — why we care up top, &ldquo;read more&rdquo; for the full dossier</span>
+          </div>
+          <div className="space-y-3">
+            {huntFinds.map((d) => (
+              <Card key={d.id} className="p-5">
+                <div className="mb-2 flex items-center gap-3">
+                  <StockLogo symbol={d.symbol as string} logoUrl={null} className="h-9 w-9 text-[11px]" />
+                  <Link href={`/stocks/${d.symbol}`} className="text-lg font-bold text-teal-200 hover:underline">
+                    {d.symbol}
+                  </Link>
+                  {d.confidence != null && <Chip tone="dim">conf {d.confidence}%</Chip>}
+                  {isMember && watchOf(d.symbol as string) !== "universe" && (
+                    <WatchButton symbol={d.symbol as string} state={watchOf(d.symbol as string)} />
+                  )}
+                  <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(d.at)}</span>
+                </div>
+                <CollapsibleMd text={d.body} threshold={320}>
+                  <SourceChips sourcesJson={d.sourcesJson} />
+                </CollapsibleMd>
+              </Card>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
-          Sector
-          <select name="sector" defaultValue={sector} className={selectCls}>
-            <option value="">Any</option>
-            {SECTORS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
-          Country
-          <select name="country" defaultValue={country} className={selectCls}>
-            <option value="">Any</option>
-            {COUNTRIES.map((c) => (
-              <option key={c.v} value={c.v}>
-                {c.l}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
-          Cap
-          <select name="cap" defaultValue={cap} className={selectCls}>
-            <option value="">Any</option>
-            {CAPS.map((c) => (
-              <option key={c.v} value={c.v}>
-                {c.l}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
-        >
-          Screen
-        </button>
-        {hasFilter && (
-          <Link href="/market" className="text-xs font-semibold text-teal-300 hover:underline">
-            clear
-          </Link>
-        )}
-      </form>
+          </div>
+          <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like to put them on your watchlist.</p>
+        </section>
+      )}
 
-      {note ? (
-        <Card className="p-8 text-center text-sm text-teal-200/40">{note}</Card>
-      ) : rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-teal-200/40">No matches — loosen the filters.</Card>
-      ) : (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
-                <th className="px-4 py-3">Symbol</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Sector</th>
-                <th className="px-4 py-3">Exch</th>
-                <th className="px-4 py-3 text-right">Cap</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={`${r.symbol}-${r.exchange}`} className="border-t border-teal-400/10">
-                  <td className="px-4 py-2.5 font-semibold text-teal-200">{r.symbol}</td>
-                  <td className="px-4 py-2.5 text-teal-100/70">
-                    {r.name}
-                    {r.isEtf && <span className="ml-1.5 text-[9px] uppercase tracking-wider text-teal-200/40">etf</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-teal-200/60">{r.sector ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/70">{capLabel(r.marketCapM)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
-                    {r.priceCents !== null ? money(r.priceCents) : "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    {isMember && (
-                      <span className="inline-flex gap-1.5">
-                        <WatchButton symbol={r.symbol} watched={watchedSet.has(r.symbol.toUpperCase())} />
-                        <ScreenerAddButton symbol={r.symbol} />
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {smartMoney && (
+        <Card className="mb-6 p-5">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <Chip tone="dim">smart money</Chip>
+            <span className="text-sm font-medium text-teal-50">{smartMoney.title}</span>
+            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(smartMoney.at)}</span>
+          </div>
+          <CollapsibleMd text={smartMoney.body}>
+            <SourceChips sourcesJson={smartMoney.sourcesJson} />
+          </CollapsibleMd>
+          <p className="mt-2 text-[11px] text-teal-200/40">What notable public portfolios (congress, funds, insiders) are buying — colour, not gospel; disclosures lag.</p>
         </Card>
       )}
-      <p className="mt-3 text-xs text-teal-200/40">
-        Powered by FMP. Prices are in each listing&apos;s native currency. &ldquo;+ research&rdquo; adds a name as a universe
-        candidate — the agent dossiers it; trading it still needs both members to promote it.
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Chip tone="teal">researched ideas</Chip>
+        <span className="text-sm text-teal-200/50">names the agent has dossiered with price targets — ranked by expected upside, unfamiliar names first</span>
+      </div>
+      {ideas.length === 0 ? (
+        <EmptyState
+          title="No ideas with targets yet"
+          body="Ideas appear here once the agent files dossiers with price targets. Watch a name on Browse to point it somewhere specific."
+        />
+      ) : (
+        <div className="space-y-4">
+          {ideas.map((idea) => (
+            <IdeaCard key={idea.sym} idea={idea} isMember={isMember} />
+          ))}
+        </div>
+      )}
+
+      {news.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Market pulse</h2>
+          <Card className="divide-y divide-[color:var(--card-border)]">
+            {news.map((n, i) => {
+              const inner = (
+                <>
+                  <span className="min-w-0 flex-1 text-sm text-teal-100/80">{n.title}</span>
+                  <span className="shrink-0 text-[11px] text-teal-200/40">{n.publisher}</span>
+                  <span className="shrink-0 text-[11px] text-teal-200/30">{n.at.slice(0, 10)}</span>
+                </>
+              );
+              return n.url ? (
+                <a key={i} href={n.url} target="_blank" rel="noreferrer" className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5 hover:bg-teal-400/[0.04]">
+                  {inner}
+                </a>
+              ) : (
+                <div key={i} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2.5">
+                  {inner}
+                </div>
+              );
+            })}
+          </Card>
+          <p className="mt-2 text-[11px] text-teal-200/40">Latest market headlines via FMP — context, not signals.</p>
+        </section>
+      )}
+
+      <p className="mt-4 text-xs text-teal-200/40">
+        The agent surfaces ideas; it does not auto-trade anything outside the guardrailed universe. Targets are the agent&apos;s
+        hypotheses, not promises — a track record builds as they resolve.
       </p>
     </main>
   );

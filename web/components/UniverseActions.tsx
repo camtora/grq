@@ -53,7 +53,7 @@ export default function UniverseActions({
         <button
           disabled={busy || researchInFlight}
           onClick={() => act("research")}
-          title="Queue a fresh deep-research dossier (shared budget: 5/day)"
+          title="Queue a fresh deep-research dossier"
           className={`${btn} border-teal-400/30 text-teal-300 hover:bg-teal-400/10`}
         >
           {researchInFlight ? "Researching…" : "Research now"}

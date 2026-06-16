@@ -38,17 +38,10 @@ export async function POST(req: Request) {
       create: { symbol, directive, by: who, note },
       update: { directive, by: who, note, at: new Date() },
     });
-    if (directive === "PINNED") {
-      await prisma.watchlist.upsert({
-        where: { symbol },
-        create: { symbol, note: `📌 pinned by ${who}` },
-        update: {},
-      });
-    }
     title =
       directive === "BLOCKED"
         ? `${who} put ${symbol} on the no-fly list`
-        : `${who} pinned ${symbol} to the watchlist`;
+        : `${who} pinned ${symbol} as a priority`;
   }
 
   await prisma.journalEntry.create({
@@ -61,7 +54,7 @@ export async function POST(req: Request) {
         (directive === "BLOCKED"
           ? "The agent may not buy this name until a member unblocks it (sells remain allowed)."
           : directive === "PINNED"
-            ? "Stays on the watchlist; the agent cannot remove it."
+            ? "Priority name — it sorts to the top of its list and the agent keeps it front-of-mind; it can't be dropped from focus."
             : "The agent's normal rules apply again."),
     },
   });

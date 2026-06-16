@@ -60,7 +60,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
-      prisma.watchlist.findUnique({ where: { symbol } }),
+      prisma.agentFocus.findUnique({ where: { symbol } }),
       prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
       prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
       getCloses(symbol, 260).catch(() => []),
@@ -90,8 +90,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
   return (
     <main>
-      <Link href="/stocks" className="text-xs text-teal-300 hover:underline">
-        ← all stocks
+      <Link href="/universe" className="text-xs text-teal-300 hover:underline">
+        ← universe
       </Link>
 
       <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
@@ -100,7 +100,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
         {entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
         {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
-        {watch && <Chip tone="teal">watchlist</Chip>}
+        {watch && <Chip tone="teal">agent watching</Chip>}
         {quote && (
           <span className="ml-auto flex items-baseline gap-3">
             <span className="text-2xl font-semibold tabular-nums text-teal-50">{money(quote.midCents)}</span>
@@ -278,7 +278,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <Card className="mb-6 p-4">
           <div className="flex items-baseline gap-3">
             <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-              Watchlist note
+              The agent&apos;s note
             </span>
             <p className="text-sm text-teal-100/80">{watch.note}</p>
           </div>

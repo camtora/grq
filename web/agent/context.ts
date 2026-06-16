@@ -13,13 +13,13 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, watchlist, openTheses, directives, slWindows, scoreboard] =
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
       prisma.journalEntry.findMany({ where: { kind: "LESSON" }, orderBy: { at: "desc" }, take: 10 }),
       prisma.journalEntry.findMany({ where: { kind: "RETRO" }, orderBy: { at: "desc" }, take: 5 }),
-      prisma.watchlist.findMany({ orderBy: { addedAt: "desc" } }),
+      prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } }),
       prisma.journalEntry.findMany({ where: { kind: "DECISION" }, orderBy: { at: "desc" }, take: 12 }),
       prisma.symbolDirective.findMany(),
       superficialLossWindows().catch(() => []),
@@ -73,8 +73,8 @@ ${
       ).join("\n")
 }
 
-## Watchlist
-${watchlist.length === 0 ? "  (empty)" : watchlist.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}
+## Your focus (ACTIVE names you're monitoring for an entry — update via set_focus)
+${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}
 
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}

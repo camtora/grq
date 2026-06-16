@@ -170,6 +170,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "The agent's call",
     def: "The agent's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
   },
+  universe: {
+    term: "The universe",
+    def: "The list of stocks the agent is allowed to buy. A name joins by being promoted from the watchlist — which takes both members plus an automated liquidity screen. The agent can propose; only humans change the universe.",
+  },
+  watchlist: {
+    term: "Watchlist",
+    def: "Names you're tracking but not yet investing in. The agent researches every watchlist name (a dossier, signals, its call), but it can't trade one until you both promote it into the universe.",
+  },
   "analyst-target": {
     term: "Analyst consensus target",
     def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on the agent's call — when the agent and the street sharply disagree, it's worth asking who's right.",

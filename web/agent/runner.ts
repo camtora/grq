@@ -56,11 +56,11 @@ async function refreshQuotes(open: boolean) {
     return;
   }
   if (open && now - lastFastRefresh >= 2 * 60_000) {
-    const [positions, watch] = await Promise.all([
+    const [positions, focus] = await Promise.all([
       prisma.position.findMany({ select: { symbol: true } }),
-      prisma.watchlist.findMany({ select: { symbol: true } }),
+      prisma.agentFocus.findMany({ select: { symbol: true } }),
     ]);
-    const syms = [...new Set([...positions.map((p) => p.symbol), ...watch.map((w) => w.symbol), BENCHMARK])];
+    const syms = [...new Set([...positions.map((p) => p.symbol), ...focus.map((w) => w.symbol), BENCHMARK])];
     await refreshQuotesFor(syms);
     lastFastRefresh = now;
   }

@@ -91,7 +91,7 @@ export async function fmpProfile(symbol: string): Promise<FmpProfile | null> {
 
 // FMP keys analyst coverage to the US/primary listing, not the .TO ticker, so we
 // strip the exchange suffix before asking.
-const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN)$/i, "");
+export const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN)$/i, "");
 
 export type ScreenerRow = {
   symbol: string;

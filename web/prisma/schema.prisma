@@ -207,10 +207,18 @@ model Quote {
   source       String   @default("yahoo-delayed")
 }
 
-model Watchlist {
+// The agent's FOCUS list — its shortlist of ACTIVE universe names it's actively
+// monitoring for an entry, with conditional trigger notes ("watching ABX for a
+// $54 hold"). Distinct from the human watchlist, which is now CANDIDATE members
+// (2.8). Set by the agent via set_focus (ACTIVE members only). Physical table
+// kept as "Watchlist" via @@map so the rename is zero-migration; the model name
+// is what code uses.
+model AgentFocus {
   symbol  String   @id
   note    String?
   addedAt DateTime @default(now())
+
+  @@map("Watchlist")
 }
 
 // The universe pipeline (2.7): CANDIDATE = researched, not tradeable;

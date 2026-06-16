@@ -5,6 +5,7 @@ import { fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Scoreboard from "@/components/Scoreboard";
+import ActivityFeed from "@/components/ActivityFeed";
 import { getScoreboard } from "@/lib/scoreboard";
 
 const KINDS = ["ALL", "SYSTEM", "RESEARCH", "DECISION", "TRADE", "RETRO", "LESSON"] as const;
@@ -34,7 +35,7 @@ export default async function Journal({
     <main>
       <PageHeader
         title="Journal"
-        sub="The agent's working memory: every thesis, decision, retro, and lesson — including the decisions not to trade."
+        sub="The agent's working memory: every thesis, decision, retro, and lesson — including the decisions not to trade. The full order ledger is at the bottom."
       />
 
       <div className="mb-6">
@@ -84,6 +85,14 @@ export default async function Journal({
           ))}
         </div>
       )}
+      <details className="mt-10 border-t border-teal-400/10 pt-6">
+        <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+          Order ledger — every fill, resting limit, and rejection
+        </summary>
+        <div className="mt-4">
+          <ActivityFeed limit={100} />
+        </div>
+      </details>
     </main>
   );
 }

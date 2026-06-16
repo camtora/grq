@@ -18,6 +18,7 @@ export type UniverseRow = {
   addedBy: string | null;
   promotionRequestedBy: string | null;
   proposedTier: string | null;
+  note: string | null;
   logoUrl: string | null;
   sector: string | null;
   industry: string | null;
@@ -28,7 +29,9 @@ export type UniverseRow = {
 };
 
 export const BENCHMARK = "XIC";
-export const CANDIDATE_CAP = 20;
+// Watching a stock ≈ adding a CANDIDATE now (2.8 — the two were unified), so this
+// is a high anti-runaway guard, not a budget. Cam lifted the research caps 2026-06-15.
+export const CANDIDATE_CAP = 200;
 // (ON_DEMAND_RESEARCH_PER_DAY removed 2026-06-15 — Cam lifted the on-demand cap;
 // research is unlimited. The weekly-refresh size is the only remaining bound.)
 // Full-universe dossier refresh runs weekly: Saturday from 02:00 ET, so every
@@ -57,6 +60,7 @@ async function load(): Promise<UniverseRow[]> {
     addedBy: r.addedBy,
     promotionRequestedBy: r.promotionRequestedBy,
     proposedTier: r.proposedTier,
+    note: r.note,
     logoUrl: r.logoUrl,
     sector: r.sector,
     industry: r.industry,

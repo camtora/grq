@@ -198,8 +198,8 @@ export default async function Overview() {
               <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
                 Activity
               </span>
-              <Link href="/activity" className="text-xs text-teal-300 hover:underline">
-                all orders →
+              <Link href="/journal" className="text-xs text-teal-300 hover:underline">
+                ledger →
               </Link>
             </div>
             <div className="mt-2">

@@ -123,6 +123,11 @@ export async function POST(req: Request) {
   // ---------- promote: two-person rule ----------
   if (action === "promote") {
     if (entry.status !== "CANDIDATE") return bad(`${symbol} is ${entry.status} — only candidates get promoted.`);
+    // Research-only listings: a non-Canadian listing can be watched + dossiered,
+    // but not promoted to tradeable until GRQ trades multiple currencies (Phase 3+).
+    if (!entry.yahoo.endsWith(".TO") && !entry.yahoo.endsWith(".V")) {
+      return bad(`${symbol} is a non-Canadian listing (${entry.yahoo}) — research-only until GRQ trades multiple currencies (Phase 3+). It stays on the watchlist.`, 422);
+    }
     const tier = typeof body.tier === "string" && (TIERS as readonly string[]).includes(body.tier) ? body.tier : entry.proposedTier;
     if (!tier) return bad("Pick a tier (etf | large | mid).");
 
@@ -171,7 +176,6 @@ export async function POST(req: Request) {
     if (entry.status !== "CANDIDATE") return bad(`Only candidates retire — demote ${symbol} first.`);
     if (symbol === BENCHMARK) return bad("XIC is the benchmark — it stays.");
     await prisma.universeMember.update({ where: { symbol }, data: { status: "RETIRED" } });
-    await prisma.watchlist.deleteMany({ where: { symbol } });
     invalidateUniverseCache();
     await journal(symbol, `${who} retired ${symbol}`, "Research stops (quotes/bars/dossiers). All history is kept; re-add any time.");
     await sendDiscord("info", `${who} retired ${symbol} from research`);
