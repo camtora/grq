@@ -99,6 +99,13 @@ struct StockDetailView: View {
         return Card {
             VStack(alignment: .leading, spacing: 10) {
                 Text(d.name).font(.system(.title2, design: .rounded).weight(.bold)).foregroundStyle(p.textPrimary)
+                if let last = d.lastCents {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(Fmt.money(last)).font(.system(.title, design: .rounded).weight(.black))
+                            .monospacedDigit().foregroundStyle(Theme.brandGradient)
+                        Text("per share").font(.caption2).foregroundStyle(p.textMuted)
+                    }
+                }
                 HStack(spacing: 8) {
                     if let c = d.call { Chip(text: c.rawValue, tone: .green) }
                     if let s = d.signals {

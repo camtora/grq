@@ -126,6 +126,7 @@ export const Idea = z.object({
 export const Dossier = z.object({
   symbol: z.string(),
   name: z.string(),
+  lastCents: z.number().int().nullable(), // current (delayed) share price
   bodyMarkdown: z.string(),
   call: AgentCall.nullable(),
   target: PriceTarget,
@@ -156,6 +157,9 @@ export const Today = z.object({
   benchmarkBps: z.number().int().nullable(), // vs-XIC for the day
   tape: z.array(NavPoint),                    // intraday NAV, open → now
   leadStoryMarkdown: z.string().nullable(),   // EOD wrap, or the morning plan pre-close
+  // Section title for the lead, derived from WHAT the entry is (not the clock) so
+  // it matches the web Today page: "The Close" | "Today's Lead" | "From the desk".
+  leadTitle: z.string(),
   movers: z.array(Mover),                     // biggest universe moves
   topHitters: z.array(Mover),                 // holdings by day move
   onTheRadar: z.array(Idea),                  // ideas w/ targets, unfamiliar first

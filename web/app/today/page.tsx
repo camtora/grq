@@ -46,7 +46,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">{children}</h2>;
 }
 
-function MoverRow({ symbol, name, midCents, dayBps, logoUrl }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null }) {
+function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null; stance?: string | null }) {
+  const sm = stance ? stanceMeta(stance) : null;
   return (
     <li className="flex items-center gap-3 px-3 py-2">
       <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
@@ -56,6 +57,14 @@ function MoverRow({ symbol, name, midCents, dayBps, logoUrl }: { symbol: string;
         </Link>
         <div className="truncate text-xs text-teal-200/40">{name}</div>
       </div>
+      {sm && (
+        <span
+          className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${STANCE_TONE_CLASSES[sm.tone].text} ${STANCE_TONE_CLASSES[sm.tone].border}`}
+          title={`GRQ's call: ${sm.label} — ${sm.blurb}`}
+        >
+          {sm.abbr}
+        </span>
+      )}
       <div className="ml-auto text-right">
         <div className="text-sm tabular-nums text-teal-100/80">{money(midCents)}</div>
         <div className={`text-xs tabular-nums ${dayClass(dayBps)}`}>{signedPct(dayBps)}</div>
@@ -212,6 +221,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     ]);
   const funFact = funFactOfDay();
   const timeline = entries.filter((e) => e.id !== plan?.id);
+
+  // GRQ's call per tracked name (latest dossier stance) — shown on movers.
+  const stanceRows = await prisma.journalEntry.findMany({
+    where: { stance: { not: null }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    select: { symbol: true, stance: true },
+  });
+  const stanceBy = new Map<string, string>();
+  for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
   // The lead adapts by edition and is never empty: today's midday brief (the
   // afternoon read), else today's plan, else the most recent plan/research.
   const middayBrief = await prisma.journalEntry.findFirst({
@@ -228,12 +246,27 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
   const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
+  const sectorBy = new Map(universeRows.map((u) => [u.symbol, u.sector]));
   const movers = quoteRows
     .filter((q) => nameBy.has(q.symbol))
-    .map((q) => ({ symbol: q.symbol, name: nameBy.get(q.symbol) ?? q.symbol, midCents: q.midCents, dayBps: q.dayChangeBps, logoUrl: logoBy.get(q.symbol) ?? null }))
+    .map((q) => ({ symbol: q.symbol, name: nameBy.get(q.symbol) ?? q.symbol, midCents: q.midCents, dayBps: q.dayChangeBps, logoUrl: logoBy.get(q.symbol) ?? null, stance: stanceBy.get(q.symbol) ?? null }))
     .sort((a, b) => b.dayBps - a.dayBps);
   const gainers = movers.filter((m) => m.dayBps > 0).slice(0, 5);
   const losers = movers.filter((m) => m.dayBps < 0).slice(-5).reverse();
+
+  // Industry breakdown — average day move per sector across tracked names.
+  const sectorAcc = new Map<string, { sum: number; n: number }>();
+  for (const q of quoteRows) {
+    const sec = sectorBy.get(q.symbol);
+    if (!sec) continue;
+    const e = sectorAcc.get(sec) ?? { sum: 0, n: 0 };
+    e.sum += q.dayChangeBps;
+    e.n += 1;
+    sectorAcc.set(sec, e);
+  }
+  const sectors = [...sectorAcc.entries()]
+    .map(([name, { sum, n }]) => ({ name, avgBps: Math.round(sum / n), n }))
+    .sort((a, b) => b.avgBps - a.avgBps);
 
   const hitters = [...pf.positions].sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps));
 
@@ -336,6 +369,38 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <p className="mt-3 border-t border-teal-400/10 pt-3 text-sm italic text-teal-200/60">{dailyQuote(anchor)}</p>
       </header>
 
+      {/* Headlines — today's news, at the top of the page (Graham 2026-06-16) */}
+      {marketNews.length > 0 && (
+        <section className="mb-6">
+          <SectionTitle>Headlines · what&apos;s moving the market today</SectionTitle>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {marketNews.slice(0, 3).map((n, i) => (
+              <a
+                key={i}
+                href={n.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="group block overflow-hidden rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]"
+              >
+                {n.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={n.image} alt="" className="h-36 w-full object-cover transition-opacity group-hover:opacity-90" />
+                ) : (
+                  <div className="flex h-36 w-full items-center justify-center bg-teal-400/5 text-3xl">📰</div>
+                )}
+                <div className="p-3">
+                  <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
+                  <div className="mt-1 text-[11px] text-teal-200/40">
+                    {n.publisher}
+                    {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* The Tape — the day's NAV, start → finish */}
       <Card className="mb-6 p-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -373,99 +438,68 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </Card>
       )}
 
-      {/* Lead story + Market Movers rail */}
-      <section className="grid items-start gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SectionTitle>{eod ? "The Close" : plan ? "Today's Lead" : "From the desk"}</SectionTitle>
-          <Card className="p-5">
-            {eod ? (
-              <>
-                <div className="mb-2 text-lg font-semibold text-teal-50">{eod.title}</div>
-                {eodStats && (
-                  <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-teal-200/60">
-                    {Object.entries(eodStats).map(([k, v]) => (
-                      <span key={k}>
-                        <span className="uppercase tracking-wider text-teal-200/40">{k.replace(/_/g, " ")}</span>{" "}
-                        <span className="tabular-nums text-teal-50">{String(v)}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <CollapsibleMd text={eod.body} threshold={1400} />
-              </>
-            ) : leadEntry ? (
-              <>
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <span className="text-lg font-semibold text-teal-50">{leadEntry.title}</span>
-                  {etDateStr(leadEntry.at) !== dateStr && (
-                    <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(leadEntry.at)}</span>
-                  )}
+      {/* Lead story — FULL WIDTH so the game plan is big & readable (Graham 2026-06-16) */}
+      <section className="mb-8">
+        <SectionTitle>{eod ? "The Close" : plan ? "Today's Lead · game plan" : "From the desk"}</SectionTitle>
+        <Card className="p-6">
+          {eod ? (
+            <>
+              <div className="mb-2 text-xl font-semibold text-teal-50">{eod.title}</div>
+              {eodStats && (
+                <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-teal-200/60">
+                  {Object.entries(eodStats).map(([k, v]) => (
+                    <span key={k}>
+                      <span className="uppercase tracking-wider text-teal-200/40">{k.replace(/_/g, " ")}</span>{" "}
+                      <span className="tabular-nums text-teal-50">{String(v)}</span>
+                    </span>
+                  ))}
                 </div>
-                <CollapsibleMd text={leadEntry.body} threshold={1400}>
+              )}
+              <CollapsibleMd text={eod.body} threshold={100000} />
+            </>
+          ) : leadEntry ? (
+            <>
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <span className="text-xl font-semibold text-teal-50">{leadEntry.title}</span>
+                {etDateStr(leadEntry.at) !== dateStr && (
+                  <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(leadEntry.at)}</span>
+                )}
+              </div>
+              <div className="text-[15px] leading-relaxed">
+                <CollapsibleMd text={leadEntry.body} threshold={100000}>
                   <Sources sourcesJson={leadEntry.sourcesJson} />
                 </CollapsibleMd>
-              </>
-            ) : (
-              <p className="text-sm text-teal-200/40">
-                {isToday
-                  ? "Quiet so far — the agent's morning research lands around 9:00 ET on market days."
-                  : "No report filed this day (weekend, holiday, or pre-agent era)."}
-              </p>
-            )}
-          </Card>
-        </div>
-
-        <aside>
-          <SectionTitle>Market Movers</SectionTitle>
-          <Card className="overflow-hidden p-1">
-            {isToday && (gainers.length > 0 || losers.length > 0) ? (
-              <ul className="divide-y divide-teal-400/10">
-                {gainers.map((m) => (
-                  <MoverRow key={`g-${m.symbol}`} {...m} />
-                ))}
-                {losers.map((m) => (
-                  <MoverRow key={`l-${m.symbol}`} {...m} />
-                ))}
-              </ul>
-            ) : (
-              <p className="p-3 text-sm text-teal-200/40">No moves to report{isToday ? " yet" : " in the archive view"}.</p>
-            )}
-          </Card>
-          <p className="mt-2 px-1 text-[10px] text-teal-200/40">biggest moves across the {universeRows.length} names we track</p>
-        </aside>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-teal-200/40">
+              {isToday
+                ? "Quiet so far — the agent's morning research lands around 9:00 ET on market days."
+                : "No report filed this day (weekend, holiday, or pre-agent era)."}
+            </p>
+          )}
+        </Card>
       </section>
 
-      {/* Top stories — the brief's headlines, with pictures */}
-      {marketNews.length > 0 && (
-        <section className="mt-8">
-          <SectionTitle>Top stories</SectionTitle>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {marketNews.slice(0, 3).map((n, i) => (
-              <a
-                key={i}
-                href={n.url || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="group block overflow-hidden rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]"
-              >
-                {n.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={n.image} alt="" className="h-32 w-full object-cover transition-opacity group-hover:opacity-90" />
-                ) : (
-                  <div className="flex h-32 w-full items-center justify-center bg-teal-400/5 text-3xl">📰</div>
-                )}
-                <div className="p-3">
-                  <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
-                  <div className="mt-1 text-[11px] text-teal-200/40">
-                    {n.publisher}
-                    {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Market Movers — our tracked names */}
+      <section className="mt-8">
+        <SectionTitle>Market Movers · our tracked names</SectionTitle>
+        <Card className="overflow-hidden p-1">
+          {isToday && (gainers.length > 0 || losers.length > 0) ? (
+            <ul className="grid gap-x-6 sm:grid-cols-2">
+              {gainers.map((m) => (
+                <MoverRow key={`g-${m.symbol}`} {...m} />
+              ))}
+              {losers.map((m) => (
+                <MoverRow key={`l-${m.symbol}`} {...m} />
+              ))}
+            </ul>
+          ) : (
+            <p className="p-3 text-sm text-teal-200/40">No moves to report{isToday ? " yet" : " in the archive view"}.</p>
+          )}
+        </Card>
+        <p className="mt-2 px-1 text-[10px] text-teal-200/40">biggest moves across the {universeRows.length} names we track</p>
+      </section>
 
       {/* Today's biggest movers — the whole market */}
       {marketGainers.length > 0 && (
@@ -498,6 +532,27 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             </table>
           </Card>
           <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — names we track link through.</p>
+        </section>
+      )}
+
+      {/* Industry breakdown — how sectors are moving today (Graham 2026-06-16) */}
+      {sectors.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle>By industry · how sectors are moving</SectionTitle>
+          <Card className="overflow-hidden p-1">
+            <ul className="divide-y divide-teal-400/10">
+              {sectors.map((s) => (
+                <li key={s.name} className="flex items-center gap-3 px-3 py-2">
+                  <span className="font-semibold text-teal-100/80">{s.name}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-teal-200/30">
+                    {s.n} {s.n === 1 ? "name" : "names"}
+                  </span>
+                  <span className={`ml-auto text-sm font-bold tabular-nums ${dayClass(s.avgBps)}`}>{signedPct(s.avgBps)}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <p className="mt-2 px-1 text-[10px] text-teal-200/40">Average move today across the names we track, grouped by sector.</p>
         </section>
       )}
 
@@ -562,7 +617,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <section className="mt-8">
           <SectionTitle>This morning's game plan</SectionTitle>
           <Card className="p-5">
-            <CollapsibleMd text={plan.body} threshold={1200}>
+            <CollapsibleMd text={plan.body} threshold={100000}>
               <Sources sourcesJson={plan.sourcesJson} />
             </CollapsibleMd>
           </Card>

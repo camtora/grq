@@ -3,36 +3,26 @@ import { prisma } from "@/lib/db";
 import { allUniverse, type UniverseRow } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession, displayName } from "@/lib/session";
-import { money, pct, fmtWhen } from "@/lib/money";
+import { money, pct } from "@/lib/money";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
 import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
-import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import { stanceMeta } from "@/lib/stance";
+import RatingBar from "@/components/RatingBar";
 import MarketTabs from "@/components/MarketTabs";
 import AddTicker from "@/components/AddTicker";
-import NoteForm from "@/components/NoteForm";
-import Md from "@/components/Md";
 import UniverseActions from "@/components/UniverseActions";
 
 export const dynamic = "force-dynamic";
 
 function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendation | null }) {
-  if (stance) {
-    const sm = stanceMeta(stance)!;
-    return (
-      <span className={`text-xs font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
-        {sm.label}
-      </span>
-    );
-  }
-  if (rec) {
-    return (
-      <span className="text-xs text-teal-200/40" title="No GRQ call yet — technical lean only (an input, not a verdict)">
-        {rec.label} <span className="text-[9px] text-teal-200/30">tech</span>
-      </span>
-    );
-  }
-  return <span className="text-xs text-teal-200/25">—</span>;
+  // The slider shows GRQ's CALL (so headline + needle agree). With no dossier yet,
+  // fall back to the technical signal — clearly tagged so it reads as an input.
+  const m = stance ? stanceMeta(stance) : null;
+  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="GRQ's call" title={`GRQ's call: ${m.blurb}`} />;
+  const sm = rec ? stanceMeta(rec.label) : null;
+  if (sm) return <RatingBar label={sm.label} tone={sm.tone} pos={sm.pos} note="technical lean" title="No GRQ call yet — technical signal only (an input, not a verdict)" />;
+  return <span className="text-xs text-teal-200/25">— no read yet</span>;
 }
 
 type Row = UniverseRow & {
@@ -46,7 +36,7 @@ type Row = UniverseRow & {
 };
 
 export default async function Watchlist() {
-  const [session, universe, requests, notes, directives] = await Promise.all([
+  const [session, universe, requests, directives] = await Promise.all([
     getSession(),
     allUniverse(),
     prisma.researchRequest.findMany({
@@ -54,7 +44,6 @@ export default async function Watchlist() {
       orderBy: { at: "desc" },
       take: 60,
     }),
-    prisma.note.findMany({ orderBy: { at: "desc" }, take: 50 }),
     prisma.symbolDirective.findMany(),
   ]);
   const me = displayName(session);
@@ -130,60 +119,43 @@ export default async function Watchlist() {
         ) : (
           <div className="space-y-3">
             {rows.map((c) => (
-              <Card key={c.symbol} className="p-4">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <Link href={`/stocks/${c.symbol}`} className="text-lg font-bold text-teal-300 hover:underline">
-                    {c.symbol}
-                  </Link>
-                  <span className="text-sm text-teal-100/70">{c.name}</span>
-                  {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
-                  {c.lastCents !== null && (
-                    <span className="text-sm tabular-nums text-teal-100/80">
-                      {money(c.lastCents)}{" "}
-                      <span className={(c.dayBps ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>{pct((c.dayBps ?? 0) / 10_000, 2)}</span>
-                    </span>
-                  )}
-                  <SignalStrip signals={c.signals} />
-                  <StanceCell stance={c.stance} rec={c.rec} />
-                  <span className="ml-auto text-xs text-teal-200/40">
-                    {c.journal > 0 ? `${c.journal} journal` : "no dossier yet"}
-                    {c.addedBy ? ` · added by ${c.addedBy}` : ""}
-                  </span>
-                </div>
-                {c.note && <p className="mt-2 text-xs text-teal-200/50">{c.note}</p>}
-                {isMember && (
-                  <div className="mt-3">
-                    <UniverseActions symbol={c.symbol} status="CANDIDATE" pendingBy={c.promotionRequestedBy} proposedTier={c.proposedTier} currentUser={me} />
-                  </div>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Your research notes</h2>
-        {isMember && <NoteForm />}
-        {notes.length > 0 ? (
-          <div className="mt-3 space-y-3">
-            {notes.map((n) => (
-              <Card key={n.id} className="p-4">
-                <div className="mb-1 flex items-center gap-2 text-xs text-teal-200/40">
-                  {n.symbol && (
-                    <Link href={`/stocks/${n.symbol}`} className="font-bold text-teal-300 hover:underline">
-                      {n.symbol}
+              <Card key={c.symbol} className="overflow-hidden p-0">
+                {/* Condensed row that expands into the rich detail (Graham 2026-06-16) */}
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 p-4 hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
+                    <span className="text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
+                    <Link href={`/stocks/${c.symbol}`} className="text-lg font-bold text-teal-300 hover:underline">
+                      {c.symbol}
                     </Link>
-                  )}
-                  <span>{n.author}</span>
-                  <span className="ml-auto">{fmtWhen(n.at)}</span>
-                </div>
-                <Md text={n.body} />
+                    <span className="min-w-0 flex-1 truncate text-sm text-teal-100/70">{c.name}</span>
+                    {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
+                    {c.lastCents !== null && (
+                      <span className="text-sm tabular-nums text-teal-100/80">
+                        {money(c.lastCents)}{" "}
+                        <span className={(c.dayBps ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>{pct((c.dayBps ?? 0) / 10_000, 2)}</span>
+                      </span>
+                    )}
+                    <StanceCell stance={c.stance} rec={c.rec} />
+                  </summary>
+                  <div className="border-t border-teal-400/10 p-4">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <SignalStrip signals={c.signals} />
+                      <span className="ml-auto text-xs text-teal-200/40">
+                        {c.journal > 0 ? `${c.journal} journal` : "no dossier yet"}
+                        {c.addedBy ? ` · added by ${c.addedBy}` : ""}
+                      </span>
+                    </div>
+                    {c.note && <p className="mt-2 text-xs text-teal-200/50">{c.note}</p>}
+                    {isMember && (
+                      <div className="mt-3">
+                        <UniverseActions symbol={c.symbol} status="CANDIDATE" pendingBy={c.promotionRequestedBy} proposedTier={c.proposedTier} currentUser={me} />
+                      </div>
+                    )}
+                  </div>
+                </details>
               </Card>
             ))}
           </div>
-        ) : (
-          <p className="mt-2 text-sm text-teal-200/40">No notes yet{isMember ? " — jot your first one above." : "."}</p>
         )}
       </section>
 

@@ -9,9 +9,9 @@ struct TodayView: View {
             if let t = today {
                 GRQScreen(title: "GRQ Daily", subtitle: "\(t.edition.label) Edition · \(t.dateISO)") {
                     heroCard(t)
+                    moversCard("Market Movers", t.movers)
                     tapeCard(t)
                     leadCard(t)
-                    moversCard("Market Movers", t.movers)
                     moversCard("Top Hitters", t.topHitters)
                     radarCard(t)
                     funFact
@@ -70,20 +70,11 @@ struct TodayView: View {
         let p = Theme.palette(scheme)
         return Card {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: leadTitle(t.edition))
+                SectionTitle(text: t.leadTitle)
                 Text(t.leadStoryMarkdown ?? "No wrap filed yet — quiet day.")
                     .font(.callout).foregroundStyle(p.textPrimary.opacity(0.92))
                 Text("— the robot").font(.caption2.italic()).foregroundStyle(p.textMuted)
             }
-        }
-    }
-
-    private func leadTitle(_ e: Edition) -> String {
-        switch e {
-        case .morning: return "The Plan"
-        case .midday: return "Midday"
-        case .evening: return "The Close"
-        case .weekend: return "Weekend Wrap"
         }
     }
 
@@ -92,13 +83,26 @@ struct TodayView: View {
         return Card {
             VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: title)
+                if movers.isEmpty {
+                    Text("Quiet — nothing's moved yet today.")
+                        .font(.subheadline).foregroundStyle(p.textMuted)
+                }
                 ForEach(Array(movers.enumerated()), id: \.element.id) { idx, m in
-                    HStack {
-                        Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                        Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
-                        Spacer()
-                        BpsBadge(bps: m.dayChangeBps).font(.subheadline)
+                    NavigationLink { StockDetailView(symbol: m.symbol) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                MoneyText(cents: m.lastCents).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                BpsBadge(bps: m.dayChangeBps).font(.caption)
+                            }
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     if idx < movers.count - 1 { Divider().overlay(p.cardBorder.opacity(0.5)) }
                 }
             }

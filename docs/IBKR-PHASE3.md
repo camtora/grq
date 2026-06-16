@@ -9,6 +9,64 @@ the account is approved.
 
 ---
 
+## ✅ 2026-06-16 — CONNECTED to paper (D22). Gateway authenticates + reconciles; one blocker left.
+
+The 2026-06-15 wall was **no real paper account existed**. Cam created one via Client Portal →
+Account Settings → **Create Paper Trading Account** → **`DUQ774890`**, which has its OWN login
+(username **`cwiaiu983`** + a paper password — a paper account is a *separate* login, NOT the live
+creds, and it shares NOTHING with the live username). With the right login the SSO **and** the
+brokerage `iserver` session both come up. Two more walls fell:
+
+1. **The CP gateway is LOOPBACK-ONLY.** It only honours `127.0.0.1` and *ignores* its own
+   `conf.yaml ips.allow` for any network IP — proven: from inside the ibeam container `localhost:5000`
+   works but its own `172.x` IP returns `Access Denied`. So the agent (a separate container) can't
+   reach `https://ibeam:5000`. **Fix:** a **socat sidecar** that shares ibeam's network namespace and
+   forwards a port to loopback, so the gateway sees a local connection:
+   ```yaml
+   # docker-compose.yaml
+   ibeam-proxy:
+     image: alpine/socat
+     network_mode: "service:ibeam"          # shares ibeam's netns
+     depends_on: [ibeam]
+     command: ["TCP-LISTEN:5002,fork,reuseaddr", "TCP:127.0.0.1:5000"]   # 5001 = IBeam health, so use 5002
+   ```
+   then `IBKR_GATEWAY_URL=https://ibeam:5002` in `.env`. (`ibeam/conf.yaml` is mounted but its
+   allowlist is vestigial given the loopback-only behaviour.) **Gotcha:** `docker-compose up -d
+   ibeam-proxy` recreates `ibeam` (dependency) → use `--no-deps`; ibeam usually re-auths inside
+   IBKR's grace window (no new push).
+2. **No-User-Agent → 403.** The gateway 403s requests with no `User-Agent`. The adapter already sends
+   `grq/1.0`, so no code change — raw `node -e` probes (which send none) were a red herring.
+
+**Adapter fixes (`web/lib/broker/ibkr.ts`)**, surfaced by a 1-share XIC test order (placed through the
+§6 gate via `getBroker().placeOrder` — never hand-craft a raw `/orders` POST, that bypasses the gate):
+- `conidFor` returned the conid as a **string** (secdef/search) → IBKR `400 "parameter with incorrect
+  type"`. Coerce `Number()` (+ `Number()` on the positions-reconcile lookup).
+- IBKR refusals come back as a **bare `{error,action}` object**, not an array → the reply cascade now
+  surfaces `resp.error` (was misreporting "reply cascade unresolved").
+
+**Verified:** `iserver` `authenticated:true, connected:true` on `DUQ774890` (`isPaper:true`);
+`reconcile()` mirrors **CAD 5,000 / 0 positions**; the test order reaches IBKR and returns a clean
+**"No trading permissions."**
+
+**THE ONE REMAINING BLOCKER — paper permission sync.** Stocks-Canada trading permission is enabled on
+the **live** account, but IBKR paper accounts inherit permissions only on the **nightly reset**, so it
+won't reach `DUQ774890` until ~next day. (Market-data subscriptions + the Market-Data **API
+acknowledgement/cert** were also required and are done.) **Re-test next market day:** `docker-compose
+up -d ibeam` → approve the IB Key push → re-run the 1-share test order → if it fills + reconciles, set
+`BROKER=ibkr-paper`, `docker-compose up -d --no-deps agent web chat` → the ≥2-week IBKR-paper soak
+clock starts. **Currently `BROKER=sim`** (reverted; the agent is healthy on the sim).
+
+**Security:** Cam set the paper password = his live password, so `.env` currently holds the LIVE
+password — rotate the paper login (`cwiaiu983`) to a UNIQUE password so the bot never holds
+live-account creds.
+
+**CDR note (relevant to SPCX & friends):** a `.TO`/`.NE` CDR is a *fractional, CAD-hedged depositary
+receipt* — e.g. `SPCX.TO` (SpaceX CDR) ~CAD 36 vs the Nasdaq underlying `SPCX` ~USD 213. The CDR is
+the CAD-tradeable instrument; size/target on the CDR's price, not the underlying. Trading the USD
+underlying needs multi-currency (deferred — CDRs cover most US megacaps in CAD).
+
+---
+
 ## ⚠️ Validated 2026-06-15 — what works, what's still blocked
 
 A live bring-up session against both members' brand-new accounts established:

@@ -73,7 +73,7 @@ struct PortfolioView: View {
                                     Text(pos.symbol).font(.subheadline.weight(.bold)).foregroundStyle(pal.textPrimary)
                                     BpsBadge(bps: pos.dayChangeBps).font(.caption2)
                                 }
-                                Text("\(pos.qty) sh · avg \(Fmt.money(pos.avgCostCents))")
+                                Text("\(pos.qty) sh · now \(Fmt.money(pos.lastCents)) · avg \(Fmt.money(pos.avgCostCents))")
                                     .font(.caption).foregroundStyle(pal.textMuted)
                             }
                             Spacer()

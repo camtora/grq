@@ -109,6 +109,7 @@ struct Idea: Codable, Identifiable {
 struct Dossier: Codable, Identifiable {
     let symbol: String
     let name: String
+    let lastCents: Int?
     let bodyMarkdown: String
     let call: AgentCall?
     let target: PriceTarget
@@ -145,6 +146,7 @@ struct Today: Codable {
     let benchmarkBps: Int?
     let tape: [NavPoint]
     let leadStoryMarkdown: String?
+    let leadTitle: String
     let movers: [Mover]
     let topHitters: [Mover]
     let onTheRadar: [Idea]

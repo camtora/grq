@@ -123,12 +123,15 @@ export class IBKRBroker implements BrokerAdapter {
         /TSE|TSX|TORONTO|VENTURE/i.test(h.description ?? "") ||
         (h.sections ?? []).some((s) => /TSE|TSX|VENTURE/i.test(s.exchange ?? ""));
       const pick = hits.find(isToronto) ?? hits[0];
-      const conid = pick.conid ?? null;
-      if (conid) {
+      // secdef/search returns conid as a STRING; the order endpoint wants an
+      // integer (else 400 "parameter with incorrect type"), so coerce to Number.
+      const conid = pick.conid == null ? null : Number(pick.conid);
+      if (conid && Number.isFinite(conid)) {
         this.conidBySymbol.set(sym, conid);
         this.symbolByConid.set(conid, sym);
+        return conid;
       }
-      return conid;
+      return null;
     } catch {
       return null;
     }
@@ -175,18 +178,23 @@ export class IBKRBroker implements BrokerAdapter {
         tif: input.type === "LIMIT" ? "GTC" : "DAY",
         ...(input.type === "LIMIT" && input.limitPriceCents ? { price: input.limitPriceCents / 100 } : {}),
       };
-      let resp = await cp<OrderReply[]>(`/iserver/account/${ACCOUNT_ID}/orders`, "POST", { orders: [order] });
+      let resp = await cp<unknown>(`/iserver/account/${ACCOUNT_ID}/orders`, "POST", { orders: [order] });
 
       // Clear the reply/confirm cascade (warnings the API requires you to ack).
+      // The response is an array of reply objects on success, OR a bare object
+      // {error, action} when IBKR refuses outright (e.g. "No trading permissions.").
       let orderId: string | undefined;
       for (let i = 0; i < 6; i++) {
-        const first = Array.isArray(resp) ? resp[0] : undefined;
+        if (resp && typeof resp === "object" && !Array.isArray(resp) && (resp as { error?: string }).error) {
+          return this.recordReject(input, `IBKR: ${(resp as { error: string }).error}`);
+        }
+        const first = Array.isArray(resp) ? (resp[0] as OrderReply) : undefined;
         if (!first) break;
         if (first.error) return this.recordReject(input, `IBKR rejected: ${first.error}`);
         orderId = first.order_id ?? first.orderId;
         if (orderId) break;
         if (first.id) {
-          resp = await cp<OrderReply[]>(`/iserver/reply/${first.id}`, "POST", { confirmed: true });
+          resp = await cp<unknown>(`/iserver/reply/${first.id}`, "POST", { confirmed: true });
           continue;
         }
         break;
@@ -283,8 +291,9 @@ export class IBKRBroker implements BrokerAdapter {
     const raw = await cp<IbkrPosition[]>(`/portfolio/${ACCOUNT_ID}/positions/0`).catch(() => [] as IbkrPosition[]);
     const out: { symbol: string; qty: number; avgCostCents: number }[] = [];
     for (const p of raw) {
-      if (!p.conid || !p.position) continue;
-      const symbol = this.symbolByConid.get(p.conid);
+      const cid = p.conid == null ? null : Number(p.conid);
+      if (!cid || !p.position) continue;
+      const symbol = this.symbolByConid.get(cid);
       if (!symbol) continue; // not one of ours — skip (VERIFY-LIVE: warm the cache for all holdings)
       const avg = p.avgCost ?? p.avgPrice ?? 0;
       out.push({ symbol, qty: Math.round(p.position), avgCostCents: Math.round(avg * 100) });

@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Sub-navigation for the Market tab: Ideas (the agent's curated finds) ·
-// Browse (the whole-market screener) · Research (the human + agent desk).
+// Sub-navigation for the stock section, in Graham's priority order (2026-06-16):
+// Watchlist (names you track — primary) · Discoveries (the agent's curated finds,
+// was "Ideas") · Research (your OWN notes desk) · Browse (whole-market screener) ·
+// Universe (the tradeable set the agent invests in — kept behind the scenes, last).
 const TABS = [
-  { href: "/market", label: "Ideas" },
-  { href: "/market/browse", label: "Browse" },
   { href: "/market/watchlist", label: "Watchlist" },
+  { href: "/market", label: "Discoveries" },
+  { href: "/market/research", label: "Research" },
+  { href: "/market/browse", label: "Browse" },
+  { href: "/universe", label: "Universe" },
 ];
 
 export default function MarketTabs() {

@@ -49,6 +49,26 @@ services:
     container_name: grq-ibeam
     restart: unless-stopped
     env_file: .env
+    # Scoped IP allowlist (localhost + docker range, default-deny kept). NOTE: this
+    # gateway build only honors LOOPBACK (127.0.0.1) and ignores ips.allow for any
+    # network IP, so cross-container calls still need the loopback proxy below.
+    volumes:
+      - ./ibeam/conf.yaml:/srv/clientportal.gw/root/conf.yaml
+
+  # Loopback proxy (2026-06-16): the CP gateway only accepts 127.0.0.1, so the
+  # agent (a separate container) can't reach ibeam:5000 directly. This socat
+  # shares ibeam's network namespace and forwards :5002 -> 127.0.0.1:5000, so the
+  # gateway sees a loopback connection. The agent uses IBKR_GATEWAY_URL=
+  # https://ibeam:5002. Port 5001 is taken by IBeam's own health server. Internal
+  # only (no host port); reachable just by our compose-network containers.
+  ibeam-proxy:
+    image: alpine/socat
+    container_name: grq-ibeam-proxy
+    restart: unless-stopped
+    network_mode: "service:ibeam"
+    depends_on:
+      - ibeam
+    command: ["TCP-LISTEN:5002,fork,reuseaddr", "TCP:127.0.0.1:5000"]
 
   db:
     image: postgres:16-alpine

@@ -8,20 +8,27 @@ Cam & Graham at https://grq.camerontora.ca. A trading agent (Phase 2+) manages a
 brokerage account within hard code-enforced guardrails; the web app is the dashboard.
 Tagline: *"Get rich quick, slowly, with receipts."*
 
-**Status (2026-06-15):** Phases 0–2.7 shipped — site live behind SSO; the agent is
+**Status (2026-06-16):** Phases 0–2.7 shipped — site live behind SSO; the agent is
 live-firing on the sim on real Yahoo-delayed quotes (soak running since 2026-06-12), with
 per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
 chat. Decision sessions run on **Opus 4.8** (`claude-opus-4-8`), triage on Haiku 4.5 — Fable 5
-access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer now
+access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer
 live on FMP Ultimate + free BoC feeds (D21):** earnings/news/grades/13F + structured macro,
 on the stock pages (honest 10-tier coverage map) AND fed into the agent's decision context;
 tier-4 insider via the agent's per-dossier web research (paid INK feed deferred). **Real-time
 on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
-market open*). **IA-v2:** "GRQ's call" everywhere; Watchlist → Market▸Watchlist (Universe = the
-investable set only). **Phase 3: the `IBKRBroker` adapter is code-complete behind the seam
-(609b0f9, inert until `BROKER=ibkr-paper`)** — flip-and-verify ready; blocked only on IBKR
-account provisioning (applied 2026-06-12).
+market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
+vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v3 (D23):** top-nav Market
+lands on **Watchlist** (primary); **Universe** is a background sub-tab; "Ideas"→**Discoveries**;
+**Research** = your human notes desk (agent queue behind the scenes); Watchlist rows
+condensed→expand; Today/Brief = news-banner-on-top + industry breakdown + full-width game plan;
+stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper CONNECTED (D22):**
+the gateway authenticates + reconciles the paper account **`DUQ774890`** (CAD 5k mirrored) via a
+**loopback proxy** (`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`); the
+adapter's conid/error bugs are fixed. **Still `BROKER=sim`** — the last blocker is the Stocks-Canada
+trading permission syncing to the paper twin on IBKR's nightly reset (re-test next market day, then
+flip). **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq underlying.**
 
 ---
 
@@ -134,10 +141,13 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `docs/OPERATIONS.md` | Runbook: deploy, db, backups, troubleshooting |
 | `docs/DATA-SOURCES.md` | 10-tier data taxonomy + source scoring system |
 | `docs/IBKR-SETUP.md` | Forwardable account-opening guide |
+| `docs/IBKR-PHASE3.md` | **IBKR-paper bring-up runbook** — gateway/proxy, 2FA, the connection saga (D22) |
+| `ibeam/conf.yaml` · `docker-compose.yaml ibeam-proxy` | The CP-gateway loopback proxy: socat sidecar (`network_mode: service:ibeam`) `:5002→127.0.0.1:5000` so the agent can reach the gateway (which is loopback-only). Agent → `IBKR_GATEWAY_URL=https://ibeam:5002` (D22) |
 | `docs/OWNERSHIP.md` | Whose money/account: options, tax notes, open decision |
 | `docs/LITERACY.md` | **Financial-literacy product pillar** — every number explainable; glossary + agent explainers |
 | `docs/NEWSPAPER.md` | "The Daily" — Today-as-newspaper: editions by time of day, sections, imagery roadmap |
-| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` |
+| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `ibkr.ts` (IBKR adapter — conid/orders/reconcile), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` (`getBroker()`) |
+| `web/lib/stance.ts` · `web/components/RatingBar.tsx` | GRQ's call = the 7-point scale (Strong Buy→Strong Sell) + slider; back-compat maps retired words (D23) |
 | `web/agent/` | The agent worker (Phase 2): `runner.ts` (orchestrator/tick loop), `validator.ts` (§6 gate), `policy.ts` (hard limits + model IDs), `sessions.ts` (LLM sessions), `tools.ts`, `context.ts`, `signals.ts`, `calendar.ts`, `alerts.ts`, `chat-server.ts` |
 | `web/lib/feed.ts` · `web/lib/auth-jwt.ts` | Mobile API: contract-shaped builders + GRQ-JWT mint/verify. Routes: `web/app/api/{portfolio,market,ideas,today,dossier/[symbol],auth/google,auth/me,auth/dev}` + GET on `settings`. Verify: `web/scripts/verify-mobile-api.ts` |
 | `ios/GRQ/Services/Services.swift` | iOS data layer: `APIClient` (real URLSession GETs, Bearer), `AuthManager` (Keychain token, Google/dev login), `GoogleAuth` stub |
@@ -146,7 +156,7 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `web/prisma/seed.ts` | Destructive sim reset + demo trades |
 | `web/lib/users.ts` | Member list (the app-level allowlist) |
 | `web/middleware.ts` | The door |
-| `.env` | Secrets/config: db password, `BROKER=sim`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token), `DISCORD_WEBHOOK_URL` (alerts), optional `GRQ_MODEL_DECISION` (overrides the decision model; default `claude-opus-4-8` in `agent/policy.ts`) |
+| `.env` | Secrets/config: db password, `BROKER=sim`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token), `DISCORD_WEBHOOK_URL` (alerts), `FMP_API_KEY`, optional `GRQ_MODEL_DECISION` (default `claude-opus-4-8`); **IBKR (D22):** `IBEAM_ACCOUNT`/`IBEAM_PASSWORD` (the PAPER login `cwiaiu983` — UNQUOTED, env_file rule), `IBEAM_USE_PAPER_ACCOUNT=True`, `IBKR_ACCOUNT_ID=DUQ774890`, `IBKR_GATEWAY_URL=https://ibeam:5002` (the loopback proxy, not :5000) |
 
 ## Working agreements
 

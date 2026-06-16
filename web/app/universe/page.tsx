@@ -8,7 +8,10 @@ import { computeSignals, overallSignal, type Signals, type Recommendation } from
 import SignalStrip from "@/components/SignalStrip";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
+import { getSession, displayName } from "@/lib/session";
 import StockFilters from "@/components/StockFilters";
+import MarketTabs from "@/components/MarketTabs";
+import UniverseActions from "@/components/UniverseActions";
 import Term from "@/components/Term";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +58,7 @@ function sortActive(rows: Row[]): Row[] {
   });
 }
 
-function UniverseTable({ rows }: { rows: Row[] }) {
+function UniverseTable({ rows, isMember, currentUser }: { rows: Row[]; isMember: boolean; currentUser: string }) {
   return (
     <Card className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -71,6 +74,7 @@ function UniverseTable({ rows }: { rows: Row[] }) {
             <th className="px-4 py-3 text-right">Position</th>
             <th className="px-4 py-3 text-right">Unrealized</th>
             <th className="px-4 py-3 text-right">Journal</th>
+            {isMember && <th className="px-4 py-3 text-right">Manage</th>}
           </tr>
         </thead>
         <tbody>
@@ -122,6 +126,11 @@ function UniverseTable({ rows }: { rows: Row[] }) {
               </td>
               <td className="px-4 py-2.5 text-right">{r.held ? <Pnl cents={r.upnlCents} className="text-sm" /> : ""}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-teal-200/50">{r.journal > 0 ? r.journal : ""}</td>
+              {isMember && (
+                <td className="px-4 py-2.5 text-right">
+                  <UniverseActions symbol={r.symbol} status="ACTIVE" pendingBy={null} proposedTier={null} currentUser={currentUser} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -131,12 +140,15 @@ function UniverseTable({ rows }: { rows: Row[] }) {
 }
 
 export default async function Universe() {
-  const [active, positions, directives, journalCounts] = await Promise.all([
+  const [session, active, positions, directives, journalCounts] = await Promise.all([
+    getSession(),
     activeUniverse(),
     prisma.position.findMany(),
     prisma.symbolDirective.findMany(),
     prisma.journalEntry.groupBy({ by: ["symbol"], _count: { id: true }, where: { symbol: { not: null } } }),
   ]);
+  const me = displayName(session);
+  const isMember = session?.role === "member";
 
   const allSyms = active.map((u) => u.symbol);
   const quotes = await getQuotes(allSyms);
@@ -203,6 +215,7 @@ export default async function Universe() {
           </Link>
         }
       />
+      <MarketTabs />
 
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -214,7 +227,7 @@ export default async function Universe() {
           </p>
         </div>
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
-        <UniverseTable rows={activeRows} />
+        <UniverseTable rows={activeRows} isMember={isMember} currentUser={me} />
       </section>
 
       <p className="mt-6 text-xs text-teal-200/40">

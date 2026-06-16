@@ -74,7 +74,7 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }
-            UniverseView().tabItem { Label("Universe", systemImage: "square.grid.2x2.fill") }
+            WatchlistView().tabItem { Label("Watchlist", systemImage: "star.fill") }
             PortfolioView().tabItem { Label("Portfolio", systemImage: "briefcase.fill") }
             IdeasView().tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
             SettingsView().tabItem { Label("Settings", systemImage: "gearshape.fill") }

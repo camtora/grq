@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// The Universe — the investable set GRQ may buy, plus the watchlist of candidates.
-/// Member actions (pin / no-fly directives, promote, propose) are mock here; the real
-/// ones hit /api/stocks/directive + /api/universe (member + Face ID — see IOS-PLAN.md).
-struct UniverseView: View {
+/// The Watchlist — everything GRQ tracks: the investable set it may buy, plus the
+/// candidates it's researching. Search filters both. Member actions (pin / no-fly
+/// directives, promote, propose) are mock here; the real ones hit
+/// /api/stocks/directive + /api/universe (member + Face ID — see IOS-PLAN.md).
+struct WatchlistView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var universe: [MarketName] = []
     @State private var watchlist: [MarketName] = []
+    @State private var query = ""
     @State private var showPropose = false
     @State private var proposeSymbol = ""
     @State private var promoteTarget: MarketName?
@@ -15,9 +17,19 @@ struct UniverseView: View {
 
     private var isMember: Bool { auth.currentUser?.role == .member }
 
+    // Case-insensitive search over symbol + company name.
+    private func matches(_ xs: [MarketName]) -> [MarketName] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return xs }
+        return xs.filter { $0.symbol.lowercased().contains(q) || $0.name.lowercased().contains(q) }
+    }
+    private var filteredUniverse: [MarketName] { matches(universe) }
+    private var filteredWatchlist: [MarketName] { matches(watchlist) }
+
     var body: some View {
         NavigationStack {
-            GRQScreen(title: "Universe", subtitle: "what GRQ may buy") {
+            GRQScreen(title: "Watchlist", subtitle: "what GRQ tracks & may buy") {
+                searchField
                 summaryCard
                 universeSection
                 watchlistSection
@@ -46,6 +58,26 @@ struct UniverseView: View {
     }
 
     // MARK: - Cards
+
+    private var searchField: some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(p.textMuted)
+            TextField("Search stocks", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .foregroundStyle(p.textPrimary)
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(p.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p.cardBg))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(p.cardBorder, lineWidth: 1))
+    }
 
     private var summaryCard: some View {
         let p = Theme.palette(scheme)
@@ -83,10 +115,16 @@ struct UniverseView: View {
             }
             Card {
                 VStack(spacing: 0) {
-                    ForEach(Array(universe.enumerated()), id: \.element.id) { idx, n in
-                        universeRow(n)
-                        if idx < universe.count - 1 {
-                            Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
+                    if filteredUniverse.isEmpty {
+                        Text(query.isEmpty ? "No investable names yet." : "No matches.")
+                            .font(.subheadline).foregroundStyle(p.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ForEach(Array(filteredUniverse.enumerated()), id: \.element.id) { idx, n in
+                            universeRow(n)
+                            if idx < filteredUniverse.count - 1 {
+                                Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
+                            }
                         }
                     }
                 }
@@ -104,14 +142,14 @@ struct UniverseView: View {
             }
             Card {
                 VStack(spacing: 0) {
-                    if watchlist.isEmpty {
-                        Text("No candidates. Propose one above.")
+                    if filteredWatchlist.isEmpty {
+                        Text(query.isEmpty ? "No candidates. Propose one above." : "No matches.")
                             .font(.subheadline).foregroundStyle(p.textMuted)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        ForEach(Array(watchlist.enumerated()), id: \.element.id) { idx, n in
+                        ForEach(Array(filteredWatchlist.enumerated()), id: \.element.id) { idx, n in
                             watchRow(n)
-                            if idx < watchlist.count - 1 {
+                            if idx < filteredWatchlist.count - 1 {
                                 Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12)
                             }
                         }

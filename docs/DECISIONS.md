@@ -231,3 +231,70 @@ it drives position size, cash floor, stop/take-profit distance, weekly-trade cap
 tiers in the validator + runner (`agent/policy.ts` DIALS).
 **Consequences:** FMP Ultimate is the paid data backbone. The two open data threads (structured
 insider, real-time-TSX) are both gated on external decisions — INK feed, and the market-open check.
+
+### D22 — IBKR paper gateway CONNECTED: loopback proxy + adapter fixes; blocked on paper-account permission sync (2026-06-16)
+**Context:** Resuming D19 during market hours. The D19 "account provisioning" wall resolved into a
+concrete cause: **no real paper account existed** — the "paper toggle" view was a half-provisioned
+dead-end. Cam created a proper one (Client Portal → Account Settings → **Create Paper Trading
+Account**) → **`DUQ774890`** with its OWN username **`cwiaiu983`** + password (a paper account is a
+separate login, not the live creds — that was the missing piece).
+**Two integration walls found & fixed (the "VERIFY-LIVE" shake-out):**
+- **Gateway is loopback-only.** The CP gateway (Build 10.46.1l) only accepts `127.0.0.1` and
+  *ignores* its `conf.yaml ips.allow` for any network IP (proven: ibeam's own IP is denied while
+  `localhost` works). So the agent — a separate container — got `Access Denied` at `ibeam:5000`.
+  **Fix:** a **socat sidecar** (`grq-ibeam-proxy`, `network_mode: "service:ibeam"`) forwarding
+  `:5002 → 127.0.0.1:5000`, so the gateway sees a loopback connection; the agent uses
+  `IBKR_GATEWAY_URL=https://ibeam:5002`. Internal docker network only (no host port) — an authorized,
+  scoped relaxation of the loopback guard. (`ibeam/conf.yaml` is mounted but its allowlist is
+  vestigial given the loopback-only behaviour.)
+- **No-User-Agent → 403.** The gateway 403s requests lacking a `User-Agent`; the adapter already
+  sends `grq/1.0`, so no code change (raw `node -e` probes were the red herring).
+- **Adapter bugs (`web/lib/broker/ibkr.ts`), found via a 1-share XIC test order through the §6 gate:**
+  `conidFor` returned the conid as a **string** (secdef/search) → IBKR 400 "parameter with incorrect
+  type" → coerce `Number()`; and IBKR refusals come back as a **bare `{error}` object** (not an
+  array) → the cascade now surfaces `resp.error` instead of "reply cascade unresolved".
+**Verified:** gateway `authenticated:true, connected:true` to `DUQ774890` (`isPaper:true`);
+`reconcile()` mirrors **CAD 5,000 / 0 positions** into the DB; the test order reaches IBKR and
+returns a clean **"No trading permissions."**
+**Remaining blocker:** Stocks-Canada trading permission was enabled on the **live** account, but IBKR
+paper accounts sync permissions on the **nightly reset** → it won't reach `DUQ774890` until ~next day.
+(Market-data agreements + the Market-Data API-cert were also required and are done.)
+**Status:** reverted to `BROKER=sim` (agent healthy on the sim, soak uninterrupted). **Re-test next
+market day:** restart `ibeam` (one IB Key tap), re-run the test order; if it fills + reconciles, flip
+`BROKER=ibkr-paper` → the ≥2-week IBKR-paper soak clock starts. **Security:** Cam set the paper
+password = his live password, so `.env` holds the live password — recommend rotating the paper login
+to a unique password. Runbook: `docs/IBKR-PHASE3.md`.
+
+### D23 — GRQ call unified to a 7-point scale; rating consistency; IA polish; SPCX is a CDR (Graham, 2026-06-16)
+**Context:** Two rounds of web feedback from Graham (relayed by Cam).
+**Rating unified (Cam's pick: 7-point):** the "GRQ call" was free words (Buy/Accumulate/Hold/Watch/
+Trim/Avoid/Sell) that read inconsistently next to the deterministic signal. Unified to a **7-point
+scale — Strong Buy / Buy / Weak Buy / Hold / Weak Sell / Sell / Strong Sell** — the SAME vocabulary
+the signal already used (`agent/signals.ts gradeLabel`). `stance` is a free Prisma `String` (no
+migration); `lib/stance.ts` rewritten with a back-compat map for the retired words + slider `pos`;
+new `components/RatingBar.tsx` slider; agent `write_journal` enum + dossier prompt updated.
+**Rating consistency:** the stock page no longer shows a competing technical "lean X" verdict —
+**GRQ's call is the only rating**, technicals render as labeled indicators; the Watchlist slider is
+driven by the call (never contradicts it).
+**IA:** top-nav "Market" lands on **Watchlist**; **Universe** demoted to a background sub-tab;
+**"Ideas"→"Discoveries"**; the **Research tab** is now a **human research desk** (your notes; the
+agent's auto-research queue stays behind the scenes on the Watchlist); Universe rows got a
+**Demote/remove** control; Watchlist rows are **condensed→expand** (native `<details>`).
+**Today/Brief:** news **Headlines** moved to the top; an **industry (sector-performance) breakdown**;
+**GRQ's call on movers**; the **game plan is full-width + uncondensed**.
+**Search:** fixed **name search** (was ticker-only) — `fmpSearch` now queries `search-name` too,
+merges/dedupes, and ranks North-American exchanges first; the multi-listing picker (ANET→NYSE,
+Shopify→SHOP.TO+SHOP) + Browse country/exchange/sector/cap filters already existed.
+**Guardrail audit (Graham's "double-check"), all PASS in code:** no margin / negative balance
+(validator cash-floor + `sim.ts` "no margin borrowing"); no shorting; fee/cap-gains/Canadian-tax
+aware; **no transfer/withdraw/FX/password/account tool exists** — the only money action is
+`propose_order` through the §6 gate + kill switch; the agent never logs into IBKR.
+**SPCX = a CDR, not a feed bug:** `SPCX.TO` is the **SpaceX CDR (CAD-hedged)** — a fractional
+depositary receipt (~CAD 36) of the Nasdaq underlying `SPCX` (~USD 213); the ~5.5× gap is the CDR
+ratio. For a CAD-only fund the **CDR is the correct tradeable instrument**; relabeled the entry, and
+the agent must re-dossier on the **CDR's $36 basis**. **Multi-currency stays deferred** — CDRs already
+give CAD access to most US megacaps; the money model is single-currency (CAD cents) and USD trading
+would need currency-aware NAV/sizing + an FX leg + the FX-approval guardrail. Only US names *without*
+a CDR force that decision.
+**iOS (parallel):** the app + `shared/contract.ts`/`web/lib/feed.ts` updated to mirror the IA
+(Universe→**Watchlist** + search, `leadTitle`, dossier `lastCents`).

@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 
-const LINKS = [
+// "Market" lands on the Watchlist (primary, Graham 2026-06-16); the Universe
+// (tradeable set) is now a background sub-tab, not a top-level destination.
+const LINKS: { href: string; label: string; match?: string[] }[] = [
   { href: "/", label: "Overview" },
   { href: "/today", label: "Today" },
-  { href: "/universe", label: "Universe" },
-  { href: "/market", label: "Market" },
+  { href: "/market/watchlist", label: "Market", match: ["/market", "/universe"] },
   { href: "/journal", label: "Journal" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
@@ -38,7 +39,7 @@ export default function NavBar({
         </Link>
         <div className="flex flex-wrap items-center gap-1">
           {LINKS.map((l) => {
-            const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+            const active = l.href === "/" ? pathname === "/" : (l.match ?? [l.href]).some((p) => pathname.startsWith(p));
             return (
               <Link
                 key={l.href}

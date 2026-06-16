@@ -188,7 +188,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   <div className="flex flex-wrap items-center gap-2">
                     <SignalStrip signals={signals} />
                     <span className="text-[10px] uppercase tracking-wider text-teal-200/40">
-                      technicals{rec ? ` · lean ${rec.label}` : ""}
+                      technical indicators
                     </span>
                   </div>
                   <p className="mt-1 text-[11px] text-teal-200/35">An input the agent weighs — trend/momentum only, not the call.</p>

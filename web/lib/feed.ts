@@ -304,6 +304,9 @@ export async function todayResponse() {
     .map((p) => ({ symbol: p.symbol, name: nameBy.get(p.symbol) ?? p.symbol, lastCents: p.lastCents, dayChangeBps: p.dayChangeBps }));
 
   const lead = eod ?? midday ?? plan ?? latestPlan ?? latestResearch;
+  // Title by WHAT the lead is, mirroring the web Today page's section header —
+  // not the time of day (so the app doesn't label the morning plan "Midday").
+  const leadTitle = eod ? "The Close" : plan ? "Today's Lead" : "From the desk";
 
   return {
     edition: editionNow(),
@@ -314,6 +317,7 @@ export async function todayResponse() {
     benchmarkBps: xicQuote?.dayChangeBps ?? null,
     tape,
     leadStoryMarkdown: lead?.body ?? null,
+    leadTitle,
     movers,
     topHitters,
     onTheRadar: await ideasResponse(8),
@@ -358,6 +362,7 @@ export async function dossierResponse(symbol: string) {
   return {
     symbol: sym,
     name: entry.name,
+    lastCents: cur,
     bodyMarkdown: body,
     call: stanceToCall(stanceEntry?.stance),
     target: {

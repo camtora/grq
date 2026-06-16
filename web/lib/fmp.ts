@@ -32,16 +32,26 @@ export type FmpMatch = {
   currency: string;
 };
 
+type RawMatch = { symbol: string; name: string; exchange: string; exchangeFullName: string; currency: string };
+
+// Major North-American exchanges — surfaced above obscure global listings so a
+// search for e.g. ANET leads with NYSE, not a Thai/Indian lookalike.
+const PRIMARY_EXCHANGES = new Set(["NYSE", "NASDAQ", "AMEX", "TSX", "TSXV", "TSE", "NEO", "CBOE"]);
+
 /** Symbol search → multiple listings (the disambiguation: ANET → NYSE:ANET,
- *  not "invalid"). Crypto/empty rows dropped; exact-ticker matches first. */
+ *  not "invalid"). Searches BOTH ticker and company NAME (so "Shopify" works,
+ *  not just "SHOP"), merges + dedupes, drops crypto, and ranks exact ticker
+ *  then North-American listings first. */
 export async function fmpSearch(query: string): Promise<FmpMatch[]> {
   const q = query.trim();
   if (!q) return [];
-  const raw = await fmpGet<Array<{ symbol: string; name: string; exchange: string; exchangeFullName: string; currency: string }>>(
-    `search-symbol?query=${encodeURIComponent(q)}`,
-  );
-  if (!Array.isArray(raw)) return [];
   const Q = q.toUpperCase();
+  const [bySymbol, byName] = await Promise.all([
+    fmpGet<RawMatch[]>(`search-symbol?query=${encodeURIComponent(q)}`).catch(() => [] as RawMatch[]),
+    fmpGet<RawMatch[]>(`search-name?query=${encodeURIComponent(q)}`).catch(() => [] as RawMatch[]),
+  ]);
+  const raw = [...(Array.isArray(bySymbol) ? bySymbol : []), ...(Array.isArray(byName) ? byName : [])];
+  const seen = new Set<string>();
   return raw
     .filter((d) => d.symbol && d.name && d.exchange && d.exchange.toUpperCase() !== "CRYPTO")
     .map((d) => ({
@@ -51,10 +61,17 @@ export async function fmpSearch(query: string): Promise<FmpMatch[]> {
       exchangeName: d.exchangeFullName || d.exchange,
       currency: d.currency || "",
     }))
+    .filter((m) => {
+      const k = `${m.symbol}|${m.exchange}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
     .sort((a, b) => {
-      // exact ticker first, then prefix matches, then the rest
-      const score = (s: string) => (s.toUpperCase() === Q ? 0 : s.toUpperCase().startsWith(Q) ? 1 : 2);
-      return score(a.symbol) - score(b.symbol);
+      const ticker = (s: string) => (s.toUpperCase() === Q ? 0 : s.toUpperCase().startsWith(Q) ? 1 : 2);
+      const t = ticker(a.symbol) - ticker(b.symbol);
+      if (t !== 0) return t;
+      return (PRIMARY_EXCHANGES.has(a.exchange.toUpperCase()) ? 0 : 1) - (PRIMARY_EXCHANGES.has(b.exchange.toUpperCase()) ? 0 : 1);
     })
     .slice(0, 12);
 }
