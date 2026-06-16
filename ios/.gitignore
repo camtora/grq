@@ -1,14 +1,18 @@
-# XcodeGen output — regenerate with `xcodegen generate`
-GRQ.xcodeproj/
+# The project itself (GRQ.xcodeproj/project.pbxproj) IS committed — like whosup.
+# Only ignore per-user state and build output.
 
-# Xcode / build
-build/
-DerivedData/
+# Xcode user state
+xcuserdata/
 *.xcuserstate
 *.xcuserdatad
-xcuserdata/
-.DS_Store
+
+# Build output
+build/
+DerivedData/
 
 # Swift Package Manager
 .swiftpm/
 Package.resolved
+
+# macOS
+.DS_Store

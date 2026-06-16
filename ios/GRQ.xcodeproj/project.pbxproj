@@ -1,0 +1,451 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		G1000001 /* GRQApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000001 /* GRQApp.swift */; };
+		G1000002 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000002 /* Theme.swift */; };
+		G1000003 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000003 /* Components.swift */; };
+		G1000004 /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000004 /* Content.swift */; };
+		G1000005 /* Services.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000005 /* Services.swift */; };
+		G1000006 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000006 /* Models.swift */; };
+		G1000007 /* Splash.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000007 /* Splash.swift */; };
+		G1000008 /* SignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000008 /* SignIn.swift */; };
+		G1000009 /* Today.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000009 /* Today.swift */; };
+		G1000010 /* Market.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000010 /* Market.swift */; };
+		G1000011 /* Portfolio.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000011 /* Portfolio.swift */; };
+		G1000012 /* Ideas.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000012 /* Ideas.swift */; };
+		G1000013 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = G2000013 /* Settings.swift */; };
+		G1000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = G2000020 /* Assets.xcassets */; };
+		G1000031 /* glossary.json in Resources */ = {isa = PBXBuildFile; fileRef = G2000031 /* glossary.json */; };
+		G1000032 /* daily.json in Resources */ = {isa = PBXBuildFile; fileRef = G2000032 /* daily.json */; };
+		G1000033 /* strings.json in Resources */ = {isa = PBXBuildFile; fileRef = G2000033 /* strings.json */; };
+		G1000034 /* tokens.json in Resources */ = {isa = PBXBuildFile; fileRef = G2000034 /* tokens.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		G2000000 /* GRQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GRQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		G2000001 /* GRQApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GRQApp.swift; sourceTree = "<group>"; };
+		G2000002 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		G2000003 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		G2000004 /* Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Content.swift; sourceTree = "<group>"; };
+		G2000005 /* Services.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services.swift; sourceTree = "<group>"; };
+		G2000006 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		G2000007 /* Splash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Splash.swift; sourceTree = "<group>"; };
+		G2000008 /* SignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignIn.swift; sourceTree = "<group>"; };
+		G2000009 /* Today.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Today.swift; sourceTree = "<group>"; };
+		G2000010 /* Market.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Market.swift; sourceTree = "<group>"; };
+		G2000011 /* Portfolio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Portfolio.swift; sourceTree = "<group>"; };
+		G2000012 /* Ideas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ideas.swift; sourceTree = "<group>"; };
+		G2000013 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		G2000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		G2000031 /* glossary.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = glossary.json; path = "../shared/content/glossary.json"; sourceTree = SOURCE_ROOT; };
+		G2000032 /* daily.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = daily.json; path = "../shared/content/daily.json"; sourceTree = SOURCE_ROOT; };
+		G2000033 /* strings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = strings.json; path = "../shared/content/strings.json"; sourceTree = SOURCE_ROOT; };
+		G2000034 /* tokens.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = tokens.json; path = "../shared/tokens.json"; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		G3000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G4000000 = {
+			isa = PBXGroup;
+			children = (
+				G4000001 /* GRQ */,
+				G4000008 /* Shared */,
+				G4000099 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G4000001 /* GRQ */ = {
+			isa = PBXGroup;
+			children = (
+				G4000002 /* App */,
+				G4000003 /* Theme */,
+				G4000004 /* Services */,
+				G4000005 /* Models */,
+				G4000006 /* Views */,
+				G4000007 /* Resources */,
+			);
+			path = GRQ;
+			sourceTree = "<group>";
+		};
+		G4000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				G2000001 /* GRQApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		G4000003 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				G2000002 /* Theme.swift */,
+				G2000003 /* Components.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		G4000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				G2000004 /* Content.swift */,
+				G2000005 /* Services.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		G4000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				G2000006 /* Models.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		G4000006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				G2000007 /* Splash.swift */,
+				G2000008 /* SignIn.swift */,
+				G2000009 /* Today.swift */,
+				G2000010 /* Market.swift */,
+				G2000011 /* Portfolio.swift */,
+				G2000012 /* Ideas.swift */,
+				G2000013 /* Settings.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		G4000007 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				G2000020 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		G4000008 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				G2000031 /* glossary.json */,
+				G2000032 /* daily.json */,
+				G2000033 /* strings.json */,
+				G2000034 /* tokens.json */,
+			);
+			name = Shared;
+			sourceTree = "<group>";
+		};
+		G4000099 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				G2000000 /* GRQ.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		G5000001 /* GRQ */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = G6000001 /* Build configuration list for PBXNativeTarget "GRQ" */;
+			buildPhases = (
+				G3000001 /* Sources */,
+				G3000002 /* Frameworks */,
+				G3000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GRQ;
+			productName = GRQ;
+			productReference = G2000000 /* GRQ.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		G7000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					G5000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = G6000002 /* Build configuration list for PBXProject "GRQ" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = G4000000;
+			productRefGroup = G4000099 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				G5000001 /* GRQ */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		G3000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				G1000020 /* Assets.xcassets in Resources */,
+				G1000031 /* glossary.json in Resources */,
+				G1000032 /* daily.json in Resources */,
+				G1000033 /* strings.json in Resources */,
+				G1000034 /* tokens.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		G3000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				G1000001 /* GRQApp.swift in Sources */,
+				G1000002 /* Theme.swift in Sources */,
+				G1000003 /* Components.swift in Sources */,
+				G1000004 /* Content.swift in Sources */,
+				G1000005 /* Services.swift in Sources */,
+				G1000006 /* Models.swift in Sources */,
+				G1000007 /* Splash.swift in Sources */,
+				G1000008 /* SignIn.swift in Sources */,
+				G1000009 /* Today.swift in Sources */,
+				G1000010 /* Market.swift in Sources */,
+				G1000011 /* Portfolio.swift in Sources */,
+				G1000012 /* Ideas.swift in Sources */,
+				G1000013 /* Settings.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		G8000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		G8000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		G8000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WR9SN94Q4;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = GRQ;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.camerontora.grq;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		G8000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3WR9SN94Q4;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = GRQ;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.camerontora.grq;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		G6000001 /* Build configuration list for PBXNativeTarget "GRQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G8000003 /* Debug */,
+				G8000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		G6000002 /* Build configuration list for PBXProject "GRQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G8000001 /* Debug */,
+				G8000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = G7000001 /* Project object */;
+}

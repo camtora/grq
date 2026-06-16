@@ -101,7 +101,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? `${earnings.upcoming ? "next" : "last"} ${earnings.date}` : "no FMP coverage for this name" },
     { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
     { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
-    { tier: 4, name: "Insider", status: "none", detail: "Canadian issuers file on SEDI, not SEC — paid feed pending" },
+    { tier: 4, name: "Insider", status: "partial", detail: "GRQ web-researches it in dossiers (SEDI/SEDAR); structured feed = INK (paid)" },
     {
       tier: 5,
       name: "Institutional",

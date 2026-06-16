@@ -168,10 +168,13 @@ Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
 Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
 
 Research this stock thoroughly with WebSearch/WebFetch — the business, recent news and
-results, catalysts, competitive position, risks. Then write EXACTLY ONE symbol-tagged
-RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
+results, catalysts, competitive position, risks. ALSO check recent INSIDER ACTIVITY: search
+SEDI / SEDAR+ / canadianinsider for this name — clusters of insider BUYING are a strong
+signal, heavy selling a caution (note what you find, dated, with the source). Then write
+EXACTLY ONE symbol-tagged RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
 markdown body with sections: **Snapshot** · **Recent developments** (dated, sourced) ·
-**Signals read** · **Bull case** · **Bear case** · **Verdict** (worth watching?
+**Insider activity** (recent filings + any cluster, or "none found") · **Signals read** ·
+**Bull case** · **Bear case** · **Verdict** (worth watching?
 thesis-worthy? confidence 0–100, plus your **price targets**) · **Risks**. Cite every source in sources[].
 In the write_journal call, commit your expected prices as fields: **targetNearCents** (a
 near-term swing target ~4–8 weeks out) with **targetNearDays** (its horizon in trading days),
