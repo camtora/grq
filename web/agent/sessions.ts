@@ -9,6 +9,8 @@ import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
 import { MODELS, AGENT_VERSION, taxContext } from "./policy";
 import { alert, heartbeat } from "./alerts";
+import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys } from "../lib/smart-money/queries";
+import { fmtUsd } from "../lib/smart-money/types";
 
 const PERSONA = `You are GRQ's trading agent — an autonomous swing-trading fund manager for Cam & Graham's $5,000 CAD simulated fund (it will become real money; treat it as real).
 
@@ -119,22 +121,52 @@ Be honest: smaller names are higher-risk — flag the lottery tickets vs. the on
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
 }
 
-/** Smart-money scan (2026-06-14) — what notable, disclosure-required public
- *  portfolios are buying/selling, as a signal. Research-only; the agent proposes. */
+/** Smart-money read (D27) — the EDITORIAL narrative on top of the structured
+ *  data the runner already ingested (FMP congress/insider/13F + OpenInsider) and
+ *  the /market/smart-money page already shows. The model synthesizes, it doesn't
+ *  re-fetch. Research-only. */
 export async function runSmartMoneyScan(): Promise<void> {
-  const universe = await allUniverse();
-  const have = universe.map((u) => u.symbol).join(", ");
-  const prompt = `# TASK: Smart-money scan — what notable public portfolios are doing (${etDateStr()})
+  const [universe, portfolios, congress, funds, insiders] = await Promise.all([
+    allUniverse(),
+    getPortfolios(),
+    getCongressLeaderboard(90, 8),
+    getFundsPilingIn(8),
+    getInsiderTopBuys(14, 10),
+  ]);
+  const have = new Set(universe.filter((u) => u.status !== "RETIRED").map((u) => u.symbol));
+  const mark = (s: string) => (have.has(s) ? " (OURS)" : "");
 
-Track what well-followed or disclosure-required public investors have been BUYING and SELLING recently, as a signal. Use WebSearch (and WebFetch) for the latest on:
-- **Congressional trades** — Nancy Pelosi and other notable members of Congress (their disclosed stock transactions are widely reported and tracked).
-- **Famous investors / funds** — recent 13F moves or public positions from Buffett/Berkshire and other widely-followed managers.
-- **Clustered insider buying** — notable recent insider purchases.
+  const congressLines = congress.map((c) => `- ${c.symbol}${mark(c.symbol)}: ${c.buyers} members, ${c.trades} trades — ${c.assetName}`).join("\n") || "- (none in window)";
+  const fundLines = funds.map((f) => `- ${f.symbol}${mark(f.symbol)}: added by ${f.fundNames.join(", ")} (${fmtUsd(f.totalValueUsd)})`).join("\n") || "- (none)";
+  const insiderLines = insiders.slice(0, 8).map((t) => `- ${t.symbol}${mark(t.symbol)}: ${fmtUsd(t.valueUsd)} by ${t.insiderName} (${t.insiderTitle ?? "?"})`).join("\n") || "- (none)";
+  const portLines =
+    portfolios
+      .map((p) => {
+        const top = p.topHoldings.slice(0, 5).map((h) => `${h.symbol}${h.putCall ? `(${h.putCall})` : ""} ${(h.pctOfPort * 100).toFixed(0)}% ${h.action}`).join(", ");
+        return `- ${p.name} (${p.firm}, 13F ${p.asOf}, ${fmtUsd(p.totalValueUsd)}): ${top}`;
+      })
+      .join("\n") || "- (no portfolios ingested yet)";
 
-Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", markdown body grouped by source (Congress · Funds · Insiders), each a short bullet (who · bought/sold what · the read). Call out any names that OVERLAP our universe (${have || "none"}) or look worth a closer look. Cite every source in sources[]. Set confidence on how actionable this batch is.
+  const prompt = `# TASK: Smart-money read — synthesize what notable portfolios are doing (${etDateStr()})
 
-Honest framing: disclosures lag (often 30–45 days), most of these names are US-listed (we trade TSX), and "a famous person bought it" is weak on its own — flag it as colour, not gospel. These are leads for Cam & Graham, not trade instructions.`;
-  await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 24 });
+We ALREADY pulled the structured data below (FMP + OpenInsider: congress/insider trades, fund 13Fs). Your job is the EDITORIAL read ON TOP of it — the through-line, not a data dump. Do NOT re-fetch this; you may use WebSearch only to add brief "why" colour on 1–2 standout names.
+
+CONGRESS — most-bought (last 90d):
+${congressLines}
+
+FUNDS — names multiple tracked managers piled into (latest 13F):
+${fundLines}
+
+INSIDERS — biggest open-market buys (last 14d):
+${insiderLines}
+
+TRACKED PORTFOLIOS — latest 13F top holdings (PUT = bearish bet, not a long):
+${portLines}
+
+Names marked (OURS) overlap GRQ's universe.
+
+Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we trade TSX) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
+  await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 16 });
 }
 
 export async function runMiddayCheckIn(reason: string): Promise<void> {

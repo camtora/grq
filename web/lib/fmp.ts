@@ -392,6 +392,179 @@ export async function fmpInstitutional(symbol: string): Promise<FmpInstitutional
   return null;
 }
 
+// --- Smart Money: 13F holdings BY HOLDER (Tier 5) -----------------------------
+// Unlike fmpInstitutional (one symbol, who-holds-it), these key off a manager's
+// CIK to reconstruct their whole 13F portfolio. Quarterly + ~45-day lag; a symbol
+// can appear as common + PUT + CALL line items (the options tell).
+export type Fmp13FDate = { date: string; year: number; quarter: number };
+
+export async function fmp13FDates(cik: string): Promise<Fmp13FDate[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`institutional-ownership/dates?cik=${encodeURIComponent(cik)}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({ date: String(r.date ?? ""), year: Number(r.year ?? 0), quarter: Number(r.quarter ?? 0) }))
+    .filter((r) => r.year && r.quarter);
+}
+
+export type Fmp13FHolding = { symbol: string; name: string; shares: number; valueUsd: number; putCall: "PUT" | "CALL" | null };
+
+export async function fmp13FHoldings(cik: string, year: number, quarter: number): Promise<Fmp13FHolding[]> {
+  // FMP paginates extract at 100/page; roster funds top out ~200 lines (ARK).
+  const out: Fmp13FHolding[] = [];
+  for (let page = 0; page < 6; page++) {
+    const raw = await fmpGet<Array<Record<string, unknown>>>(
+      `institutional-ownership/extract?cik=${encodeURIComponent(cik)}&year=${year}&quarter=${quarter}&page=${page}`,
+    );
+    if (!Array.isArray(raw) || raw.length === 0) break;
+    for (const r of raw) {
+      const sym = String(r.symbol ?? "").toUpperCase();
+      if (!sym) continue;
+      const pc = String(r.putCallShare ?? "").toUpperCase();
+      out.push({
+        symbol: sym,
+        name: String(r.nameOfIssuer ?? sym),
+        shares: typeof r.shares === "number" ? r.shares : 0,
+        valueUsd: typeof r.value === "number" ? r.value : 0,
+        putCall: pc === "PUT" ? "PUT" : pc === "CALL" ? "CALL" : null,
+      });
+    }
+    if (raw.length < 100) break;
+  }
+  return out;
+}
+
+export type Fmp13FSummary = {
+  date: string;
+  investorName: string;
+  portfolioSize: number;
+  marketValueUsd: number;
+  securitiesAdded: number;
+  securitiesRemoved: number;
+  perf1yPct: number | null;
+};
+
+export async function fmp13FSummary(cik: string): Promise<Fmp13FSummary | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`institutional-ownership/holder-performance-summary?cik=${encodeURIComponent(cik)}&page=0`);
+  const r = Array.isArray(raw) ? raw[0] : null;
+  if (!r) return null;
+  const n = (v: unknown) => (typeof v === "number" ? v : null);
+  return {
+    date: String(r.date ?? ""),
+    investorName: String(r.investorName ?? ""),
+    portfolioSize: n(r.portfolioSize) ?? 0,
+    marketValueUsd: n(r.marketValue) ?? 0,
+    securitiesAdded: n(r.securitiesAdded) ?? 0,
+    securitiesRemoved: n(r.securitiesRemoved) ?? 0,
+    perf1yPct: n(r.performancePercentage1year),
+  };
+}
+
+// --- Smart Money: congressional trades ----------------------------------------
+// senate-latest / house-latest share a shape. Amounts are disclosed as RANGES.
+export type FmpPoliticalTrade = {
+  symbol: string;
+  memberId: string;
+  memberName: string;
+  district: string;
+  assetName: string;
+  type: string; // "Purchase" | "Sale" | "Sale (Partial)" | "Exchange"
+  amountRange: string;
+  txnDate: string;
+  disclosureDate: string;
+  link: string;
+};
+
+function mapPolitical(raw: unknown): FmpPoliticalTrade[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => {
+      const first = String(r.firstName ?? "").trim();
+      const last = String(r.lastName ?? "").trim();
+      return {
+        symbol: String(r.symbol ?? "").toUpperCase(),
+        memberId: String(r.senateID ?? r.houseID ?? ""),
+        memberName: String(r.office ?? "").trim() || [first, last].filter(Boolean).join(" "),
+        district: String(r.district ?? ""),
+        assetName: String(r.assetDescription ?? ""),
+        type: String(r.type ?? ""),
+        amountRange: String(r.amount ?? ""),
+        txnDate: String(r.transactionDate ?? ""),
+        disclosureDate: String(r.disclosureDate ?? ""),
+        link: String(r.link ?? ""),
+      };
+    })
+    .filter((t) => t.symbol && t.type);
+}
+
+async function fmpPoliticalLatest(endpoint: "senate-latest" | "house-latest", pages: number): Promise<FmpPoliticalTrade[]> {
+  const out: FmpPoliticalTrade[] = [];
+  for (let p = 0; p < pages; p++) {
+    const batch = mapPolitical(await fmpGet<unknown>(`${endpoint}?page=${p}&limit=100`));
+    out.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return out;
+}
+
+export const fmpSenateLatest = (pages = 3) => fmpPoliticalLatest("senate-latest", pages);
+export const fmpHouseLatest = (pages = 3) => fmpPoliticalLatest("house-latest", pages);
+
+// A specific member's trades by last name (the "latest" feeds only carry the most
+// recent disclosures chronologically, so infrequent filers like Pelosi never
+// appear there — we fetch tracked members by name). Checks both chambers.
+export async function fmpCongressByName(lastName: string): Promise<Array<{ chamber: "senate" | "house"; trade: FmpPoliticalTrade }>> {
+  const [house, senate] = await Promise.all([
+    fmpGet<unknown>(`house-trades-by-name?name=${encodeURIComponent(lastName)}`).catch(() => null),
+    fmpGet<unknown>(`senate-trades-by-name?name=${encodeURIComponent(lastName)}`).catch(() => null),
+  ]);
+  return [
+    ...mapPolitical(house).map((trade) => ({ chamber: "house" as const, trade })),
+    ...mapPolitical(senate).map((trade) => ({ chamber: "senate" as const, trade })),
+  ];
+}
+
+// --- Smart Money: insider Form 4 ----------------------------------------------
+// insider-trading/latest returns ALL Form-4 lines; the "top buys" board filters
+// to open-market PURCHASES (transactionType "P-Purchase"), not option exercises.
+export type FmpInsiderTrade = {
+  symbol: string;
+  reportingName: string;
+  typeOfOwner: string;
+  transactionType: string;
+  acquiredDisposed: string; // "A" | "D"
+  shares: number;
+  price: number;
+  txnDate: string;
+  filingDate: string;
+  url: string;
+};
+
+export async function fmpInsiderLatest(pages = 4): Promise<FmpInsiderTrade[]> {
+  const out: FmpInsiderTrade[] = [];
+  for (let p = 0; p < pages; p++) {
+    const raw = await fmpGet<Array<Record<string, unknown>>>(`insider-trading/latest?page=${p}&limit=100`);
+    if (!Array.isArray(raw) || raw.length === 0) break;
+    for (const r of raw) {
+      const sym = String(r.symbol ?? "").toUpperCase();
+      if (!sym) continue;
+      out.push({
+        symbol: sym,
+        reportingName: String(r.reportingName ?? ""),
+        typeOfOwner: String(r.typeOfOwner ?? ""),
+        transactionType: String(r.transactionType ?? ""),
+        acquiredDisposed: String(r.acquisitionOrDisposition ?? ""),
+        shares: typeof r.securitiesTransacted === "number" ? r.securitiesTransacted : 0,
+        price: typeof r.price === "number" ? r.price : 0,
+        txnDate: String(r.transactionDate ?? ""),
+        filingDate: String(r.filingDate ?? ""),
+        url: String(r.url ?? ""),
+      });
+    }
+    if (raw.length < 100) break;
+  }
+  return out;
+}
+
 // --- Market indices + commodities strip (Today's "live until close" ticker) -----
 // Index levels / commodity prices are reference figures, not fund money — kept as
 // plain numbers (not cents). FMP batch-quote-short serves all of these.

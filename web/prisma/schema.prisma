@@ -351,6 +351,103 @@ model Note {
   @@index([at])
 }
 
+// --- Smart Money (D27) -------------------------------------------------------
+// What notable public portfolios are doing, surfaced as colour/leads (not trade
+// instructions). EXTERNAL reference data, not fund money: dollar values are stored
+// as REPORTED (USD from US filings), like IndexQuote keeps index levels as plain
+// numbers — never the integer-CAD-cents rule, because we never trade off these
+// directly. BigInt where a 13F's market value overflows Int32 (Berkshire ~$263B).
+// Refreshed by the agent runner: congress + insider daily, 13F when a new filing
+// date appears (quarterly, ~45-day lag). See docs/DATA-SOURCES.md tiers 4 & 5.
+
+// One manager's 13F as of a quarter-end. Holdings hang off it.
+model PortfolioSnapshot {
+  id            Int                @id @default(autoincrement())
+  cik           String
+  holderName    String
+  asOf          DateTime // 13F "date" — quarter-end
+  filedAt       DateTime? // when the 13F was filed (the ~45-day lag is asOf→filedAt)
+  totalValueUsd BigInt // marketValue
+  holdingsCount Int
+  securitiesAdded   Int? // new positions this quarter
+  securitiesRemoved Int? // exited positions this quarter
+  perf1yPct     Float? // trailing 1-yr portfolio performance (FMP holder-perf)
+  fetchedAt     DateTime           @default(now())
+  holdings      PortfolioHolding[]
+
+  @@unique([cik, asOf])
+  @@index([cik])
+}
+
+// One line of a 13F (a symbol can appear as common + PUT + CALL — kept distinct,
+// matching the filing). action is derived by diffing against the prior quarter.
+model PortfolioHolding {
+  id           Int               @id @default(autoincrement())
+  snapshotId   Int
+  snapshot     PortfolioSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  symbol       String
+  name         String
+  shares       BigInt
+  valueUsd     BigInt
+  pctOfPort    Float // weight = value / portfolio total
+  putCall      String? // "PUT" | "CALL" | null (the bearish/options tell)
+  action       String // NEW | ADD | TRIM | EXIT | HOLD
+  qoqSharesPct Float? // share-count change vs prior quarter (null if NEW/unknown)
+  rank         Int // by value within the portfolio
+
+  @@index([snapshotId])
+  @@index([symbol])
+}
+
+// A disclosed congressional trade (Senate or House). `key` is a deterministic
+// dedupe hash so daily ingest is idempotent. Amounts are reported as RANGES.
+model PoliticalTrade {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique
+  chamber      String // "senate" | "house"
+  memberName   String
+  memberId     String? // senateID / house id from the feed
+  district     String?
+  symbol       String
+  assetName    String
+  side         String // "BUY" | "SELL"
+  amountRange  String // "$1,001 - $15,000"
+  amountMinUsd Int? // parsed low bound — for ranking by size
+  txnDate      DateTime
+  disclosedAt  DateTime
+  link         String?
+  fetchedAt    DateTime @default(now())
+
+  @@index([symbol])
+  @@index([txnDate])
+}
+
+// An insider (Form 4) transaction. Source is "fmp" or "openinsider"; the
+// top-buys board filters to open-market PURCHASES (txnType "P-Purchase"), not
+// option exercises/grants. `key` makes ingest idempotent.
+model InsiderTrade {
+  id           Int      @id @default(autoincrement())
+  key          String   @unique
+  symbol       String
+  companyName  String?
+  insiderName  String
+  insiderTitle String? // typeOfOwner (e.g. "officer: CEO", "director")
+  side         String // "BUY" | "SELL"
+  txnType      String // FMP transactionType code (P-Purchase, S-Sale, ...)
+  shares       Int
+  priceUsd     Float
+  valueUsd     Float // shares * price
+  txnDate      DateTime
+  filedAt      DateTime
+  source       String // "fmp" | "openinsider"
+  link         String?
+  fetchedAt    DateTime @default(now())
+
+  @@index([symbol])
+  @@index([txnDate])
+  @@index([side])
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)

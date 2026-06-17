@@ -14,6 +14,7 @@ import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
+import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
 import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
@@ -34,6 +35,7 @@ let lastBarsDay = "";
 let lastLogoBackfill = 0;
 let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
+let lastSmartMoneyDay = "";
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
@@ -335,6 +337,15 @@ async function tick() {
     lastFundamentalsBackfill = Date.now();
     const n = await backfillFundamentals().catch(() => 0);
     if (n > 0) console.log(`[fmp] refreshed ${n} fundamentals`);
+  }
+
+  // Smart Money ingest (D27) — once per ET day: congress + insider trades file
+  // continuously (daily), and 13Fs only re-pull when a new filing date appears.
+  if (lastSmartMoneyDay !== p.dateStr) {
+    lastSmartMoneyDay = p.dateStr;
+    runSmartMoneyIngest()
+      .then((r) => console.log(`[smartmoney] ingest: ${r.congress} congress · ${r.insiders} insider · ${r.portfolios.fresh} fresh 13F`))
+      .catch((e) => console.error("[smartmoney] ingest failed:", e instanceof Error ? e.message : e));
   }
 
   await maybeScheduledSessions();

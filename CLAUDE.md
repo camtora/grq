@@ -27,9 +27,15 @@ dossier's plain-English *why* (`bottomLine`) + targets, **+ lazily-loaded earnin
 (`/api/stock-extras/[symbol]` → `RowExtras`, fetched on expand), full-dossier link (`components/ExpandableRow.tsx`,
 a client wrapper so `StockTable` stays server). Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
 list tables — `UniverseActions hideResearch`). **Discover** = the hunt (8–12 names · **↻ refresh** via
-`AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED) + smart money; hunt cards are **leads, not verdicts**
+`AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED); hunt cards are **leads, not verdicts**
 (`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
+**Smart Money (D28)** is a fifth top-level destination (`/market/smart-money`): **tracked-portfolio cards**
+(curated 13F filers by CIK — Buffett/Burry/Ackman/Wood/**Aschenbrenner**, + Pelosi by name; expand into
+holdings with NEW/ADD/TRIM diffs + **PUT/CALL flags**), **Congress/funds/insider leaderboards** + cluster
+buys, and a GRQ narrative — all from FMP structured feeds + a nightly **OpenInsider** scrape, ingested
+**daily** (13Fs only on a new filing) by the runner. Honest: 13F lags ~45d & longs+options-only; congress
+amounts are ranges; most names US-listed → leads, not trades. (`lib/smart-money/*`, `components/smart-money/*`.)
 **Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**;
 **The Tape sits above the headlines**, and **today's biggest movers are clickable + auto-researched** — Today queues a `movers`
 dossier for any it doesn't track, and the stock page shows a *researching…* state until it lands (D29). The stock page also shows the **company logo**.

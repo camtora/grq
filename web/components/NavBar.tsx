@@ -16,6 +16,7 @@ const PRIMARY: NavLink[] = [
   { href: "/universe", label: "Universe" },
   { href: "/market", label: "Discover", exact: true },
   { href: "/market/browse", label: "Browse" },
+  { href: "/market/smart-money", label: "Smart Money" },
 ];
 const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },

@@ -3,13 +3,11 @@ import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession } from "@/lib/session";
 import { computeSignals, overallSignal } from "@/agent/signals";
-import { fmtWhen } from "@/lib/money";
-import { Card, PageHeader, Chip } from "@/components/ui";
-import CollapsibleMd from "@/components/CollapsibleMd";
+import { PageHeader, Chip } from "@/components/ui";
 import { type WatchState } from "@/components/WatchButton";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
 import DismissButton from "@/components/DismissButton";
-import IdeaCard, { type Idea, SourceChips } from "@/components/IdeaCard";
+import IdeaCard, { type Idea } from "@/components/IdeaCard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +27,11 @@ export default async function Market() {
     return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
   };
 
-  const [huntRaw, smartMoney] = await Promise.all([
-    prisma.journalEntry.findMany({
-      where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
-      orderBy: { at: "desc" },
-      take: 24,
-    }),
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
-  ]);
+  const huntRaw = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    take: 24,
+  });
   const huntSeen = new Set<string>();
   const huntFinds = huntRaw
     .filter((d) => {
@@ -78,21 +73,10 @@ export default async function Market() {
 
   return (
     <main>
-      <PageHeader title="Discover" sub="The agent's hunt for under-the-radar names, and what notable public portfolios are buying." />
-
-      {smartMoney && (
-        <Card className="mb-8 p-5">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <Chip tone="dim">smart money</Chip>
-            <span className="text-sm font-medium text-teal-50">{smartMoney.title}</span>
-            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(smartMoney.at)}</span>
-          </div>
-          <CollapsibleMd text={smartMoney.body}>
-            <SourceChips sourcesJson={smartMoney.sourcesJson} />
-          </CollapsibleMd>
-          <p className="mt-2 text-[11px] text-teal-200/40">What notable public portfolios (congress, funds, insiders) are buying — colour, not gospel; disclosures lag.</p>
-        </Card>
-      )}
+      <PageHeader
+        title="Discover"
+        sub="The agent's hunt for under-the-radar names — earlier-stage leads, often before a price target. (Smart money moved to its own page.)"
+      />
 
       {huntIdeas.length > 0 && (
         <section className="mb-8">

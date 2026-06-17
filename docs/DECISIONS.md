@@ -423,6 +423,36 @@ nothing. Reports + Settings also moved to the **right** of the header (landed in
 `agent/chat-server.ts`, `components/{JournalSection,ChatDrawer,ChatClient}.tsx`,
 `prisma/{schema.prisma,backfill-chat-owner.ts}`. **Schema (additive, pushed):** `ChatMessage.owner`.
 
+### D28 — Smart Money is its own data-driven page (Cam, 2026-06-17)
+Promoted "smart money" from a single **weekly LLM web-search** card on Discover to a **first-class,
+structured destination** at `/market/smart-money` (top-level header nav — no sub-nav; Cam). The old prose
+card is **gone** from `/market`; the data now comes from **FMP Ultimate's structured feeds** (already paid)
+**+ a nightly OpenInsider scrape** as a cross-check — not the model.
+**What the page shows (Cam's priority order):** (1) **Tracked-portfolio cards** — a curated roster of 13F
+filers (Buffett/Berkshire, Burry/Scion, Ackman/Pershing, Wood/ARK, **Aschenbrenner/Situational Awareness**)
++ a tracked member of Congress (Pelosi), each an avatar/monogram header that expands into a Watchlist-style
+holdings table (weight · NEW/ADD/TRIM action diffed vs the prior quarter · **PUT/CALL flag** · universe
+overlap). Aschenbrenner's & Burry's bearish semis **puts** are explicitly labelled so a put never reads as a
+long. (2) **Congress's most-bought** leaderboard (senate+house, aggregated by distinct members). (3)
+**Biggest insider buys** (open-market Form 4 only — `P-Purchase`, not option exercises) + a **cluster-buys**
+strip. (4) The agent's **"GRQ's read"** narrative — `runSmartMoneyScan()` rewritten to *synthesize the
+ingested tables* (not free web search), still titled "Smart money — <date>" so the Reports tab still works.
+**Cadence:** congress + insider ingest **daily** (they file continuously); 13Fs only re-pull when a **new
+filing date** appears (quarterly, ~45-day lag, idempotent skip). A once-per-ET-day `runSmartMoneyIngest()`
+runs in the runner tick.
+**Honesty baked in:** 13F = longs+options only, ~45-day lag, no true shorts; congress amounts are ranges;
+most names are US-listed (we trade TSX) → leads/colour, not trade instructions. The **universe-overlap
+badge** is the tie-back to the fund.
+**Schema (additive, pushed):** `PortfolioSnapshot`/`PortfolioHolding` (13F by holder; USD **BigInt** —
+reference data, not fund cents), `PoliticalTrade`, `InsiderTrade`. **FMP wrappers** (`lib/fmp.ts`):
+`fmp13FDates`/`fmp13FHoldings`/`fmp13FSummary` (by CIK), `fmpSenateLatest`/`fmpHouseLatest`,
+`fmpInsiderLatest`. **Files:** `lib/smart-money/{portfolios,openinsider,ingest,queries,types}.ts`,
+`app/market/smart-money/page.tsx`, `components/smart-money/{PortfolioCard,CongressCard,Leaderboard,SmartMoneyAvatar}.tsx`,
+`components/NavBar.tsx`, `agent/{runner,sessions}.ts`, `app/market/page.tsx` (card removed). Roster CIKs +
+endpoint shapes verified live against FMP before wiring; `scripts/ingest-smart-money.ts` is the manual
+re-pull/spot-check. **NB:** FMP key lives only in root `.env` (container), not `web/.env` — host-side ingest
+needs it injected.
+
 ### D29 — Stock-page logos · Today movers clickable+auto-researched · expandable Universe/Watchlist rows (Cam, 2026-06-17)
 Three fills from Cam & Graham's review.
 **(1) Company logo on the stock page.** `<StockLogo>` (logo + monogram fallback, already on the lists) now
