@@ -118,13 +118,33 @@ async function enforceExits() {
   }
 }
 
+// Consecutive ticks the drawdown has breached the kill threshold. The kill switch
+// is severe and sticky (halts the fund until a human re-enables), so we require the
+// breach to PERSIST across two ticks — a single transient NAV misread (e.g. a
+// reconcile blip that briefly drops a position) must never halt trading. A real
+// drawdown persists; a blip clears on the next tick. Resets on restart (safe
+// direction: errs toward not-halting).
+let drawdownBreaches = 0;
 async function checkDrawdown() {
   const hwmRow = await prisma.navSnapshot.aggregate({ _max: { navCents: true } });
   const hwm = hwmRow._max.navCents ?? 0;
   if (hwm <= 0) return;
   const pf = await getPortfolio();
   const ddBps = Math.round(((pf.navCents - hwm) / hwm) * 10_000);
-  if (ddBps <= HARD.drawdownKillBps && !pf.killSwitch) {
+  if (ddBps > HARD.drawdownKillBps) {
+    drawdownBreaches = 0; // healthy — clear any prior single breach
+    return;
+  }
+  drawdownBreaches++;
+  if (drawdownBreaches < 2) {
+    await alert(
+      "warning",
+      "Drawdown threshold breached — confirming",
+      `NAV $${(pf.navCents / 100).toFixed(2)} is ${(ddBps / 100).toFixed(1)}% off the high-water mark $${(hwm / 100).toFixed(2)}. Re-checking next tick before engaging the kill switch (guards against a transient misread).`,
+    );
+    return;
+  }
+  if (!pf.killSwitch) {
     await prisma.settings.update({
       where: { id: 1 },
       data: { killSwitch: true, killSwitchBy: "system-drawdown", killSwitchAt: new Date() },
@@ -132,7 +152,7 @@ async function checkDrawdown() {
     await alert(
       "critical",
       "DRAWDOWN KILL SWITCH ENGAGED",
-      `NAV $${(pf.navCents / 100).toFixed(2)} is ${(ddBps / 100).toFixed(1)}% off the high-water mark $${(hwm / 100).toFixed(2)}. All trading halted until a human re-enables.`,
+      `NAV $${(pf.navCents / 100).toFixed(2)} is ${(ddBps / 100).toFixed(1)}% off the high-water mark $${(hwm / 100).toFixed(2)} for two consecutive ticks. All trading halted until a human re-enables.`,
     );
   }
 }

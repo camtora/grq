@@ -601,6 +601,16 @@ chart) and the Today page's day-open baseline (`app/page.tsx` `dayOpenSnap`) now
 PAPER_INCEPTION`. The latter also fixed a phantom **+$20k "today" gain** (the Today baseline had been the
 last *sim* 5k snapshot → `25k − 5k`). Drawdown HWM unaffected (today's 25k was already the max).
 
+**Follow-up — guardrail + baseline hardening (Cam, 2026-06-17, day 1).** Two refinements to the live
+system: (1) **the drawdown kill switch is now two-tick-confirmed** (`runner.ts` `checkDrawdown`) — the
+threshold (`HARD.drawdownKillBps`) must breach for **two consecutive ticks** before the severe, sticky kill
+switch engages (a "confirming" warning fires on the first breach). A single transient NAV misread — e.g. a
+`reconcile()` blip that briefly drops a position — no longer halts the fund; a real drawdown persists and
+still trips it. The counter resets on restart (errs toward not-halting). (2) The **daily-loss-pause baseline**
+(`validator.ts` `dayPnlBps`) now anchors its day-open snapshot to `PAPER_INCEPTION` (never a pre-inception
+sim 5k snapshot), matching the NAV-chart/Today windowing from the inception fix above. Guardrail changes are
+humans-only by rule — both are Cam's.
+
 ### D34 — USD multi-currency: the fund holds USD, mirroring IBKR (Cam, 2026-06-17)
 **Context:** GRQ now researches US names (10 USD candidates) but could only *trade* CAD — `isCadTradeable`
 blocked USD listings from promotion, and the whole valuation/gate stack implicitly assumed one currency.

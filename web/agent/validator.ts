@@ -4,7 +4,7 @@ import { toCadCents } from "../lib/fx";
 import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry } from "../lib/universe";
-import { getPortfolio } from "../lib/portfolio";
+import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
 import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { alert } from "./alerts";
@@ -45,9 +45,11 @@ export function markBoot(): void {
 export async function dayPnlBps(): Promise<number> {
   const dayStart = startOfEtDay();
   const [openSnap, pf] = await Promise.all([
-    prisma.navSnapshot.findFirst({ where: { at: { lt: dayStart } }, orderBy: { at: "desc" } }),
+    prisma.navSnapshot.findFirst({ where: { at: { lt: dayStart, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
     getPortfolio(),
   ]);
+  // base = yesterday's close (paper-era only — never a pre-inception sim snapshot);
+  // falls back to contributions on the first paper day.
   const base = openSnap?.navCents ?? pf.contributionsCents;
   if (base <= 0) return 0;
   return Math.round(((pf.navCents - base) / base) * 10_000);
