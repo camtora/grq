@@ -5,6 +5,7 @@ import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
 import { universeEntry, activeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
+import { agentSelfPromote } from "./promote";
 import { computeSignals, overallSignal } from "./signals";
 import { AGENT_VERSION } from "./policy";
 import type { JournalKind } from "@prisma/client";
@@ -231,6 +232,24 @@ const proposeOrderTool = tool(
   },
 );
 
+const promoteToUniverseTool = tool(
+  "promote_to_universe",
+  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD-tradeable; not member-blocked; and within the weekly self-promotion cap. The human watchlist→universe path is separate and unchanged. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
+  {
+    symbol: z.string(),
+    tier: z.enum(["large", "mid"]).optional(),
+    reason: z.string().min(20).max(1000),
+  },
+  async (args) => {
+    const r = await agentSelfPromote(args.symbol, args.tier, args.reason);
+    return text(
+      r.ok
+        ? `PROMOTED ${args.symbol.toUpperCase()} to the universe (${r.tier}). You may now propose_order it — within all guardrails. The members were alerted.`
+        : `REJECTED: ${r.reason}`,
+    );
+  },
+);
+
 export const grqServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
@@ -243,6 +262,7 @@ export const grqServer = createSdkMcpServer({
     setFocusTool,
     getSignalsTool,
     gradeSourcesTool,
+    promoteToUniverseTool,
     proposeOrderTool,
   ],
 });
@@ -256,6 +276,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__set_focus",
   "mcp__grq__get_signals",
   "mcp__grq__grade_sources",
+  "mcp__grq__promote_to_universe",
   "mcp__grq__propose_order",
 ];
 

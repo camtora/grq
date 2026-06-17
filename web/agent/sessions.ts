@@ -84,6 +84,7 @@ export async function runMorningResearch(): Promise<void> {
 1. Work through your seed sources and the macro sweep with WebSearch (and WebFetch for promising articles). You're looking for anything that affects current holdings, your focus list, or presents a swing opportunity in the universe.
 2. Review every open position against its thesis — still valid?
 3. Update your focus list (set_focus) — the names you're monitoring for an entry today, each with its trigger.
+3b. SELF-INVEST: if a CANDIDATE you've researched is a high-conviction buy (your dossier call ≥ Buy, confidence ≥75) and it's liquid and CAD-tradeable, you may promote_to_universe to make it tradeable yourself — give a one-line reason (the members get a Discord alert and can veto). Rules are enforced; rejections explain themselves. Be selective: it's capped per week, and a promoted name still has to clear the order gate before you buy it.
 4. Write ONE RESEARCH journal entry (write_journal) titled "Game plan — ${etDateStr()}": today's read of the market, what you're watching, planned actions with conditions ("buy X if it holds above Y"), and cited sources. When a finding is specifically about one symbol, ALSO write a short symbol-tagged RESEARCH entry for it — the stock pages collect those.
 5. Do NOT place orders now — the market is closed and entries are blocked in the first 15 minutes anyway. Trades happen via your plan when conditions trigger, or at midday check-ins.
 

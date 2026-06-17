@@ -10,8 +10,9 @@ import {
   bareTicker,
   isCadTradeable,
 } from "@/lib/universe";
+import { promotionScreen } from "@/lib/screen";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
-import { refreshQuotesFor, getQuote } from "@/lib/broker/quotes";
+import { refreshQuotesFor } from "@/lib/broker/quotes";
 import { refreshBars } from "@/lib/bars";
 import { sendDiscord } from "@/agent/alerts";
 
@@ -37,24 +38,6 @@ function inferCountry(currency: string | null, exchange: string | null): string 
   if (["TSX", "TSE", "TSXV", "NEO", "CSE", "CNSX"].includes(e)) return "CA";
   if (["NYSE", "NASDAQ", "AMEX", "NYSEARCA", "BATS"].includes(e)) return "US";
   return null;
-}
-
-/** The automated promotion screen: price ≥ $2, 20d ADV ≥ 100k sh, ≥30 bars. */
-async function promotionScreen(symbol: string): Promise<string[]> {
-  const failures: string[] = [];
-  const quote = await getQuote(symbol);
-  if (!quote) failures.push("no quote available");
-  else if (quote.midCents < 200) failures.push(`price $${(quote.midCents / 100).toFixed(2)} < $2.00 floor`);
-  const bars = await prisma.bar.findMany({ where: { symbol }, orderBy: { date: "desc" }, take: 20 });
-  if (bars.length < 20) {
-    const total = await prisma.bar.count({ where: { symbol } });
-    if (total < 30) failures.push(`insufficient bar history (${total} days; need 30)`);
-  }
-  if (bars.length > 0) {
-    const adv = bars.reduce((s, b) => s + b.volume, 0) / bars.length;
-    if (adv < 100_000) failures.push(`20d avg volume ${Math.round(adv).toLocaleString()} < 100,000 sh`);
-  }
-  return failures;
 }
 
 export async function POST(req: Request) {
