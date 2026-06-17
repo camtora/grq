@@ -21,14 +21,18 @@ on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-rea
 market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
 vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v5 (D26):** the four market
 destinations **Watchlist · Universe · Discover · Browse** are now **top-level header nav** (the
-`MarketTabs` sub-nav is gone). **Watchlist** rows are Universe-style and **expand into the
-researched-ideas card** (shared `components/IdeaCard.tsx`); **Universe**+Watchlist show GRQ's call as the
-**RatingBar**, Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
+`MarketTabs` sub-nav is gone). **Watchlist** rows are Universe-style; **Universe**+Watchlist show GRQ's
+call as the **RatingBar** and **click-to-expand** (D29) into an in-table panel — GRQ's call + blurb, the
+dossier's plain-English *why* (`bottomLine`) + targets, **+ lazily-loaded earnings/analyst ratings**
+(`/api/stock-extras/[symbol]` → `RowExtras`, fetched on expand), full-dossier link (`components/ExpandableRow.tsx`,
+a client wrapper so `StockTable` stays server). Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
 list tables — `UniverseActions hideResearch`). **Discover** = the hunt (8–12 names · **↻ refresh** via
 `AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED) + smart money; hunt cards are **leads, not verdicts**
 (`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
-**Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**.
+**Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**;
+**The Tape sits above the headlines**, and **today's biggest movers are clickable + auto-researched** — Today queues a `movers`
+dossier for any it doesn't track, and the stock page shows a *researching…* state until it lands (D29). The stock page also shows the **company logo**.
 stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper CONNECTED (D22):**
 the gateway authenticates + reconciles the paper account **`DUQ774890`** (CAD 5k mirrored) via a
 **loopback proxy** (`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`); the

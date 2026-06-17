@@ -16,6 +16,7 @@ import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
 import LiveQuote from "@/components/LiveQuote";
+import StockLogo from "@/components/StockLogo";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -59,22 +60,28 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // the discovery hunt), show that dossier with a "Watch to add" CTA instead of a
   // 404. A genuinely unknown symbol (no journal at all) still 404s.
   if (!entry) {
-    const [pquote, pjournal, psignals] = await Promise.all([
+    const [pquote, pjournal, psignals, pendingReq] = await Promise.all([
       getQuote(symbol).catch(() => null),
       prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 30 }),
       computeSignals(symbol).catch(() => null),
+      prisma.researchRequest.findFirst({ where: { symbol, status: { in: ["QUEUED", "RUNNING"] } } }),
     ]);
-    if (pjournal.length === 0) notFound();
+    // 404 only when there's genuinely nothing to show — no dossier, no live quote,
+    // no research in flight. A biggest-mover the agent is researching (queued from
+    // Today) reaches us with a quote + a pending request: render it, don't 404.
+    if (pjournal.length === 0 && !pquote && !pendingReq) notFound();
     const lead = pjournal.find((j) => j.kind === "RESEARCH") ?? pjournal[0];
+    const researching = !lead && !!pendingReq;
     return (
       <main>
         <Link href="/market" className="text-xs text-teal-300 hover:underline">
           ← discoveries
         </Link>
         <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+          <StockLogo symbol={symbol} logoUrl={null} className="h-10 w-10 self-center text-sm" />
           <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
           <Chip tone="dim">not tracked</Chip>
-          <Chip tone="teal">agent-flagged</Chip>
+          {researching ? <Chip tone="teal">researching…</Chip> : lead ? <Chip tone="teal">agent-flagged</Chip> : null}
           {pquote && (
             <span className="ml-auto flex items-baseline gap-2">
               <LiveQuote
@@ -88,9 +95,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
         <Card className="mb-6 border-teal-400/30 p-5">
           <p className="text-sm text-teal-100/80">
-            The agent flagged <b className="text-teal-200">{symbol}</b> in its discovery hunt — an early-stage idea it
-            can&apos;t add to the universe itself.
-            {isMember ? " Watch it to put it on your watchlist, and the agent will write a full dossier." : ""}
+            {researching ? (
+              <>
+                GRQ is <b className="text-teal-200">researching {symbol}</b> right now — one of today&apos;s biggest
+                movers. Its dossier will appear here shortly; check back in a few minutes.
+              </>
+            ) : (
+              <>
+                The agent flagged <b className="text-teal-200">{symbol}</b> — an early-stage idea it can&apos;t add to
+                the universe itself.
+                {isMember ? " Watch it to put it on your watchlist, and the agent will write a full dossier." : ""}
+              </>
+            )}
           </p>
           {isMember && (
             <div className="mt-3">
@@ -194,6 +210,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       </Link>
 
       <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+        <StockLogo symbol={symbol} logoUrl={entry.logoUrl} className="h-10 w-10 self-center text-sm" />
         <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
         <span className="text-teal-200/60">{entry.name}</span>
         <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>

@@ -11,9 +11,10 @@ import StockTable, { type StockColumn, type StockRow } from "@/components/StockT
 
 export const dynamic = "force-dynamic";
 
-// The watchlist carries everything inline (no expand — Cam 2026-06-16): the agent's
-// call, the indicators, the target upside, and the manage actions. The long-form
-// dossier (business / bull / bear / sources) lives one click away on the stock page.
+// The watchlist table carries the at-a-glance numbers inline (call, indicators,
+// target upside, manage actions); clicking a row expands it for GRQ's call blurb +
+// the dossier's plain-English "why" (Cam 2026-06-17). The full long-form dossier
+// (business / bull / bear / sources) still lives one click away on the stock page.
 const COLUMNS: StockColumn[] = ["last", "day", "signals", "call", "upside", "conf", "journal"];
 
 export default async function Watchlist() {
@@ -88,6 +89,7 @@ export default async function Watchlist() {
         nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
         nearDays: doss?.targetNearDays ?? null,
         confidence: doss?.confidence ?? null,
+        bottomLine: doss?.bottomLine ?? null,
         held: null,
         mvCents: 0,
         upnlCents: 0,
@@ -137,7 +139,7 @@ export default async function Watchlist() {
           <span className="font-semibold text-teal-200/60">Signals</span> are inputs (T trend · R rsi · M macd · V volatility);{" "}
           <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the verdict.{" "}
           <span className="font-semibold text-teal-200/60">12-mo</span> is the agent&apos;s target upside (hover for near-term).{" "}
-          Open a name for the full dossier — business, bull &amp; bear case, sources.
+          Click a row for GRQ&apos;s reasoning; open a name for the full dossier — business, bull &amp; bear case, sources.
         </p>
       </section>
 

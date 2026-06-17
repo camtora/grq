@@ -2,14 +2,17 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { money, pct, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
-import { stanceMeta } from "@/lib/stance";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import type { Signals, Recommendation } from "@/agent/signals";
 import SignalStrip from "@/components/SignalStrip";
 import StockLogo from "@/components/StockLogo";
+import Md from "@/components/Md";
 import Term from "@/components/Term";
 import { capTier } from "@/lib/fundamentals";
 import UniverseActions from "@/components/UniverseActions";
+import ExpandableRow from "@/components/ExpandableRow";
+import RowExtras from "@/components/RowExtras";
 
 // One table for both the Universe (the tradeable set) and the Watchlist (candidates)
 // — same look, different column list + manage buttons (Cam 2026-06-16). Columns are
@@ -40,6 +43,7 @@ export type StockRow = {
   nearPct: number | null; // near-term target upside (tooltip)
   nearDays: number | null;
   confidence: number | null;
+  bottomLine: string | null; // the dossier's plain-English "why" (row expansion)
   held: { qty: number } | null;
   mvCents: number;
   upnlCents: number;
@@ -165,6 +169,86 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
   }
 }
 
+// A row only expands if there's something worth showing under it.
+function hasDetail(r: StockRow): boolean {
+  return !!(r.stance || r.rec || r.bottomLine || r.upsidePct != null || r.nearPct != null);
+}
+
+// The expansion panel: GRQ's call + its one-line blurb, the plain-English "why"
+// (the dossier's bottomLine), the targets, and a link to the full dossier. Server-
+// rendered and handed to <ExpandableRow> as a prop (Cam 2026-06-17).
+function RowDetail({ r }: { r: StockRow }) {
+  const m = r.stance ? stanceMeta(r.stance) : null;
+  const tech = !m && r.rec ? stanceMeta(r.rec.label) : null;
+  return (
+    <div className="rounded-xl border border-teal-400/10 bg-teal-400/[0.03] p-4">
+      <div className="grid gap-x-6 gap-y-3 md:grid-cols-3">
+      <div>
+        <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
+          <Term k="agent-call">GRQ&apos;s call</Term>
+        </div>
+        {m ? (
+          <>
+            <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[m.tone].text}`}>{m.label}</span>
+            <p className="mt-1 text-sm text-teal-200/65">{m.blurb}</p>
+          </>
+        ) : tech ? (
+          <>
+            <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[tech.tone].text}`}>{tech.label}</span>
+            <p className="mt-1 text-xs text-teal-200/45">technical lean only — GRQ hasn&apos;t filed a call yet</p>
+          </>
+        ) : (
+          <p className="mt-0.5 text-sm text-teal-200/40">Not yet rated by GRQ.</p>
+        )}
+        {(r.nearPct != null || r.upsidePct != null || r.confidence != null) && (
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/55">
+            {r.nearPct != null && (
+              <span>
+                near{r.nearDays ? ` ~${Math.max(1, Math.round(r.nearDays / 5))}w` : ""}{" "}
+                <b className={r.nearPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                  {r.nearPct > 0 ? "+" : ""}
+                  {pct(r.nearPct, 0)}
+                </b>
+              </span>
+            )}
+            {r.upsidePct != null && (
+              <span>
+                <Term k="expected-return">12-mo</Term>{" "}
+                <b className={r.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}>
+                  {r.upsidePct > 0 ? "+" : ""}
+                  {pct(r.upsidePct, 0)}
+                </b>
+              </span>
+            )}
+            {r.confidence != null && (
+              <span>
+                <Term k="confidence">conf</Term> {r.confidence}%
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="md:col-span-2">
+        <div className="text-[10px] uppercase tracking-wider text-teal-200/50">Why</div>
+        {r.bottomLine ? (
+          <div className="mt-1 text-sm text-teal-100/80">
+            <Md text={r.bottomLine} />
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-teal-200/40">
+            No plain-English summary on file yet — open the dossier for the full write-up.
+          </p>
+        )}
+        <Link href={`/stocks/${r.symbol}`} className="mt-2 inline-block text-xs text-teal-300 hover:underline">
+          full dossier →
+        </Link>
+      </div>
+      </div>
+      <RowExtras symbol={r.symbol} />
+    </div>
+  );
+}
+
 export default function StockTable({
   rows,
   columns,
@@ -176,6 +260,7 @@ export default function StockTable({
   isMember: boolean;
   currentUser: string;
 }) {
+  const colSpan = 2 + columns.length + (isMember ? 1 : 0);
   return (
     <Card className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -192,17 +277,31 @@ export default function StockTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr
+          {rows.map((r) => {
+            const expandable = hasDetail(r);
+            return (
+            <ExpandableRow
               key={r.symbol}
               className={`stock-row border-t border-teal-400/10 ${r.held || r.pinnedBy ? "bg-teal-400/[0.05]" : ""}`}
-              data-country={r.country ?? ""}
-              data-exchange={r.exchange ?? ""}
-              data-sector={r.sector ?? ""}
-              data-cap={capTier(r.marketCapM) ?? ""}
+              data={{
+                "data-country": r.country ?? "",
+                "data-exchange": r.exchange ?? "",
+                "data-sector": r.sector ?? "",
+                "data-cap": capTier(r.marketCapM) ?? "",
+              }}
+              colSpan={colSpan}
+              detail={expandable ? <RowDetail r={r} /> : null}
             >
               <td className="px-4 py-2.5">
                 <div className="flex items-center gap-2.5">
+                  <span
+                    className={`-mr-1 w-3 shrink-0 text-center text-[10px] text-teal-200/30 transition-transform group-aria-expanded:rotate-90 ${
+                      expandable ? "" : "opacity-0"
+                    }`}
+                    aria-hidden
+                  >
+                    ▸
+                  </span>
                   <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} className="h-6 w-6 text-[9px]" />
                   <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-300 hover:underline">
                     {r.symbol}
@@ -227,7 +326,7 @@ export default function StockTable({
                 <Cell key={c} col={c} r={r} />
               ))}
               {isMember && (
-                <td className="px-4 py-2.5">
+                <td className="px-4 py-2.5" data-no-expand>
                   {r.manageStatus ? (
                     <div className="flex justify-end">
                       <UniverseActions
@@ -244,8 +343,9 @@ export default function StockTable({
                   ) : null}
                 </td>
               )}
-            </tr>
-          ))}
+            </ExpandableRow>
+            );
+          })}
         </tbody>
       </table>
     </Card>

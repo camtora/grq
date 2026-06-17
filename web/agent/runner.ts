@@ -409,7 +409,7 @@ async function processResearchQueue() {
         where: { id: next.id },
         data: { status: "DONE", completedAt: new Date() },
       });
-      if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh") {
+      if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh" && next.requestedBy !== "movers") {
         await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
       }
     }

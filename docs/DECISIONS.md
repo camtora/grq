@@ -422,3 +422,31 @@ nothing. Reports + Settings also moved to the **right** of the header (landed in
 **Files:** `app/{today,page,reports,settings,journal,activity,layout}.tsx`, `app/api/chat/route.ts`,
 `agent/chat-server.ts`, `components/{JournalSection,ChatDrawer,ChatClient}.tsx`,
 `prisma/{schema.prisma,backfill-chat-owner.ts}`. **Schema (additive, pushed):** `ChatMessage.owner`.
+
+### D29 — Stock-page logos · Today movers clickable+auto-researched · expandable Universe/Watchlist rows (Cam, 2026-06-17)
+Three fills from Cam & Graham's review.
+**(1) Company logo on the stock page.** `<StockLogo>` (logo + monogram fallback, already on the lists) now
+sits beside the title on `/stocks/[symbol]` — `logoUrl` was already loaded, just never rendered; untracked
+names get the monogram.
+**(2) Today's "biggest movers" are clickable + auto-researched.** The whole-market FMP gainers were dead
+text unless already tracked. Now every mover links to `/stocks/<sym>`, and the Today render queues a dossier
+(`ResearchRequest`, `requestedBy:"movers"`, idempotent) for any it doesn't already track/research. The stock
+page's not-tracked branch no longer 404s when a quote or a queued request exists — it shows a "GRQ is
+researching this" state that fills in once the dossier lands. The runner suppresses the "Dossier ready"
+Discord ping for `movers` requests (treated like `rotation`). Also moved **The Tape** (NAV sparkline) above
+the headlines on Today.
+**(3) Click-to-expand Universe/Watchlist rows.** Both tables (shared `StockTable`) expand a row on click to
+show **GRQ's call (large) + its one-line blurb**, the dossier's plain-English **"why"** (`bottomLine`),
+near/12-mo targets + confidence, a **full dossier →** link, AND — **lazily, on expand** — **earnings +
+analyst ratings** (the same FMP data as the stock page). `StockTable` stays a server component: a small client
+`ExpandableRow` owns only open/closed state, with the cells + the server-rendered detail panel passed in as
+props; clicks on links/buttons/`[data-no-expand]` don't toggle. The earnings/analyst half is a client
+`RowExtras` that fetches `GET /api/stock-extras/[symbol]` only when the row opens (cached per session), so the
+tables never pay ~2 FMP calls per name on load. `StockFilters` hides an open detail row in lockstep with its
+parent. Universe now fetches the latest dossier per name (bottomLine + targets), as the Watchlist already did.
+Supersedes the D26 "Watchlist expands into the IdeaCard" plan — the expansion is now the lighter in-table
+panel, on both pages.
+**Files:** `app/stocks/[symbol]/page.tsx`, `app/today/page.tsx`, `app/universe/page.tsx`,
+`app/market/watchlist/page.tsx`, `app/api/stock-extras/[symbol]/route.ts` (new),
+`components/{StockTable,StockFilters,ExpandableRow,RowExtras}.tsx`, `agent/runner.ts` (movers-alert
+suppression). No schema change.

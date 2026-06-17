@@ -58,6 +58,9 @@ export default function StockFilters({
         (!sector || row.dataset.sector === sector) &&
         (!cap || row.dataset.cap === cap);
       row.hidden = !ok;
+      // Keep an open expansion row in lockstep with its parent (it's the next sibling).
+      const detail = row.nextElementSibling;
+      if (detail instanceof HTMLElement && detail.classList.contains("stock-row-detail")) detail.hidden = !ok;
       if (ok) n++;
     }
     const anyFilter = !!(country || exchange || sector || cap);

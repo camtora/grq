@@ -201,6 +201,29 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     marketGainers.map((g) => (fmpEnabled() ? fmpProfile(g.symbol).catch(() => null) : Promise.resolve(null))),
   );
   const profileBy = new Map(marketGainers.map((g, i) => [g.symbol, gainerProfiles[i]]));
+
+  // Auto-research today's biggest movers so each links to a real, clickable page.
+  // The whole-market gainers aren't in our universe; queue a dossier for any we
+  // haven't already researched or queued, and the agent fills in the stock page.
+  // Idempotent — Today re-renders every load, so skip names already known.
+  if (isToday && marketGainers.length > 0) {
+    const tracked = new Set(universeRows.map((u) => u.symbol));
+    const fresh = marketGainers.map((m) => m.symbol).filter((s) => !tracked.has(s));
+    if (fresh.length > 0) {
+      const [haveReq, haveJournal] = await Promise.all([
+        prisma.researchRequest.findMany({ where: { symbol: { in: fresh } }, select: { symbol: true } }),
+        prisma.journalEntry.findMany({ where: { symbol: { in: fresh } }, select: { symbol: true } }),
+      ]);
+      const known = new Set([...haveReq, ...haveJournal].map((r) => r.symbol));
+      const toQueue = fresh.filter((s) => !known.has(s));
+      if (toQueue.length > 0) {
+        await prisma.researchRequest.createMany({
+          data: toQueue.map((symbol) => ({ symbol, requestedBy: "movers" })),
+        });
+      }
+    }
+  }
+
   const funFact = funFactOfDay();
 
   // GRQ's call per tracked name (latest dossier stance) — shown on movers.
@@ -346,6 +369,33 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
       {isToday && <MarketIndices initial={marketIndices} />}
 
+      {/* The Tape — the day's NAV, start → finish. Above the headlines (Cam 2026-06-16) */}
+      <Card className="mb-6 p-5">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+            <Term k="the-tape">The Tape</Term> · the day&apos;s NAV
+          </span>
+          <span className="text-xs text-teal-200/40">
+            opened {money(dayOpenNav)} → {isToday ? "now" : "close"} {money(pf.navCents)}{" "}
+            <span className={dayClass(dayPnl)}>({signedMoney(dayPnl)})</span>
+            {pf.benchmarkCents !== null && (
+              <>
+                {" · "}
+                <Term k="vs-xic" align="right">vs XIC</Term>{" "}
+                <span className={dayClass(pf.navCents - pf.benchmarkCents)}>{signedMoney(pf.navCents - pf.benchmarkCents)}</span>
+              </>
+            )}
+          </span>
+        </div>
+        {tape.length >= 2 ? (
+          <Sparkline values={tape} />
+        ) : (
+          <p className="py-4 text-sm text-teal-200/40">
+            Flat line — the fund's parked in cash. The tape comes alive the day the agent takes a position.
+          </p>
+        )}
+      </Card>
+
       {/* Headlines — today's news. Live, so today only — archive hides stale headlines (Cam 2026-06-16) */}
       {isToday && marketNews.length > 0 && (
         <section className="mb-6">
@@ -402,33 +452,6 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <p className="mt-2 text-[10px] text-teal-200/40">Latest market headlines via FMP — context, not signals.</p>
         </section>
       )}
-
-      {/* The Tape — the day's NAV, start → finish */}
-      <Card className="mb-6 p-5">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-            <Term k="the-tape">The Tape</Term> · the day&apos;s NAV
-          </span>
-          <span className="text-xs text-teal-200/40">
-            opened {money(dayOpenNav)} → {isToday ? "now" : "close"} {money(pf.navCents)}{" "}
-            <span className={dayClass(dayPnl)}>({signedMoney(dayPnl)})</span>
-            {pf.benchmarkCents !== null && (
-              <>
-                {" · "}
-                <Term k="vs-xic" align="right">vs XIC</Term>{" "}
-                <span className={dayClass(pf.navCents - pf.benchmarkCents)}>{signedMoney(pf.navCents - pf.benchmarkCents)}</span>
-              </>
-            )}
-          </span>
-        </div>
-        {tape.length >= 2 ? (
-          <Sparkline values={tape} />
-        ) : (
-          <p className="py-4 text-sm text-teal-200/40">
-            Flat line — the fund's parked in cash. The tape comes alive the day the agent takes a position.
-          </p>
-        )}
-      </Card>
 
       {weekly && (
         <Card className="mb-6 border-teal-400/30 p-5">
@@ -528,13 +551,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                 <details key={m.symbol} className="group border-t border-teal-400/10 first:border-t-0">
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
                     <span className="text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
-                    {inUniverse ? (
-                      <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
-                        {m.symbol}
-                      </Link>
-                    ) : (
-                      <span className="font-bold text-teal-200">{m.symbol}</span>
-                    )}
+                    <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
+                      {m.symbol}
+                    </Link>
                     <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{m.name}</span>
                     <span className="tabular-nums text-teal-100/70">{money(m.priceCents)}</span>
                     <span className="font-semibold tabular-nums text-emerald-400">+{pct(m.changePct, 0)}</span>
@@ -552,7 +571,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               );
             })}
           </Card>
-          <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — names we track link through.</p>
+          <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — each links to a GRQ page; the agent auto-researches the ones we don&apos;t yet track.</p>
         </section>
       )}
       {sectors.length > 0 && (

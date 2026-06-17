@@ -64,6 +64,16 @@ export default async function Universe() {
   const stanceBy = new Map<string, string>();
   for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
 
+  // Latest dossier per name — its plain-English "why" + price targets feed the
+  // expandable row detail (Cam 2026-06-17).
+  const dossiers = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: allSyms } },
+    orderBy: { at: "desc" },
+    select: { symbol: true, bottomLine: true, confidence: true, targetNearCents: true, targetNearDays: true, targetFarCents: true },
+  });
+  const dossierBy = new Map<string, (typeof dossiers)[number]>();
+  for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
+
   const signalsList = await Promise.all(allSyms.map((s) => computeSignals(s).catch(() => null)));
   const sigBy = new Map(allSyms.map((s, i) => [s, signalsList[i]] as const));
 
@@ -85,6 +95,8 @@ export default async function Universe() {
     const p = posBy.get(u.symbol);
     const d = dirBy.get(u.symbol);
     const sig = sigBy.get(u.symbol) ?? null;
+    const doss = dossierBy.get(u.symbol);
+    const cur = q?.midCents ?? null;
     return {
       symbol: u.symbol,
       name: u.name,
@@ -104,10 +116,11 @@ export default async function Universe() {
       pinnedBy: d?.directive === "PINNED" ? d.by : null,
       blocked: d?.directive === "BLOCKED",
       journal: jcBy.get(u.symbol) ?? 0,
-      upsidePct: null,
-      nearPct: null,
-      nearDays: null,
-      confidence: null,
+      upsidePct: cur && doss?.targetFarCents != null ? (doss.targetFarCents - cur) / cur : null,
+      nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
+      nearDays: doss?.targetNearDays ?? null,
+      confidence: doss?.confidence ?? null,
+      bottomLine: doss?.bottomLine ?? null,
       held: p ? { qty: p.qty } : null,
       mvCents: p && q ? p.qty * q.midCents : 0,
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
@@ -201,7 +214,7 @@ export default async function Universe() {
         <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
         These are <span className="font-semibold text-teal-200/60">inputs</span>, not the verdict.{" "}
         <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
-        quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
+        Click any row to read GRQ&apos;s reasoning. quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
       </p>
     </main>
   );
