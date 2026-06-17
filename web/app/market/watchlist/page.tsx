@@ -1,41 +1,20 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { allUniverse, type UniverseRow } from "@/lib/universe";
+import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession, displayName } from "@/lib/session";
-import { money, pct } from "@/lib/money";
-import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
-import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
-import SignalStrip from "@/components/SignalStrip";
-import { stanceMeta } from "@/lib/stance";
-import RatingBar from "@/components/RatingBar";
-import MarketTabs from "@/components/MarketTabs";
+import { Card, PageHeader, EmptyState } from "@/components/ui";
+import { computeSignals, overallSignal } from "@/agent/signals";
 import AddTicker from "@/components/AddTicker";
 import UniverseActions from "@/components/UniverseActions";
-import IdeaCard, { type Idea } from "@/components/IdeaCard";
+import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 
 export const dynamic = "force-dynamic";
 
-function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendation | null }) {
-  // The slider shows GRQ's CALL (so headline + needle agree). With no dossier yet,
-  // fall back to the technical signal — clearly tagged so it reads as an input.
-  const m = stance ? stanceMeta(stance) : null;
-  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="GRQ's call" title={`GRQ's call: ${m.blurb}`} />;
-  const sm = rec ? stanceMeta(rec.label) : null;
-  if (sm) return <RatingBar label={sm.label} tone={sm.tone} pos={sm.pos} note="technical lean" title="No GRQ call yet — technical signal only (an input, not a verdict)" />;
-  return <span className="text-xs text-teal-200/25">— no read yet</span>;
-}
-
-type Row = UniverseRow & {
-  lastCents: number | null;
-  dayBps: number | null;
-  signals: Signals | null;
-  rec: Recommendation | null;
-  stance: string | null;
-  pinnedBy: string | null;
-  journal: number;
-  idea: Idea; // the researched-ideas card the row expands into
-};
+// The watchlist carries everything inline (no expand — Cam 2026-06-16): the agent's
+// call, the indicators, the target upside, and the manage actions. The long-form
+// dossier (business / bull / bear / sources) lives one click away on the stock page.
+const COLUMNS: StockColumn[] = ["last", "day", "signals", "call", "upside", "conf", "journal"];
 
 export default async function Watchlist() {
   const [session, universe, requests, directives] = await Promise.all([
@@ -71,7 +50,7 @@ export default async function Watchlist() {
   });
   const jcBy = new Map(jc.map((j) => [j.symbol as string, j._count.id]));
 
-  // Latest dossier per candidate — body + targets + sources feed the expandable card.
+  // Latest dossier per candidate — its price targets + confidence feed the table.
   const dossiers = await prisma.journalEntry.findMany({
     where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: candidates.map((c) => c.symbol) } },
     orderBy: { at: "desc" },
@@ -79,46 +58,47 @@ export default async function Watchlist() {
   const dossierBy = new Map<string, (typeof dossiers)[number]>();
   for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
 
-  const rows: Row[] = candidates
+  const rows: StockRow[] = candidates
     .map((c, i) => {
       const q = quotes.get(c.symbol);
       const sig = sigList[i];
       const d = dirBy.get(c.symbol);
       const doss = dossierBy.get(c.symbol);
       const cur = q?.midCents ?? null;
-      const rec = sig ? overallSignal(sig) : null;
-      const stance = stanceBy.get(c.symbol) ?? null;
-      const idea: Idea = {
-        sym: c.symbol,
+      return {
+        symbol: c.symbol,
         name: c.name,
         logoUrl: c.logoUrl,
         currency: c.currency,
-        cur,
-        near: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
-        far: cur && doss?.targetFarCents != null ? (doss.targetFarCents - cur) / cur : null,
-        nearDays: doss?.targetNearDays ?? null,
-        confidence: doss?.confidence ?? null,
-        rec,
-        stance,
-        body:
-          doss?.body ??
-          "No dossier filed yet — GRQ writes the business, the bull and bear case, and a verdict here once it researches this name.",
-        sourcesJson: doss?.sourcesJson ?? null,
-        obscurity: 0,
-        watch: "watching",
-      };
-      return {
-        ...c,
-        lastCents: q?.midCents ?? null,
+        note: c.note,
+        tier: c.tier,
+        country: c.country,
+        exchange: c.exchange,
+        sector: c.sector,
+        marketCapM: c.marketCapM,
+        lastCents: cur,
         dayBps: q?.dayChangeBps ?? null,
         signals: sig,
-        rec,
-        stance,
+        rec: sig ? overallSignal(sig) : null,
+        stance: stanceBy.get(c.symbol) ?? null,
         pinnedBy: d?.directive === "PINNED" ? d.by : null,
+        blocked: d?.directive === "BLOCKED",
         journal: jcBy.get(c.symbol) ?? 0,
-        idea,
+        upsidePct: cur && doss?.targetFarCents != null ? (doss.targetFarCents - cur) / cur : null,
+        nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
+        nearDays: doss?.targetNearDays ?? null,
+        confidence: doss?.confidence ?? null,
+        held: null,
+        mvCents: 0,
+        upnlCents: 0,
+        lastResearchedAt: null,
+        manageStatus: "CANDIDATE" as const,
+        promotionRequestedBy: c.promotionRequestedBy,
+        proposedTier: c.proposedTier,
+        researchInFlight: requests.some((r) => r.symbol === c.symbol && r.status === "RUNNING"),
       };
     })
+    // Pinned (priority) names sort to the top; the rest alphabetical.
     .sort((a, b) => (a.pinnedBy ? -1 : b.pinnedBy ? 1 : a.symbol.localeCompare(b.symbol)));
 
   const running = requests.filter((r) => r.status === "RUNNING");
@@ -128,8 +108,7 @@ export default async function Watchlist() {
 
   return (
     <main>
-      <PageHeader title="Market" sub="Discover names beyond GRQ's universe — the agent's ideas, the whole-market screener, and your watchlist." />
-      <MarketTabs />
+      <PageHeader title="Watchlist" sub="Names GRQ is researching for you — promote one (both members) to let the agent trade it in the Universe." />
 
       <section className="mb-8">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -151,42 +130,15 @@ export default async function Watchlist() {
             body="Watch a name above, or find one on Browse / Discover — GRQ starts researching it the moment you do."
           />
         ) : (
-          <div className="space-y-3">
-            {rows.map((c) => (
-              <Card key={c.symbol} className="overflow-hidden p-0">
-                {/* Condensed row that expands into the rich detail (Graham 2026-06-16) */}
-                <details className="group">
-                  <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 p-4 hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
-                    <span className="text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
-                    <Link href={`/stocks/${c.symbol}`} className="text-lg font-bold text-teal-300 hover:underline">
-                      {c.symbol}
-                    </Link>
-                    <span className="min-w-0 flex-1 truncate text-sm text-teal-100/70">{c.name}</span>
-                    {c.currency && c.currency !== "CAD" && <Chip tone="dim">{c.currency}</Chip>}
-                    {c.pinnedBy && <Chip tone="teal">priority · {c.pinnedBy}</Chip>}
-                    <SignalStrip signals={c.signals} />
-                    {c.lastCents !== null && (
-                      <span className="text-sm tabular-nums text-teal-100/80">
-                        {money(c.lastCents, c.currency)}{" "}
-                        <span className={(c.dayBps ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>{pct((c.dayBps ?? 0) / 10_000, 2)}</span>
-                      </span>
-                    )}
-                    <StanceCell stance={c.stance} rec={c.rec} />
-                  </summary>
-                  <div className="border-t border-teal-400/10 p-4">
-                    <IdeaCard idea={c.idea} isMember={isMember} />
-                    {c.note && <p className="mt-3 text-xs text-teal-200/50">Your note: {c.note}</p>}
-                    {isMember && (
-                      <div className="mt-3">
-                        <UniverseActions symbol={c.symbol} status="CANDIDATE" pendingBy={c.promotionRequestedBy} proposedTier={c.proposedTier} currentUser={me} />
-                      </div>
-                    )}
-                  </div>
-                </details>
-              </Card>
-            ))}
-          </div>
+          <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
         )}
+
+        <p className="mt-3 text-xs text-teal-200/40">
+          <span className="font-semibold text-teal-200/60">Signals</span> are inputs (T trend · R rsi · M macd · V volatility);{" "}
+          <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the verdict.{" "}
+          <span className="font-semibold text-teal-200/60">12-mo</span> is the agent&apos;s target upside (hover for near-term).{" "}
+          Open a name for the full dossier — business, bull &amp; bear case, sources.
+        </p>
       </section>
 
       <section className="mt-10 border-t border-teal-400/10 pt-6">

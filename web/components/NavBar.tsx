@@ -4,13 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 
-// "Market" lands on the Watchlist (primary, Graham 2026-06-16); the Universe
-// (tradeable set) is now a background sub-tab, not a top-level destination.
-const LINKS: { href: string; label: string; match?: string[] }[] = [
+// The four market destinations sit directly in the header — no sub-navigation
+// (Cam 2026-06-16). `exact` pins Discover to exactly /market so it doesn't light
+// up on /market/watchlist or /market/browse.
+// Reports + Settings sit on the right of the nav with the status cluster.
+type NavLink = { href: string; label: string; match?: string[]; exact?: boolean };
+const PRIMARY: NavLink[] = [
   { href: "/", label: "Overview" },
   { href: "/today", label: "Today" },
-  { href: "/market/watchlist", label: "Market", match: ["/market", "/universe"] },
-  { href: "/journal", label: "Journal" },
+  { href: "/market/watchlist", label: "Watchlist" },
+  { href: "/universe", label: "Universe" },
+  { href: "/market", label: "Discover", exact: true },
+  { href: "/market/browse", label: "Browse" },
+];
+const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
 ];
@@ -29,6 +36,26 @@ export default function NavBar({
   isMember?: boolean;
 }) {
   const pathname = usePathname();
+  const renderLink = (l: NavLink) => {
+    const active = l.exact
+      ? pathname === l.href
+      : l.href === "/"
+        ? pathname === "/"
+        : (l.match ?? [l.href]).some((p) => pathname.startsWith(p));
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+          active
+            ? "bg-teal-400/15 font-semibold text-teal-200"
+            : "text-teal-200/60 hover:bg-teal-400/10 hover:text-teal-100"
+        }`}
+      >
+        {l.label}
+      </Link>
+    );
+  };
   return (
     <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-(--nav-bg) backdrop-blur">
       <div className="mx-auto flex max-w-[1700px] flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
@@ -37,25 +64,9 @@ export default function NavBar({
             GRQ
           </span>
         </Link>
-        <div className="flex flex-wrap items-center gap-1">
-          {LINKS.map((l) => {
-            const active = l.href === "/" ? pathname === "/" : (l.match ?? [l.href]).some((p) => pathname.startsWith(p));
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? "bg-teal-400/15 font-semibold text-teal-200"
-                    : "text-teal-200/60 hover:bg-teal-400/10 hover:text-teal-100"
-                }`}
-              >
-                {l.label}
-              </Link>
-            );
-          })}
-        </div>
+        <div className="flex flex-wrap items-center gap-1">{PRIMARY.map(renderLink)}</div>
         <div className="ml-auto flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1">{SECONDARY.map(renderLink)}</div>
           {isMember && (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("grq:chat"))}

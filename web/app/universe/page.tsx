@@ -2,136 +2,27 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { activeUniverse, allUniverse, type UniverseRow } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
-import { money, pct, fmtWhen } from "@/lib/money";
-import { Card, PageHeader, Chip, Pnl } from "@/components/ui";
-import { computeSignals, overallSignal, type Signals, type Recommendation } from "@/agent/signals";
-import SignalStrip from "@/components/SignalStrip";
-import { stanceMeta } from "@/lib/stance";
-import RatingBar from "@/components/RatingBar";
+import { money, fmtWhen } from "@/lib/money";
+import { Card, PageHeader, Chip } from "@/components/ui";
+import { computeSignals, overallSignal } from "@/agent/signals";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import { getSession, displayName } from "@/lib/session";
 import StockFilters from "@/components/StockFilters";
-import MarketTabs from "@/components/MarketTabs";
 import UniverseActions from "@/components/UniverseActions";
 import Term from "@/components/Term";
+import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 
 export const dynamic = "force-dynamic";
 
-type Row = UniverseRow & {
-  lastCents: number | null;
-  dayBps: number | null;
-  held: { qty: number; avgCostCents: number } | null;
-  pinnedBy: string | null;
-  blocked: boolean;
-  journal: number;
-  lastResearchedAt: Date | null;
-  mvCents: number;
-  upnlCents: number;
-  signals: Signals | null;
-  rec: Recommendation | null;
-  stance: string | null;
-};
+const COLUMNS: StockColumn[] = ["tier", "last", "day", "signals", "call", "position", "unrealized", "journal", "researched"];
 
-function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendation | null }) {
-  const m = stance ? stanceMeta(stance) : null;
-  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="GRQ's call" title={`GRQ's call: ${m.blurb}`} />;
-  const sm = rec ? stanceMeta(rec.label) : null;
-  if (sm) return <RatingBar label={sm.label} tone={sm.tone} pos={sm.pos} note="technical lean" title="No GRQ call yet — technical signal only (an input, not a verdict)" />;
-  return <span className="text-xs text-teal-200/25">— no read yet</span>;
-}
-
-function sortActive(rows: Row[]): Row[] {
+function sortActive(rows: StockRow[]): StockRow[] {
   return rows.sort((a, b) => {
     if (!!a.held !== !!b.held) return a.held ? -1 : 1;
     if (a.held && b.held) return b.mvCents - a.mvCents;
     if (!!a.pinnedBy !== !!b.pinnedBy) return a.pinnedBy ? -1 : 1;
     return a.symbol.localeCompare(b.symbol);
   });
-}
-
-function UniverseTable({ rows, isMember, currentUser }: { rows: Row[]; isMember: boolean; currentUser: string }) {
-  return (
-    <Card className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
-            <th className="px-4 py-3">Symbol</th>
-            <th className="px-4 py-3">Name</th>
-            <th className="px-4 py-3">Tier</th>
-            <th className="px-4 py-3 text-right">Last</th>
-            <th className="px-4 py-3 text-right">Day</th>
-            <th className="px-4 py-3">Signals</th>
-            <th className="px-4 py-3">GRQ&apos;s call</th>
-            <th className="px-4 py-3 text-right">Position</th>
-            <th className="px-4 py-3 text-right">Unrealized</th>
-            <th className="px-4 py-3 text-right">Journal</th>
-            <th className="px-4 py-3 text-right">Researched</th>
-            {isMember && <th className="px-4 py-3 text-right">Manage</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.symbol}
-              className={`stock-row border-t border-teal-400/10 ${r.held ? "bg-teal-400/[0.05]" : ""}`}
-              data-country={r.country ?? ""}
-              data-exchange={r.exchange ?? ""}
-              data-sector={r.sector ?? ""}
-              data-cap={capTier(r.marketCapM) ?? ""}
-            >
-              <td className="px-4 py-2.5">
-                <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                  {r.symbol}
-                </Link>
-                {r.pinnedBy && (
-                  <span
-                    className="ml-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-teal-400/20 align-middle text-[9px] font-black text-teal-200"
-                    title={`Priority — pinned by ${r.pinnedBy}`}
-                  >
-                    {r.pinnedBy.charAt(0)}
-                  </span>
-                )}
-                {r.blocked && <span className="ml-1 align-middle" title="No-fly: the agent may not buy this">🚫</span>}
-              </td>
-              <td className="px-4 py-2.5 text-teal-100/70">{r.name}</td>
-              <td className="px-4 py-2.5">
-                <Chip tone="dim">{r.tier ?? "—"}</Chip>
-              </td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
-                {r.lastCents !== null ? money(r.lastCents) : "—"}
-              </td>
-              <td
-                className={`px-4 py-2.5 text-right tabular-nums ${
-                  (r.dayBps ?? 0) > 0 ? "text-emerald-400" : (r.dayBps ?? 0) < 0 ? "text-red-400" : "text-teal-200/50"
-                }`}
-              >
-                {r.dayBps !== null ? pct(r.dayBps / 10_000, 2) : "—"}
-              </td>
-              <td className="px-4 py-2.5">
-                <SignalStrip signals={r.signals} />
-              </td>
-              <td className="px-4 py-2.5">
-                <StanceCell stance={r.stance} rec={r.rec} />
-              </td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-teal-50">
-                {r.held ? `${r.held.qty} sh · ${money(r.mvCents)}` : ""}
-              </td>
-              <td className="px-4 py-2.5 text-right">{r.held ? <Pnl cents={r.upnlCents} className="text-sm" /> : ""}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-teal-200/50">{r.journal > 0 ? r.journal : ""}</td>
-              <td className="px-4 py-2.5 text-right text-xs tabular-nums text-teal-200/40" title="Last completed research">
-                {r.lastResearchedAt ? fmtWhen(r.lastResearchedAt) : "—"}
-              </td>
-              {isMember && (
-                <td className="px-4 py-2.5 text-right">
-                  <UniverseActions symbol={r.symbol} status="ACTIVE" pendingBy={null} proposedTier={null} currentUser={currentUser} />
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
 }
 
 export default async function Universe() {
@@ -181,7 +72,7 @@ export default async function Universe() {
   const jcBy = new Map(journalCounts.map((j) => [j.symbol as string, j._count.id]));
 
   // When each name was last researched (latest completed research request) — shown
-  // for reference next to the "research now" control.
+  // as the "Researched" column (the "research now" control lives on the stock page).
   const researchedAgg = await prisma.researchRequest.groupBy({
     by: ["symbol"],
     where: { status: "DONE", completedAt: { not: null } },
@@ -189,25 +80,42 @@ export default async function Universe() {
   });
   const researchedBy = new Map(researchedAgg.map((r) => [r.symbol, r._max.completedAt]));
 
-  const toRow = (u: UniverseRow): Row => {
+  const toRow = (u: UniverseRow): StockRow => {
     const q = quotes.get(u.symbol);
     const p = posBy.get(u.symbol);
     const d = dirBy.get(u.symbol);
     const sig = sigBy.get(u.symbol) ?? null;
     return {
-      ...u,
+      symbol: u.symbol,
+      name: u.name,
+      logoUrl: u.logoUrl,
+      currency: u.currency,
+      note: u.note,
+      tier: u.tier,
+      country: u.country,
+      exchange: u.exchange,
+      sector: u.sector,
+      marketCapM: u.marketCapM,
       lastCents: q?.midCents ?? null,
       dayBps: q?.dayChangeBps ?? null,
-      held: p ? { qty: p.qty, avgCostCents: p.avgCostCents } : null,
-      pinnedBy: d?.directive === "PINNED" ? d.by : null,
-      blocked: d?.directive === "BLOCKED",
-      journal: jcBy.get(u.symbol) ?? 0,
-      lastResearchedAt: researchedBy.get(u.symbol) ?? null,
-      mvCents: p && q ? p.qty * q.midCents : 0,
-      upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
       signals: sig,
       rec: sig ? overallSignal(sig) : null,
       stance: stanceBy.get(u.symbol) ?? null,
+      pinnedBy: d?.directive === "PINNED" ? d.by : null,
+      blocked: d?.directive === "BLOCKED",
+      journal: jcBy.get(u.symbol) ?? 0,
+      upsidePct: null,
+      nearPct: null,
+      nearDays: null,
+      confidence: null,
+      held: p ? { qty: p.qty } : null,
+      mvCents: p && q ? p.qty * q.midCents : 0,
+      upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
+      lastResearchedAt: researchedBy.get(u.symbol) ?? null,
+      manageStatus: "ACTIVE",
+      promotionRequestedBy: null,
+      proposedTier: null,
+      researchInFlight: false,
     };
   };
 
@@ -230,14 +138,13 @@ export default async function Universe() {
     <main>
       <PageHeader
         title="Universe"
-        sub="The names GRQ can invest in. New names start on the watchlist (Market ▸ Watchlist) and get promoted in."
+        sub="The names GRQ can invest in. New names start on the Watchlist and get promoted in."
         right={
           <Link href="/market/watchlist">
             <Chip tone="teal">watchlist →</Chip>
           </Link>
         }
       />
-      <MarketTabs />
 
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -249,7 +156,7 @@ export default async function Universe() {
           </p>
         </div>
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
-        <UniverseTable rows={activeRows} isMember={isMember} currentUser={me} />
+        <StockTable rows={activeRows} columns={COLUMNS} isMember={isMember} currentUser={me} />
       </section>
 
       {demoted.length > 0 && (
@@ -276,7 +183,7 @@ export default async function Universe() {
                   )}
                   {isMember && (
                     <div className="ml-auto">
-                      <UniverseActions symbol={u.symbol} status="CANDIDATE" pendingBy={u.promotionRequestedBy} proposedTier={u.proposedTier} currentUser={me} />
+                      <UniverseActions symbol={u.symbol} status="CANDIDATE" pendingBy={u.promotionRequestedBy} proposedTier={u.proposedTier} currentUser={me} hideResearch />
                     </div>
                   )}
                 </Card>

@@ -1,9 +1,8 @@
-import { fmpEnabled, fmpScreener, stripSuffix, type ScreenerRow } from "@/lib/fmp";
+import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { getSession } from "@/lib/session";
 import { allUniverse } from "@/lib/universe";
 import { money } from "@/lib/money";
 import { Card, PageHeader } from "@/components/ui";
-import MarketTabs from "@/components/MarketTabs";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +38,46 @@ function capLabel(m: number | null): string {
   return m >= 1000 ? `$${Math.round(m / 1000)}B` : `$${m}M`;
 }
 
+type CapDef = (typeof CAPS)[number];
+
+// Name/ticker search → the same ScreenerRow shape as the screener, so it drops
+// into the same table. fmpSearch finds the listings; fmpProfile fills in the
+// sector/cap/price columns. (Cam 2026-06-16: search NARROWS the browse list — it
+// does not add to the watchlist; you Watch from the row.)
+async function searchRows(q: string): Promise<ScreenerRow[]> {
+  const matches = (await fmpSearch(q)).slice(0, 10);
+  const profiles = await Promise.all(matches.map((m) => fmpProfile(m.symbol).catch(() => null)));
+  return matches.map((m, i) => {
+    const p = profiles[i];
+    return {
+      symbol: m.symbol,
+      name: m.name,
+      priceCents: p?.priceCents ?? null,
+      marketCapM: p?.marketCap ? Math.round(p.marketCap / 1_000_000) : null,
+      sector: p?.sector ?? null,
+      exchange: m.exchange || p?.exchange || null,
+      country: p?.country ?? null,
+      currency: m.currency || p?.currency || null,
+      isEtf: false,
+    };
+  });
+}
+
+// The dropdown filters narrow the result set whether it came from the screener or
+// a name search (applied client-side over search results).
+function matchesFilters(r: ScreenerRow, exchange: string, sector: string, country: string, capDef: CapDef | undefined): boolean {
+  if (exchange && r.exchange !== exchange) return false;
+  if (sector && r.sector !== sector) return false;
+  if (country && r.country !== country) return false;
+  if (capDef) {
+    const cap = r.marketCapM ? r.marketCapM * 1_000_000 : null;
+    if (cap == null) return false;
+    if (capDef.more && cap < capDef.more) return false;
+    if (capDef.less && cap >= capDef.less) return false;
+  }
+  return true;
+}
+
 const selectCls =
   "rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-sm text-teal-100 outline-none";
 
@@ -52,14 +91,18 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
     return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
   };
 
-  const { exchange = "", sector = "", country = "", cap = "" } = sp;
+  const { q = "", exchange = "", sector = "", country = "", cap = "" } = sp;
+  const query = q.trim();
   const capDef = CAPS.find((c) => c.v === cap);
-  const hasFilter = !!(exchange || sector || country || cap);
+  const hasFilter = !!(query || exchange || sector || country || cap);
 
   let rows: ScreenerRow[] = [];
   let note = "";
   if (!fmpEnabled()) {
     note = "Market browsing needs the FMP key in .env.";
+  } else if (query) {
+    // A name/ticker search drives the list; the dropdowns then narrow it.
+    rows = (await searchRows(query)).filter((r) => matchesFilters(r, exchange, sector, country, capDef));
   } else {
     rows = await fmpScreener({
       exchange: exchange || undefined,
@@ -73,11 +116,19 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
 
   return (
     <main>
-      <PageHeader title="Market" sub="Discover names beyond GRQ's universe — the agent's ideas, the whole-market screener, and your research desk." />
-      <MarketTabs />
+      <PageHeader title="Browse" sub="Search any name or screen the whole market — watch the ones worth a closer look." />
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Browse the whole market</h2>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
+        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
+          Name or ticker
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder="e.g. Shopify, ANET"
+            className={`${selectCls} w-44 placeholder:text-teal-200/30`}
+          />
+        </label>
         <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
           Exchange
           <select name="exchange" defaultValue={exchange} className={selectCls}>
@@ -126,7 +177,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
           type="submit"
           className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
         >
-          Screen
+          {query ? "Search" : "Screen"}
         </button>
         {hasFilter && (
           <a href="/market/browse" className="text-xs font-semibold text-teal-300 hover:underline">
@@ -138,7 +189,9 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
       {note ? (
         <Card className="p-8 text-center text-sm text-teal-200/40">{note}</Card>
       ) : rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-teal-200/40">No matches — loosen the filters.</Card>
+        <Card className="p-8 text-center text-sm text-teal-200/40">
+          {query ? `No matches for “${query}” — try the company name or a different ticker.` : "No matches — loosen the filters."}
+        </Card>
       ) : (
         <Card className="overflow-x-auto">
           <table className="w-full text-sm">

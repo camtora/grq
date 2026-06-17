@@ -363,3 +363,32 @@ headlines) moved here from Discover, under Headlines. Money renders native+label
 **New:** `components/{IdeaCard,MarketIndices,AddNote,DismissButton,RefreshHuntButton}.tsx`; routes
 `/api/{indices,note,hunt/refresh}`. **Open:** the "Demoted" shelf is empty until a name is actually
 demoted; FRED US-macro (D24) still pending.
+
+### D26 — Market nav into the header + Discover/Browse polish (Cam, 2026-06-16)
+Follow-on UI pass after D25, built in verified chunks. **Navigation:** the four market destinations
+**Watchlist · Universe · Discover · Browse** are surfaced **directly in the header** (`NavBar`); the
+`MarketTabs` sub-nav component is **deleted** (no double navigation). Active-state uses an `exact` flag so
+**Discover** (`/market`) doesn't light up on `/market/watchlist` or `/market/browse`. The two pages that
+read "Market" were retitled to **Watchlist** and **Browse**.
+**Research now:** the **"Research now"** button is **removed from the Watchlist + Universe list tables**
+(and the Demoted shelf) — it belongs on the stock page, where it stays. Done via a `hideResearch` prop on
+the shared `UniverseActions` (default still shows it, so the stock page is untouched).
+**Discover / the hunt:** hunt cards no longer show a Buy/Hold/Sell **verdict** — a "Hold" on a name you
+don't own is contradictory, and these are *leads*, not positions. New `IdeaCard` `discovery` prop drops
+the call and **leads with the 12-mo upside + GRQ's conviction (confidence)**. This also fixes the "why so
+many Holds" report: half the tiles were either genuine low-conviction Holds or legacy `WATCH→Hold`
+back-compat mappings — both gone now. (Hunt *entry* criteria unchanged: the daily `runDiscoveryHunt`
+session web-searches 8–12 under-the-radar Canadian-listed names — it's the agent's judgment, not a screener.)
+**Browse:** replaced the add-to-watchlist box with an **inline "Name or ticker" field in the screener
+form** that **narrows the result set** (it does not add to the watchlist). `fmpSearch` finds listings,
+`fmpProfile` fills the sector/cap/price columns so search rows match the table; the dropdown filters
+further narrow; you **Watch from the row**.
+**Ops correction (bit us this session):** Docker's data-root is **`/var/lib/docker` on `/dev/sda5`
+(`/var`, ~95–100% full)** — NOT on `/` as CLAUDE.md claimed (sda2 is roomy). **A full `/var` makes a build
+silently bake STALE code** (`COPY . .` can't write a new layer; the image keeps old pages) — a
+"successful" deploy served old code until caught by diffing the compiled page inside the image. Always
+verify a fresh image before trusting a deploy. Reclaim with `container prune -f` + `image prune -f`
+(dangling only — shared host, never `-a`/`system prune`). CLAUDE.md updated.
+**Files:** `components/{NavBar,IdeaCard,UniverseActions,StockTable}.tsx` (StockTable = the shared
+Universe/Watchlist table from the D25 line), `app/market/{page,browse/page,watchlist/page}.tsx`,
+`app/universe/page.tsx`, `CLAUDE.md`; **deleted** `components/MarketTabs.tsx`. No schema change.

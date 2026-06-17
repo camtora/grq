@@ -19,13 +19,16 @@ on the stock pages (honest 10-tier coverage map) AND fed into the agent's decisi
 tier-4 insider via the agent's per-dossier web research (paid INK feed deferred). **Real-time
 on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
 market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
-vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v4 (D25):** Market sub-tabs
-**Watchlist · Universe · Discover · Browse** (Research tab removed — notes now per-stock in **"The
-record"** = `JournalKind.NOTE`). **Watchlist** rows are Universe-style and **expand into the
+vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v5 (D26):** the four market
+destinations **Watchlist · Universe · Discover · Browse** are now **top-level header nav** (the
+`MarketTabs` sub-nav is gone). **Watchlist** rows are Universe-style and **expand into the
 researched-ideas card** (shared `components/IdeaCard.tsx`); **Universe**+Watchlist show GRQ's call as the
-**RatingBar**, Universe has a **Demoted** shelf; **Discover** = the hunt (8–12 names · **↻ refresh** via
-`AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED) + smart money; **Today** gained a **live indices
-strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**.
+**RatingBar**, Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
+list tables — `UniverseActions hideResearch`). **Discover** = the hunt (8–12 names · **↻ refresh** via
+`AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED) + smart money; hunt cards are **leads, not verdicts**
+(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Browse** has an inline
+**name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
+**Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**.
 stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper CONNECTED (D22):**
 the gateway authenticates + reconciles the paper account **`DUQ774890`** (CAD 5k mirrored) via a
 **loopback proxy** (`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`); the
@@ -66,9 +69,16 @@ flip). **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq
   git- and docker-ignored. Container process env wins over Next's .env loading.
 - **React SSR splits dynamic text with `<!-- -->`** — grep rendered HTML loosely
   (e.g. `Welcome back,[^<]*<!-- -->Cam`).
-- Server disk hovers ~89% on /home; **Docker's root is on `/` and rebuild marathons fill it
-  faster than the nightly 5AM prune** — this took the db down once (2026-06-12). After any
-  heavy build session: `docker image prune -f` (never `system prune`).
+- **Docker's data-root is `/var/lib/docker` on `/dev/sda5` (mounted `/var`, a 60G volume that
+  runs ~95–100% full)** — NOT on `/` (sda2 is roomy at ~23%). `/home` (sda6) is separate at
+  ~92%. Rebuild marathons fill `/var` faster than the nightly 5AM prune; this took the db down
+  once (2026-06-12). **When `/var` is full a build can silently bake STALE code** — `COPY . .`
+  fails to write a new layer and the image keeps old pages (bit us 2026-06-16: a "successful"
+  deploy served old code). Always verify a fresh image before trusting a deploy:
+  `docker run --rm --entrypoint sh grq_web:latest -c "grep -l <new-string> /app/.next/server/app/.../page.js"`.
+  Reclaim: `docker container prune -f` (stopped) + `docker image prune -f` (dangling — note it
+  only frees the OLD image's layers AFTER `up -d` swaps to the new one). Shared host (tdarr,
+  seerr, minecraft, infra…) so **never `image prune -a` / `system prune`** — too broad.
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

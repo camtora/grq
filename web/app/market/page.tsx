@@ -6,7 +6,6 @@ import { computeSignals, overallSignal } from "@/agent/signals";
 import { fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import MarketTabs from "@/components/MarketTabs";
 import { type WatchState } from "@/components/WatchButton";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
 import DismissButton from "@/components/DismissButton";
@@ -47,8 +46,9 @@ export default async function Market() {
     })
     .slice(0, 12);
 
-  // The hunt names render through the IdeaCard (compact); smart money is a roundup,
-  // styled apart.
+  // The hunt names render through the IdeaCard (compact + discovery: these are
+  // leads, not positions, so we lead with upside + conviction, not a Buy/Hold/Sell
+  // verdict). Smart money is a roundup, styled apart.
   const quotes = await getQuotes(huntFinds.map((d) => d.symbol as string));
   const toIdea = async (d: (typeof huntFinds)[number]): Promise<Idea> => {
     const sym = d.symbol as string;
@@ -79,7 +79,6 @@ export default async function Market() {
   return (
     <main>
       <PageHeader title="Discover" sub="The agent's hunt for under-the-radar names, and what notable public portfolios are buying." />
-      <MarketTabs />
 
       {smartMoney && (
         <Card className="mb-8 p-5">
@@ -109,7 +108,7 @@ export default async function Market() {
           <div className="grid items-start gap-4 sm:grid-cols-2">
             {huntIdeas.map((idea) => (
               <div key={idea.sym} className="flex flex-col gap-1.5">
-                <IdeaCard idea={idea} isMember={isMember} compact />
+                <IdeaCard idea={idea} isMember={isMember} compact discovery />
                 {isMember && (
                   <div className="flex justify-end px-1">
                     <DismissButton symbol={idea.sym} name={idea.name} />

@@ -50,7 +50,20 @@ export function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   );
 }
 
-export default function IdeaCard({ idea, isMember, compact = false }: { idea: Idea; isMember: boolean; compact?: boolean }) {
+export default function IdeaCard({
+  idea,
+  isMember,
+  compact = false,
+  discovery = false,
+}: {
+  idea: Idea;
+  isMember: boolean;
+  compact?: boolean;
+  // Discovery/lead context (the hunt): suppress the Buy/Hold/Sell verdict — a
+  // "Hold" on a name you don't own is contradictory, and these are leads, not
+  // positions — and lead with the 12-mo upside + GRQ's conviction. (Cam 2026-06-16)
+  discovery?: boolean;
+}) {
   const sm = stanceMeta(idea.stance);
   if (compact) {
     return (
@@ -61,7 +74,21 @@ export default function IdeaCard({ idea, isMember, compact = false }: { idea: Id
             {idea.sym}
           </Link>
           <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{idea.name}</span>
-          {sm ? (
+          {discovery ? (
+            <div className="flex shrink-0 items-center gap-2">
+              {idea.far !== null && (
+                <span className={`text-sm font-black ${idea.far > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {idea.far > 0 ? "+" : ""}
+                  {pct(idea.far, 0)}
+                </span>
+              )}
+              {idea.confidence != null && (
+                <span className="rounded-full bg-teal-400/10 px-2 py-0.5 text-[10px] font-semibold text-teal-200/70" title="GRQ's conviction this is worth a look">
+                  {idea.confidence}% conf
+                </span>
+              )}
+            </div>
+          ) : sm ? (
             <span className={`shrink-0 text-sm font-black ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
               {sm.label}
             </span>
@@ -74,13 +101,14 @@ export default function IdeaCard({ idea, isMember, compact = false }: { idea: Id
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/50">
           {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
-          {idea.far !== null && (
+          {!discovery && idea.far !== null && (
             <span className={idea.far > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
               12-mo {idea.far > 0 ? "+" : ""}
               {pct(idea.far, 0)}
             </span>
           )}
-          {idea.confidence != null && <span>conf {idea.confidence}%</span>}
+          {!discovery && idea.confidence != null && <span>conf {idea.confidence}%</span>}
+          {discovery && idea.far === null && idea.confidence == null && <span className="text-teal-200/40">early look — no target yet</span>}
         </div>
         <div className="mt-2 grow">
           <CollapsibleMd text={idea.body} threshold={180}>
@@ -153,9 +181,20 @@ export default function IdeaCard({ idea, isMember, compact = false }: { idea: Id
 
         <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
           <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-            <Term k="agent-call">GRQ&apos;s call</Term>
+            {discovery ? "Early look" : <Term k="agent-call">GRQ&apos;s call</Term>}
           </div>
-          {sm ? (
+          {discovery ? (
+            <div className="mt-1">
+              {idea.confidence != null ? (
+                <>
+                  <span className="text-2xl font-black text-teal-200">{idea.confidence}%</span>
+                  <p className="mt-1 text-xs text-teal-200/50">GRQ&apos;s conviction this is worth a look — an early-stage find, not a position call.</p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-teal-200/40">An early-stage find — not yet a position call.</p>
+              )}
+            </div>
+          ) : sm ? (
             <div className="mt-1">
               <span className={`text-2xl font-black ${STANCE_TONE_CLASSES[sm.tone].text}`}>{sm.label}</span>
               <p className="mt-1 text-xs text-teal-200/50">{sm.blurb}</p>

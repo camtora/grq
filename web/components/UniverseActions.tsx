@@ -10,6 +10,12 @@ type Props = {
   proposedTier: string | null;
   currentUser: string;
   researchInFlight?: boolean;
+  // Hide the tier picker (it lives on the stock page) — in compact rows the
+  // promotion request just uses the proposed/default tier. (Cam 2026-06-16)
+  hideTierSelect?: boolean;
+  // Hide the "Research now" button on the watchlist/universe tables — it belongs
+  // on the stock page (where the same component still shows it). (Cam 2026-06-16)
+  hideResearch?: boolean;
 };
 
 export default function UniverseActions({
@@ -19,6 +25,8 @@ export default function UniverseActions({
   proposedTier,
   currentUser,
   researchInFlight,
+  hideTierSelect,
+  hideResearch,
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -49,7 +57,7 @@ export default function UniverseActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {status !== "RETIRED" && (
+      {status !== "RETIRED" && !hideResearch && (
         <button
           disabled={busy || researchInFlight}
           onClick={() => act("research")}
@@ -64,16 +72,18 @@ export default function UniverseActions({
         <>
           {!pendingBy || pendingBy === currentUser ? (
             <>
-              <select
-                value={tier}
-                onChange={(e) => setTier(e.target.value)}
-                disabled={busy || pendingBy === currentUser}
-                className="rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-xs text-teal-50 outline-none"
-              >
-                <option value="etf">etf</option>
-                <option value="large">large</option>
-                <option value="mid">mid</option>
-              </select>
+              {!hideTierSelect && (
+                <select
+                  value={tier}
+                  onChange={(e) => setTier(e.target.value)}
+                  disabled={busy || pendingBy === currentUser}
+                  className="rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-xs text-teal-50 outline-none"
+                >
+                  <option value="etf">etf</option>
+                  <option value="large">large</option>
+                  <option value="mid">mid</option>
+                </select>
+              )}
               <button
                 disabled={busy || pendingBy === currentUser}
                 onClick={() => act("promote", { tier })}
