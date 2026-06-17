@@ -204,7 +204,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     { tier: 3, name: "Options flow", status: "none", detail: "never traded; flow is US-centric — later" },
     { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
     { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
-  ];
+  ].sort((a, b) => a.tier - b.tier); // show tiers in order T1→T10
 
   return (
     <main>
