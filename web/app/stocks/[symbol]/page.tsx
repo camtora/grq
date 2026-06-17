@@ -186,13 +186,25 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // The 10-tier data-coverage map (docs/DATA-SOURCES.md) for THIS name: what's
   // wired & live, what's partial, and — honestly — why the rest is dark.
   type Cov = { tier: number; name: string; status: "live" | "partial" | "none"; detail: string };
+  const cadListing = /\.(TO|V|NE|CN)$/i.test(entry.yahoo); // CA listing → no structured insider feed yet
+  const insiderBuys = smartMoney?.insiderBuyers ?? 0;
   const coverage: Cov[] = [
     { tier: 1, name: "Price/vol", status: closes.length > 1 ? "live" : "partial", detail: `${closes.length} sessions of OHLCV → signals` },
     { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
     { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? `${earnings.upcoming ? "next" : "last"} ${earnings.date}` : "no FMP coverage for this name" },
     { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
     { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
-    { tier: 4, name: "Insider", status: "partial", detail: "GRQ web-researches it in dossiers (SEDI/SEDAR); structured feed = INK (paid)" },
+    {
+      tier: 4,
+      name: "Insider",
+      status: insiderBuys > 0 ? "live" : "partial",
+      detail:
+        insiderBuys > 0
+          ? `${insiderBuys} insider buy(s), 90d · structured Form 4 / OpenInsider`
+          : cadListing
+            ? "CA insider not yet structured — agent web-researches SEDI/SEDAR+ in dossiers"
+            : "US Form 4 + OpenInsider wired — no recent open-market buys on file",
+    },
     {
       tier: 5,
       name: "Institutional",

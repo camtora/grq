@@ -1,7 +1,7 @@
 import https from "node:https";
 import { prisma } from "../db";
 import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
-import { activeSymbols } from "../universe";
+import { activeSymbols, universeEntry } from "../universe";
 import { ibkrFixedCommissionCents, writeNavSnapshot } from "./sim";
 import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
@@ -76,7 +76,7 @@ type OrderReply = { id?: string; message?: string[]; order_id?: string; orderId?
 // (snake_case); `avgPrice` is the orders-LIST field. Market orders carry no
 // limit_price fallback, so missing `average_price` here = no usable price.
 type OrderStatus = { order_status?: string; average_price?: string; avgPrice?: string; avg_price?: string; filledQuantity?: number; commission?: number; total_size?: number };
-type IbkrPosition = { conid?: number; position?: number; avgCost?: number; avgPrice?: number; contractDesc?: string };
+type IbkrPosition = { conid?: number; position?: number; avgCost?: number; avgPrice?: number; contractDesc?: string; currency?: string };
 type Ledger = Record<string, { cashbalance?: number; settledcash?: number; currency?: string }>;
 
 // A PENDING order that finalizePending() resolved to a fill — the runner pings
@@ -112,8 +112,8 @@ export class IBKRBroker implements BrokerAdapter {
 
   // ---- contract resolution -------------------------------------------------
 
-  /** symbol → IBKR conid for the Canadian (CAD) listing. We trade TSX/CAD only
-   *  in Phase 3, so prefer the Toronto listing among the search hits. */
+  /** symbol → IBKR conid in the name's own currency: CAD→Toronto (TSE/TSX/Venture),
+   *  USD→the US listing (NYSE/NASDAQ/…) — D34 multi-currency. Cached per symbol. */
   async conidFor(symbol: string): Promise<number | null> {
     const sym = symbol.toUpperCase();
     const cached = this.conidBySymbol.get(sym);
@@ -123,13 +123,17 @@ export class IBKRBroker implements BrokerAdapter {
       const bare = sym.replace(/\.(TO|V|NE|CN)$/i, "");
       const hits = await cp<SecdefHit[]>(`/iserver/secdef/search?symbol=${encodeURIComponent(bare)}&secType=STK`);
       if (!Array.isArray(hits) || hits.length === 0) return null;
-      // VERIFY-LIVE: prefer the hit whose section/description is the Toronto
-      // (TSE/TSX) listing; fall back to the first hit. The search result's
-      // `description` is usually the primary exchange code.
+      // Pick the listing in the name's own currency (D34): USD names → the US
+      // listing (NYSE/NASDAQ/…), CAD names → Toronto (TSE/TSX/Venture). Fall back to
+      // the first hit. VERIFY-LIVE: the hit's `description` is usually the exchange.
+      const wantUsd = ((await universeEntry(sym).catch(() => null))?.currency ?? "").toUpperCase() === "USD";
       const isToronto = (h: SecdefHit) =>
         /TSE|TSX|TORONTO|VENTURE/i.test(h.description ?? "") ||
         (h.sections ?? []).some((s) => /TSE|TSX|VENTURE/i.test(s.exchange ?? ""));
-      const pick = hits.find(isToronto) ?? hits[0];
+      const isUS = (h: SecdefHit) =>
+        /NYSE|NASDAQ|ARCA|AMEX|BATS|PINK/i.test(h.description ?? "") ||
+        (h.sections ?? []).some((s) => /NYSE|NASDAQ|ARCA|AMEX|BATS|PINK/i.test(s.exchange ?? ""));
+      const pick = (wantUsd ? hits.find(isUS) : hits.find(isToronto)) ?? hits[0];
       // secdef/search returns conid as a STRING; the order endpoint wants an
       // integer (else 400 "parameter with incorrect type"), so coerce to Number.
       const conid = pick.conid == null ? null : Number(pick.conid);
@@ -349,70 +353,97 @@ export class IBKRBroker implements BrokerAdapter {
 
   /** Read live positions from IBKR. Maps conid → our symbol via the resolver
    *  cache (warmed by conidFor / listSymbols at startup). */
-  async getPositions(): Promise<{ symbol: string; qty: number; avgCostCents: number }[]> {
-    const raw = await cp<IbkrPosition[]>(`/portfolio/${ACCOUNT_ID}/positions/0`).catch(() => [] as IbkrPosition[]);
-    const out: { symbol: string; qty: number; avgCostCents: number }[] = [];
+  async getPositions(): Promise<{ symbol: string; qty: number; avgCostCents: number; currency: string }[] | null> {
+    // Returns `null` when the read is UNTRUSTWORTHY — the fetch failed/timed out, or
+    // the endpoint returned a non-array (it serves an error object / "still loading"
+    // shape while the iserver session is spinning up, e.g. right after a restart or
+    // the nightly re-auth). reconcile() must NOT delete the mirror on null. A
+    // successful, genuinely-empty array IS authoritative (a flat account) → clears.
+    let raw: IbkrPosition[];
+    try {
+      raw = await cp<IbkrPosition[]>(`/portfolio/${ACCOUNT_ID}/positions/0`);
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(raw)) return null;
+    const out: { symbol: string; qty: number; avgCostCents: number; currency: string }[] = [];
     for (const p of raw) {
       const cid = p.conid == null ? null : Number(p.conid);
       if (!cid || !p.position) continue;
       const symbol = this.symbolByConid.get(cid);
       if (!symbol) continue; // not one of ours — skip (VERIFY-LIVE: warm the cache for all holdings)
       const avg = p.avgCost ?? p.avgPrice ?? 0;
-      out.push({ symbol, qty: Math.round(p.position), avgCostCents: Math.round(avg * 100) });
+      // avgCost is in the position's native currency; we tag it so NAV/sizing convert (D34).
+      out.push({ symbol, qty: Math.round(p.position), avgCostCents: Math.round(avg * 100), currency: (p.currency ?? "CAD").toUpperCase() });
     }
     return out;
   }
 
-  /** CAD cash balance from the account ledger. */
-  async getCashCents(): Promise<number | null> {
+  /** Cash balances per currency from the account ledger — CAD + USD (D34). */
+  async getCashByCurrency(): Promise<{ cadCents: number | null; usdCents: number }> {
     const ledger = await cp<Ledger>(`/portfolio/${ACCOUNT_ID}/ledger`).catch(() => null);
-    if (!ledger) return null;
-    const cad = ledger["CAD"] ?? ledger["BASE"];
-    if (cad?.cashbalance === undefined) return null;
-    return Math.round((cad.settledcash ?? cad.cashbalance) * 100);
+    if (!ledger) return { cadCents: null, usdCents: 0 };
+    const bal = (k: string): number | null => {
+      const c = ledger[k];
+      if (c?.cashbalance === undefined) return null;
+      return Math.round((c.settledcash ?? c.cashbalance) * 100);
+    };
+    return { cadCents: bal("CAD") ?? bal("BASE"), usdCents: bal("USD") ?? 0 };
   }
 
   /** Mirror IBKR positions + cash into our DB so the dashboards, NAV snapshots
    *  and realized-P&L math read broker truth. Called by the runner each tick and
    *  right after a fill. Writes a SYSTEM journal note when it corrects drift. */
   async reconcile(): Promise<void> {
+    // Never reconcile against a half-up session: a failed positions read would look
+    // like a flat account and WIPE the mirror — which on 2026-06-17 briefly dropped
+    // our holding, cratered NAV to cash-only and tripped a false daily-loss pause.
+    // It's a mirror; skipping a tick is harmless, the next one catches up.
+    const auth = await this.authStatus();
+    if (!auth.authenticated || !auth.connected) return;
+
     // Warm the conid→symbol map for the active universe so holdings resolve.
     if (this.symbolByConid.size === 0) {
       for (const s of await activeSymbols()) await this.conidFor(s).catch(() => null);
     }
-    const [brokerPositions, cashCents] = await Promise.all([this.getPositions(), this.getCashCents()]);
+    const [brokerPositions, cash] = await Promise.all([this.getPositions(), this.getCashByCurrency()]);
 
-    const dbPositions = await prisma.position.findMany();
-    const dbBy = new Map(dbPositions.map((p) => [p.symbol, p]));
-    const brokerBy = new Map(brokerPositions.map((p) => [p.symbol, p]));
     let drift = 0;
+    // Only touch positions when the read was trustworthy (a real array). null =
+    // failed/non-array → leave the mirror exactly as-is; NEVER delete on it. A
+    // successful empty array still flows through and correctly clears a flat account.
+    if (brokerPositions !== null) {
+      const dbPositions = await prisma.position.findMany();
+      const dbBy = new Map(dbPositions.map((p) => [p.symbol, p]));
+      const brokerBy = new Map(brokerPositions.map((p) => [p.symbol, p]));
 
-    for (const bp of brokerPositions) {
-      const cur = dbBy.get(bp.symbol);
-      if (!cur || cur.qty !== bp.qty || cur.avgCostCents !== bp.avgCostCents) {
-        await prisma.position.upsert({
-          where: { symbol: bp.symbol },
-          create: { symbol: bp.symbol, qty: bp.qty, avgCostCents: bp.avgCostCents },
-          update: { qty: bp.qty, avgCostCents: bp.avgCostCents },
-        });
-        drift++;
+      for (const bp of brokerPositions) {
+        const cur = dbBy.get(bp.symbol);
+        if (!cur || cur.qty !== bp.qty || cur.avgCostCents !== bp.avgCostCents || cur.currency !== bp.currency) {
+          await prisma.position.upsert({
+            where: { symbol: bp.symbol },
+            create: { symbol: bp.symbol, qty: bp.qty, avgCostCents: bp.avgCostCents, currency: bp.currency },
+            update: { qty: bp.qty, avgCostCents: bp.avgCostCents, currency: bp.currency },
+          });
+          drift++;
+        }
+      }
+      // Positions IBKR no longer reports → closed; drop them (only on a trusted read).
+      for (const dp of dbPositions) {
+        if (!brokerBy.has(dp.symbol)) {
+          await prisma.position.delete({ where: { symbol: dp.symbol } }).catch(() => {});
+          drift++;
+        }
       }
     }
-    // Positions IBKR no longer reports → closed; drop them.
-    for (const dp of dbPositions) {
-      if (!brokerBy.has(dp.symbol)) {
-        await prisma.position.delete({ where: { symbol: dp.symbol } }).catch(() => {});
-        drift++;
-      }
-    }
-    if (cashCents !== null) {
-      await prisma.account.update({ where: { id: 1 }, data: { cashCents } }).catch(() => {});
+    if (cash.cadCents !== null) {
+      await prisma.account.update({ where: { id: 1 }, data: { cashCents: cash.cadCents, usdCashCents: cash.usdCents } }).catch(() => {});
     }
     if (drift > 0) {
       await prisma.journalEntry.create({
         data: {
           kind: "SYSTEM", title: `Reconciled ${drift} position(s) from IBKR`,
-          body: `Mirrored broker truth: ${brokerPositions.length} live position(s), cash ${cashCents !== null ? `$${(cashCents / 100).toFixed(2)}` : "unknown"}.`,
+          body: `Mirrored broker truth: ${brokerPositions?.length ?? 0} live position(s), cash ${cash.cadCents !== null ? `$${(cash.cadCents / 100).toFixed(2)} CAD` : "unknown"}${cash.usdCents ? ` + $${(cash.usdCents / 100).toFixed(2)} USD` : ""}.`,
         },
       });
     }

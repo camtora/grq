@@ -28,9 +28,13 @@ the Wall Street Journal on equal terms.
 
 ## The ten tiers
 
-_Status updated 2026-06-15 — most of this is now LIVE on **FMP Ultimate** (the paid
-backbone) + free Bank-of-Canada feeds. Tiers feed both the stock pages and the agent's
-decision context (so they move calls, not just displays)._
+_Status updated 2026-06-17 — most of this is LIVE on **FMP Ultimate** (the paid backbone) +
+free Bank-of-Canada **and FRED** feeds. Tiers feed both the stock pages and the agent's
+decision context (so they move calls, not just displays). **US/CA asymmetry to know:** the
+stack is SEC/FMP-centric, so US names have RICHER structured coverage than pure-TSX ones
+(insider Form 4, 13F, fuller fundamentals/earnings); the remaining gaps are pure-TSX
+structured insider (free sources are walled — Tier 4) and US macro (closed 2026-06-17 via
+FRED). The fund now trades CAD **and** USD (see `docs/DECISIONS.md` D34)._
 
 | Tier | Category | GRQ priority | Status |
 |---|---|---|---|
@@ -38,9 +42,9 @@ decision context (so they move calls, not just displays)._
 | 2 | Fundamentals | **Now** | **Live** — FMP profile/cap/sector + analyst price-target consensus + buy/hold/sell grades + peer comparison |
 | 6 | Earnings intelligence | **Now** | **Live** — FMP next-earnings date + EPS/rev estimates, on the stock page **and** injected into the agent's context (catalyst awareness) |
 | 7 | News | **Now** | **Live** — FMP per-stock + market news, plus the agent's web research |
-| 9 | Macroeconomic | **Now** | **Live** — structured **Bank of Canada Valet** feed (overnight rate / 5y GoC / CPI / USD-CAD), in the agent context + Overview strip (`lib/macro.ts`) |
+| 9 | Macroeconomic | **Now** | **Live (CA + US)** — **Bank of Canada Valet** (overnight rate / 5y GoC / CPI / USD-CAD) **+ US via FRED** (Fed funds `DFF` / 10y Treasury `DGS10` / US CPI YoY `CPIAUCNS`); both in the agent context + macro strip (`lib/macro.ts`, `FRED_API_KEY`) |
 | 5 | Institutional ownership | Mid | **Live (US-listed)** — FMP 13F summary on the stock page; empty for pure-TSX issuers |
-| 4 | Insider activity | Mid | **Partial** — the agent web-researches it per dossier (SEDI/SEDAR, clusters of buying). A structured universe-wide feed needs a **paid** source (INK) — free is walled (Cloudflare/crumb/fragile SEDI form) |
+| 4 | Insider activity | Mid | **Live (US) / web-research (CA)** — FMP Form 4 + nightly **OpenInsider** scrape cover US **and cross-listed CA** names (Smart Money board + the stock-page coverage map go green when buys exist). **Pure-TSX has no free structured feed** — canadianinsider = Cloudflare-walled, SEDI = session-gated (confirmed 2026-06-17) — so the agent web-researches those per dossier; INK (paid) deferred |
 | 3 | Options data (as signal only) | Later | Not wired — never-trade; US-centric flow |
 | 8 | Social sentiment | Later | Deliberately late — noisy |
 | 10 | Alternative data | Maybe | Mostly paid; revisit at scale |

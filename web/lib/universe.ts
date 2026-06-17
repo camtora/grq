@@ -141,6 +141,19 @@ export function isCadTradeable(currency?: string | null, yahoo?: string | null):
   return y.endsWith(".TO") || y.endsWith(".V") || y.endsWith(".NE") || y.endsWith(".CN");
 }
 
+/** Tradeable if denominated in a currency the fund holds — CAD or USD (D34; the
+ *  IBKR account carries both). Unknown currency falls back to the listing suffix:
+ *  Canadian suffixes and bare (US-style) tickers qualify; other foreign suffixes
+ *  don't. This is the promotion gate; valuation/NAV convert USD→CAD at the BoC rate. */
+export function isTradeable(currency?: string | null, yahoo?: string | null): boolean {
+  const c = (currency ?? "").trim().toUpperCase();
+  if (c === "CAD" || c === "USD") return true;
+  if (c) return false; // a known but unsupported currency (GBP, EUR, …)
+  const y = (yahoo ?? "").toUpperCase();
+  if (/\.(TO|V|NE|CN)$/.test(y)) return true;
+  return !/\.[A-Z]{1,3}$/.test(y); // bare ticker → US (USD); other foreign suffix → no
+}
+
 // The original hand-screened list — seeds UniverseMember as ACTIVE.
 export const SEED: { symbol: string; yahoo: string; name: string; tier: Tier }[] = [
   { symbol: "XIC", yahoo: "XIC.TO", name: "iShares Core S&P/TSX Capped Composite", tier: "etf" },

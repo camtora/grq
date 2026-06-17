@@ -2,7 +2,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
-import { universeEntry, allUniverse, isCadTradeable } from "../lib/universe";
+import { universeEntry, allUniverse, isTradeable } from "../lib/universe";
 import { setBootstrapMode } from "./promote";
 import { queueHuntDossier } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
@@ -85,7 +85,7 @@ export async function runMorningResearch(): Promise<void> {
 1. Work through your seed sources and the macro sweep with WebSearch (and WebFetch for promising articles). You're looking for anything that affects current holdings, your focus list, or presents a swing opportunity in the universe.
 2. Review every open position against its thesis — still valid?
 3. Update your focus list (set_focus) — the names you're monitoring for an entry today, each with its trigger.
-3b. SELF-INVEST: if a CANDIDATE you've researched is a high-conviction buy (your dossier call ≥ Buy, confidence ≥75) and it's liquid and CAD-tradeable, you may promote_to_universe to make it tradeable yourself — give a one-line reason (the members get a Discord alert and can veto). Rules are enforced; rejections explain themselves. Be selective: it's capped per week, and a promoted name still has to clear the order gate before you buy it.
+3b. SELF-INVEST: if a CANDIDATE you've researched is a high-conviction buy (your dossier call ≥ Buy, confidence ≥75) and it's liquid and CAD- or USD-tradeable, you may promote_to_universe to make it tradeable yourself — give a one-line reason (the members get a Discord alert and can veto). Rules are enforced; rejections explain themselves. Be selective: it's capped per week, and a promoted name still has to clear the order gate before you buy it.
 4. Write ONE RESEARCH journal entry (write_journal) titled "Game plan — ${etDateStr()}": today's read of the market, what you're watching, planned actions with conditions ("buy X if it holds above Y"), and cited sources. When a finding is specifically about one symbol, ALSO write a short symbol-tagged RESEARCH entry for it — the stock pages collect those.
 5. Do NOT place orders now — the market is closed and entries are blocked in the first 15 minutes anyway. Trades happen via your plan when conditions trigger, or at midday check-ins.
 
@@ -107,8 +107,8 @@ export async function runStartupUniverseReview(): Promise<void> {
     candidates.map(async (c) => {
       const dossier = await prisma.journalEntry.findFirst({ where: { symbol: c.symbol, stance: { not: null } }, orderBy: { at: "desc" } });
       const sig = await computeSignals(c.symbol).catch(() => null);
-      const cad = isCadTradeable(c.currency, c.yahoo);
-      return `- ${c.symbol} (${c.name})${cad ? "" : " [non-CAD — research-only, can't promote]"}: your call ${dossier?.stance ?? "none yet"}${dossier?.confidence != null ? ` @ ${dossier.confidence}%` : ""}; signals ${sig ? signalsOneLine(sig) : "n/a"}`;
+      const tradeable = isTradeable(c.currency, c.yahoo);
+      return `- ${c.symbol} (${c.name})${tradeable ? "" : " [non-CAD/USD — research-only]"}: your call ${dossier?.stance ?? "none yet"}${dossier?.confidence != null ? ` @ ${dossier.confidence}%` : ""}; signals ${sig ? signalsOneLine(sig) : "n/a"}`;
     }),
   );
 
@@ -124,7 +124,7 @@ ${rows.join("\n")}
 
 For EACH candidate you would actually put real money into RIGHT NOW:
 1. Confirm conviction — your latest dossier must rate it ≥ Buy with confidence ≥ ${SELF_INVEST.minConfidence}. If you believe in it but the dossier is stale or weaker, write a fresh symbol-tagged RESEARCH entry (write_journal with stance + confidence + sources) FIRST, then promote.
-2. promote_to_universe it. CAD-tradeable + liquid only; rules are enforced and rejections explain themselves. Members get a Discord on each.
+2. promote_to_universe it. CAD/USD-tradeable + liquid only; rules are enforced and rejections explain themselves. Members get a Discord on each.
 Be SELECTIVE — promote only names you'd defend buying today, NOT the whole list. Quality over quantity; the universe caps at ${SELF_INVEST.maxUniverseSize}.
 
 Then:
@@ -235,7 +235,7 @@ ${portLines}
 
 Names marked (OURS) overlap GRQ's universe.
 
-Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we trade TSX) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
+Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we now trade CAD + USD) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
   await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 16 });
 }
 

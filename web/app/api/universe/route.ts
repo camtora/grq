@@ -8,7 +8,7 @@ import {
   CANDIDATE_CAP,
   yahooForListing,
   bareTicker,
-  isCadTradeable,
+  isTradeable,
 } from "@/lib/universe";
 import { promotionScreen } from "@/lib/screen";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
@@ -173,11 +173,11 @@ export async function POST(req: Request) {
   // ---------- promote: two-person rule ----------
   if (action === "promote") {
     if (entry.status !== "CANDIDATE") return bad(`${symbol} is ${entry.status} — only candidates get promoted.`);
-    // Tradeable only if CAD-denominated (CDRs qualify; true-USD listings are
-    // research-only until GRQ trades multiple currencies — Phase 3+). Ties the
-    // gate to the actual money constraint, not the exchange suffix (D24).
-    if (!isCadTradeable(entry.currency, entry.yahoo)) {
-      return bad(`${symbol} is a ${entry.currency ?? "non-CAD"} listing (${entry.yahoo}) — research-only until GRQ trades multiple currencies (Phase 3+). It stays on the watchlist.`, 422);
+    // Tradeable only in a currency the fund holds — CAD or USD (D34; IBKR carries
+    // both). Other currencies stay research-only. Ties the gate to the actual money
+    // constraint, not the exchange suffix (D24).
+    if (!isTradeable(entry.currency, entry.yahoo)) {
+      return bad(`${symbol} is a ${entry.currency ?? "non-CAD/USD"} listing (${entry.yahoo}) — the fund trades CAD and USD only. It stays on the watchlist.`, 422);
     }
     const tier = typeof body.tier === "string" && (TIERS as readonly string[]).includes(body.tier) ? body.tier : entry.proposedTier;
     if (!tier) return bad("Pick a tier (etf | large | mid).");

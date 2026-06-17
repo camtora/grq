@@ -600,3 +600,28 @@ performance VIEWS to it (non-destructive — sim snapshots stay in the DB): `get
 chart) and the Today page's day-open baseline (`app/page.tsx` `dayOpenSnap`) now filter `at >=
 PAPER_INCEPTION`. The latter also fixed a phantom **+$20k "today" gain** (the Today baseline had been the
 last *sim* 5k snapshot → `25k − 5k`). Drawdown HWM unaffected (today's 25k was already the max).
+
+### D34 — USD multi-currency: the fund holds USD, mirroring IBKR (Cam, 2026-06-17)
+**Context:** GRQ now researches US names (10 USD candidates) but could only *trade* CAD — `isCadTradeable`
+blocked USD listings from promotion, and the whole valuation/gate stack implicitly assumed one currency.
+With `BROKER=ibkr-paper`, the IBKR account natively holds CAD **and** USD. **Decision (Cam):** the fund
+holds USD, **mirroring IBKR** (option b — true multi-currency balances, NOT FX-at-execution), and US
+trading is **enabled now**, mid-soak (Cam's call; materially changes the soaked system, so the clean-soak
+clock may restart). **The §6 order gate + kill switch are unchanged and humans-only — only *valuation*
+learned to convert.**
+**What shipped:** (1) schema — `Account.usdCashCents` + `Position.currency` (additive, default CAD →
+existing rows byte-identical). (2) **`lib/fx.ts`** — `toCadCents(cents, ccy, fx)` + `usdCadRate()` (the BoC
+USD/CAD already in the macro feed); CAD passes through untouched. (3) **Valuation in CAD** — `portfolio.ts`
++ `sim.writeNavSnapshot` compute NAV = CAD cash + USD cash×fx + Σ positions(native ccy)×fx; `PortfolioView`
+gains `cadCashCents`/`usdCashCents`/`fxUsdCad`, `cashCents` is now the CAD **total**, `PositionView` gains
+`currency` + `marketValueCadCents`. (4) **Gate** — `validator.ts` converts the order's native value→CAD
+before the position-size % and cash-floor checks (CAD names unchanged). (5) **Mirror** — `ibkr.ts`
+`getCashByCurrency()` reads CAD+USD ledger, `getPositions()` tags currency, `reconcile()` writes both +
+per-position currency, and **`conidFor()` picks the listing in the name's own currency** (USD→NYSE/NASDAQ,
+CAD→Toronto). (6) **Unblock** — `isCadTradeable`→**`isTradeable`** (CAD or USD); promotion gate updated in
+`promote.ts`, `sessions.ts`, `api/universe/route.ts`; agent self-invest/research/chat prompts updated so it
+knows USD is tradeable. **Verified:** tsc clean; live NAV unchanged at **$25,010** (CAD-only backward-compat,
+fresh images stale-checked). **Known follow-ups (cosmetic / paper-soak-OK):** the realized-P&L journal line
+hardcodes "CAD" (a USD sell shows USD P&L mislabeled); the commission *estimate* in the validator uses the
+CAD per-share model for US names (the real commission still comes from IBKR's fill); >2 currencies would
+warrant a `CashBalance` table instead of a `usdCashCents` column. FX source = BoC; benchmark stays XIC (CAD).

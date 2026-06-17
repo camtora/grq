@@ -6,7 +6,7 @@
 // distinct Discord so the members see each autonomous add and can veto it.
 
 import { prisma } from "../lib/db";
-import { universeEntry, activeUniverse, invalidateUniverseCache, isCadTradeable, bareTicker, CANDIDATE_CAP } from "../lib/universe";
+import { universeEntry, activeUniverse, invalidateUniverseCache, isTradeable, bareTicker, CANDIDATE_CAP } from "../lib/universe";
 import { promotionScreen } from "../lib/screen";
 import { probeYahooSymbol } from "../lib/broker/yahoo";
 import { refreshQuotesFor } from "../lib/broker/quotes";
@@ -21,7 +21,7 @@ export type CandidateResult = { ok: boolean; symbol?: string; reason?: string };
 // The runner opens a "bootstrap window" for the one-time startup universe review
 // (Cam 2026-06-17): inside it the per-week self-promotion cap is lifted so the agent
 // can rebuild a freshly-demoted watchlist in one pass. Every QUALITY gate (conviction,
-// liquidity screen, CAD-tradeable, not-blocked) and the hard universe-size cap STILL
+// liquidity screen, CAD/USD-tradeable, not-blocked) and the hard universe-size cap STILL
 // apply — only the anti-churn weekly cap is relaxed.
 let bootstrapMode = false;
 export function setBootstrapMode(on: boolean): void {
@@ -97,9 +97,9 @@ export async function agentSelfPromote(symbol: string, tier: "large" | "mid" | u
   const directive = await prisma.symbolDirective.findUnique({ where: { symbol: sym } });
   if (directive?.directive === "BLOCKED") return { ok: false, reason: `${sym} is BLOCKED (no-fly) by ${directive.by} — the members' veto stands.` };
 
-  // CAD-tradeable only — US listings stay research-only until multi-currency.
-  if (!isCadTradeable(entry.currency, entry.yahoo)) {
-    return { ok: false, reason: `${sym} is ${entry.currency ?? "non-CAD"}-listed — research-only until multi-currency support; not promotable.` };
+  // Tradeable currency only — the fund holds CAD + USD (D34); other currencies stay research-only.
+  if (!isTradeable(entry.currency, entry.yahoo)) {
+    return { ok: false, reason: `${sym} is ${entry.currency ?? "a non-CAD/USD"} listing — the fund trades CAD and USD only; not promotable.` };
   }
 
   // Conviction: your latest dossier call must be a genuine buy at ≥ the gate's bar.

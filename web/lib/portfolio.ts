@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { getQuotes } from "./broker/quotes";
 import { benchmarkValueCents } from "./broker/sim";
+import { toCadCents, usdCadRate } from "./fx";
 
 // The fund's real track record begins at the IBKR-paper open (2026-06-17, 9:30 ET
 // = 13:30 UTC). The sim run before that was a rehearsal on a different (5k) account,
@@ -13,16 +14,23 @@ export type PositionView = {
   qty: number;
   avgCostCents: number;
   lastCents: number;
-  marketValueCents: number;
-  unrealizedPnlCents: number;
+  marketValueCents: number; // native currency
+  marketValueCadCents: number; // valued in CAD (USD×fx); == marketValueCents for CAD names
+  currency: string;
+  unrealizedPnlCents: number; // native currency
   dayChangeBps: number;
   openedAt: Date;
 };
 
 export type PortfolioView = {
+  // All totals are CAD. cashCents = TOTAL cash valued in CAD (cadCashCents +
+  // usdCashCents×fx); raw per-currency balances are below it (D34, multi-currency).
   cashCents: number;
+  cadCashCents: number;
+  usdCashCents: number;
+  fxUsdCad: number | null;
   positions: PositionView[];
-  positionsCents: number;
+  positionsCents: number; // Σ positions valued in CAD
   navCents: number;
   contributionsCents: number;
   totalPnlCents: number;
@@ -48,33 +56,41 @@ export async function getPortfolio(): Promise<PortfolioView> {
     prisma.trade.aggregate({ where: { at: { gte: monthStart } }, _sum: { commissionCents: true } }),
   ]);
 
+  const fxUsdCad = await usdCadRate();
   const quotes = await getQuotes(positions.map((p) => p.symbol));
   let quotesAsOf: Date | null = null;
   const views: PositionView[] = positions.map((p) => {
     const q = quotes.get(p.symbol);
     const lastCents = q?.midCents ?? p.avgCostCents;
     if (q && (!quotesAsOf || q.at < quotesAsOf)) quotesAsOf = q.at;
-    const marketValueCents = p.qty * lastCents;
+    const marketValueCents = p.qty * lastCents; // native currency
     return {
       symbol: p.symbol,
       qty: p.qty,
       avgCostCents: p.avgCostCents,
       lastCents,
       marketValueCents,
+      marketValueCadCents: toCadCents(marketValueCents, p.currency, fxUsdCad),
+      currency: p.currency,
       unrealizedPnlCents: marketValueCents - p.qty * p.avgCostCents,
       dayChangeBps: q?.dayChangeBps ?? 0,
       openedAt: p.openedAt,
     };
   });
 
-  const cashCents = account?.cashCents ?? 0;
-  const positionsCents = views.reduce((s, p) => s + p.marketValueCents, 0);
+  const cadCashCents = account?.cashCents ?? 0;
+  const usdCashCents = account?.usdCashCents ?? 0;
+  const cashCents = cadCashCents + toCadCents(usdCashCents, "USD", fxUsdCad); // total, in CAD
+  const positionsCents = views.reduce((s, p) => s + p.marketValueCadCents, 0); // CAD
   const navCents = cashCents + positionsCents;
   const contributionsCents = contributions._sum.amountCents ?? 0;
   const benchmarkCents = await benchmarkValueCents().catch(() => null);
 
   return {
     cashCents,
+    cadCashCents,
+    usdCashCents,
+    fxUsdCad,
     positions: views,
     positionsCents,
     navCents,

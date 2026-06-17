@@ -35,7 +35,7 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, history, recentJournal, latestPlan, midday, macro] = await Promise.all([
+  const [session, pf, history, recentJournal, latestPlan, midday, latestEod, macro] = await Promise.all([
     getSession(),
     getPortfolio(),
     getNavHistory(60),
@@ -48,9 +48,20 @@ export default async function Portfolio() {
       where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } },
       orderBy: { at: "desc" },
     }),
+    prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
     getMacro().catch(() => null),
   ]);
   const name = session?.user?.name ?? "friend";
+
+  // One evolving "latest briefing" slot: the agent's most recent read replaces
+  // the last — morning game plan → midday brief → EOD close → next morning. Show
+  // only the single newest so a stale prior-day brief never lingers (Cam 2026-06-17).
+  const briefs = [
+    latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson },
+    midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson },
+    latestEod && { kicker: "Evening Brief · the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null },
+  ].filter((b): b is NonNullable<typeof b> => Boolean(b));
+  const latestBrief = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
   const feeFrac = pf.feeBudgetCentsMonth > 0 ? pf.feeSpentMonthCents / pf.feeBudgetCentsMonth : 0;
 
@@ -63,14 +74,6 @@ export default async function Portfolio() {
           </h1>
           <p className="mt-1 text-sm text-teal-200/50">
             Live-fire sim on real delayed quotes
-            {latestPlan && (
-              <>
-                {" · "}
-                <Link href="/" className="text-teal-300 hover:underline">
-                  {latestPlan.title} →
-                </Link>
-              </>
-            )}
           </p>
         </div>
         <Chip tone={pf.killSwitch ? "red" : "teal"}>
@@ -127,24 +130,24 @@ export default async function Portfolio() {
         <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
           <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
           <span className="text-teal-100/70">{macroLine(macro)}</span>
-          <span className="ml-auto text-teal-200/30">Bank of Canada · as of {macro.asOf}</span>
+          <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
         </div>
       )}
 
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-        {/* Main column: midday review, NAV, positions, latest journal */}
+        {/* Main column: latest briefing, NAV, positions, latest journal */}
         <div className="space-y-6 lg:col-span-2">
-          {midday && (
+          {latestBrief && (
             <Card className="p-5">
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
-                  Midday Review · the afternoon read
+                  {latestBrief.kicker}
                 </span>
-                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(midday.at)}</span>
+                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
               </div>
-              <div className="mb-2 text-base font-semibold text-teal-50">{midday.title}</div>
-              <CollapsibleMd text={midday.body} threshold={600}>
-                <Sources sourcesJson={midday.sourcesJson} />
+              <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
+              <CollapsibleMd text={latestBrief.body} threshold={600}>
+                <Sources sourcesJson={latestBrief.sourcesJson} />
               </CollapsibleMd>
             </Card>
           )}
@@ -197,12 +200,15 @@ export default async function Portfolio() {
                       <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
                       <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
                       <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(p.marketValueCents)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                        {money(p.marketValueCents)}
+                        {p.currency !== "CAD" ? <span className="ml-1 text-[10px] text-teal-200/40">{p.currency}</span> : null}
+                      </td>
                       <td className="px-5 py-2.5 text-right">
                         <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
                       </td>
                       <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                        {pf.navCents > 0 ? pct(p.marketValueCents / pf.navCents) : "—"}
+                        {pf.navCents > 0 ? pct(p.marketValueCadCents / pf.navCents) : "—"}
                       </td>
                     </tr>
                   ))}

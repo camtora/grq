@@ -1,5 +1,6 @@
 import { prisma } from "../lib/db";
 import { ibkrFixedCommissionCents } from "../lib/broker/sim";
+import { toCadCents } from "../lib/fx";
 import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry } from "../lib/universe";
@@ -165,8 +166,12 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   // -- sizing, floors, fee edge (BUYs) --
   const quote = await getQuote(symbol);
   if (!quote) return refuse(`No quote for ${symbol}.`);
-  const estPrice = order.side === "BUY" ? quote.askCents : quote.bidCents;
+  const estPrice = order.side === "BUY" ? quote.askCents : quote.bidCents; // native currency
   const pf = await getPortfolio();
+  // This name's currency → value the order in CAD for the §6 sizing/floor checks,
+  // which are all CAD-denominated (D34 multi-currency). CAD names are unchanged.
+  const posCcy = pf.positions.find((p) => p.symbol === symbol)?.currency ?? (await universeEntry(symbol))?.currency ?? "CAD";
+  const cad = (cents: number) => toCadCents(cents, posCcy, pf.fxUsdCad);
 
   if (order.side === "BUY") {
     const existing = pf.positions.find((p) => p.symbol === symbol);
@@ -174,12 +179,12 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
       return refuse(`Max position count reached (${HARD.maxPositions}).`);
     }
     const commIn = ibkrFixedCommissionCents(order.qty, estPrice);
-    const cost = order.qty * estPrice + commIn;
-    const newPosValue = (existing?.marketValueCents ?? 0) + order.qty * estPrice;
-    if (newPosValue > (pf.navCents * dial.maxPositionPct) / 100) {
+    const costCad = cad(order.qty * estPrice + commIn);
+    const newPosValueCad = (existing?.marketValueCadCents ?? 0) + cad(order.qty * estPrice);
+    if (newPosValueCad > (pf.navCents * dial.maxPositionPct) / 100) {
       return refuse(`Position would exceed ${dial.maxPositionPct}% of NAV (${settings?.riskLevel} dial).`);
     }
-    const cashAfter = pf.cashCents - cost;
+    const cashAfter = pf.cashCents - costCad;
     if (cashAfter < (pf.navCents * dial.cashFloorPct) / 100) {
       return refuse(`Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial).`);
     }

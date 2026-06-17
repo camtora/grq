@@ -15,9 +15,11 @@ per-member themes, stocks one-pagers, signals v1, source scoreboard, member dire
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
 chat. Decision sessions run on **Opus 4.8** (`claude-opus-4-8`), triage on Haiku 4.5 — Fable 5
 access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer
-live on FMP Ultimate + free BoC feeds (D21):** earnings/news/grades/13F + structured macro,
+live on FMP Ultimate + free BoC & FRED feeds (D21):** earnings/news/grades/13F + structured macro
+(**CA via BoC + US via FRED** — Fed funds/10y/US-CPI; `FRED_API_KEY`),
 on the stock pages (honest 10-tier coverage map) AND fed into the agent's decision context;
-tier-4 insider via the agent's per-dossier web research (paid INK feed deferred). **Real-time
+**tier-4 insider is structured for US + cross-listed CA** (FMP Form 4 + nightly OpenInsider) —
+pure-TSX stays agent web-research (free CA sources are Cloudflare/session-walled; paid INK deferred). **Real-time
 on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
 market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
 vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v5 (D26):** the four market

@@ -117,7 +117,7 @@ ${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => 
 ## Smart money on your names (disclosed positions/trades — an INPUT you weigh, NEVER the gate; 13F lags ~45 days, congress amounts are ranges)
 ${smartLines.length === 0 ? "  (none disclosed on holdings or focus)" : smartLines.join("\n")}
 
-## Macro (Bank of Canada — live structured feed; rate-sensitive names move on this)
+## Macro (Bank of Canada + US Fed/Treasury via FRED — live structured feeds; rate-sensitive names move on this)
 ${macro ? `  ${macroLine(macro)} (as of ${macro.asOf})` : "  (unavailable)"}
 
 ## Policy — ${dialName} dial (you cannot change any of this)

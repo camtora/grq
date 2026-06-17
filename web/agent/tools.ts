@@ -244,7 +244,7 @@ const addCandidateTool = tool(
 
 const promoteToUniverseTool = tool(
   "promote_to_universe",
-  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD-tradeable; not member-blocked; and within the weekly self-promotion cap. The human watchlist→universe path is separate and unchanged. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
+  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. The human watchlist→universe path is separate and unchanged. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
   {
     symbol: z.string(),
     tier: z.enum(["large", "mid"]).optional(),

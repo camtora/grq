@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { getQuote, getQuotes, isHardStale } from "./quotes";
 import { activeSymbols, BENCHMARK } from "../universe";
+import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
@@ -49,13 +50,14 @@ export async function writeNavSnapshot(
     prisma.account.findUnique({ where: { id: 1 } }),
     prisma.position.findMany(),
   ]);
+  const fx = await usdCadRate();
   const quotes = await getQuotes(positions.map((p) => p.symbol));
-  let positionsCents = 0;
+  let positionsCents = 0; // valued in CAD (USD positions × fx)
   for (const p of positions) {
     const q = quotes.get(p.symbol);
-    positionsCents += p.qty * (q?.midCents ?? p.avgCostCents);
+    positionsCents += toCadCents(p.qty * (q?.midCents ?? p.avgCostCents), p.currency, fx);
   }
-  const cashCents = account?.cashCents ?? 0;
+  const cashCents = (account?.cashCents ?? 0) + toCadCents(account?.usdCashCents ?? 0, "USD", fx); // total CAD
   const navCents = cashCents + positionsCents;
   const benchmarkCents = await benchmarkValueCents().catch(() => null);
   await prisma.navSnapshot.create({

@@ -50,7 +50,10 @@ enum ReportKind {
 
 model Account {
   id        Int      @id @default(1)
-  cashCents Int      @default(0)
+  // CAD cash. USD cash is held separately (multi-currency — IBKR holds both, D33);
+  // NAV converts USD→CAD at the BoC rate. Other currencies would warrant a table.
+  cashCents    Int @default(0)
+  usdCashCents Int @default(0)
   updatedAt DateTime @updatedAt
 }
 
@@ -126,6 +129,9 @@ model Position {
   symbol       String   @id
   qty          Int
   avgCostCents Int
+  // Native currency of avgCostCents + this name's quotes ("CAD" | "USD"). NAV/sizing
+  // convert USD→CAD at the BoC rate (D33). Defaults CAD so existing rows are unchanged.
+  currency     String   @default("CAD")
   openedAt     DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
