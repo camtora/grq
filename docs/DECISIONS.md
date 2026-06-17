@@ -495,16 +495,17 @@ panel, on both pages.
 `components/{StockTable,StockFilters,ExpandableRow,RowExtras}.tsx`, `agent/runner.ts` (movers-alert
 suppression). No schema change.
 
-### D30 — Every hunt find gets a full dossier + full stock page; Discover renamed "The Hunt" (Cam, 2026-06-17)
-The discovery hunt used to write only a lightweight "Hunt dossier" lead per name; clicking through landed on a
-thin agent-flagged page. Now **each name the hunt surfaces is auto-promoted to a tracked CANDIDATE** after the
-session (`lib/hunt.ts` `promoteHuntFindToCandidate`, called from `runDiscoveryHunt`): it probes US → `.TO` → `.V`
-for a live listing, creates the `UniverseMember` (CANDIDATE, `addedBy:"hunt"`), warms quotes + 1y bars, and
-queues a **full** dossier (`ResearchRequest requestedBy:"hunt"` → `runStockDossier`). Result: a hunt find gets a
-**complete stock page** (quotes/signals/coverage + the full Dossier with bull/bear/verdict/targets/stance) and
-also lands on the **Watchlist** as a candidate; the lightweight lead still feeds the Hunt-page cards.
-**Guardrails unchanged:** the agent still cannot add to the *tradeable* universe — CANDIDATE→ACTIVE is still the
-two-member rule + screen; this only makes "researched" automatic. Respects dismissals (won't revive a RETIRED
-name) and the `CANDIDATE_CAP`. **Also:** the **Discover** destination is renamed **The Hunt** (nav, page,
-back-links). **Files:** `lib/hunt.ts` (new), `agent/sessions.ts`, `components/NavBar.tsx`, `app/market/page.tsx`,
-`app/market/watchlist/page.tsx`, `app/stocks/[symbol]/page.tsx`. Agent-only — inert until the agent image is rebuilt.
+### D30 — Hunt finds get a full dossier queued (researched, NOT added to the Watchlist); Discover renamed "The Hunt" (Cam, 2026-06-17)
+The discovery hunt writes a lightweight "Hunt dossier" lead per name. Now, after the session, **each surfaced
+name also gets a FULL dossier queued** (`lib/hunt.ts` `queueHuntDossier` → `ResearchRequest requestedBy:"hunt"` →
+`runStockDossier` writes "Dossier — TICKER"), so the stock page is **researched and ready when a member clicks
+it** instead of the thin agent-flagged page. **Deliberately NOT added to the universe/Watchlist** (Cam: don't
+want every find cluttering the Watchlist) — the not-tracked stock page just shows the full dossier; **watching a
+find** is what tracks it (adds the CANDIDATE, with live quotes/signals from then on). The full dossier is
+web-research-driven, so it's useful for a bare TSX/TSXV ticker we don't yet track (no live quote/signals until
+watched). `queueHuntDossier` skips names already tracked, already researched, or with a dossier in flight; the
+runner suppresses the "Dossier ready" Discord ping for `requestedBy:"hunt"`. **Guardrails unchanged:** the agent
+adds nothing to the universe and trades nothing. **Also:** the **Discover** destination is renamed **The Hunt**
+(nav, page, back-links). **Files:** `lib/hunt.ts` (new), `agent/{sessions,runner}.ts`, `components/NavBar.tsx`,
+`app/market/page.tsx`, `app/market/watchlist/page.tsx`, `app/stocks/[symbol]/page.tsx`. Agent-only — inert until
+the agent image is rebuilt.

@@ -3,7 +3,7 @@ import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse } from "../lib/universe";
-import { promoteHuntFindToCandidate } from "../lib/hunt";
+import { queueHuntDossier } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -120,26 +120,27 @@ Lead with WHY it matters, not just what the company is. Be honest: smaller names
   const startedAt = new Date();
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
 
-  // D (Cam 2026-06-17): every name the hunt surfaces gets the FULL dossier pipeline —
-  // a tracked CANDIDATE → resolved quotes/bars + a queued full Dossier → a complete
-  // stock page, not just the lightweight hunt lead. The agent still can't trade them.
+  // D (Cam 2026-06-17): every name the hunt surfaces gets a FULL dossier queued so the
+  // stock page is researched and ready when a member clicks it — but it is NOT added to
+  // the universe/Watchlist (members don't want every find there). Watching a find is what
+  // tracks it. The agent still can't trade anything.
   const finds = await prisma.journalEntry.findMany({
     where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, at: { gte: startedAt }, symbol: { not: null } },
     select: { symbol: true },
   });
   const seen = new Set<string>();
-  let promoted = 0;
+  let queued = 0;
   for (const f of finds) {
     const s = f.symbol as string;
     if (seen.has(s)) continue;
     seen.add(s);
     try {
-      if ((await promoteHuntFindToCandidate(s)) === "added") promoted++;
+      if ((await queueHuntDossier(s)) === "queued") queued++;
     } catch (e) {
-      console.error(`[hunt] promote ${s} failed:`, e instanceof Error ? e.message : e);
+      console.error(`[hunt] queue dossier ${s} failed:`, e instanceof Error ? e.message : e);
     }
   }
-  if (promoted > 0) console.log(`[hunt] promoted ${promoted} find(s) to CANDIDATE — full dossiers queued`);
+  if (queued > 0) console.log(`[hunt] queued ${queued} full dossier(s) for hunt finds`);
 }
 
 /** Smart-money read (D27) — the EDITORIAL narrative on top of the structured

@@ -28,9 +28,10 @@ dossier's plain-English *why* (`bottomLine`) + targets, **+ lazily-loaded earnin
 a client wrapper so `StockTable` stays server). Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
 list tables — `UniverseActions hideResearch`). **The Hunt** (was Discover; D30) = the hunt (8–12 names · **↻ refresh** via
 `AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED); hunt cards are **leads, not verdicts**
-(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Every hunt find is now
-auto-promoted to a CANDIDATE** (`lib/hunt.ts`, `requestedBy:"hunt"`) so it gets a **full dossier + full stock
-page**, not just the lead — the agent still can't trade it (D30). **Browse** has an inline
+(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Every hunt find gets a full
+dossier queued** (`lib/hunt.ts` `queueHuntDossier`, `requestedBy:"hunt"`) so the stock page is researched and
+ready when you click it — but it is **NOT added to the Watchlist** (watching a find is what tracks it); D30.
+**Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
 **Smart Money (D28)** is a fifth top-level destination (`/market/smart-money`): **tracked-portfolio cards**
 (curated 13F filers by CIK — Buffett/Burry/Ackman/Wood/**Aschenbrenner**, + Pelosi by name; expand into
