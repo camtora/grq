@@ -601,12 +601,20 @@ chart) and the Today page's day-open baseline (`app/page.tsx` `dayOpenSnap`) now
 PAPER_INCEPTION`. The latter also fixed a phantom **+$20k "today" gain** (the Today baseline had been the
 last *sim* 5k snapshot → `25k − 5k`). Drawdown HWM unaffected (today's 25k was already the max).
 
-**Follow-up — guardrail + baseline hardening (Cam, 2026-06-17, day 1).** Two refinements to the live
-system: (1) **the drawdown kill switch is now two-tick-confirmed** (`runner.ts` `checkDrawdown`) — the
+**Follow-up — reconcile-wipe fix + guardrail/baseline hardening (Cam, 2026-06-17, day 1).** Root cause of a
+false daily-loss pause on day 1: a restart/re-auth left the `iserver` session momentarily down, a
+`reconcile()` positions read came back empty, reconcile treated "empty" as "account flat" → **deleted the
+position mirror** → NAV read cash-only (−12.5% vs the $25k baseline) → daily-loss pause fired. The next
+reconcile (~60s later) restored it. Three fixes: (1) **`reconcile()` no longer wipes on an untrustworthy
+read** (`ibkr.ts`, shipped in D34's commit `e87e4da`): `getPositions()` returns **`null`** on a failed or
+non-array ("still loading") read, reconcile **bails when the `iserver` session isn't authenticated/connected**,
+and it **never deletes positions on a `null` read** — only a successful array syncs (a genuine empty array =
+a real flat account still clears; cash was already null-guarded). Verified live: a stubbed null read AND a
+session-down reconcile both leave the mirror intact. (2) **the drawdown kill switch is now two-tick-confirmed** (`runner.ts` `checkDrawdown`) — the
 threshold (`HARD.drawdownKillBps`) must breach for **two consecutive ticks** before the severe, sticky kill
 switch engages (a "confirming" warning fires on the first breach). A single transient NAV misread — e.g. a
 `reconcile()` blip that briefly drops a position — no longer halts the fund; a real drawdown persists and
-still trips it. The counter resets on restart (errs toward not-halting). (2) The **daily-loss-pause baseline**
+still trips it. The counter resets on restart (errs toward not-halting). (3) The **daily-loss-pause baseline**
 (`validator.ts` `dayPnlBps`) now anchors its day-open snapshot to `PAPER_INCEPTION` (never a pre-inception
 sim 5k snapshot), matching the NAV-chart/Today windowing from the inception fix above. Guardrail changes are
 humans-only by rule — both are Cam's.
