@@ -13,6 +13,8 @@ import { capTier } from "@/lib/fundamentals";
 import UniverseActions from "@/components/UniverseActions";
 import ExpandableRow from "@/components/ExpandableRow";
 import RowExtras from "@/components/RowExtras";
+import Avatar from "@/components/Avatar";
+import { personByName } from "@/lib/people";
 
 // One table for both the Universe (the tradeable set) and the Watchlist (candidates)
 // — same look, different column list + manage buttons (Cam 2026-06-16). Columns are
@@ -31,6 +33,7 @@ export type StockRow = {
   exchange: string | null;
   sector: string | null;
   marketCapM: number | null;
+  addedBy?: string | null; // who watched it (watchlist only; null on legacy/agent rows)
   lastCents: number | null;
   dayBps: number | null;
   signals: Signals | null;
@@ -56,6 +59,7 @@ export type StockRow = {
 
 export type StockColumn =
   | "tier"
+  | "watcher"
   | "last"
   | "day"
   | "signals"
@@ -79,6 +83,7 @@ function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendatio
 
 const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   tier: { label: "Tier", align: false },
+  watcher: { label: "Watched by", align: false },
   last: { label: "Last", align: true },
   day: { label: "Day", align: true },
   signals: { label: "Signals", align: false },
@@ -113,6 +118,17 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
           <Chip tone="dim">{r.tier ?? "—"}</Chip>
         </td>
       );
+    case "watcher": {
+      const p = personByName(r.addedBy);
+      if (!p && !r.addedBy) return <td className="px-4 py-2.5 text-center text-teal-200/25">—</td>;
+      return (
+        <td className="px-4 py-2.5">
+          <div className="flex justify-center">
+            <Avatar src={p?.photo ?? null} name={p?.name ?? r.addedBy ?? "?"} />
+          </div>
+        </td>
+      );
+    }
     case "last":
       return <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">{r.lastCents !== null ? money(r.lastCents, r.currency) : "—"}</td>;
     case "day":
@@ -269,7 +285,7 @@ export default function StockTable({
             <th className="px-4 py-3">Symbol</th>
             <th className="px-4 py-3">Name</th>
             {columns.map((c) => (
-              <th key={c} className={`px-4 py-3 ${HEADERS[c].align ? "text-right" : ""}`}>
+              <th key={c} className={`px-4 py-3 ${c === "watcher" ? "text-center" : HEADERS[c].align ? "text-right" : ""}`}>
                 {HEADERS[c].label}
               </th>
             ))}

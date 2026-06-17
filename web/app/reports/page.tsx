@@ -5,6 +5,9 @@ import { fmtWhen } from "@/lib/money";
 import { etDateStr } from "@/agent/calendar";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
+import Md from "@/components/Md";
+import PeopleBadges from "@/components/PeopleBadges";
+import { PEOPLE } from "@/lib/people";
 
 // Reports is a hub over every kind of report the fund files: the Daily (morning
 // game plan beside the EOD close), the Sunday Weekly review, Smart-money
@@ -15,6 +18,7 @@ const TABS = [
   { key: "smart", label: "Smart Money" },
   { key: "retros", label: "Retros" },
   { key: "lessons", label: "Lessons" },
+  { key: "conviction", label: "Conviction" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -81,12 +85,13 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === sp.tab) ? (sp.tab as TabKey) : "daily";
 
-  const [eodCount, weeklyCount, smartCount, retroCount, lessonCount] = await Promise.all([
+  const [eodCount, weeklyCount, smartCount, retroCount, lessonCount, convictionCount] = await Promise.all([
     prisma.report.count({ where: { kind: "EOD" } }),
     prisma.report.count({ where: { kind: "WEEKLY" } }),
     prisma.journalEntry.count({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } } }),
     prisma.journalEntry.count({ where: { kind: "RETRO" } }),
     prisma.journalEntry.count({ where: { kind: "LESSON" } }),
+    prisma.tradeProposal.count({ where: { side: "BUY" } }),
   ]);
   const countByTab: Record<TabKey, number> = {
     daily: eodCount,
@@ -94,6 +99,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
     smart: smartCount,
     retros: retroCount,
     lessons: lessonCount,
+    conviction: convictionCount,
   };
 
   let content: React.ReactNode;
@@ -181,6 +187,99 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
           ))}
         </div>
       );
+  } else if (tab === "conviction") {
+    const proposals = await prisma.tradeProposal.findMany({ orderBy: { at: "desc" }, take: 120 });
+    const buys = proposals.filter((p) => p.side === "BUY");
+    const withBoth = buys.filter((p) => p.tradeConfidence != null && p.dossierConfidence != null);
+    const clearedGate = buys.filter((p) => (p.tradeConfidence ?? 0) >= 75).length;
+    const filled = buys.filter((p) => p.accepted).length;
+    const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length) : null);
+    const avgTrade = avg(withBoth.map((p) => p.tradeConfidence as number));
+    const avgDossier = avg(withBoth.map((p) => p.dossierConfidence as number));
+    const avgGap = avgTrade != null && avgDossier != null ? avgTrade - avgDossier : null;
+    const summary: [string, string][] = [
+      ["BUY proposals", String(buys.length)],
+      ["cleared 75% gate", `${clearedGate}/${buys.length}`],
+      ["actually traded", `${filled}/${buys.length}`],
+      ["avg per-trade conf", avgTrade != null ? `${avgTrade}%` : "—"],
+      ["avg dossier conf", avgDossier != null ? `${avgDossier}%` : "—"],
+      ["avg gap (trade − dossier)", avgGap != null ? `${avgGap > 0 ? "+" : ""}${avgGap} pts` : "—"],
+    ];
+    content =
+      proposals.length === 0 ? (
+        <EmptyState
+          title="No proposals logged yet"
+          body="Every BUY/SELL the agent proposes — including the ones the 75% conviction gate rejects — lands here, with its per-trade confidence beside the standing dossier confidence. The tally starts from the next proposal."
+        />
+      ) : (
+        <div className="space-y-4">
+          <Card className="p-5">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {summary.map(([k, v]) => (
+                <span key={k}>
+                  <span className="text-xs uppercase tracking-wider text-teal-200/40">{k}</span>{" "}
+                  <span className="font-semibold tabular-nums text-teal-50">{v}</span>
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-teal-200/40">
+              A persistently negative gap means the agent rates names highly in research but talks itself below the 75% bar at the
+              trigger — the pattern we&apos;re watching for. Price at proposal is kept too, so we can retro whether waiting paid off.
+            </p>
+          </Card>
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+                  <th className="px-4 py-3">When</th>
+                  <th className="px-4 py-3">Symbol</th>
+                  <th className="px-4 py-3">Side</th>
+                  <th className="px-4 py-3 text-right">Trade conf</th>
+                  <th className="px-4 py-3 text-right">Dossier</th>
+                  <th className="px-4 py-3 text-right">Gap</th>
+                  <th className="px-4 py-3">Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                {proposals.map((p) => {
+                  const gap =
+                    p.tradeConfidence != null && p.dossierConfidence != null ? p.tradeConfidence - p.dossierConfidence : null;
+                  const convictionBlocked = !p.accepted && (p.rejectReason ?? "").includes("Conviction gate");
+                  return (
+                    <tr key={p.id} className="border-t border-teal-400/10">
+                      <td className="px-4 py-2.5 text-xs text-teal-200/50">{fmtWhen(p.at)}</td>
+                      <td className="px-4 py-2.5 font-semibold text-teal-100">{p.symbol}</td>
+                      <td className="px-4 py-2.5">
+                        <Chip tone={p.side === "BUY" ? "green" : "dim"}>{p.side}</Chip>
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-teal-50">
+                        {p.tradeConfidence != null ? `${p.tradeConfidence}%` : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-teal-200/60">
+                        {p.dossierConfidence != null ? `${p.dossierConfidence}%${p.dossierStance ? ` · ${p.dossierStance}` : ""}` : "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-2.5 text-right tabular-nums ${gap == null ? "text-teal-200/30" : gap < 0 ? "text-red-400" : "text-emerald-400"}`}
+                      >
+                        {gap == null ? "—" : `${gap > 0 ? "+" : ""}${gap}`}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs">
+                        {p.accepted ? (
+                          <span className="text-emerald-400">{p.status}</span>
+                        ) : (
+                          <span className={convictionBlocked ? "text-amber-400" : "text-red-400/80"} title={p.rejectReason ?? ""}>
+                            {convictionBlocked ? "below 75% gate" : "rejected"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      );
   } else {
     const where: Prisma.JournalEntryWhereInput =
       tab === "smart"
@@ -212,6 +311,18 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       <PageHeader
         title="Reports"
         sub="Every report the fund files — the daily plan & close, the Sunday review, smart-money roundups, post-mortems, and lessons."
+        right={
+          <PeopleBadges
+            people={PEOPLE.map((p) => ({
+              key: p.key,
+              name: p.name,
+              fullName: p.fullName,
+              title: p.title,
+              photo: p.photo,
+              bio: <Md text={p.bio} />,
+            }))}
+          />
+        }
       />
 
       <div className="mb-6 flex flex-wrap gap-2">

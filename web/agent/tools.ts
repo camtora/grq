@@ -7,8 +7,28 @@ import { universeEntry, activeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
 import { computeSignals, overallSignal } from "./signals";
-import { AGENT_VERSION } from "./policy";
+import { AGENT_VERSION, MAX_PENDING_WAKEUPS } from "./policy";
+import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
+
+const OPEN_MIN = 9 * 60 + 30;
+const CLOSE_MIN = 16 * 60;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+// Resolve an ET clock time ("HH:MM", 24h) or "+N" minutes-from-now to a UTC Date
+// landing TODAY in ET. startOfEtDay gives midnight-ET as a UTC instant; add minutes.
+function resolveEtToday(at: string): { date: Date; minutes: number } | { error: string } {
+  const trimmed = at.trim();
+  let minutes: number;
+  if (/^\+\d{1,3}$/.test(trimmed)) {
+    minutes = etParts().minutesSinceMidnight + Number(trimmed.slice(1));
+  } else {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+    if (!m) return { error: `bad time "${at}" — use "HH:MM" (ET, 24h) or "+N" minutes from now.` };
+    minutes = Number(m[1]) * 60 + Number(m[2]);
+  }
+  return { date: new Date(startOfEtDay().getTime() + minutes * 60_000), minutes };
+}
 
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
@@ -224,6 +244,38 @@ const proposeOrderTool = tool(
         sources: args.sources,
       },
     );
+    // Conviction tally: log EVERY proposal — incl. conviction-gate rejections,
+    // which refuse() before the DECISION journal is written — with the per-trade
+    // confidence beside the standing dossier confidence. Best-effort: a logging
+    // failure must never block or alter a trade.
+    try {
+      const sym = args.symbol.toUpperCase();
+      const [dossier, q] = await Promise.all([
+        prisma.journalEntry.findFirst({
+          where: { kind: "RESEARCH", symbol: sym, confidence: { not: null } },
+          orderBy: { at: "desc" },
+        }),
+        getQuotes([sym]).then((m) => m.get(sym)).catch(() => null),
+      ]);
+      await prisma.tradeProposal.create({
+        data: {
+          symbol: sym,
+          side: args.side,
+          qty: args.qty,
+          tradeConfidence: args.confidence ?? null,
+          dossierConfidence: dossier?.confidence ?? null,
+          dossierStance: dossier?.stance ?? null,
+          accepted: verdict.ok,
+          status: verdict.ok ? verdict.status ?? null : "REJECTED",
+          rejectReason: verdict.ok ? null : verdict.rejectReason ?? null,
+          priceCents: q ? (args.side === "BUY" ? q.askCents : q.bidCents) : null,
+          targetCents: args.targetCents ?? null,
+        },
+      });
+    } catch {
+      /* tally is observability only — never let it interfere with the order path */
+    }
+
     if (!verdict.ok) return text(`REJECTED: ${verdict.rejectReason}`);
     if (verdict.status === "PENDING") return text(`PENDING: resting limit order #${verdict.orderId}.`);
     return text(
@@ -260,6 +312,41 @@ const promoteToUniverseTool = tool(
   },
 );
 
+const scheduleCheckinTool = tool(
+  "schedule_checkin",
+  'Schedule your own future trading check-in LATER TODAY — e.g. "wake me at 14:05 for the Fed dot plot, then I deploy the XIC core". `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now; it must be in the future, same-day, and within market hours (9:30–16:00 ET). At that time you get a decision-capable session pre-loaded with your standing plan. Use this in your morning plan and revise it at midday. Capped at a few pending at once; these draw on your ad-hoc decision budget when they fire.',
+  { at: z.string(), reason: z.string().min(5).max(300) },
+  async (args) => {
+    const r = resolveEtToday(args.at);
+    if ("error" in r) return text(`SKIP: ${r.error}`);
+    const nowMin = etParts().minutesSinceMidnight;
+    if (r.minutes <= nowMin) return text(`SKIP: ${pad2(Math.floor(r.minutes / 60))}:${pad2(r.minutes % 60)} ET is not in the future (it's ${pad2(Math.floor(nowMin / 60))}:${pad2(nowMin % 60)} ET now). Same-day only for now.`);
+    if (r.minutes < OPEN_MIN || r.minutes >= CLOSE_MIN) return text(`SKIP: ${pad2(Math.floor(r.minutes / 60))}:${pad2(r.minutes % 60)} ET is outside market hours (9:30–16:00).`);
+    const pending = await prisma.agentWakeup.count({ where: { status: "PENDING" } });
+    if (pending >= MAX_PENDING_WAKEUPS) return text(`SKIP: already ${pending} check-ins pending (cap ${MAX_PENDING_WAKEUPS}). Cancel one first (list_scheduled / cancel_checkin).`);
+    const w = await prisma.agentWakeup.create({ data: { dueAt: r.date, reason: args.reason, createdBy: "session" } });
+    return text(`SCHEDULED #${w.id}: check-in at ${pad2(Math.floor(r.minutes / 60))}:${pad2(r.minutes % 60)} ET — ${args.reason}`);
+  },
+);
+
+const listScheduledTool = tool("list_scheduled", "Your PENDING self-scheduled check-ins for today (id, time, reason).", {}, async () => {
+  const ws = await prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } });
+  if (ws.length === 0) return text("(no pending check-ins)");
+  return text(ws.map((w) => { const p = etParts(w.dueAt); return `#${w.id} at ${pad2(p.hour)}:${pad2(p.minute)} ET — ${w.reason}`; }).join("\n"));
+});
+
+const cancelCheckinTool = tool(
+  "cancel_checkin",
+  "Cancel a PENDING self-scheduled check-in by id (from list_scheduled). Fixed daily check-ins (10:00/12:30/15:00) are not yours to cancel.",
+  { id: z.number().int() },
+  async (args) => {
+    const w = await prisma.agentWakeup.findUnique({ where: { id: args.id } });
+    if (!w || w.status !== "PENDING") return text(`SKIP: #${args.id} is not a pending check-in.`);
+    await prisma.agentWakeup.update({ where: { id: args.id }, data: { status: "CANCELLED" } });
+    return text(`CANCELLED #${args.id}.`);
+  },
+);
+
 export const grqServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
@@ -275,6 +362,9 @@ export const grqServer = createSdkMcpServer({
     addCandidateTool,
     promoteToUniverseTool,
     proposeOrderTool,
+    scheduleCheckinTool,
+    listScheduledTool,
+    cancelCheckinTool,
   ],
 });
 
@@ -290,6 +380,9 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__add_candidate",
   "mcp__grq__promote_to_universe",
   "mcp__grq__propose_order",
+  "mcp__grq__schedule_checkin",
+  "mcp__grq__list_scheduled",
+  "mcp__grq__cancel_checkin",
 ];
 
 // Read-only variant for the chat (2.5c): no propose_order, no writes —

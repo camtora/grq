@@ -35,7 +35,7 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, history, recentJournal, latestPlan, midday, latestEod, macro] = await Promise.all([
+  const [session, pf, history, recentJournal, latestPlan, midday, checkin, latestEod, macro] = await Promise.all([
     getSession(),
     getPortfolio(),
     getNavHistory(60),
@@ -46,6 +46,12 @@ export default async function Portfolio() {
     }),
     prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } },
+      orderBy: { at: "desc" },
+    }),
+    // Intraday trading check-ins (10:00/12:30/15:00 + self-scheduled) write a
+    // "Check-in — …" RESEARCH note; match loosely so any check-in phrasing counts.
+    prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" } },
       orderBy: { at: "desc" },
     }),
     prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
@@ -59,6 +65,7 @@ export default async function Portfolio() {
   const briefs = [
     latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson },
     midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson },
+    checkin && { kicker: "Intraday Check-in · the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson },
     latestEod && { kicker: "Evening Brief · the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null },
   ].filter((b): b is NonNullable<typeof b> => Boolean(b));
   const latestBrief = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;

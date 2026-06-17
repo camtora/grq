@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
+import Avatar from "./Avatar";
 
 // The market destinations sit directly in the header — no sub-navigation
 // (Cam 2026-06-16). `exact` pins The Hunt to exactly /market so it doesn't light
@@ -25,12 +26,14 @@ const SECONDARY: NavLink[] = [
 
 export default function NavBar({
   name,
+  photo = null,
   killSwitch,
   broker,
   theme,
   isMember = true,
 }: {
   name: string;
+  photo?: string | null;
   killSwitch: boolean;
   broker: string;
   theme: "light" | "dark";
@@ -100,7 +103,7 @@ export default function NavBar({
             />
             {killSwitch ? "HALTED" : "OK"}
           </span>
-          <span className="text-teal-200/40">{name}</span>
+          <Avatar src={photo} name={name} size="h-7 w-7" />
           <ThemeToggle current={theme} />
         </div>
       </div>

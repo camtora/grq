@@ -16,7 +16,7 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro] =
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, wakeups] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -28,7 +28,9 @@ export async function buildContext(): Promise<string> {
       superficialLossWindows().catch(() => []),
       getScoreboard().catch(() => []),
       getMacro().catch(() => null),
+      prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } }),
     ]);
+  const pad2 = (n: number) => String(n).padStart(2, "0");
   const dialName = settings?.riskLevel ?? "BALANCED";
   const dial = DIALS[dialName];
   const p = etParts();
@@ -110,6 +112,14 @@ ${
 
 ## Your focus (ACTIVE names you're monitoring for an entry — update via set_focus)
 ${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}
+
+## Your scheduled check-ins today (you set these; revise via schedule_checkin / cancel_checkin)
+${
+  wakeups.length === 0
+    ? "  (none — schedule_checkin to be woken later today for an event or price level)"
+    : wakeups.map((w) => `  ${pad2(etParts(w.dueAt).hour)}:${pad2(etParts(w.dueAt).minute)} ET — ${w.reason}`).join("\n")
+}
+Fixed daily trading check-ins run at 10:00, 12:30, and 15:00 ET (you don't schedule those).
 
 ## Upcoming earnings (next 3 weeks — a catalyst; size and time around it)
 ${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => `  ${e.symbol}: reports ${e.date} (in ${e.days}d)${e.eps != null ? `, EPS est ${e.eps}` : ""}`).join("\n")}

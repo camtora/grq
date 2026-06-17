@@ -643,3 +643,76 @@ fresh images stale-checked). **Known follow-ups (cosmetic / paper-soak-OK):** th
 hardcodes "CAD" (a USD sell shows USD P&L mislabeled); the commission *estimate* in the validator uses the
 CAD per-share model for US names (the real commission still comes from IBKR's fill); >2 currencies would
 warrant a `CashBalance` table instead of a `usdCashCents` column. FX source = BoC; benchmark stays XIC (CAD).
+
+### D35 — Intraday trading check-ins + agent self-scheduling (Cam, 2026-06-17)
+**Context:** the agent wrote a detailed conditional morning plan ("deploy XIC core after the 2pm dot plot",
+"buy ATD on a quiet down-day") but had **no way to act on it intraday**. The only trading-capable scheduled
+session was boot-only (`runStartupUniverseReview`); the time-scheduled sessions (9:00 morning brief, 10:00
+hunt, 12:30 midday brief, 16:15 EOD) are all research/report-only — the 12:30 brief is literally
+`withTools:false`. The one decision session that can `propose_order` (`runMiddayCheckIn`) is gated behind
+`evaluateTriggers`, which only fires on a **held position** moving ≥4% — dead while all-cash. Net: the plan's
+afternoon entries could never execute on their own. **Decision (Cam):**
+1. **Fixed intraday trading check-ins at 10:00 / 12:30 / 15:00 ET** (`CHECKIN_TIMES_ET`, `policy.ts`) — a new
+   decision-capable session `runScheduledCheckin` (`sessions.ts`) that re-reads the standing game plan +
+   focus + fresh quotes and acts on any live entry/exit condition (through the unchanged §6 gate), or stands
+   down with a one-line note. Wired in `maybeScheduledSessions` (`runner.ts`) in a 60-min window so a
+   same-slot research/brief runs first and the check-in falls through on a later tick (so 12:30 runs **after**
+   the midday brief, 10:00 **after** the hunt). Restart-safe via a SYSTEM journal marker. **EXEMPT from the
+   decision budget** (a short fixed list).
+2. **Agent self-scheduling** — `schedule_checkin(at, reason)` / `list_scheduled` / `cancel_checkin` tools
+   (`tools.ts`), backed by a new `AgentWakeup` model (`PENDING|FIRED|CANCELLED`). The morning plan can queue
+   its own wake-up ("wake me 14:05 for the Fed"); the 12:30 check-in can revise it. `fireDueWakeups`
+   (`runner.ts`) fires due PENDING wakeups during market hours, **drawing on the ad-hoc decision budget**,
+   expiring any missed by >30 min (no stale fossil firings). Same-day + market-hours (9:30–16:00 ET) only for
+   now; PENDING capped at `MAX_PENDING_WAKEUPS=6`. Pending wakeups surface in `buildContext` so each
+   stateless cold-start session sees what it queued.
+3. **Budget:** `maxDecisionSessionsPerDay` **4 → 6** — now the *ad-hoc* pool (held-position trigger
+   escalations + self-scheduled wakeups); the 3 fixed check-ins don't draw on it.
+**Guardrails unchanged & humans-only:** every order still clears the deterministic gate + kill switch +
+daily-loss pause + warmup + first/last-15-min; check-ins only *propose*. **Verified:** tsc clean, Prisma
+client regenerated. **Deploy:** `prisma db push` (additive: new `AgentWakeup` table + `WakeupStatus` enum) +
+rebuild the `agent` container. **Follow-up (deferred, its own phase):** a "watcher" that notices a *non-held*
+name starting to run (momentum/breakout/volume) and surfaces or auto-researches it — discussed, not built.
+
+### D36 — Member identity: photos, career bios, and bull/bear mascots (Cam, 2026-06-17)
+**Context:** the app referred to members only by first name ("Watched by Cam", a `name` string in the nav).
+Cam supplied headshots + CVs for himself and Graham and wanted the fund to feel like *theirs* — faces, not
+labels — plus an "about us." **Decision:** a single source of truth, **`lib/people.ts`** — each member's
+photo (`/public/people/{cam,graham}.png`, 800×800) + a **plain-markdown career bio** (kept as text on
+purpose — "AI-readable", reusable by the agent later) + `personByName()` to map a recorded name
+(`addedBy`/`displayName`) back to their photo/bio. A reusable **`components/Avatar.tsx`** (circular photo,
+initial-chip fallback) now renders identity everywhere:
+- **Watchlist** — the "Watched by {name}" text became a **"Watched by" column** of circular headshots
+  (`StockTable` `watcher` column); system/seed watchers show a dash (the `watchedBy()` sentinel filter).
+- **NavBar** + **chat bubbles** (`ChatClient`) show the signed-in / authoring member's headshot.
+- **Reports header** — a client **`PeopleBadges`** ("About us"): two avatars that open a career-summary
+  dialog (theme-aware, bio rendered server-side via `<Md>` and passed in as a node).
+- **Bull/bear mascots** — `RatingBar` gained `size="lg"` + `mascots` for the stock-page hero, flanking the
+  7-point track with the bull (buy end) and **new `bear-splash` asset** (sell end); `bull-splash` pre-existed.
+All photos sit behind the SSO middleware (not public). Web-only; no schema.
+
+### D37 — The agent's observability + learning loop: conviction tally, durable lessons, live brief (Cam, 2026-06-17)
+**Context:** on Fed day the 3pm check-in proposed FTS/CP and the **75% conviction gate** rejected both — its
+*per-trade* thesis confidence (60–62%) sat well below its *standing dossier* confidence on the same names
+(76–78%). We wanted to know: systematic under-confidence at the trigger, or a one-day Fed thing? Two gaps
+surfaced: (1) conviction-gate rejections `refuse()` **before** the DECISION journal is written
+(`validator.ts:104`), so the most interesting proposals weren't recorded anywhere structured; (2) the
+check-in "banked a lesson" in prose but never wrote a real `LESSON`, so it wouldn't compound. **Decision —
+three parts, all humans-curated, none touching the §6 gate:**
+1. **Conviction tally** — new **`TradeProposal`** model + logging at the `propose_order` boundary
+   (`tools.ts`, best-effort/try-catch so it never blocks a trade) capturing **every** proposal incl.
+   conviction-gate rejections: per-trade confidence beside the latest **dossier** confidence/stance, the gate
+   verdict + reason, and the **price at proposal** (to retro later whether waiting paid off). Surfaced on a new
+   **Reports → Conviction** tab (table + summary: BUY count, % clearing the 75% gate, avg gap). Empty until
+   the next proposal — pre-existing rejections predate the logging.
+2. **Durable lesson banking** — the scheduled + triggered check-in prompts (`sessions.ts`) now also
+   `write_journal(kind:"LESSON")` **when** a genuinely durable, reusable pattern emerges (gated: "most
+   check-ins won't earn one"). A real LESSON shows on **Reports → Lessons** *and* is re-read before every
+   future decision (`context.ts` "Lessons learned" block) — so it compounds, unlike prose. (Prior LESSON
+   count: 0 — the system existed but only retros/weekly were prompted to use it.)
+3. **Live brief rollforward** — the **Portfolio** page's "latest briefing" slot now includes the intraday
+   **check-in** notes (titled `Check-in — …`), so the tab shows the agent's *current* read (morning plan →
+   check-ins → EOD), not just the morning Game plan.
+**Verified:** tsc clean; `TradeProposal` table pushed; web + agent rebuilt, fresh images stale-checked.
+**Watching:** if the per-trade-vs-dossier gap stays persistently negative, it's a calibration issue (the
+fund's real risk is under-deployment vs XIC, not bad picks) — the tally is how we'll tell.

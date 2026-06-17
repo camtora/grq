@@ -14,9 +14,19 @@ export const HARD = {
   warmupMs: 5 * 60_000, // no agent trading for 5 min after a restart
   noEntriesFirstMin: 15, // no new BUYs in the first 15 min of the session
   noEntriesLastMin: 15, // …or the last 15
-  maxDecisionSessionsPerDay: 4, // Fable escalations are budgeted
+  maxDecisionSessionsPerDay: 6, // AD-HOC decision budget: held-position trigger escalations + self-scheduled wakeups. The fixed CHECKIN_TIMES_ET check-ins are EXEMPT (bounded by being a short fixed list).
   triageCooldownMs: 30 * 60_000, // per-symbol trigger cooldown
 };
+
+// Fixed intraday trading check-ins (ET). Each is a decision-capable session that
+// acts on the standing game plan, fires once/day, and runs AFTER any same-slot
+// research/brief (those blocks return first; the check-in falls through on a later
+// tick). EXEMPT from maxDecisionSessionsPerDay (see above). Humans edit this.
+export const CHECKIN_TIMES_ET = ["10:00", "12:30", "15:00"] as const;
+
+// Agent self-scheduling: how many of its own future check-ins may be PENDING at
+// once (anti-runaway). Same-day, market-hours wakeups only for now.
+export const MAX_PENDING_WAKEUPS = 6;
 
 // Agent self-investing (D30): the agent may promote a CANDIDATE it has RESEARCHED
 // and has conviction on straight into the tradeable universe — bounded by these

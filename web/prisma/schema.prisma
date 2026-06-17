@@ -472,3 +472,51 @@ model AgentState {
   huntRequestedBy String?
   updatedAt     DateTime  @updatedAt
 }
+
+// Agent self-scheduling: a decision session can queue its own future trading
+// check-in for later TODAY (e.g. "wake me at 2:05pm for the Fed"). The runner's
+// tick fires due PENDING wakeups (market hours only, drawing on the ad-hoc
+// decision budget) and marks them FIRED. Same-day, market hours only for now.
+enum WakeupStatus {
+  PENDING
+  FIRED
+  CANCELLED
+}
+
+model AgentWakeup {
+  id        Int          @id @default(autoincrement())
+  dueAt     DateTime
+  reason    String
+  createdBy String // the session label that scheduled it
+  status    WakeupStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  firedAt   DateTime?
+
+  @@index([status, dueAt])
+}
+
+// Conviction tally (Cam, 2026-06-17): every agent BUY/SELL proposal, logged at
+// the propose_order boundary — including conviction-gate REJECTIONS, which
+// refuse() before the DECISION journal is ever written. Lets us track the
+// agent's per-trade thesis confidence against its standing dossier confidence
+// over time: is it systematically under-confident at the trigger, or was the
+// 2026-06-17 Fed-day caution a one-off? priceCents is the quote at proposal
+// time so we can later retro whether "waiting" actually helped.
+model TradeProposal {
+  id                Int      @id @default(autoincrement())
+  at                DateTime @default(now())
+  symbol            String
+  side              String // BUY | SELL
+  qty               Int
+  tradeConfidence   Int? // per-trade thesis confidence (the conviction-gate input)
+  dossierConfidence Int? // latest dossier confidence at proposal time
+  dossierStance     String? // latest dossier stance at proposal time
+  accepted          Boolean
+  status            String? // FILLED | PENDING | REJECTED
+  rejectReason      String? // which rail fired (esp. the conviction gate)
+  priceCents        Int? // ask (BUY) / bid (SELL) at proposal time, native ccy
+  targetCents       Int?
+
+  @@index([at])
+  @@index([symbol])
+}

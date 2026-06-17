@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import ChatDrawer from "@/components/ChatDrawer";
 import { getSession } from "@/lib/session";
 import { USERS } from "@/lib/users";
+import { personByName } from "@/lib/people";
 import { prisma } from "@/lib/db";
 
 // The named members (Cam, Graham) are the toggle-able chat threads.
@@ -38,6 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </div>
         <NavBar
           name={session?.user?.name ?? session?.email ?? "?"}
+          photo={personByName(session?.user?.name)?.photo ?? null}
           killSwitch={settings?.killSwitch ?? false}
           broker={(process.env.BROKER ?? "sim").toUpperCase()}
           theme={theme}

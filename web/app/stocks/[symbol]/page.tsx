@@ -280,14 +280,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 <Term k="agent-call">GRQ&apos;s call</Term>
               </div>
               {stance ? (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} />
-                  <span className="text-sm text-teal-200/60">{stance.blurb}</span>
+                <div>
+                  <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} size="lg" mascots />
+                  <p className="mt-2 text-sm text-teal-200/60">{stance.blurb}</p>
                 </div>
               ) : recMeta ? (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" />
-                  <span className="text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</span>
+                <div>
+                  <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" size="lg" mascots />
+                  <p className="mt-2 text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</p>
                 </div>
               ) : (
                 <div className="text-sm text-teal-200/50">

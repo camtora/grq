@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 360" fill="none">
+  <defs>
+    <linearGradient id="teal" x1="0" y1="0" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2BC9D0"/>
+      <stop offset="0.55" stop-color="#1BB3BB"/>
+      <stop offset="1" stop-color="#0C8B97"/>
+    </linearGradient>
+    <!-- knock a dilated copy of the chart-arrow out of the bear → thin transparent gaps,
+         the same ribbon-over-body treatment the bull uses -->
+    <mask id="cut">
+      <rect width="540" height="360" fill="white"/>
+      <g stroke="black" fill="black" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 518 100 L 424 152 L 390 134 L 352 168 L 310 134 L 270 168 L 230 134 L 142 242" stroke-width="34" fill="none"/>
+        <path d="M 86 304 L 172 272 L 100 214 Z" stroke-width="14"/>
+      </g>
+    </mask>
+  </defs>
+
+  <!-- WALKING GRIZZLY (facing right), masked so the chart reads as a separate ribbon -->
+  <g fill="url(#teal)" stroke="url(#teal)" mask="url(#cut)">
+    <path d="M 168 238 L 160 302" stroke-width="40" stroke-linecap="round" fill="none"/>
+    <path d="M 228 244 L 234 304" stroke-width="40" stroke-linecap="round" fill="none"/>
+    <path d="M 322 244 L 320 304" stroke-width="42" stroke-linecap="round" fill="none"/>
+    <path d="M 398 238 L 406 302" stroke-width="42" stroke-linecap="round" fill="none"/>
+    <ellipse cx="166" cy="302" rx="25" ry="11" stroke="none"/>
+    <ellipse cx="240" cy="304" rx="25" ry="11" stroke="none"/>
+    <ellipse cx="326" cy="304" rx="26" ry="11" stroke="none"/>
+    <ellipse cx="412" cy="302" rx="26" ry="11" stroke="none"/>
+    <ellipse cx="270" cy="204" rx="132" ry="56" stroke="none"/>
+    <ellipse cx="326" cy="170" rx="66" ry="42" stroke="none"/>
+    <circle cx="420" cy="198" r="46" stroke="none"/>
+    <path d="M 446 184 C 470 188, 492 198, 500 212 C 492 224, 470 230, 446 228 Z" stroke="none"/>
+    <circle cx="412" cy="156" r="18" stroke="none"/>
+  </g>
+
+  <!-- DECLINING JAGGED CHART → arrowhead down-left (mirror energy of the bull's rising arrow) -->
+  <g fill="url(#teal)" stroke="url(#teal)">
+    <path d="M 518 100 L 424 152 L 390 134 L 352 168 L 310 134 L 270 168 L 230 134 L 142 242"
+          stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M 86 304 L 172 272 L 100 214 Z" stroke="none"/>
+  </g>
+</svg>

@@ -11,11 +11,18 @@ import StockTable, { type StockColumn, type StockRow } from "@/components/StockT
 
 export const dynamic = "force-dynamic";
 
+// addedBy carries system sentinels for non-member adds (DB seed / migration
+// backfill) — only surface it when it's an actual person who watched the name.
+function watchedBy(addedBy: string | null): string | null {
+  if (!addedBy || addedBy === "migration" || addedBy.startsWith("seed")) return null;
+  return addedBy;
+}
+
 // The watchlist table carries the at-a-glance numbers inline (call, indicators,
 // target upside, manage actions); clicking a row expands it for GRQ's call blurb +
 // the dossier's plain-English "why" (Cam 2026-06-17). The full long-form dossier
 // (business / bull / bear / sources) still lives one click away on the stock page.
-const COLUMNS: StockColumn[] = ["last", "day", "signals", "call", "upside", "conf", "journal"];
+const COLUMNS: StockColumn[] = ["watcher", "last", "day", "signals", "call", "upside", "conf", "journal"];
 
 export default async function Watchlist() {
   const [session, universe, requests, directives] = await Promise.all([
@@ -77,6 +84,7 @@ export default async function Watchlist() {
         exchange: c.exchange,
         sector: c.sector,
         marketCapM: c.marketCapM,
+        addedBy: watchedBy(c.addedBy),
         lastCents: cur,
         dayBps: q?.dayChangeBps ?? null,
         signals: sig,

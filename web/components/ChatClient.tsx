@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Md from "./Md";
+import Avatar from "./Avatar";
+import { personByName } from "@/lib/people";
 
 type Msg = { id: number | string; email: string; role: string; content: string };
 
@@ -9,6 +11,12 @@ function authorName(email: string): string {
   if (email.startsWith("cameron")) return "Cam";
   if (email.startsWith("g.j.appleby")) return "Graham";
   return email === "agent" ? "GRQ" : email;
+}
+
+// A member's headshot for the chat bubble, or null (agent/unknown → initial chip).
+function authorPhoto(email: string): string | null {
+  if (email === "agent") return null;
+  return personByName(authorName(email))?.photo ?? null;
 }
 
 export default function ChatClient({
@@ -127,26 +135,35 @@ export default function ChatClient({
             It can read everything and trade nothing.
           </p>
         )}
-        {messages.map((m) => (
-          <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            <div
-              className={`max-w-[85%] rounded-2xl border p-4 ${
-                m.role === "user"
-                  ? "border-teal-400/25 bg-teal-400/10"
-                  : "border-teal-400/15 bg-teal-400/[0.04]"
-              }`}
-            >
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">
-                {m.email === "me" || (meEmail && m.email === meEmail) ? "You" : authorName(m.email)}
+        {messages.map((m) => {
+          const srcEmail = m.email === "me" ? meEmail ?? "" : m.email;
+          const isMe = m.email === "me" || (!!meEmail && m.email === meEmail);
+          const who = authorName(srcEmail);
+          return (
+            <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div
+                className={`max-w-[85%] rounded-2xl border p-4 ${
+                  m.role === "user"
+                    ? "border-teal-400/25 bg-teal-400/10"
+                    : "border-teal-400/15 bg-teal-400/[0.04]"
+                }`}
+              >
+                <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">
+                  <Avatar src={authorPhoto(srcEmail)} name={who} size="h-5 w-5" />
+                  {isMe ? "You" : who}
+                </div>
+                <Md text={m.content} />
               </div>
-              <Md text={m.content} />
             </div>
-          </div>
-        ))}
+          );
+        })}
         {pending !== null && (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl border border-teal-400/15 bg-teal-400/[0.04] p-4">
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">GRQ</div>
+              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">
+                <Avatar src={null} name="GRQ" size="h-5 w-5" />
+                GRQ
+              </div>
               {pending ? <Md text={pending} /> : <span className="text-sm text-teal-200/40">thinking…</span>}
               {status && <div className="mt-2 text-xs italic text-teal-300/60">{status}</div>}
             </div>

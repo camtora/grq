@@ -17,10 +17,10 @@ import { backfillFundamentals } from "../lib/fundamentals";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
 import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
-import { HARD, DIALS, AGENT_VERSION } from "./policy";
+import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -196,6 +196,38 @@ async function evaluateTriggers() {
   }
 }
 
+// Fire the agent's own self-scheduled check-ins (schedule_checkin). Market hours
+// only; a wakeup missed by >30 min (a crash/downtime gap, or yesterday's leftover)
+// is expired rather than fired stale. Self-scheduled wakeups DRAW on the ad-hoc
+// decision budget (shared with held-position trigger escalations).
+async function fireDueWakeups() {
+  if (sessionRunning || !isMarketOpen()) return;
+  const now = Date.now();
+  await prisma.agentWakeup.updateMany({
+    where: { status: "PENDING", dueAt: { lt: new Date(now - 30 * 60_000) } },
+    data: { status: "CANCELLED" },
+  });
+  const due = await prisma.agentWakeup.findFirst({
+    where: { status: "PENDING", dueAt: { lte: new Date(now) } },
+    orderBy: { dueAt: "asc" },
+  });
+  if (!due) return;
+  if (decisionSessionsToday >= HARD.maxDecisionSessionsPerDay) {
+    await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "CANCELLED" } });
+    await alert("warning", "Self-scheduled check-in skipped — budget spent", `"${due.reason}" came due, but today's ${HARD.maxDecisionSessionsPerDay} ad-hoc decision sessions are used up.`);
+    return;
+  }
+  await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "FIRED", firedAt: new Date() } });
+  decisionSessionsToday++;
+  sessionRunning = true;
+  try {
+    await runScheduledCheckin(`self-scheduled — ${due.reason}`);
+    await alert("info", "Self-scheduled check-in ran", due.reason);
+  } finally {
+    sessionRunning = false;
+  }
+}
+
 async function maybeScheduledSessions() {
   if (sessionRunning) return;
   const p = etParts();
@@ -312,6 +344,32 @@ async function maybeScheduledSessions() {
     }
   }
 
+  // Fixed intraday trading check-ins (10:00 / 12:30 / 15:00 ET) — decision-capable
+  // sessions that act on the standing game plan. Each fires once/day inside a 60-min
+  // window (wide enough that a same-slot research/brief, which returns earlier in this
+  // function, runs first and the check-in falls through on a later tick). Restart-safe
+  // via a SYSTEM marker. EXEMPT from the decision budget (a short fixed list).
+  if (isMarketOpen()) {
+    for (const hhmm of CHECKIN_TIMES_ET) {
+      const [hh, mm] = hhmm.split(":").map(Number);
+      const slot = hh * 60 + mm;
+      if (m < slot || m >= slot + 60) continue;
+      const marker = `Scheduled check-in ${hhmm}`;
+      const done = await prisma.journalEntry.count({ where: { kind: "SYSTEM", title: marker, at: { gte: dayStart } } });
+      if (done > 0) continue;
+      sessionRunning = true;
+      try {
+        await runScheduledCheckin(`scheduled ${hhmm} ET`);
+        await prisma.journalEntry.create({
+          data: { kind: "SYSTEM", title: marker, body: `Ran the ${hhmm} ET trading check-in.`, agentVersion: AGENT_VERSION },
+        });
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
   // 16:15+ EOD report on market days
   if (isMarketDay() && m >= 16 * 60 + 15) {
     const existing = await prisma.report.count({ where: { date: dayStart, kind: "EOD" } });
@@ -379,6 +437,7 @@ async function tick() {
       lastSnapshot = Date.now();
     }
     await evaluateTriggers();
+    await fireDueWakeups();
   }
 
   // Nightly bars maintenance: after close on market days, once per day.

@@ -247,9 +247,32 @@ export async function runMiddayCheckIn(reason: string): Promise<void> {
 
 The market is open. Review the trigger above against your morning game plan (get_journal kind=RESEARCH limit=1) and current quotes.
 - If action is warranted and within policy, use propose_order (full thesis + sources required). Rejections are final — if rejected, journal why and stand down.
-- If no action is right, write a short DECISION-grade RESEARCH note via write_journal explaining the pass — "no trade" is a decision and gets receipts too.
+- Either way, write a short DECISION-grade RESEARCH note via write_journal titled "Check-in — <one-line summary>" (it becomes the live brief on the Portfolio page) — what you did or why you passed; "no trade" is a decision and gets receipts too.
+- If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
+}
+
+/** Scheduled / self-scheduled trading check-in — a decision-capable session that
+ *  wakes on the fixed clock (CHECKIN_TIMES_ET) or a self-scheduled wakeup, reviews
+ *  the standing game plan against fresh quotes/focus, and ACTS on any entry or exit
+ *  condition that is now live (propose_order through the gate) — or stands down with
+ *  a one-line note. It may also re-arm its own watch via schedule_checkin. This is
+ *  how the morning plan's conditional afternoon trades actually execute. */
+export async function runScheduledCheckin(reason: string): Promise<void> {
+  const ctx = await buildContext();
+  const prompt = `${ctx}
+
+# TASK: Trading check-in — ${reason} (${etDateStr()})
+
+The market is open. This is a scheduled check-in to ACT on your standing plan — not a research project.
+1. Re-read today's plan (get_journal kind=RESEARCH limit=1 — the "Game plan"), your focus list (get_focus), and fresh quotes (get_quotes) for holdings + focus names.
+2. For each standing condition that is NOW met — an entry trigger that's live, a stop/trim level, a thesis that's broken — propose_order it with a full thesis + sources. Rejections are final: journal why and stand down. Do NOT force a trade when nothing is actionable.
+3. If you want to be woken again later today for a specific event or price level, schedule_checkin(at, reason) (same-day, market hours). Tidy up stale ones with list_scheduled / cancel_checkin.
+4. Write ONE short DECISION-grade RESEARCH note (write_journal) titled "Check-in — <a one-line summary of your read>" — what you did, or why you stood down. This note becomes the live brief on the Portfolio page, so lead with a clean at-a-glance read. "No trade" is a decision and gets receipts too.
+5. If — and ONLY if — this check-in surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off observation about today), ALSO record it as a separate LESSON: write_journal(kind:"LESSON") with a crisp title and the pattern + why it matters. Lessons are re-read before every future decision, so keep them rare and real — most check-ins won't earn one; don't manufacture one.
+Keep it tight.`;
+  await runSession({ label: `checkin:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 20 });
 }
 
 /** Deep single-stock dossier (2.7) — research tools only, never trades.
