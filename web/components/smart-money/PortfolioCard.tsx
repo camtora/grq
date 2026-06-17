@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Term from "@/components/Term";
 import SmartMoneyAvatar from "./SmartMoneyAvatar";
 import { fmtUsd, type SmPortfolio, type SmHolding, type WatchOverlap } from "@/lib/smart-money/types";
 
@@ -37,9 +38,11 @@ function HoldingRow({ h, overlap, maxPct }: { h: SmHolding; overlap?: WatchOverl
           <span className="font-semibold text-teal-100/90">{h.symbol}</span>
         )}
         {h.putCall && (
-          <Badge cls={h.putCall === "PUT" ? "border-red-400/30 bg-red-400/15 text-red-300" : "border-sky-400/30 bg-sky-400/15 text-sky-300"}>
-            {h.putCall}
-          </Badge>
+          <Term k={h.putCall === "PUT" ? "put-option" : "call-option"} className="!border-b-0">
+            <Badge cls={h.putCall === "PUT" ? "border-red-400/30 bg-red-400/15 text-red-300" : "border-sky-400/30 bg-sky-400/15 text-sky-300"}>
+              {h.putCall}
+            </Badge>
+          </Term>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -108,7 +111,7 @@ export default function PortfolioCard({ p, overlap }: { p: SmPortfolio; overlap:
           <p className="mb-2 text-xs italic text-teal-200/45">{p.blurb}</p>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-teal-200/40">
             <span>
-              Top {p.topHoldings.length} of {p.holdingsCount} — 13F as of {p.asOf}, ~45-day lag.
+              Top {p.topHoldings.length} of {p.holdingsCount} · <Term k="13f">13F</Term> as of {p.asOf}
             </span>
             {(p.securitiesAdded != null || p.securitiesRemoved != null) && (
               <span>
@@ -118,12 +121,6 @@ export default function PortfolioCard({ p, overlap }: { p: SmPortfolio; overlap:
               </span>
             )}
           </div>
-          {p.hasPuts && (
-            <p className="mb-1 text-[11px] text-red-300/70">
-              ⚠ <span className="font-semibold">PUT</span> lines are bearish bets against a name (and CALL lines are leveraged longs) — 13F shows the
-              option notional, not a short. Don&apos;t read a put as ownership.
-            </p>
-          )}
           <div>
             {p.topHoldings.map((h) => (
               <HoldingRow key={`${h.symbol}-${h.putCall ?? ""}`} h={h} overlap={overlap[h.symbol]} maxPct={maxPct} />

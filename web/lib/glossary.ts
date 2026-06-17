@@ -194,4 +194,32 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "RRSP — Registered Retirement Savings Plan",
     def: "A registered account: contributions reduce this year's taxable income and growth is tax-deferred — you pay tax as income when you withdraw in retirement.",
   },
+  "13f": {
+    term: "13F filing",
+    def: "A quarterly report big investment managers (over $100M) must file listing their U.S. stock holdings. It's a snapshot, filed up to ~45 days after quarter-end, and it shows only longs and options — never short positions.",
+  },
+  "form-4": {
+    term: "Form 4 — insider trade",
+    def: "The filing a company's executives, directors, and 10%+ owners must submit within two days of trading its stock. Open-market purchases are the meaningful 'insider buying' signal; option exercises and grants are noise.",
+  },
+  insider: {
+    term: "Insider",
+    def: "A company's own officers, directors, or 10%+ owners. Their trades are disclosed on Form 4 — when they buy on the open market with their own money, it's often read as confidence in the business.",
+  },
+  "put-option": {
+    term: "Put (option)",
+    def: "A bet that a stock falls — it gains value as the price drops. In a 13F a put shows up as a 'holding', but it's a bearish position, not ownership of the shares.",
+  },
+  "call-option": {
+    term: "Call (option)",
+    def: "A leveraged bet that a stock rises — it gains value as the price climbs. A call line in a 13F is a bullish add-on, not plain share ownership.",
+  },
+  "cluster-buying": {
+    term: "Cluster buying",
+    def: "Several different insiders at one company buying its stock around the same time — a stronger signal than any single purchase, since it's harder to dismiss as one person's hunch.",
+  },
+  "congress-trade": {
+    term: "Congressional disclosure",
+    def: "Members of Congress must disclose their stock trades — but only as dollar ranges (e.g. $1M–$5M) and up to ~45 days late. Colour on what well-connected people are doing, not a holdings list and not a timing signal.",
+  },
 };

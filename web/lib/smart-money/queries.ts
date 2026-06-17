@@ -4,7 +4,9 @@
 // figures are USD reference values, not fund cents.
 
 import { prisma } from "../db";
+import { bareTicker } from "../universe";
 import { ROSTER_FUNDS, ROSTER_CONGRESS, type RosterPerson } from "./portfolios";
+import { fmtUsd } from "./types";
 import type {
   SmHolding,
   SmPortfolio,
@@ -196,6 +198,139 @@ export async function getCongressMembers(days = 180, perMember = 10): Promise<Co
     });
   }
   return out;
+}
+
+// --- Per-symbol smart money (stock page panel + agent decision context) -------
+export type SymbolFundHolder = {
+  slug: string;
+  name: string;
+  firm: string;
+  avatar: string | null;
+  accent: string | null;
+  asOf: string;
+  pctOfPort: number;
+  shares: number;
+  action: string;
+  putCall: "PUT" | "CALL" | null;
+};
+export type SymbolPersonTrade = {
+  slug: string;
+  name: string;
+  role: string;
+  avatar: string | null;
+  accent: string | null;
+  trades: CongressTrade[];
+};
+export type SymbolSmartMoney = {
+  symbol: string;
+  fundHolders: SymbolFundHolder[]; // roster funds that hold/short it (latest 13F)
+  people: SymbolPersonTrade[]; // roster members of Congress who traded it
+  congressBuyers: number; // distinct members (any) who bought, 180d
+  congressSellers: number;
+  insiderBuyers: number; // distinct insiders who bought, 90d
+  insiderBuyValueUsd: number;
+  hasAny: boolean;
+};
+
+/** Everything smart-money we know about ONE symbol — the tracked roster's
+ *  positions/trades in it, plus aggregate congress/insider activity. Shared by
+ *  the stock-page panel and the agent's decision context. */
+export async function getSmartMoneyForSymbol(symbol: string): Promise<SymbolSmartMoney> {
+  const sym = bareTicker(symbol); // tables store bare US tickers (cross-listings included)
+  const ciks = ROSTER_FUNDS.map((f) => f.cik);
+
+  const [holdingRows, congressBuys, congressSells, insiderBuyRows] = await Promise.all([
+    prisma.portfolioHolding.findMany({
+      where: { symbol: sym, snapshot: { cik: { in: ciks } } },
+      include: { snapshot: { select: { cik: true, asOf: true } } },
+    }),
+    prisma.politicalTrade.findMany({ where: { symbol: sym, side: "BUY", txnDate: { gte: daysAgo(180) } }, select: { memberName: true } }),
+    prisma.politicalTrade.findMany({ where: { symbol: sym, side: "SELL", txnDate: { gte: daysAgo(180) } }, select: { memberName: true } }),
+    prisma.insiderTrade.findMany({ where: { symbol: sym, side: "BUY", txnDate: { gte: daysAgo(90) } }, select: { insiderName: true, valueUsd: true } }),
+  ]);
+
+  // Keep only each fund's LATEST snapshot, then map to roster faces.
+  const latestByCik = new Map<string, Date>();
+  for (const h of holdingRows) {
+    const cur = latestByCik.get(h.snapshot.cik);
+    if (!cur || h.snapshot.asOf > cur) latestByCik.set(h.snapshot.cik, h.snapshot.asOf);
+  }
+  const fundHolders: SymbolFundHolder[] = [];
+  for (const f of ROSTER_FUNDS) {
+    const latest = latestByCik.get(f.cik);
+    if (!latest) continue;
+    for (const h of holdingRows) {
+      if (h.snapshot.cik !== f.cik || h.snapshot.asOf.getTime() !== latest.getTime()) continue;
+      if (!h.putCall && h.pctOfPort < 0.0005) continue; // skip negligible (~0.0%) lines
+      fundHolders.push({
+        slug: f.slug,
+        name: f.name,
+        firm: f.firm,
+        avatar: f.avatar ?? null,
+        accent: f.accent ?? null,
+        asOf: latest.toISOString().slice(0, 10),
+        pctOfPort: h.pctOfPort,
+        shares: Number(h.shares),
+        action: h.action,
+        putCall: (h.putCall as "PUT" | "CALL" | null) ?? null,
+      });
+    }
+  }
+  fundHolders.sort((a, b) => b.pctOfPort - a.pctOfPort);
+
+  const people: SymbolPersonTrade[] = [];
+  for (const p of ROSTER_CONGRESS) {
+    const rows = await prisma.politicalTrade.findMany({
+      where: { memberName: { contains: p.matchLastName, mode: "insensitive" }, symbol: sym },
+      orderBy: { txnDate: "desc" },
+      take: 6,
+    });
+    if (rows.length === 0) continue;
+    people.push({
+      slug: p.slug,
+      name: p.name,
+      role: p.role,
+      avatar: p.avatar ?? null,
+      accent: p.accent ?? null,
+      trades: rows.map((r) => ({ symbol: r.symbol, assetName: r.assetName, side: r.side, amountRange: r.amountRange, txnDate: r.txnDate.toISOString().slice(0, 10), link: r.link })),
+    });
+  }
+
+  const insiderMax = new Map<string, number>();
+  for (const r of insiderBuyRows) insiderMax.set(normName(r.insiderName), Math.max(insiderMax.get(normName(r.insiderName)) ?? 0, r.valueUsd));
+  const congressBuyers = new Set(congressBuys.map((r) => r.memberName)).size;
+  const congressSellers = new Set(congressSells.map((r) => r.memberName)).size;
+  const insiderBuyers = insiderMax.size;
+  const insiderBuyValueUsd = [...insiderMax.values()].reduce((s, v) => s + v, 0);
+
+  return {
+    symbol: sym,
+    fundHolders,
+    people,
+    congressBuyers,
+    congressSellers,
+    insiderBuyers,
+    insiderBuyValueUsd,
+    hasAny: fundHolders.length > 0 || people.length > 0 || congressBuyers > 0 || congressSellers > 0 || insiderBuyers > 0,
+  };
+}
+
+/** One-line smart-money summary for a symbol — for the agent's prompt/context.
+ *  Returns "" when there's nothing disclosed (so callers can skip it cleanly). */
+export function smartMoneySummaryLine(sm: SymbolSmartMoney): string {
+  if (!sm.hasAny) return "";
+  const parts: string[] = [];
+  for (const f of sm.fundHolders) {
+    const tag = f.putCall === "PUT" ? "PUT — bearish" : f.putCall === "CALL" ? "CALL — bullish" : `${(f.pctOfPort * 100).toFixed(1)}% ${f.action}`;
+    parts.push(`${f.name} holds (${tag}, 13F ${f.asOf})`);
+  }
+  for (const p of sm.people) {
+    const t = p.trades[0];
+    parts.push(`${p.name} ${t.side === "BUY" ? "bought" : "sold"} (${t.amountRange}, ${t.txnDate})`);
+  }
+  if (sm.congressBuyers > 0 || sm.congressSellers > 0) parts.push(`Congress 180d: ${sm.congressBuyers} bought / ${sm.congressSellers} sold`);
+  if (sm.insiderBuyers > 0) parts.push(`${sm.insiderBuyers} insider buy(s) ~${fmtUsd(sm.insiderBuyValueUsd)} (90d)`);
+  return parts.join("; ");
 }
 
 /** When did we last pull each feed? (for the page's honest "as of" line) */

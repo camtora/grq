@@ -15,6 +15,8 @@ import { stanceMeta } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
+import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
+import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
 import LiveQuote from "@/components/LiveQuote";
 import StockLogo from "@/components/StockLogo";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
@@ -141,7 +143,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional, smartMoney] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -158,6 +160,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       fmpEnabled() ? fmpStockNews(entry.yahoo, 5).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpInstitutional(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      getSmartMoneyForSymbol(symbol).catch(() => null),
     ]);
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
@@ -453,6 +456,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <Sparkline values={closes.map((c) => c.closeCents)} dates={closes.map((c) => c.date)} format={(c) => money(c, entry.currency)} axes />
         </Card>
       )}
+
+      {/* Smart money on THIS name — tracked investors' positions/trades + faces. */}
+      {smartMoney && <StockSmartMoney sm={smartMoney} />}
 
       {/* Key data panels under the chart — institutional · scoreboard · earnings · analyst, equal height. */}
       <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

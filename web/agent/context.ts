@@ -5,6 +5,7 @@ import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
 import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
 import { fmpEnabled, fmpEarnings } from "../lib/fmp";
+import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { getMacro, macroLine } from "../lib/macro";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
 
@@ -66,6 +67,19 @@ export async function buildContext(): Promise<string> {
         .sort((a, b) => a.days - b.days)
     : [];
 
+  // Smart money on the names we hold or are watching — disclosed 13F holdings,
+  // congress + insider trades (D28). An INPUT the agent weighs, never a guardrail.
+  const smSyms = [...new Set([...pf.positions.map((x) => x.symbol), ...focus.map((f) => f.symbol)])];
+  const smartLines = (
+    await Promise.all(
+      smSyms.map(async (s) => {
+        const sm = await getSmartMoneyForSymbol(s).catch(() => null);
+        const line = sm ? smartMoneySummaryLine(sm) : "";
+        return line ? `  ${s}: ${line}` : null;
+      }),
+    )
+  ).filter((l): l is string => !!l);
+
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
 Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — TSX session 9:30–16:00 ET.
@@ -99,6 +113,9 @@ ${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? `
 
 ## Upcoming earnings (next 3 weeks — a catalyst; size and time around it)
 ${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => `  ${e.symbol}: reports ${e.date} (in ${e.days}d)${e.eps != null ? `, EPS est ${e.eps}` : ""}`).join("\n")}
+
+## Smart money on your names (disclosed positions/trades — an INPUT you weigh, NEVER the gate; 13F lags ~45 days, congress amounts are ranges)
+${smartLines.length === 0 ? "  (none disclosed on holdings or focus)" : smartLines.join("\n")}
 
 ## Macro (Bank of Canada — live structured feed; rate-sensitive names move on this)
 ${macro ? `  ${macroLine(macro)} (as of ${macro.asOf})` : "  (unavailable)"}

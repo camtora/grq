@@ -5,6 +5,7 @@ import { fmtWhen } from "@/lib/money";
 import { PageHeader, Card, Chip } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import { SourceChips } from "@/components/IdeaCard";
+import Term from "@/components/Term";
 import PortfolioCard from "@/components/smart-money/PortfolioCard";
 import CongressCard from "@/components/smart-money/CongressCard";
 import Leaderboard, { type LeaderRow } from "@/components/smart-money/Leaderboard";
@@ -79,18 +80,14 @@ export default async function SmartMoney() {
     <main>
       <PageHeader
         title="Smart Money"
-        sub="What notable portfolios are buying — congress, famous funds, and company insiders. Colour, not gospel; disclosures lag."
+        sub={
+          <>
+            What notable portfolios are buying — <Term k="congress-trade">Congress</Term>, famous <Term k="13f">funds</Term>, and
+            company <Term k="insider">insiders</Term>. Colour and leads, not trade instructions.
+            {refreshedAt && <span className="text-teal-200/35"> · updated {fmtWhen(refreshedAt)}</span>}
+          </>
+        }
       />
-
-      <Card className="mb-6 border-teal-400/15 p-3">
-        <p className="text-[11px] leading-relaxed text-teal-200/45">
-          <span className="font-semibold text-teal-200/60">How to read this:</span> 13F fund holdings are quarterly and ~45 days
-          stale, and show longs + options only (a <span className="text-red-300/70">PUT</span> is a bearish bet, not a short).
-          Congress amounts are disclosed as ranges, up to ~45 days late. Most names are US-listed — we trade TSX — so treat these as{" "}
-          <span className="italic">leads and colour, not trade instructions.</span>
-          {refreshedAt && <span className="text-teal-200/35"> · flow data refreshed {fmtWhen(refreshedAt)}</span>}
-        </p>
-      </Card>
 
       {!hasData && (
         <Card className="p-10 text-center">
@@ -127,19 +124,19 @@ export default async function SmartMoney() {
           <div className="grid gap-4 lg:grid-cols-3">
             <Leaderboard
               title="Congress's most-bought"
-              blurb="Stocks the most members of Congress disclosed buying — last 90 days."
+              blurb={<>Stocks the most members of <Term k="congress-trade">Congress disclosed</Term> buying — last 90 days.</>}
               rows={congressRows}
               empty="No congressional buys in range."
             />
             <Leaderboard
               title="Funds piling in"
-              blurb="Names the most tracked funds newly bought or added to in their latest 13F."
+              blurb={<>Names the most tracked funds newly bought or added to in their latest <Term k="13f">13F</Term>.</>}
               rows={fundRows}
               empty="No new fund positions yet."
             />
             <Leaderboard
-              title="Biggest insider buys"
-              blurb="Largest open-market insider purchases (Form 4) — last 14 days."
+              title={<>Biggest <Term k="insider">insider</Term> buys</>}
+              blurb={<>Largest open-market insider purchases (<Term k="form-4">Form 4</Term>) — last 14 days.</>}
               rows={insiderRows}
               empty="No insider buys in range."
             />
@@ -148,7 +145,9 @@ export default async function SmartMoney() {
           {clusters.length > 0 && (
             <Card className="mt-4 p-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <span className="text-xs font-semibold text-teal-200/60">Cluster buys</span>
+                <span className="text-xs font-semibold text-teal-200/60">
+                  <Term k="cluster-buying">Cluster buys</Term>
+                </span>
                 <span className="text-[11px] text-teal-200/35">multiple insiders, one stock (last 30d):</span>
                 {clusters.map((c) => (
                   <span key={c.symbol} className="inline-flex items-center gap-1 rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[11px]">

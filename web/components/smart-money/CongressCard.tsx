@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Term from "@/components/Term";
 import SmartMoneyAvatar from "./SmartMoneyAvatar";
 import type { CongressMemberTrades } from "@/lib/smart-money/queries";
 import type { WatchOverlap } from "@/lib/smart-money/types";
@@ -67,7 +68,9 @@ export default function CongressCard({ entry, overlap }: { entry: CongressMember
               ))}
             </div>
           )}
-          <p className="mt-2 text-[10px] text-teal-200/35">Disclosed transactions — amounts are ranges; filings lag up to ~45 days.</p>
+          <p className="mt-2 text-[10px] text-teal-200/35">
+            <Term k="congress-trade">Disclosed transactions</Term> — ranges, not a holdings list.
+          </p>
         </div>
       )}
     </div>

@@ -9,7 +9,7 @@ import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
 import { MODELS, AGENT_VERSION, taxContext } from "./policy";
 import { alert, heartbeat } from "./alerts";
-import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys } from "../lib/smart-money/queries";
+import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
 
 const PERSONA = `You are GRQ's trading agent — an autonomous swing-trading fund manager for Cam & Graham's $5,000 CAD simulated fund (it will become real money; treat it as real).
@@ -187,22 +187,27 @@ Keep it tight: this is a check-in, not a research project.`;
  *  tell a real failure from a success instead of marking everything DONE. */
 export async function runStockDossier(symbol: string, requestedBy = "rotation"): Promise<string | null> {
   const sym = symbol.toUpperCase();
-  const [entry, quote, sig, recent] = await Promise.all([
+  const [entry, quote, sig, recent, sm] = await Promise.all([
     universeEntry(sym),
     getQuote(sym).catch(() => null),
     computeSignals(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 5 }),
+    getSmartMoneyForSymbol(sym).catch(() => null),
   ]);
+  const smLine = sm ? smartMoneySummaryLine(sm) : "";
   const prompt = `# STOCK DOSSIER ASSIGNMENT: ${sym}${entry ? ` — ${entry.name} (${entry.status}${entry.tier ? `, ${entry.tier}` : ""})` : ""}
 Requested by: ${requestedBy} · Today: ${etDateStr()}
 Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
 Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
+Smart money (disclosed — weigh it, don't follow blindly): ${smLine || "(none tracked on this name)"}
 Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
 
 Research this stock thoroughly with WebSearch/WebFetch — the business, recent news and
-results, catalysts, competitive position, risks. ALSO check recent INSIDER ACTIVITY: search
-SEDI / SEDAR+ / canadianinsider for this name — clusters of insider BUYING are a strong
-signal, heavy selling a caution (note what you find, dated, with the source). Then write
+results, catalysts, competitive position, risks. ALSO check recent INSIDER ACTIVITY: the
+"Smart money" line above already carries our tracked 13F / congress / insider disclosures for
+this name — factor it in, and search SEDI / SEDAR+ / canadianinsider for anything fresher
+(clusters of insider BUYING are a strong signal, heavy selling a caution; note what you find,
+dated, with the source). Then write
 EXACTLY ONE symbol-tagged RESEARCH entry via write_journal: symbol="${sym}", title "Dossier — ${sym} — ${etDateStr()}",
 markdown body with sections: **Snapshot** · **Recent developments** (dated, sourced) ·
 **Insider activity** (recent filings + any cluster, or "none found") · **Signals read** ·

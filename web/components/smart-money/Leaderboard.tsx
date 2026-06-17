@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import type { WatchOverlap } from "@/lib/smart-money/types";
@@ -20,8 +21,8 @@ export default function Leaderboard({
   rows,
   empty,
 }: {
-  title: string;
-  blurb: string;
+  title: ReactNode;
+  blurb: ReactNode;
   rows: LeaderRow[];
   empty?: string;
 }) {

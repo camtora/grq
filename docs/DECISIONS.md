@@ -453,6 +453,20 @@ endpoint shapes verified live against FMP before wiring; `scripts/ingest-smart-m
 re-pull/spot-check. **NB:** FMP key lives only in root `.env` (container), not `web/.env` — host-side ingest
 needs it injected.
 
+**Follow-up (2026-06-17, same day) — integrated into the stock page + the agent's decisions (Cam):** Smart
+money is no longer a standalone page only. (1) `getSmartMoneyForSymbol(symbol)` (`lib/smart-money/queries.ts`)
+is the one shared per-symbol read — tracked roster funds that hold/short it (face + weight/action + PUT/CALL),
+roster members of Congress who traded it, plus aggregate congress-buyers (180d) / insider-buys (90d). Matches
+on `bareTicker` so cross-listings line up; skips negligible (~0.0%) common lines. (2) **Stock page**: a
+`StockSmartMoney` panel (`components/smart-money/StockSmartMoney.tsx`) renders those **faces + positions** on
+`/stocks/[symbol]` (above the data-panel row), nothing when there's no activity. (3) **The agent weighs it**:
+`buildContext()` gained a `## Smart money on your names` section for holdings + focus (verified live), and
+`runStockDossier()` injects the per-symbol summary into the dossier prompt — both framed *"an INPUT you weigh,
+NEVER the gate."* The deterministic gate in `sim.ts` still never sees it; copy-trading stays out. Literacy:
+the page's "How to read this" blurb was replaced by `<Term>` tooltips (glossary keys `13f`/`form-4`/`insider`/
+`put-option`/`call-option`/`cluster-buying`/`congress-trade`). **Not yet done:** grading smart-money-influenced
+theses via the source scoreboard (the "did following them work?" loop).
+
 ### D29 — Stock-page logos · Today movers clickable+auto-researched · expandable Universe/Watchlist rows (Cam, 2026-06-17)
 Three fills from Cam & Graham's review.
 **(1) Company logo on the stock page.** `<StockLogo>` (logo + monogram fallback, already on the lists) now
