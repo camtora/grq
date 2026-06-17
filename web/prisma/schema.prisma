@@ -313,15 +313,19 @@ model SourceGrade {
   @@index([symbol])
 }
 
-// Shared chat thread between the members and the agent (read-only tools —
-// chat can never trade). email is the author; "agent" for assistant turns.
+// Per-member chat threads with the agent (read-only tools — chat can never
+// trade). `owner` is the member whose thread this belongs to (their email);
+// `email` is the author (a member email, or "agent" for assistant turns). Cam
+// and Graham each have their own thread and can toggle into the other's.
 model ChatMessage {
   id      Int      @id @default(autoincrement())
   at      DateTime @default(now())
-  email   String
+  owner   String   @default("") // the member whose thread this is (email)
+  email   String // author: a member email, or "agent"
   role    String // "user" | "assistant"
   content String
 
+  @@index([owner, at])
   @@index([at])
 }
 

@@ -1,45 +1,238 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { fmtDay } from "@/lib/money";
+import { fmtWhen } from "@/lib/money";
+import { etDateStr } from "@/agent/calendar";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
+import CollapsibleMd from "@/components/CollapsibleMd";
 
-export default async function Reports() {
-  const reports = await prisma.report.findMany({
-    orderBy: { date: "desc" },
-    take: 60,
+// Reports is a hub over every kind of report the fund files: the Daily (morning
+// game plan beside the EOD close), the Sunday Weekly review, Smart-money
+// roundups, Retros (source post-mortems), and Lessons. URL-param tabs keep it SSR.
+const TABS = [
+  { key: "daily", label: "Daily" },
+  { key: "weekly", label: "Weekly" },
+  { key: "smart", label: "Smart Money" },
+  { key: "retros", label: "Retros" },
+  { key: "lessons", label: "Lessons" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+function dayLabel(d: Date): string {
+  return d.toLocaleDateString("en-CA", {
+    timeZone: "America/Toronto",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
   });
+}
+
+function parseStats(json: string | null): Record<string, string | number> | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as Record<string, string | number>;
+  } catch {
+    return null;
+  }
+}
+
+function Stats({ stats }: { stats: Record<string, string | number> | null }) {
+  if (!stats) return null;
+  return (
+    <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-teal-200/60">
+      {Object.entries(stats).map(([k, v]) => (
+        <span key={k}>
+          <span className="uppercase tracking-wider text-teal-200/40">{k.replace(/_/g, " ")}</span>{" "}
+          <span className="tabular-nums text-teal-50">{String(v)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Blank({ text }: { text: string }) {
+  return <p className="text-sm text-teal-200/40">{text}</p>;
+}
+
+function EntryCard({
+  j,
+}: {
+  j: { id: number; kind: string; symbol: string | null; title: string; body: string; at: Date; agentVersion: string; confidence: number | null };
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Chip tone={j.kind === "LESSON" ? "teal" : j.kind === "RETRO" ? "green" : "dim"}>{j.kind}</Chip>
+        {j.symbol && <span className="font-semibold text-teal-50">{j.symbol}</span>}
+        <span className="text-sm font-medium text-teal-50">{j.title}</span>
+        <span className="ml-auto text-xs text-teal-200/40">
+          {fmtWhen(j.at)} · {j.agentVersion}
+          {j.confidence !== null ? ` · confidence ${j.confidence}%` : ""}
+        </span>
+      </div>
+      <div className="mt-3">
+        <CollapsibleMd text={j.body} threshold={600} />
+      </div>
+    </Card>
+  );
+}
+
+export default async function Reports({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const sp = await searchParams;
+  const tab: TabKey = TABS.some((t) => t.key === sp.tab) ? (sp.tab as TabKey) : "daily";
+
+  const [eodCount, weeklyCount, smartCount, retroCount, lessonCount] = await Promise.all([
+    prisma.report.count({ where: { kind: "EOD" } }),
+    prisma.report.count({ where: { kind: "WEEKLY" } }),
+    prisma.journalEntry.count({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } } }),
+    prisma.journalEntry.count({ where: { kind: "RETRO" } }),
+    prisma.journalEntry.count({ where: { kind: "LESSON" } }),
+  ]);
+  const countByTab: Record<TabKey, number> = {
+    daily: eodCount,
+    weekly: weeklyCount,
+    smart: smartCount,
+    retros: retroCount,
+    lessons: lessonCount,
+  };
+
+  let content: React.ReactNode;
+
+  if (tab === "daily") {
+    // Pair each day's morning game plan (a RESEARCH entry) with its EOD close.
+    const [eods, plans] = await Promise.all([
+      prisma.report.findMany({ where: { kind: "EOD" }, orderBy: { date: "desc" }, take: 40 }),
+      prisma.journalEntry.findMany({
+        where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
+        orderBy: { at: "desc" },
+        take: 40,
+      }),
+    ]);
+    type Day = { date: Date; eod?: (typeof eods)[number]; plan?: (typeof plans)[number] };
+    const days = new Map<string, Day>();
+    for (const e of eods) days.set(etDateStr(e.date), { date: e.date, eod: e });
+    for (const p of plans) {
+      const k = etDateStr(p.at);
+      const cur = days.get(k);
+      if (cur) cur.plan = p;
+      else days.set(k, { date: p.at, plan: p });
+    }
+    const dailyList = [...days.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .slice(0, 30)
+      .map(([, v]) => v);
+
+    content =
+      dailyList.length === 0 ? (
+        <EmptyState
+          title="No daily reports yet"
+          body="Each market day pairs the morning game plan with the EOD close here — the first lands at ~9:00 and ~16:15 ET on the next market day."
+        />
+      ) : (
+        <div className="space-y-4">
+          {dailyList.map((d) => (
+            <Card key={d.date.toISOString()} className="p-5">
+              <div className="mb-3 flex items-center gap-3 border-b border-teal-400/10 pb-2">
+                <span className="text-sm font-semibold text-teal-50">{dayLabel(d.date)}</span>
+                <Link href={`/today?d=${etDateStr(d.date)}`} className="ml-auto text-xs text-teal-300 hover:underline">
+                  that day →
+                </Link>
+              </div>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/40">Morning game plan</h3>
+                  {d.plan ? <CollapsibleMd text={d.plan.body} threshold={600} /> : <Blank text="No game plan filed this day." />}
+                </div>
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/40">The close</h3>
+                  {d.eod ? (
+                    <>
+                      <Stats stats={parseStats(d.eod.statsJson)} />
+                      <CollapsibleMd text={d.eod.body} threshold={600} />
+                    </>
+                  ) : (
+                    <Blank text="No close report filed this day." />
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      );
+  } else if (tab === "weekly") {
+    const weeklies = await prisma.report.findMany({ where: { kind: "WEEKLY" }, orderBy: { date: "desc" }, take: 30 });
+    content =
+      weeklies.length === 0 ? (
+        <EmptyState
+          title="No weekly reviews yet"
+          body="The Sunday deep review — what worked, the lessons, source grades, and the capital recommendation — lands once a full week is in the books."
+        />
+      ) : (
+        <div className="space-y-4">
+          {weeklies.map((r) => (
+            <Card key={r.id} className="p-5">
+              <div className="mb-3 flex items-center gap-3">
+                <Chip tone="teal">weekly</Chip>
+                <span className="text-sm font-medium text-teal-50">{r.title}</span>
+              </div>
+              <Stats stats={parseStats(r.statsJson)} />
+              <CollapsibleMd text={r.body} threshold={800} />
+            </Card>
+          ))}
+        </div>
+      );
+  } else {
+    const where: Prisma.JournalEntryWhereInput =
+      tab === "smart"
+        ? { kind: "RESEARCH", title: { startsWith: "Smart money" } }
+        : tab === "retros"
+          ? { kind: "RETRO" }
+          : { kind: "LESSON" };
+    const entries = await prisma.journalEntry.findMany({ where, orderBy: { at: "desc" }, take: 50 });
+    const empty =
+      tab === "smart"
+        ? { title: "No smart-money roundups yet", body: "The agent files a 'Smart money' roundup when 13F / institutional moves are worth flagging." }
+        : tab === "retros"
+          ? { title: "No retros yet", body: "After a thesis resolves the agent writes a post-mortem and grades the sources it cited — those grades build the scoreboard." }
+          : { title: "No lessons yet", body: "Durable patterns the agent learns get filed as lessons and re-read before every decision. It has to earn them." };
+    content =
+      entries.length === 0 ? (
+        <EmptyState title={empty.title} body={empty.body} />
+      ) : (
+        <div className="space-y-4">
+          {entries.map((j) => (
+            <EntryCard key={j.id} j={j} />
+          ))}
+        </div>
+      );
+  }
 
   return (
     <main>
       <PageHeader
         title="Reports"
-        sub="End-of-day reports land at ~16:15 ET; the Sunday deep review includes lessons and the capital recommendation."
+        sub="Every report the fund files — the daily plan & close, the Sunday review, smart-money roundups, post-mortems, and lessons."
       />
 
-      {reports.length === 0 ? (
-        <EmptyState
-          title="No reports yet"
-          body={
-            <>
-              The first end-of-day report lands at <strong className="text-teal-200">~16:15 ET
-              on the next market day</strong> — daily P&L, every trade with its reasoning, fees
-              vs budget, and the &ldquo;vs just buying XIC&rdquo; benchmark.
-            </>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {reports.map((r) => (
-            <Link key={r.id} href={`/reports/${r.id}`} className="block">
-              <Card className="flex items-center gap-4 p-5 transition-colors hover:border-teal-400/40">
-                <Chip tone={r.kind === "WEEKLY" ? "teal" : "dim"}>{r.kind}</Chip>
-                <span className="font-medium text-teal-50">{r.title}</span>
-                <span className="ml-auto text-xs text-teal-200/40">{fmtDay(r.date)}</span>
-              </Card>
+      <div className="mb-6 flex flex-wrap gap-2">
+        {TABS.map((t) => {
+          const active = t.key === tab;
+          return (
+            <Link
+              key={t.key}
+              href={t.key === "daily" ? "/reports" : `/reports?tab=${t.key}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                active ? "bg-teal-400/20 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10"
+              }`}
+            >
+              {t.label}
+              <span className={`ml-1.5 tabular-nums ${active ? "text-teal-300/70" : "text-teal-200/30"}`}>{countByTab[t.key]}</span>
             </Link>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
+
+      {content}
     </main>
   );
 }

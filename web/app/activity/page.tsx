@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-// /activity folded into the Journal page's order ledger (2.8 IA restructure).
+// /activity folded into the Journal's order ledger, now at the bottom of Settings.
 export default function Activity() {
-  redirect("/journal");
+  redirect("/settings#journal");
 }

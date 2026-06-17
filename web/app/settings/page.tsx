@@ -7,6 +7,7 @@ import { Card, PageHeader, Chip } from "@/components/ui";
 import SettingsForm from "@/components/SettingsForm";
 import KillSwitch from "@/components/KillSwitch";
 import OrderTicket from "@/components/OrderTicket";
+import JournalSection from "@/components/JournalSection";
 
 const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
@@ -16,8 +17,9 @@ const ROADMAP = [
   { n: 4, label: "Live — real money, Cautious dial for week 1", done: false },
 ];
 
-export default async function Settings() {
-  const [settings, symbols, session] = await Promise.all([
+export default async function Settings({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
+  const [sp, settings, symbols, session] = await Promise.all([
+    searchParams,
     prisma.settings.findUnique({ where: { id: 1 } }),
     getBroker().listSymbols(),
     getSession(),
@@ -128,6 +130,8 @@ export default async function Settings() {
             ))}
           </ol>
         </Card>
+
+        <JournalSection kind={sp.kind} />
       </div>
     </main>
   );

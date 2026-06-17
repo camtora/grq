@@ -392,3 +392,33 @@ verify a fresh image before trusting a deploy. Reclaim with `container prune -f`
 **Files:** `components/{NavBar,IdeaCard,UniverseActions,StockTable}.tsx` (StockTable = the shared
 Universe/Watchlist table from the D25 line), `app/market/{page,browse/page,watchlist/page}.tsx`,
 `app/universe/page.tsx`, `CLAUDE.md`; **deleted** `components/MarketTabs.tsx`. No schema change.
+
+### D27 — Today/Reports/Journal IA refresh + per-member chat threads (Cam, 2026-06-16)
+Follow-on UI pass (parallel to D26). **Today** is leaner and date-aware. Viewing a **past date** now
+**hides the live data** (the indices ticker, Headlines, Market pulse, both movers blocks + the industry
+breakdown) instead of showing today's numbers against an old date — only date-scoped historical sections
+remain. **Top Hitters / On the Radar moved above Market Movers**; the **date nav** moved into the masthead
+(right-aligned under the NAV, beside the quote); the **"Did you know?" fun fact** tucked under the masthead
+quote; the **"day as it happened"** timeline removed (it's the Journal's job). The morning plan + EOD and
+the midday review all **left** the Today page (see below).
+**Reports → a hub:** tabbed (URL-param, SSR, with counts) over **Daily** (each day's morning game plan
+beside the EOD close, paired by ET day), **Weekly**, **Smart Money** (the agent's "Smart money" roundups,
+ex-Discover), **Retros**, and **Lessons**. Bodies read in-page (collapsible) — the per-report "full report
+→" links were dropped (the `/reports/[id]` detail route stays, just unlinked).
+**Journal → Settings:** the Journal (scoreboard + kind filters + entries + order ledger) is now a section
+at the **bottom of Settings** (`JournalSection`, anchor `#journal`); the top-level "Journal" nav item is
+gone and `/journal` (+`?kind=`) and `/activity` **redirect** to `/settings#journal`.
+**Overview:** gained the **Midday Review** card (the afternoon read, moved off Today).
+**Chat — per-member threads (the one schema change):** `ChatMessage.owner` (the member whose thread it is;
+`email` stays the author) + `@@index([owner, at])`, pushed and **backfilled** (the 26 shared messages split
+into Cam's 17 / Graham's 9 — user turns to their author, agent replies inherit the turn they answered).
+Clicking Chat opens **your** thread; a **Cam | Graham toggle** switches the active thread for both reading
+and sending (you post into the active thread, authored as you). `/api/chat` GET/POST resolve a
+member-validated owner; `chat-server` persists + reads history per-owner. Still read-only — chat trades
+nothing. Reports + Settings also moved to the **right** of the header (landed in the D26 `NavBar`).
+**Ops:** the deploy hit the full `/var` again (db push: "No space left on device") — cleared with
+`container/image prune -f` (dangling only) and verified the running web+chat serve fresh code (the new
+`owner` field + owner-aware chat-server source), since a full-`/var` build can silently bake stale (D26).
+**Files:** `app/{today,page,reports,settings,journal,activity,layout}.tsx`, `app/api/chat/route.ts`,
+`agent/chat-server.ts`, `components/{JournalSection,ChatDrawer,ChatClient}.tsx`,
+`prisma/{schema.prisma,backfill-chat-owner.ts}`. **Schema (additive, pushed):** `ChatMessage.owner`.

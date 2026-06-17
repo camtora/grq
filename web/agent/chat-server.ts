@@ -18,7 +18,7 @@ const PORT = Number(process.env.CHAT_PORT ?? 3014);
 
 const CHAT_PERSONA = `You are GRQ's trading agent in chat mode, talking with Cam or Graham — the fund's two members. You have READ-ONLY tools: inspect the portfolio, quotes, journal, watchlist, signals, and search the web. You CANNOT trade, journal, or change anything from chat — if asked to, say so plainly and point at the morning session / tune-up as the path. Be direct, honest, lightly funny (never about losses); cite sources and signals when you lean on them; "I don't know" beats confident nonsense. You are the fund's robot thinking out loud with its humans — not a licensed advisor, and you say so if it matters.`;
 
-type ChatBody = { email?: string; message?: string; symbol?: string };
+type ChatBody = { owner?: string; email?: string; message?: string; symbol?: string };
 
 function sse(res: http.ServerResponse, event: object) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -50,6 +50,9 @@ async function handleChat(res: http.ServerResponse, body: ChatBody) {
     res.end(JSON.stringify({ error: "bad request" }));
     return;
   }
+  // The thread belongs to `owner`; `email` is the author. Each member's thread is
+  // its own conversation, so the agent only sees this owner's history.
+  const owner = body.owner?.trim().toLowerCase() || email;
 
   res.writeHead(200, {
     "content-type": "text/event-stream",
@@ -57,11 +60,11 @@ async function handleChat(res: http.ServerResponse, body: ChatBody) {
     connection: "keep-alive",
   });
 
-  await prisma.chatMessage.create({ data: { email, role: "user", content: message } });
+  await prisma.chatMessage.create({ data: { owner, email, role: "user", content: message } });
 
   const [ctx, history] = await Promise.all([
     buildContext(),
-    prisma.chatMessage.findMany({ orderBy: { at: "desc" }, take: 20 }),
+    prisma.chatMessage.findMany({ where: { owner }, orderBy: { at: "desc" }, take: 20 }),
   ]);
   history.reverse();
   const focus = body.symbol ? await symbolFocus(body.symbol) : "";
@@ -111,7 +114,7 @@ ${convo}`;
   }
 
   if (finalText) {
-    await prisma.chatMessage.create({ data: { email: "agent", role: "assistant", content: finalText } });
+    await prisma.chatMessage.create({ data: { owner, email: "agent", role: "assistant", content: finalText } });
   }
   sse(res, { type: "done" });
   res.end();

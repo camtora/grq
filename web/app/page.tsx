@@ -9,16 +9,43 @@ import Sparkline from "@/components/Sparkline";
 import KillSwitch from "@/components/KillSwitch";
 import ActivityFeed from "@/components/ActivityFeed";
 import Term from "@/components/Term";
+import CollapsibleMd from "@/components/CollapsibleMd";
 import { getMacro, macroLine } from "@/lib/macro";
 
+// The agent cites sources in its briefs — show them as chips (moved here with the
+// midday review from the Today page, Cam 2026-06-16).
+function Sources({ sourcesJson }: { sourcesJson: string | null }) {
+  if (!sourcesJson) return null;
+  let sources: string[] = [];
+  try {
+    sources = JSON.parse(sourcesJson);
+  } catch {
+    return null;
+  }
+  if (sources.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {sources.map((s, i) => (
+        <span key={i} className="rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[10px] text-teal-200/60">
+          {s}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default async function Overview() {
-  const [session, pf, history, recentJournal, latestPlan, macro] = await Promise.all([
+  const [session, pf, history, recentJournal, latestPlan, midday, macro] = await Promise.all([
     getSession(),
     getPortfolio(),
     getNavHistory(60),
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
     prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
+      orderBy: { at: "desc" },
+    }),
+    prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } },
       orderBy: { at: "desc" },
     }),
     getMacro().catch(() => null),
@@ -105,8 +132,23 @@ export default async function Overview() {
       )}
 
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-        {/* Main column: NAV, positions, latest journal */}
+        {/* Main column: midday review, NAV, positions, latest journal */}
         <div className="space-y-6 lg:col-span-2">
+          {midday && (
+            <Card className="p-5">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
+                  Midday Review · the afternoon read
+                </span>
+                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(midday.at)}</span>
+              </div>
+              <div className="mb-2 text-base font-semibold text-teal-50">{midday.title}</div>
+              <CollapsibleMd text={midday.body} threshold={600}>
+                <Sources sourcesJson={midday.sourcesJson} />
+              </CollapsibleMd>
+            </Card>
+          )}
+
           <Card className="p-5">
             <div className="mb-2 flex items-baseline justify-between">
               <span className="text-xs uppercase tracking-wider text-teal-200/50">NAV history</span>
@@ -181,7 +223,7 @@ export default async function Overview() {
           <Card className="p-5">
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
-              <Link href="/journal" className="text-xs text-teal-300 hover:underline">
+              <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
                 journal →
               </Link>
             </div>
@@ -208,7 +250,7 @@ export default async function Overview() {
               <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
                 Activity
               </span>
-              <Link href="/journal" className="text-xs text-teal-300 hover:underline">
+              <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
                 ledger →
               </Link>
             </div>

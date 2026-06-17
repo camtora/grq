@@ -16,11 +16,15 @@ export default function ChatClient({
   symbol,
   heightClass = "h-[calc(100vh-16rem)] min-h-[24rem]",
   selfLoad = false,
+  owner,
+  meEmail,
 }: {
   initialMessages?: Msg[];
   symbol?: string;
   heightClass?: string;
   selfLoad?: boolean;
+  owner?: string;
+  meEmail?: string;
 }) {
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [draft, setDraft] = useState(
@@ -29,14 +33,14 @@ export default function ChatClient({
 
   useEffect(() => {
     if (!selfLoad) return;
-    fetch("/api/chat")
+    fetch(owner ? `/api/chat?owner=${encodeURIComponent(owner)}` : "/api/chat")
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d.messages)) setMessages(d.messages);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selfLoad]);
+  }, [selfLoad, owner]);
 
   useEffect(() => {
     if (symbol) setDraft((d) => (d === "" || d.startsWith("Let's talk about") ? `Let's talk about ${symbol}. ` : d));
@@ -63,7 +67,7 @@ export default function ChatClient({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, symbol }),
+        body: JSON.stringify({ message, symbol, owner }),
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       const reader = res.body.getReader();
@@ -133,7 +137,7 @@ export default function ChatClient({
               }`}
             >
               <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">
-                {m.email === "me" ? "You" : authorName(m.email)}
+                {m.email === "me" || (meEmail && m.email === meEmail) ? "You" : authorName(m.email)}
               </div>
               <Md text={m.content} />
             </div>

@@ -7,10 +7,22 @@ import ChatClient from "./ChatClient";
  *  Open it from anywhere: window.dispatchEvent(new CustomEvent("grq:chat",
  *  { detail: { symbol?: "RY" } })). Escape or ✕ closes. Stays mounted after
  *  first open so the conversation survives open/close. */
-export default function ChatDrawer() {
+export default function ChatDrawer({
+  meEmail,
+  members,
+}: {
+  meEmail: string;
+  members: { email: string; name: string }[];
+}) {
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
   const [symbol, setSymbol] = useState<string | undefined>(undefined);
+  // Your thread first, then the other member's — you can toggle between them.
+  const inList = members.some((m) => m.email === meEmail);
+  const threads = inList
+    ? [...members.filter((m) => m.email === meEmail), ...members.filter((m) => m.email !== meEmail)]
+    : [{ email: meEmail, name: "You" }, ...members];
+  const [activeOwner, setActiveOwner] = useState(meEmail);
 
   useEffect(() => {
     function onChat(e: Event) {
@@ -43,24 +55,42 @@ export default function ChatDrawer() {
           GRQ
         </span>
         <span className="text-sm font-semibold text-teal-50">Chat</span>
+        {threads.length > 1 && (
+          <div className="flex items-center gap-0.5 rounded-lg border border-teal-400/15 p-0.5">
+            {threads.map((m) => (
+              <button
+                key={m.email}
+                onClick={() => setActiveOwner(m.email)}
+                title={m.email === meEmail ? "Your chat" : `${m.name}'s chat`}
+                className={`rounded-md px-2 py-0.5 text-xs font-semibold transition-colors ${
+                  activeOwner === m.email ? "bg-teal-400/20 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10"
+                }`}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        )}
         {symbol && (
-          <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-300">
+          <span className="hidden rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-300 sm:inline">
             discussing {symbol}
           </span>
         )}
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-teal-200/30">
+        <span className="ml-auto hidden text-[10px] uppercase tracking-wider text-teal-200/30 lg:inline">
           reads everything · trades nothing
         </span>
         <button
           onClick={() => setOpen(false)}
           aria-label="Close chat"
-          className="rounded-lg border border-teal-400/20 px-2 py-0.5 text-sm text-teal-200/60 hover:bg-teal-400/10"
+          className="ml-auto rounded-lg border border-teal-400/20 px-2 py-0.5 text-sm text-teal-200/60 hover:bg-teal-400/10 lg:ml-0"
         >
           ✕
         </button>
       </div>
       <div className="min-h-0 flex-1 px-5 py-4">
-        {everOpened && <ChatClient selfLoad symbol={symbol} heightClass="h-full" />}
+        {everOpened && (
+          <ChatClient key={activeOwner} selfLoad owner={activeOwner} meEmail={meEmail} symbol={symbol} heightClass="h-full" />
+        )}
       </div>
     </aside>
   );
