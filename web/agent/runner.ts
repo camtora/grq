@@ -222,9 +222,11 @@ async function maybeScheduledSessions() {
     return;
   }
 
-  // 8:00–8:30 pre-market research on market days (the morning brief — the Game
-  // plan shown on the Portfolio page; moved earlier from 9:00, Cam 2026-06-17)
-  if (isMarketDay() && m >= 8 * 60 && m < 8 * 60 + 30) {
+  // 9:00–9:30 pre-market research on market days (the morning brief — the Game
+  // plan shown on the Portfolio page). At 9:00 (not 8:00) so the plan reflects the
+  // 8:30 ET US macro prints — CPI/jobs/PPI, the day's biggest scheduled movers —
+  // and the latest pre-market; still ~30 min before the 9:30 open. (Cam 2026-06-17)
+  if (isMarketDay() && m >= 9 * 60 && m < 9 * 60 + 30) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Game plan" } },
     });
