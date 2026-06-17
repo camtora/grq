@@ -332,11 +332,19 @@ async function tick() {
       await (broker as IBKRBroker).keepAlive();
       // Finalise any PENDING orders whose fill landed after the synchronous poll
       // window BEFORE reconcile, so a sell's realized P&L reads the pre-fill ACB.
-      const finalized = await (broker as IBKRBroker).finalizePending().catch(async (e) => {
+      const fills = await (broker as IBKRBroker).finalizePending().catch(async (e) => {
         await alert("warning", "IBKR finalize-pending failed", String(e));
-        return 0;
+        return [];
       });
-      if (finalized > 0) await alert("info", `Finalised ${finalized} IBKR fill(s) from broker truth`);
+      for (const f of fills) {
+        // System stops/take-profits already pinged at trigger time — don't double-alert.
+        if (f.placedBy === "system-stop" || f.placedBy === "system-takeprofit") continue;
+        await alert(
+          "info",
+          `${f.side === "BUY" ? "Bought" : "Sold"} ${f.qty} ${f.symbol} @ $${(f.priceCents / 100).toFixed(2)}`,
+          (f.reason ?? "Filled — confirmed from broker truth after the order rested.").slice(0, 280),
+        );
+      }
       await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e)));
     }
     const swept = await broker.sweepPendingOrders();

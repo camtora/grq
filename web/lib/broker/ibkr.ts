@@ -72,9 +72,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ---- IBKR response shapes (the subset we use) ----
 type SecdefHit = { conid?: number; symbol?: string; description?: string; companyName?: string; sections?: { secType?: string; exchange?: string }[] };
 type OrderReply = { id?: string; message?: string[]; order_id?: string; orderId?: string; order_status?: string; error?: string };
-type OrderStatus = { order_status?: string; avgPrice?: string; avg_price?: string; filledQuantity?: number; commission?: number; total_size?: number };
+// NB the per-order status endpoint reports the fill price as `average_price`
+// (snake_case); `avgPrice` is the orders-LIST field. Market orders carry no
+// limit_price fallback, so missing `average_price` here = no usable price.
+type OrderStatus = { order_status?: string; average_price?: string; avgPrice?: string; avg_price?: string; filledQuantity?: number; commission?: number; total_size?: number };
 type IbkrPosition = { conid?: number; position?: number; avgCost?: number; avgPrice?: number; contractDesc?: string };
 type Ledger = Record<string, { cashbalance?: number; settledcash?: number; currency?: string }>;
+
+// A PENDING order that finalizePending() resolved to a fill — the runner pings
+// Discord per item (skipping system stops/take-profits, which alert at trigger).
+export type FinalizedFill = { symbol: string; side: "BUY" | "SELL"; qty: number; priceCents: number; placedBy: string; reason: string | null };
 
 export class IBKRBroker implements BrokerAdapter {
   readonly kind = "ibkr";
@@ -209,7 +216,7 @@ export class IBKRBroker implements BrokerAdapter {
         const st = await cp<OrderStatus>(`/iserver/account/order/status/${orderId}`).catch(() => ({}) as OrderStatus);
         const status = (st.order_status ?? "").toLowerCase();
         if (status === "filled") {
-          const avg = parseFloat(st.avgPrice ?? st.avg_price ?? "0");
+          const avg = parseFloat(st.average_price ?? st.avgPrice ?? st.avg_price ?? "0");
           if (avg > 0) filledPriceCents = Math.round(avg * 100);
           if (typeof st.commission === "number" && st.commission > 0) commissionCents = Math.round(st.commission * 100);
           break;
@@ -293,17 +300,18 @@ export class IBKRBroker implements BrokerAdapter {
    *  AFTER the synchronous poll window (placeOrder returned PENDING) is finalised
    *  here — Trade + journal written, Order flipped to FILLED — so the trade ledger is
    *  never silently incomplete. Cancelled/rejected orders are closed out. Returns the
-   *  count finalised to a fill; the runner reconciles positions/cash after. Called on
-   *  the tick BEFORE reconcile so a sell's realized P&L reads the pre-fill ACB. */
-  async finalizePending(): Promise<number> {
+   *  newly-filled orders (the runner pings Discord per fill + reconciles positions/
+   *  cash after). Called on the tick BEFORE reconcile so a sell's realized P&L reads
+   *  the pre-fill ACB. */
+  async finalizePending(): Promise<FinalizedFill[]> {
     const pending = await prisma.order.findMany({ where: { status: "PENDING", broker: "ibkr" } });
-    let filled = 0;
+    const filled: FinalizedFill[] = [];
     for (const o of pending) {
       if (!o.brokerOrderId) continue; // no broker id (legacy row) — can't track; backfilled manually
       const st = await cp<OrderStatus>(`/iserver/account/order/status/${o.brokerOrderId}`).catch(() => ({}) as OrderStatus);
       const status = (st.order_status ?? "").toLowerCase();
       if (status === "filled") {
-        const avg = parseFloat(st.avgPrice ?? st.avg_price ?? "0");
+        const avg = parseFloat(st.average_price ?? st.avgPrice ?? st.avg_price ?? "0");
         const priceCents = avg > 0 ? Math.round(avg * 100) : o.limitPriceCents ?? 0;
         if (priceCents <= 0) continue; // no usable fill price yet — retry next tick
         const commissionCents =
@@ -315,7 +323,7 @@ export class IBKRBroker implements BrokerAdapter {
           data: { status: "FILLED", filledQty: o.qty, avgFillPriceCents: priceCents, commissionCents },
         });
         await this.settleFill({ id: o.id, symbol: o.symbol, side: o.side, qty: o.qty, reason: o.reason }, priceCents, commissionCents);
-        filled++;
+        filled.push({ symbol: o.symbol, side: o.side, qty: o.qty, priceCents, placedBy: o.placedBy, reason: o.reason });
       } else if (status === "cancelled" || status === "rejected") {
         await prisma.order.update({
           where: { id: o.id },

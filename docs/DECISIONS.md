@@ -571,3 +571,20 @@ tsc clean; agent rebuilt + deployed (`--no-deps`), stale-build-checked against t
 4.5 GB — recurring disk pressure, minimise rebuilds. **Open follow-ups:** rotate the paper login to a
 unique password (the bot must not hold live-account creds); the gateway needs a daily ~midnight-ET IB Key
 re-approval. Runbook: `docs/IBKR-PHASE3.md` top block.
+
+**Follow-up same day — fill alerts + a market-order price bug (deployed + pushed).** Cam noticed the
+agent's 53-share XIC buy fired no Discord alert. Root cause: the discretionary order path
+(`validator.placeAndJournal`) journals a DECISION but **never called `alert()`** — only deterministic
+stops/take-profits, risk events, self-promotions and session summaries ping. **Added per-fill pings, exactly
+one per fill:** `placeAndJournal` alerts on a synchronous `FILLED` (`Bought/Sold {qty} {symbol} @ $x`, info
+→ 💹 Discord); `finalizePending()` now **returns the filled orders** (type `FinalizedFill`) and the runner
+pings each, **skipping `system-stop`/`system-takeprofit`** (they alert at trigger → no double-ping). A
+PENDING order is announced only when it actually fills, so fast fills ping from the validator and slow fills
+from the runner — never both. **Verifying this surfaced a real bug:** the per-order status endpoint reports
+the fill price as **`average_price`** (snake_case), NOT `avgPrice` (that's the orders-LIST field). The code
+read only `avgPrice`/`avg_price`, so a MARKET order (no `limit_price` fallback) computed `priceCents=0` and
+was **skipped forever** by BOTH the synchronous ~12s poll in `placeOrder` AND `finalizePending` — the
+53-share order only finalised because it was a LIMIT (it had a limit price to fall back on). Fixed both
+reads to prefer `average_price`. Verified live: a 1-share XIC **market** test went PENDING→finalised @
+$56.89, Trade/journal written, the "Bought 1 XIC @ $56.89" alert delivered. Files: `web/agent/validator.ts`,
+`web/agent/runner.ts`, `web/lib/broker/ibkr.ts`.

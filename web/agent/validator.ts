@@ -6,6 +6,7 @@ import { universeEntry } from "../lib/universe";
 import { getPortfolio } from "../lib/portfolio";
 import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
+import { alert } from "./alerts";
 
 export type Thesis = {
   thesis: string;
@@ -246,6 +247,19 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   });
 
   if (!result.ok) return { ok: false, orderId: result.orderId, rejectReason: result.rejectReason };
+
+  // Discord ping on a position change. Only on a confirmed FILL — a PENDING order
+  // (slow IBKR fill / resting limit) is announced by the runner's finalizePending
+  // loop when it actually fills, so every fill pings exactly once. System
+  // stops/take-profits alert on their own path (runner), never here.
+  if (result.status === "FILLED") {
+    await alert(
+      "info",
+      `${order.side === "BUY" ? "Bought" : "Sold"} ${order.qty} ${symbol} @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)}`,
+      `${thesis.thesis}${sellLossNote}`,
+    );
+  }
+
   return {
     ok: true,
     status: result.status,
