@@ -13,10 +13,10 @@ const PRIMARY: NavLink[] = [
   { href: "/", label: "Overview" },
   { href: "/today", label: "Today" },
   { href: "/market/watchlist", label: "Watchlist" },
+  { href: "/market/smart-money", label: "Smart Money" },
   { href: "/universe", label: "Universe" },
   { href: "/market", label: "The Hunt", exact: true },
   { href: "/market/browse", label: "Browse" },
-  { href: "/market/smart-money", label: "Smart Money" },
 ];
 const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },
@@ -60,10 +60,9 @@ export default function NavBar({
   return (
     <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-(--nav-bg) backdrop-blur">
       <div className="mx-auto flex max-w-[1700px] flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
-        <Link href="/" className="flex items-baseline gap-2">
-          <span className="bg-gradient-to-r from-teal-300 to-teal-500 bg-clip-text text-xl font-black tracking-tight text-transparent">
-            GRQ
-          </span>
+        <Link href="/" className="flex items-center" aria-label="GRQ — Get Rich Quick">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/grq-logo.png" alt="GRQ — Get Rich Quick" className="h-7 w-auto" />
         </Link>
         <div className="flex flex-wrap items-center gap-1">{PRIMARY.map(renderLink)}</div>
         <div className="ml-auto flex items-center gap-3 text-xs">
