@@ -509,3 +509,12 @@ adds nothing to the universe and trades nothing. **Also:** the **Discover** dest
 (nav, page, back-links). **Files:** `lib/hunt.ts` (new), `agent/{sessions,runner}.ts`, `components/NavBar.tsx`,
 `app/market/page.tsx`, `app/market/watchlist/page.tsx`, `app/stocks/[symbol]/page.tsx`. Agent-only — inert until
 the agent image is rebuilt.
+
+### D31 — Sim fund bumped $5,000 → $25,000 (Cam, 2026-06-17)
+Cam raised the simulated fund from $5k to $25k. Changed: `prisma/seed.ts` (account cash + initial contribution
+now `2_500_000` cents; init journal reads $25,000), the agent PERSONA (`agent/sessions.ts` — "$25,000 CAD
+fund"), and the Settings roadmap label. **Takes effect only on a destructive reseed** (`npx tsx prisma/seed.ts`
+wipes ALL fund data and resets the soak clock running since 2026-06-12) — until then the live sim still holds
+$5k and the PERSONA figure runs ahead of reality. **Guardrails (`agent/policy.ts`) unchanged:** if any hard
+limit is absolute-dollar rather than % of NAV, revisit it for the 5×-larger account before relying on it. Also
+`.gitignore` now ignores `.env.*`.

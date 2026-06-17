@@ -3,7 +3,7 @@
  *
  *   npx tsx prisma/seed.ts
  *
- * Seeds a clean $5,000 with a real XIC benchmark anchor (live delayed quote)
+ * Seeds a clean $25,000 with a real XIC benchmark anchor (live delayed quote)
  * and NO demo trades — the agent earns every entry on this slate. NAV history
  * starts with a single honest baseline point.
  */
@@ -37,10 +37,10 @@ async function main() {
 
   console.log("Seeding account…");
   await prisma.settings.create({ data: { id: 1 } }); // BALANCED, $20 budget
-  await prisma.account.create({ data: { id: 1, cashCents: 500_000 } });
+  await prisma.account.create({ data: { id: 1, cashCents: 2_500_000 } });
   await prisma.contribution.create({
     data: {
-      amountCents: 500_000,
+      amountCents: 2_500_000,
       contributor: "Cam", // sim placeholder — real-money ownership: docs/OWNERSHIP.md
       xicPriceCents: xic.midCents,
       note: "Initial commitment",
@@ -52,7 +52,7 @@ async function main() {
       kind: "SYSTEM",
       title: "Sim fund initialized — live fire",
       body:
-        `**$5,000.00 CAD** on the line (simulated). Real delayed market quotes. ` +
+        `**$25,000.00 CAD** on the line (simulated). Real delayed market quotes. ` +
         `Benchmark anchored: same money in ${BENCHMARK} @ $${(xic.midCents / 100).toFixed(2)}. ` +
         `Risk: Balanced. Fee budget: $20/month. No shorting, no margin, kill switch armed.\n\n` +
         `The agent takes over at the next market open. The soak clock starts now — ` +
