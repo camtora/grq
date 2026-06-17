@@ -10,8 +10,8 @@ import ThemeToggle from "./ThemeToggle";
 // Reports + Settings sit on the right of the nav with the status cluster.
 type NavLink = { href: string; label: string; match?: string[]; exact?: boolean };
 const PRIMARY: NavLink[] = [
-  { href: "/", label: "Overview" },
-  { href: "/today", label: "Today" },
+  { href: "/", label: "Today" },
+  { href: "/portfolio", label: "Portfolio" },
   { href: "/market/watchlist", label: "Watchlist" },
   { href: "/market/smart-money", label: "Smart Money" },
   { href: "/universe", label: "Universe" },

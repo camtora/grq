@@ -134,7 +134,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
             <Card key={d.date.toISOString()} className="p-5">
               <div className="mb-3 flex items-center gap-3 border-b border-teal-400/10 pb-2">
                 <span className="text-sm font-semibold text-teal-50">{dayLabel(d.date)}</span>
-                <Link href={`/today?d=${etDateStr(d.date)}`} className="ml-auto text-xs text-teal-300 hover:underline">
+                <Link href={`/?d=${etDateStr(d.date)}`} className="ml-auto text-xs text-teal-300 hover:underline">
                   that day →
                 </Link>
               </div>
