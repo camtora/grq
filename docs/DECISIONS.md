@@ -494,3 +494,17 @@ panel, on both pages.
 `app/market/watchlist/page.tsx`, `app/api/stock-extras/[symbol]/route.ts` (new),
 `components/{StockTable,StockFilters,ExpandableRow,RowExtras}.tsx`, `agent/runner.ts` (movers-alert
 suppression). No schema change.
+
+### D30 — Every hunt find gets a full dossier + full stock page; Discover renamed "The Hunt" (Cam, 2026-06-17)
+The discovery hunt used to write only a lightweight "Hunt dossier" lead per name; clicking through landed on a
+thin agent-flagged page. Now **each name the hunt surfaces is auto-promoted to a tracked CANDIDATE** after the
+session (`lib/hunt.ts` `promoteHuntFindToCandidate`, called from `runDiscoveryHunt`): it probes US → `.TO` → `.V`
+for a live listing, creates the `UniverseMember` (CANDIDATE, `addedBy:"hunt"`), warms quotes + 1y bars, and
+queues a **full** dossier (`ResearchRequest requestedBy:"hunt"` → `runStockDossier`). Result: a hunt find gets a
+**complete stock page** (quotes/signals/coverage + the full Dossier with bull/bear/verdict/targets/stance) and
+also lands on the **Watchlist** as a candidate; the lightweight lead still feeds the Hunt-page cards.
+**Guardrails unchanged:** the agent still cannot add to the *tradeable* universe — CANDIDATE→ACTIVE is still the
+two-member rule + screen; this only makes "researched" automatic. Respects dismissals (won't revive a RETIRED
+name) and the `CANDIDATE_CAP`. **Also:** the **Discover** destination is renamed **The Hunt** (nav, page,
+back-links). **Files:** `lib/hunt.ts` (new), `agent/sessions.ts`, `components/NavBar.tsx`, `app/market/page.tsx`,
+`app/market/watchlist/page.tsx`, `app/stocks/[symbol]/page.tsx`. Agent-only — inert until the agent image is rebuilt.

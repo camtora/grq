@@ -3,6 +3,7 @@ import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse } from "../lib/universe";
+import { promoteHuntFindToCandidate } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -115,10 +116,30 @@ For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journ
 - confidence = your conviction this is worth a look (0–100)
 - sources = every source you used
 
-Lead with WHY it matters, not just what the company is. These are PROPOSALS — you cannot add them to the universe; Cam & Graham decide what to research further. Be honest: flag the lottery tickets vs. the real businesses.
-
-Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. These are PROPOSALS; you cannot add them to the universe — Cam & Graham decide what to research further.`;
+Lead with WHY it matters, not just what the company is. Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. You can't add anything to the TRADEABLE universe; each name you surface is automatically queued for a FULL dossier, and Cam & Graham decide which to promote to tradeable.`;
+  const startedAt = new Date();
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
+
+  // D (Cam 2026-06-17): every name the hunt surfaces gets the FULL dossier pipeline —
+  // a tracked CANDIDATE → resolved quotes/bars + a queued full Dossier → a complete
+  // stock page, not just the lightweight hunt lead. The agent still can't trade them.
+  const finds = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, at: { gte: startedAt }, symbol: { not: null } },
+    select: { symbol: true },
+  });
+  const seen = new Set<string>();
+  let promoted = 0;
+  for (const f of finds) {
+    const s = f.symbol as string;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    try {
+      if ((await promoteHuntFindToCandidate(s)) === "added") promoted++;
+    } catch (e) {
+      console.error(`[hunt] promote ${s} failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+  if (promoted > 0) console.log(`[hunt] promoted ${promoted} find(s) to CANDIDATE — full dossiers queued`);
 }
 
 /** Smart-money read (D27) — the EDITORIAL narrative on top of the structured

@@ -20,15 +20,17 @@ tier-4 insider via the agent's per-dossier web research (paid INK feed deferred)
 on-page price ticker** (`<LiveQuote>` → `/api/quotes`, FMP — *verify TSX-realtime vs delayed at
 market open*). **Rating: GRQ's call unified to a 7-point scale** (Strong Buy→Strong Sell, same
 vocabulary as the signal; D23) — `lib/stance.ts` + `RatingBar`. **IA-v5 (D26):** the four market
-destinations **Watchlist · Universe · Discover · Browse** are now **top-level header nav** (the
+destinations **Watchlist · Universe · The Hunt · Browse** are now **top-level header nav** (the
 `MarketTabs` sub-nav is gone). **Watchlist** rows are Universe-style; **Universe**+Watchlist show GRQ's
 call as the **RatingBar** and **click-to-expand** (D29) into an in-table panel — GRQ's call + blurb, the
 dossier's plain-English *why* (`bottomLine`) + targets, **+ lazily-loaded earnings/analyst ratings**
 (`/api/stock-extras/[symbol]` → `RowExtras`, fetched on expand), full-dossier link (`components/ExpandableRow.tsx`,
 a client wrapper so `StockTable` stays server). Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
-list tables — `UniverseActions hideResearch`). **Discover** = the hunt (8–12 names · **↻ refresh** via
+list tables — `UniverseActions hideResearch`). **The Hunt** (was Discover; D30) = the hunt (8–12 names · **↻ refresh** via
 `AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED); hunt cards are **leads, not verdicts**
-(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Browse** has an inline
+(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Every hunt find is now
+auto-promoted to a CANDIDATE** (`lib/hunt.ts`, `requestedBy:"hunt"`) so it gets a **full dossier + full stock
+page**, not just the lead — the agent still can't trade it (D30). **Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
 **Smart Money (D28)** is a fifth top-level destination (`/market/smart-money`): **tracked-portfolio cards**
 (curated 13F filers by CIK — Buffett/Burry/Ackman/Wood/**Aschenbrenner**, + Pelosi by name; expand into
