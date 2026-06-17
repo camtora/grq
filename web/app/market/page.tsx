@@ -3,7 +3,7 @@ import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession } from "@/lib/session";
 import { computeSignals, overallSignal } from "@/agent/signals";
-import { PageHeader, Chip } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { type WatchState } from "@/components/WatchButton";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
 import DismissButton from "@/components/DismissButton";
@@ -74,21 +74,13 @@ export default async function Market() {
   return (
     <main>
       <PageHeader
-        title="Discover"
-        sub="The agent's hunt for under-the-radar names — earlier-stage leads, often before a price target. (Smart money moved to its own page.)"
+        title="The Hunt"
+        sub="The agent's search for under-the-radar names — earlier-stage leads, often before a price target. Proposals only: watch the ones you like, dismiss the ones you don't."
+        right={isMember ? <RefreshHuntButton /> : undefined}
       />
 
       {huntIdeas.length > 0 && (
         <section className="mb-8">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Chip tone="teal">the hunt</Chip>
-            <span className="text-sm text-teal-200/50">under-the-radar names the agent flagged — earlier-stage finds, often before a price target</span>
-            {isMember && (
-              <span className="ml-auto">
-                <RefreshHuntButton />
-              </span>
-            )}
-          </div>
           <div className="grid items-start gap-4 sm:grid-cols-2">
             {huntIdeas.map((idea) => (
               <div key={idea.sym} className="flex flex-col gap-1.5">
@@ -101,13 +93,12 @@ export default async function Market() {
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-teal-200/40">Proposals only — the agent can&apos;t add these itself. Watch the ones you like, or dismiss the ones you don&apos;t.</p>
         </section>
       )}
 
       <p className="mt-4 text-xs text-teal-200/40">
-        The agent surfaces ideas; it does not auto-trade anything outside the guardrailed universe. Targets are the agent&apos;s
-        hypotheses, not promises — a track record builds as they resolve.
+        The agent can&apos;t add or trade these itself — nothing trades outside the guardrailed universe. Targets are the
+        agent&apos;s hypotheses, not promises; a track record builds as they resolve.
       </p>
     </main>
   );

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 
-// The four market destinations sit directly in the header — no sub-navigation
-// (Cam 2026-06-16). `exact` pins Discover to exactly /market so it doesn't light
+// The market destinations sit directly in the header — no sub-navigation
+// (Cam 2026-06-16). `exact` pins The Hunt to exactly /market so it doesn't light
 // up on /market/watchlist or /market/browse.
 // Reports + Settings sit on the right of the nav with the status cluster.
 type NavLink = { href: string; label: string; match?: string[]; exact?: boolean };
@@ -14,7 +14,7 @@ const PRIMARY: NavLink[] = [
   { href: "/today", label: "Today" },
   { href: "/market/watchlist", label: "Watchlist" },
   { href: "/universe", label: "Universe" },
-  { href: "/market", label: "Discover", exact: true },
+  { href: "/market", label: "The Hunt", exact: true },
   { href: "/market/browse", label: "Browse" },
   { href: "/market/smart-money", label: "Smart Money" },
 ];

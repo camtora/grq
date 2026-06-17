@@ -75,7 +75,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     return (
       <main>
         <Link href="/market" className="text-xs text-teal-300 hover:underline">
-          ← discoveries
+          ← the hunt
         </Link>
         <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
           <StockLogo symbol={symbol} logoUrl={null} className="h-10 w-10 self-center text-sm" />

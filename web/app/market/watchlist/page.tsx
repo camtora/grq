@@ -129,7 +129,7 @@ export default async function Watchlist() {
         {rows.length === 0 ? (
           <EmptyState
             title="Nothing on the watchlist"
-            body="Watch a name above, or find one on Browse / Discover — GRQ starts researching it the moment you do."
+            body="Watch a name above, or find one on Browse / The Hunt — GRQ starts researching it the moment you do."
           />
         ) : (
           <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
