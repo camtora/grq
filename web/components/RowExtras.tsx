@@ -85,7 +85,7 @@ export default function RowExtras({ symbol }: { symbol: string }) {
     : [];
 
   return (
-    <div className="mt-3 grid gap-x-6 gap-y-3 border-t border-teal-400/10 pt-3 sm:grid-cols-2">
+    <div className="mt-3 space-y-3 border-t border-teal-400/10 pt-3">
       {earnings && (
         <div>
           <div className="text-[10px] uppercase tracking-wider text-teal-200/50">

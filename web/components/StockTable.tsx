@@ -227,6 +227,7 @@ function RowDetail({ r }: { r: StockRow }) {
             )}
           </div>
         )}
+        <RowExtras symbol={r.symbol} />
       </div>
       <div className="md:col-span-2">
         <div className="text-[10px] uppercase tracking-wider text-teal-200/50">Why</div>
@@ -244,7 +245,6 @@ function RowDetail({ r }: { r: StockRow }) {
         </Link>
       </div>
       </div>
-      <RowExtras symbol={r.symbol} />
     </div>
   );
 }

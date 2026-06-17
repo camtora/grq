@@ -116,7 +116,10 @@ export default function Md({ text, className = "" }: { text: string; className?:
   const processed = text.replace(/\[\[([^\][]{1,80})\]\]/g, (_m, t) => `[${t}](#explain:${encodeURIComponent(t.trim())})`);
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-teal-100/80 ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[autoGlossary]} components={components}>
+      {/* singleTilde:false — the agent writes ~ for "approximately" (~$870); without
+          this, GFM reads a pair of ~ on a line as strikethrough and crosses out the
+          text between them. Only ~~double~~ strikes through now. */}
+      <ReactMarkdown remarkPlugins={[[remarkGfm, { singleTilde: false }]]} rehypePlugins={[autoGlossary]} components={components}>
         {processed}
       </ReactMarkdown>
     </div>
