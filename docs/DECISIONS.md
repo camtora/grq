@@ -588,3 +588,15 @@ was **skipped forever** by BOTH the synchronous ~12s poll in `placeOrder` AND `f
 reads to prefer `average_price`. Verified live: a 1-share XIC **market** test went PENDING→finalised @
 $56.89, Trade/journal written, the "Bought 1 XIC @ $56.89" alert delivered. Files: `web/agent/validator.ts`,
 `web/agent/runner.ts`, `web/lib/broker/ibkr.ts`.
+
+**Follow-up — performance referenced to the paper inception, not the sim.** Cam: "vs XIC −$630.51" looked
+wrong because the benchmark was anchored to the **sim seed** (2026-06-12, XIC $55.51), giving XIC a 5-day
+head start before we deployed a dollar. The fund's real track record starts at the **IBKR-paper open
+(2026-06-17 9:30 ET = 13:30 UTC)**. Fixes: (1) **re-anchored the single $25k `Contribution`** to that open
+(`xicPriceCents` $55.51→**$56.75** = XIC at 9:33 ET, derived from the all-cash open snapshot; `at`→06-17
+13:30; today's already-written `NavSnapshot.benchmarkCents` rescaled ×5551/5675 since benchmark ∝ 1/anchor)
+→ "vs XIC" went −$630→~−$80. (2) Added **`PAPER_INCEPTION`** (`lib/portfolio.ts`) and windowed the
+performance VIEWS to it (non-destructive — sim snapshots stay in the DB): `getNavHistory` (Portfolio NAV
+chart) and the Today page's day-open baseline (`app/page.tsx` `dayOpenSnap`) now filter `at >=
+PAPER_INCEPTION`. The latter also fixed a phantom **+$20k "today" gain** (the Today baseline had been the
+last *sim* 5k snapshot → `25k − 5k`). Drawdown HWM unaffected (today's 25k was already the max).

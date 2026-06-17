@@ -2,6 +2,12 @@ import { prisma } from "./db";
 import { getQuotes } from "./broker/quotes";
 import { benchmarkValueCents } from "./broker/sim";
 
+// The fund's real track record begins at the IBKR-paper open (2026-06-17, 9:30 ET
+// = 13:30 UTC). The sim run before that was a rehearsal on a different (5k) account,
+// so performance views — the NAV chart, day-open baselines — reference this inception,
+// not the sim history (which stays in the DB). See docs/DECISIONS.md D33.
+export const PAPER_INCEPTION = new Date("2026-06-17T13:30:00Z");
+
 export type PositionView = {
   symbol: string;
   qty: number;
@@ -86,6 +92,7 @@ export async function getPortfolio(): Promise<PortfolioView> {
 
 export async function getNavHistory(limit = 60) {
   const rows = await prisma.navSnapshot.findMany({
+    where: { at: { gte: PAPER_INCEPTION } },
     orderBy: { at: "desc" },
     take: limit,
   });

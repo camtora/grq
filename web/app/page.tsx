@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { getPortfolio, type PositionView } from "@/lib/portfolio";
+import { getPortfolio, PAPER_INCEPTION, type PositionView } from "@/lib/portfolio";
 import { allUniverse } from "@/lib/universe";
 import { startOfEtDay, etDateStr, etParts, isMarketDay } from "@/agent/calendar";
 import { money, signedMoney, pct } from "@/lib/money";
@@ -172,7 +172,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
-      prisma.navSnapshot.findFirst({ where: { at: { lt: start } }, orderBy: { at: "desc" } }),
+      prisma.navSnapshot.findFirst({ where: { at: { lt: start, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
       prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
       prisma.quote.findMany(),
       allUniverse(),
