@@ -9,6 +9,42 @@ the account is approved.
 
 ---
 
+## ✅ 2026-06-17 — LIVE on IBKR paper; the soak clock started (D33).
+
+The 2026-06-16 blocker (Stocks-Canada permission not yet synced to the paper twin) **cleared on the
+overnight reset** — and that same reset **re-provisioned the paper account**: it is now **`DUQ779121`**
+(login **`yzfrmq515`**, **CAD ~25,000** — the paper default, not the old 5k), replacing `DUQ774890`. `.env`
+updated accordingly. Gameday verification, all green:
+
+1. **Connect** — `iserver/auth/status` → `authenticated:true, connected:true, competing:false`; SSO ~18h
+   (the IB Key push was approved at boot).
+2. **Reconcile** — gateway ledger **CAD 25,000 / flat** mirrors into our DB `Account` (`reconcile()` works).
+3. **A real fill** — `getBroker().placeOrder({symbol:"XIC",side:"BUY",type:"MARKET",qty:1})` (run via
+   `docker exec grq-agent node_modules/.bin/tsx -e` in an **async IIFE** — tsx `-e` is CJS, no top-level
+   await). The order was **ACCEPTED (no "No trading permissions")** and **FILLED @ CAD 56.98**; reconcile
+   mirrored the position + cash. **NB:** the manual `/api/sim/order` route is hard-blocked when
+   `BROKER!=="sim"` (returns 400) — by design; the only ibkr test path is `getBroker().placeOrder` direct.
+
+**`BROKER=ibkr-paper` is live; the ≥2-week IBKR-paper soak clock started 2026-06-17 = day 1** (Cam's call).
+
+**Bug found + fixed in the same session (D33) — the slow-fill ledger gap.** A fill that lands *after* the
+adapter's synchronous ~12s poll returns `PENDING`, and nothing finalised it: `reconcile()` only mirrors
+position/cash and `sweepPendingOrders()` is a no-op for IBKR → the `Order` stayed `PENDING` forever with
+**no `Trade` row and no journal entry** (holdings/NAV stayed correct, but the trade ledger silently missed
+the trade — unacceptable for a clean soak record). Fix (`web/lib/broker/ibkr.ts`, `web/agent/runner.ts`,
+schema): added **`Order.brokerOrderId`** (stored on the PENDING row) + **`IBKRBroker.finalizePending()`**
+— each market tick (before `reconcile`, so a sell's realized P&L reads the pre-fill ACB) it polls each
+PENDING ibkr order's `/iserver/account/order/status/{id}` and, on `filled`, writes the Trade + journal via
+a shared **`settleFill()`** and flips the order `FILLED` (cancelled/rejected → `REJECTED`). The first test
+order (#15) was **backfilled** directly (legacy row, no `brokerOrderId`). Verified: tsc clean; agent
+rebuilt + deployed (stale-build-checked against the fresh image); `finalizePending()` exercised live.
+
+**Daily reality:** IBKR expires the session ~midnight ET → a **daily IB Key approval** keeps the gateway
+alive (restart `ibeam`, approve the push). **Security still open:** rotate the paper login to a UNIQUE
+password so `.env` never holds live-account creds.
+
+---
+
 ## ✅ 2026-06-16 — CONNECTED to paper (D22). Gateway authenticates + reconciles; one blocker left.
 
 The 2026-06-15 wall was **no real paper account existed**. Cam created one via Client Portal →
@@ -54,7 +90,8 @@ won't reach `DUQ774890` until ~next day. (Market-data subscriptions + the Market
 acknowledgement/cert** were also required and are done.) **Re-test next market day:** `docker-compose
 up -d ibeam` → approve the IB Key push → re-run the 1-share test order → if it fills + reconciles, set
 `BROKER=ibkr-paper`, `docker-compose up -d --no-deps agent web chat` → the ≥2-week IBKR-paper soak
-clock starts. **Currently `BROKER=sim`** (reverted; the agent is healthy on the sim).
+clock starts. **✅ RESOLVED 2026-06-17 — see the top block (D33): perm synced, test order filled, now LIVE
+on `ibkr-paper`. (The reset also re-provisioned the account `DUQ774890`→`DUQ779121`.)**
 
 **Security:** Cam set the paper password = his live password, so `.env` currently holds the LIVE
 password — rotate the paper login (`cwiaiu983`) to a UNIQUE password so the bot never holds

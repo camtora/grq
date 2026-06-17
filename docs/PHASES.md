@@ -7,9 +7,9 @@ detail: what each phase actually contains, what shipped, and exact exit criteria
 |---|---|---|---|
 | 0 | Skeleton | ✅ shipped 2026-06-11 | no |
 | 1 | Mock fund | ✅ shipped 2026-06-11 | no |
-| 2 | Sim live-fire (the agent) | ✅ shipped 2026-06-12 — **soaking** | no |
+| 2 | Sim live-fire (the agent) | ✅ shipped 2026-06-12 (sim soaked 06-12→17) | no |
 | 2.5 | Quality-of-life builds (parallel with the soak) | ✅ shipped 2026-06-12 (a–f all live) | no |
-| 3 | IBKR paper | blocked on account opening (Cam & Graham both applied 2026-06-12) | **yes** |
+| 3 | IBKR paper | ✅ **LIVE 2026-06-17 (D33)** — `BROKER=ibkr-paper`, **soaking (paper day 1 = 06-17)** | **yes** |
 | 4 | Live ($5,000) | gated on soak | yes |
 | 5 | Later | backlog | yes |
 
@@ -285,6 +285,13 @@ change membership, only propose.** Update AGENT-SPEC + DECISIONS when this ships
 6. Candidate cap ~20 and on-demand budget ~5/day — OK?
 
 ## Phase 3 — IBKR paper (needs the account)
+
+**✅ LIVE since 2026-06-17 (D33) — soaking.** `BROKER=ibkr-paper` on paper account `DUQ779121` (CAD ~25k);
+gateway connected via the loopback proxy; verified end-to-end (connect + reconcile + a 1-share XIC order
+placed→filled→reconciled). The ≥2-week IBKR-paper soak clock started **2026-06-17 = day 1**. The slow-fill
+ledger finaliser (`finalizePending()`) shipped the same day so the trade record stays complete. Runbook +
+detail: `docs/IBKR-PHASE3.md`. Remaining ops: daily ~midnight-ET IB Key re-approval; rotate the paper
+password to a unique value; the Flex importer is deferred (not a blocker). Below = the original plan.
 
 Human prerequisites (Cam, in Client Portal once approved): enable paper account · create
 secondary username for the API · paper credentials into `.env` · generate Flex token.

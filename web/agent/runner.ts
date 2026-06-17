@@ -222,8 +222,9 @@ async function maybeScheduledSessions() {
     return;
   }
 
-  // 9:00–9:30 pre-market research on market days
-  if (isMarketDay() && m >= 9 * 60 && m < 9 * 60 + 30) {
+  // 8:00–8:30 pre-market research on market days (the morning brief — the Game
+  // plan shown on the Portfolio page; moved earlier from 9:00, Cam 2026-06-17)
+  if (isMarketDay() && m >= 8 * 60 && m < 8 * 60 + 30) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Game plan" } },
     });
@@ -329,6 +330,13 @@ async function tick() {
   if (open) {
     if (broker.kind === "ibkr") {
       await (broker as IBKRBroker).keepAlive();
+      // Finalise any PENDING orders whose fill landed after the synchronous poll
+      // window BEFORE reconcile, so a sell's realized P&L reads the pre-fill ACB.
+      const finalized = await (broker as IBKRBroker).finalizePending().catch(async (e) => {
+        await alert("warning", "IBKR finalize-pending failed", String(e));
+        return 0;
+      });
+      if (finalized > 0) await alert("info", `Finalised ${finalized} IBKR fill(s) from broker truth`);
       await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e)));
     }
     const swept = await broker.sweepPendingOrders();

@@ -95,6 +95,11 @@ model Order {
   reason            String?
   rejectReason      String?
   broker            String         @default("sim")
+  // Broker-side order id (IBKR). Stored when an order is left PENDING (its fill
+  // landed after our synchronous poll window) so the per-tick finaliser can resolve
+  // it to a fill and write the Trade/journal — keeps the ledger from silently
+  // missing slow fills. Null for sim orders and legacy rows.
+  brokerOrderId     String?
   trades            Trade[]
   journal           JournalEntry[]
 

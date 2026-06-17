@@ -541,3 +541,33 @@ self-promoted {symbol}` Discord (+ `🤖 GRQ is tracking` for new candidates); t
 universe` alert is untouched and persists. **Loop is now closed:** hunt → dossier → add_candidate →
 promote_to_universe → trade, all agent-driven, with block/demote/kill + the order gate as the human brakes.
 **Chat persona** updated so the read-only chat agent can explain the new capability. Default-on, on `ibkr-paper`.
+
+### D33 — IBKR paper LIVE + the slow-fill ledger finaliser (Cam, 2026-06-17)
+**Context:** gameday. The D22 connection's last blocker was the Stocks-Canada trading permission not yet
+synced to the paper twin (paper inherits perms only on IBKR's nightly reset). On 2026-06-17 the reset
+cleared it — and **re-provisioned the paper account** to **`DUQ779121`** (login `yzfrmq515`, CAD ~25k, the
+paper default), replacing `DUQ774890`/5k; `.env` updated. **Decision:** today counts as **day 1 of the
+≥2-week IBKR-paper soak** (Cam's call); `BROKER=ibkr-paper` stays live. The soak gate (§9: ≥2 clean weeks
+on IBKR paper, ≥4 total incl. sim) and the §6 order gate are unchanged.
+**Verified end-to-end:** (1) gateway `authenticated:true,connected:true`; (2) `reconcile()` mirrors the
+gateway ledger (CAD 25k / flat) into the DB `Account`; (3) a 1-share XIC market order via
+`getBroker().placeOrder` (the manual `/api/sim/order` route is hard-blocked off-sim, by design) was
+**accepted (no "No trading permissions") and FILLED @ CAD 56.98**, then reconciled. We now hold 1 paper
+share of XIC.
+**Bug found + fixed (the gameday work):** a fill that lands AFTER the adapter's synchronous ~12s poll
+returns `PENDING`, and nothing finalised it — `reconcile()` only mirrors position/cash and
+`sweepPendingOrders()` is a no-op for IBKR → the `Order` stayed `PENDING` forever with **no `Trade` and no
+journal entry**. Holdings/NAV stayed correct, but the **trade ledger silently missed the trade** — wrong
+for a clean soak record (and a "shows it but can't explain it" literacy bug). **Fix** (`web/lib/broker/
+ibkr.ts`, `web/agent/runner.ts`, `web/prisma/schema.prisma`): added **`Order.brokerOrderId`** (stored on
+the PENDING row); new **`IBKRBroker.finalizePending()`** runs each market tick *before* `reconcile()` (so a
+sell's realized P&L reads the pre-fill ACB), polls each PENDING ibkr order's
+`/iserver/account/order/status/{id}`, and on `filled` writes the Trade + journal via a shared
+**`settleFill()`** (refactored out of `recordFill`) and flips the order `FILLED` (cancelled/rejected →
+`REJECTED`). The first test order (#15, a legacy row with no `brokerOrderId`) was **backfilled** directly.
+tsc clean; agent rebuilt + deployed (`--no-deps`), stale-build-checked against the fresh image,
+`finalizePending()` exercised live (returned 0 — nothing left pending). **Ops note:** the deploy hit
+`/var` `ENOSPC` (host disk 94–95%; agent bounced ~2×) and recovered after `docker image prune -f` freed
+4.5 GB — recurring disk pressure, minimise rebuilds. **Open follow-ups:** rotate the paper login to a
+unique password (the bot must not hold live-account creds); the gateway needs a daily ~midnight-ET IB Key
+re-approval. Runbook: `docs/IBKR-PHASE3.md` top block.

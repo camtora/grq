@@ -220,12 +220,14 @@ export class IBKRBroker implements BrokerAdapter {
       }
 
       if (filledPriceCents === null) {
-        // Working but not yet filled — record PENDING; reconcile finalises it.
+        // Working but not yet filled — record PENDING with the broker order id so
+        // finalizePending() can resolve it to a fill on a later tick (a slow fill
+        // would otherwise leave the order PENDING with no Trade ever written).
         const o = await prisma.order.create({
           data: {
             symbol: input.symbol.toUpperCase(), side: input.side, type: input.type, qty: input.qty,
             limitPriceCents: input.limitPriceCents, status: "PENDING", placedBy: input.placedBy,
-            reason: input.reason, broker: "ibkr",
+            reason: input.reason, broker: "ibkr", brokerOrderId: orderId,
           },
         });
         return { ok: true, orderId: o.id, status: "PENDING" };
@@ -242,12 +244,9 @@ export class IBKRBroker implements BrokerAdapter {
 
   /** Write a FILLED order + trade + TRADE journal entry from IBKR's execution.
    *  Position/cash are NOT computed here — reconcile() mirrors them from broker
-   *  truth. Realized P&L on a sell uses the DB position's ACB (kept current by
-   *  reconcile). Returns the order id. */
+   *  truth. Returns the order id. */
   private async recordFill(input: PlaceOrderInput, priceCents: number, commissionCents: number): Promise<number> {
     const symbol = input.symbol.toUpperCase();
-    const pos = input.side === "SELL" ? await prisma.position.findUnique({ where: { symbol } }) : null;
-    const realizedPnlCents = pos ? input.qty * (priceCents - pos.avgCostCents) - commissionCents : null;
     const order = await prisma.order.create({
       data: {
         symbol, side: input.side, type: input.type, qty: input.qty, limitPriceCents: input.limitPriceCents,
@@ -255,21 +254,76 @@ export class IBKRBroker implements BrokerAdapter {
         placedBy: input.placedBy, reason: input.reason, broker: "ibkr",
       },
     });
+    await this.settleFill(
+      { id: order.id, symbol, side: input.side, qty: input.qty, reason: input.reason ?? null },
+      priceCents,
+      commissionCents,
+    );
+    return order.id;
+  }
+
+  /** Write the Trade + TRADE journal entry for a fill on an already-persisted order
+   *  row. Realized P&L on a sell uses the DB position's ACB (kept current by
+   *  reconcile, which runs AFTER this on the tick). Shared by the synchronous fill
+   *  path (recordFill) and the per-tick PENDING finaliser (finalizePending). */
+  private async settleFill(
+    order: { id: number; symbol: string; side: "BUY" | "SELL"; qty: number; reason: string | null },
+    priceCents: number,
+    commissionCents: number,
+  ): Promise<void> {
+    const pos = order.side === "SELL" ? await prisma.position.findUnique({ where: { symbol: order.symbol } }) : null;
+    const realizedPnlCents = pos ? order.qty * (priceCents - pos.avgCostCents) - commissionCents : null;
     await prisma.trade.create({
-      data: { orderId: order.id, symbol, side: input.side, qty: input.qty, priceCents, commissionCents, realizedPnlCents },
+      data: { orderId: order.id, symbol: order.symbol, side: order.side, qty: order.qty, priceCents, commissionCents, realizedPnlCents },
     });
     await prisma.journalEntry.create({
       data: {
-        kind: "TRADE", symbol, orderId: order.id,
-        title: `${input.side} ${input.qty} ${symbol} @ ${(priceCents / 100).toFixed(2)} (IBKR paper)`,
+        kind: "TRADE", symbol: order.symbol, orderId: order.id,
+        title: `${order.side} ${order.qty} ${order.symbol} @ ${(priceCents / 100).toFixed(2)} (IBKR paper)`,
         body:
-          (input.reason ?? "(no thesis recorded)") +
+          (order.reason ?? "(no thesis recorded)") +
           (realizedPnlCents !== null
             ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} CAD (after ${(commissionCents / 100).toFixed(2)} commission)`
             : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} CAD`),
       },
     });
-    return order.id;
+  }
+
+  /** Reconcile PENDING ibkr orders against broker truth. An order whose fill landed
+   *  AFTER the synchronous poll window (placeOrder returned PENDING) is finalised
+   *  here — Trade + journal written, Order flipped to FILLED — so the trade ledger is
+   *  never silently incomplete. Cancelled/rejected orders are closed out. Returns the
+   *  count finalised to a fill; the runner reconciles positions/cash after. Called on
+   *  the tick BEFORE reconcile so a sell's realized P&L reads the pre-fill ACB. */
+  async finalizePending(): Promise<number> {
+    const pending = await prisma.order.findMany({ where: { status: "PENDING", broker: "ibkr" } });
+    let filled = 0;
+    for (const o of pending) {
+      if (!o.brokerOrderId) continue; // no broker id (legacy row) — can't track; backfilled manually
+      const st = await cp<OrderStatus>(`/iserver/account/order/status/${o.brokerOrderId}`).catch(() => ({}) as OrderStatus);
+      const status = (st.order_status ?? "").toLowerCase();
+      if (status === "filled") {
+        const avg = parseFloat(st.avgPrice ?? st.avg_price ?? "0");
+        const priceCents = avg > 0 ? Math.round(avg * 100) : o.limitPriceCents ?? 0;
+        if (priceCents <= 0) continue; // no usable fill price yet — retry next tick
+        const commissionCents =
+          typeof st.commission === "number" && st.commission > 0
+            ? Math.round(st.commission * 100)
+            : ibkrFixedCommissionCents(o.qty, priceCents) || 100;
+        await prisma.order.update({
+          where: { id: o.id },
+          data: { status: "FILLED", filledQty: o.qty, avgFillPriceCents: priceCents, commissionCents },
+        });
+        await this.settleFill({ id: o.id, symbol: o.symbol, side: o.side, qty: o.qty, reason: o.reason }, priceCents, commissionCents);
+        filled++;
+      } else if (status === "cancelled" || status === "rejected") {
+        await prisma.order.update({
+          where: { id: o.id },
+          data: { status: "REJECTED", rejectReason: `IBKR order ${o.brokerOrderId} ${status}.` },
+        });
+      }
+    }
+    return filled;
   }
 
   private async recordReject(input: PlaceOrderInput, rejectReason: string): Promise<PlaceOrderResult> {

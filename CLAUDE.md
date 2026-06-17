@@ -8,8 +8,9 @@ Cam & Graham at https://grq.camerontora.ca. A trading agent (Phase 2+) manages a
 brokerage account within hard code-enforced guardrails; the web app is the dashboard.
 Tagline: *"Get rich quick, slowly, with receipts."*
 
-**Status (2026-06-16):** Phases 0–2.7 shipped — site live behind SSO; the agent is
-live-firing on the sim on real Yahoo-delayed quotes (soak running since 2026-06-12), with
+**Status (2026-06-17):** Phases 0–2.7 shipped — site live behind SSO; the agent is
+**live-firing on IBKR paper** (`BROKER=ibkr-paper`) on real delayed quotes — the **IBKR-paper soak
+clock started 2026-06-17 (day 1)**; the sim soaked 2026-06-12→17, with
 per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
 chat. Decision sessions run on **Opus 4.8** (`claude-opus-4-8`), triage on Haiku 4.5 — Fable 5
@@ -44,12 +45,15 @@ input it weighs, never the gate. (`lib/smart-money/*`, `components/smart-money/*
 **Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**;
 **The Tape sits above the headlines**, and **today's biggest movers are clickable + auto-researched** — Today queues a `movers`
 dossier for any it doesn't track, and the stock page shows a *researching…* state until it lands (D29). The stock page also shows the **company logo**.
-stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper CONNECTED (D22):**
-the gateway authenticates + reconciles the paper account **`DUQ774890`** (CAD 5k mirrored) via a
-**loopback proxy** (`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`); the
-adapter's conid/error bugs are fixed. **Still `BROKER=sim`** — the last blocker is the Stocks-Canada
-trading permission syncing to the paper twin on IBKR's nightly reset (re-test next market day, then
-flip). **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq underlying.**
+stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR paper LIVE (D22, D33):**
+`BROKER=ibkr-paper` is live and the agent trades the paper account **`DUQ779121`** (CAD ~25k; the
+2026-06-17 nightly reset re-provisioned the account — was `DUQ774890`/CAD 5k) via a **loopback proxy**
+(`grq-ibeam-proxy` socat sidecar → `IBKR_GATEWAY_URL=https://ibeam:5002`). **Verified end-to-end
+2026-06-17 (D33):** gateway authenticated+connected, `reconcile()` mirrors broker truth, and a 1-share
+XIC market order placed→**filled @ CAD 56.98**→reconciled (the old "No trading permissions" block cleared
+on the overnight perm-sync). **The ≥2-wk IBKR-paper soak clock started 2026-06-17 = day 1.** D33 also
+fixed a slow-fill ledger gap (`finalizePending()` — see below). Gateway needs a **daily ~midnight-ET IB
+Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq underlying.**
 
 ---
 
@@ -188,7 +192,7 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `web/prisma/seed.ts` | Destructive sim reset + demo trades |
 | `web/lib/users.ts` | Member list (the app-level allowlist) |
 | `web/middleware.ts` | The door |
-| `.env` | Secrets/config: db password, `BROKER=sim`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token), `DISCORD_WEBHOOK_URL` (alerts), `FMP_API_KEY`, optional `GRQ_MODEL_DECISION` (default `claude-opus-4-8`); **IBKR (D22):** `IBEAM_ACCOUNT`/`IBEAM_PASSWORD` (the PAPER login `cwiaiu983` — UNQUOTED, env_file rule), `IBEAM_USE_PAPER_ACCOUNT=True`, `IBKR_ACCOUNT_ID=DUQ774890`, `IBKR_GATEWAY_URL=https://ibeam:5002` (the loopback proxy, not :5000) |
+| `.env` | Secrets/config: db password, `BROKER=ibkr-paper`, `CLAUDE_CODE_OAUTH_TOKEN` (Cam's Max token), `DISCORD_WEBHOOK_URL` (alerts), `FMP_API_KEY`, optional `GRQ_MODEL_DECISION` (default `claude-opus-4-8`); **IBKR (D22, D33):** `IBEAM_ACCOUNT`/`IBEAM_PASSWORD` (the PAPER login `yzfrmq515` — UNQUOTED, env_file rule), `IBEAM_USE_PAPER_ACCOUNT=True`, `IBKR_ACCOUNT_ID=DUQ779121`, `IBKR_GATEWAY_URL=https://ibeam:5002` (the loopback proxy, not :5000) |
 
 ## Working agreements
 
