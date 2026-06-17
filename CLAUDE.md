@@ -35,7 +35,9 @@ list tables — `UniverseActions hideResearch`). **Discover** = the hunt (8–12
 holdings with NEW/ADD/TRIM diffs + **PUT/CALL flags**), **Congress/funds/insider leaderboards** + cluster
 buys, and a GRQ narrative — all from FMP structured feeds + a nightly **OpenInsider** scrape, ingested
 **daily** (13Fs only on a new filing) by the runner. Honest: 13F lags ~45d & longs+options-only; congress
-amounts are ranges; most names US-listed → leads, not trades. (`lib/smart-money/*`, `components/smart-money/*`.)
+amounts are ranges; most names US-listed → leads, not trades. Also surfaced **per-stock** (`StockSmartMoney` on
+`/stocks/[symbol]`) and **fed into the agent** (`buildContext` holdings/focus section + the dossier prompt) — an
+input it weighs, never the gate. (`lib/smart-money/*`, `components/smart-money/*`.)
 **Today** gained a **live indices strip** (`/api/indices`, polls till close) + movers-beside-industry (expandable) + the **market pulse**;
 **The Tape sits above the headlines**, and **today's biggest movers are clickable + auto-researched** — Today queues a `movers`
 dossier for any it doesn't track, and the stock page shows a *researching…* state until it lands (D29). The stock page also shows the **company logo**.
