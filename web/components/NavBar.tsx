@@ -61,8 +61,9 @@ export default function NavBar({
     <nav className="sticky top-0 z-10 border-b border-teal-400/10 bg-(--nav-bg) backdrop-blur">
       <div className="mx-auto flex max-w-[1700px] flex-wrap items-center gap-x-5 gap-y-2 px-6 py-3">
         <Link href="/" className="flex items-center" aria-label="GRQ — Get Rich Quick">
+          {/* Light mode: the original dark-text logo (reads on light); dark mode: the recolored one. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/grq-logo.png" alt="GRQ — Get Rich Quick" className="h-7 w-auto" />
+          <img src={theme === "light" ? "/grq-logo-light.png" : "/grq-logo.png"} alt="GRQ — Get Rich Quick" className="h-7 w-auto" />
         </Link>
         <div className="flex flex-wrap items-center gap-1">{PRIMARY.map(renderLink)}</div>
         <div className="ml-auto flex items-center gap-3 text-xs">

@@ -321,7 +321,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <header className="mb-6 border-y-2 border-teal-400/30 py-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-3xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/bull-splash.png" alt="" className="h-9 w-auto" />
+              <div className="text-3xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
+            </div>
             <div className="mt-1 text-[11px] uppercase tracking-[0.3em] text-teal-300/70">
               {edition} · {dayLabel}
             </div>

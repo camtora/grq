@@ -31,6 +31,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" data-theme={theme}>
       <body className="min-h-screen antialiased">
+        {/* Faint bull watermark behind every page (Cam 2026-06-17). */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 flex items-center justify-center overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/bull-splash.png" alt="" className="w-[min(72vw,860px)] opacity-[0.04]" />
+        </div>
         <NavBar
           name={session?.user?.name ?? session?.email ?? "?"}
           killSwitch={settings?.killSwitch ?? false}
