@@ -20,7 +20,7 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { markBoot, isDailyLossPaused } from "./validator";
 import { alert, heartbeat } from "./alerts";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan } from "./sessions";
+import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview } from "./sessions";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -36,6 +36,7 @@ let lastLogoBackfill = 0;
 let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
 let lastSmartMoneyDay = "";
+let startupReviewChecked = false;
 let dailyLossAlerted = "";
 const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
@@ -180,6 +181,31 @@ async function maybeScheduledSessions() {
   const p = etParts();
   const m = p.minutesSinceMidnight;
   const dayStart = (await import("./calendar")).startOfEtDay();
+
+  // Startup universe review (D30, Cam 2026-06-17): once per process boot, the agent
+  // reviews the watchlist and self-promotes the names it would invest in, then plans
+  // entries. Guarded 6h so a deploy/restart doesn't re-run the (big) review session.
+  if (!startupReviewChecked) {
+    startupReviewChecked = true;
+    const [recent, candidates] = await Promise.all([
+      prisma.journalEntry.count({ where: { title: { startsWith: "Startup universe review" }, at: { gte: new Date(Date.now() - 6 * 60 * 60_000) } } }),
+      prisma.universeMember.count({ where: { status: "CANDIDATE" } }),
+    ]);
+    if (recent === 0 && candidates > 0) {
+      sessionRunning = true;
+      try {
+        await runStartupUniverseReview();
+        // Reliable 6h-guard marker (independent of what the agent journaled).
+        await prisma.journalEntry.create({
+          data: { kind: "SYSTEM", title: "Startup universe review — completed", body: "Boot review of the watchlist completed; the agent built its universe.", agentVersion: AGENT_VERSION },
+        });
+        await alert("info", "Startup universe review complete", "The agent reviewed the watchlist and built its universe from the names it would invest in.");
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
 
   // On-demand hunt refresh — a member hit "refresh" on the Discover tab. Runs the
   // hunt off-schedule (any time), then clears the flag so it fires once per request.

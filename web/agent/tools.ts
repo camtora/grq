@@ -5,7 +5,7 @@ import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
 import { universeEntry, activeSymbols } from "../lib/universe";
 import { validateAndPlace } from "./validator";
-import { agentSelfPromote } from "./promote";
+import { agentSelfPromote, addCandidate } from "./promote";
 import { computeSignals, overallSignal } from "./signals";
 import { AGENT_VERSION } from "./policy";
 import type { JournalKind } from "@prisma/client";
@@ -232,6 +232,16 @@ const proposeOrderTool = tool(
   },
 );
 
+const addCandidateTool = tool(
+  "add_candidate",
+  "Track a name you've researched (e.g. a discovery-hunt find) as a CANDIDATE — researched, not yet tradeable. Resolves the listing, pulls a year of bars, and queues a dossier if none exists. This is the step BEFORE promote_to_universe: track it, make sure its dossier rates it ≥Buy with ≥75 confidence, then promote. Members get a Discord alert. Give a one-line reason.",
+  { symbol: z.string(), name: z.string().optional(), reason: z.string().min(15).max(500) },
+  async (args) => {
+    const r = await addCandidate(args.symbol, args.reason, args.name);
+    return text(r.ok ? `TRACKING ${r.symbol} as a candidate. Once your dossier rates it ≥Buy with ≥75% confidence, promote_to_universe it.` : `SKIP: ${r.reason}`);
+  },
+);
+
 const promoteToUniverseTool = tool(
   "promote_to_universe",
   "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD-tradeable; not member-blocked; and within the weekly self-promotion cap. The human watchlist→universe path is separate and unchanged. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
@@ -262,6 +272,7 @@ export const grqServer = createSdkMcpServer({
     setFocusTool,
     getSignalsTool,
     gradeSourcesTool,
+    addCandidateTool,
     promoteToUniverseTool,
     proposeOrderTool,
   ],
@@ -276,6 +287,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__set_focus",
   "mcp__grq__get_signals",
   "mcp__grq__grade_sources",
+  "mcp__grq__add_candidate",
   "mcp__grq__promote_to_universe",
   "mcp__grq__propose_order",
 ];

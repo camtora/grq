@@ -2,13 +2,14 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
-import { universeEntry, allUniverse } from "../lib/universe";
+import { universeEntry, allUniverse, isCadTradeable } from "../lib/universe";
+import { setBootstrapMode } from "./promote";
 import { queueHuntDossier } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
-import { MODELS, AGENT_VERSION, taxContext } from "./policy";
+import { MODELS, AGENT_VERSION, taxContext, SELF_INVEST } from "./policy";
 import { alert, heartbeat } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
@@ -90,6 +91,52 @@ export async function runMorningResearch(): Promise<void> {
 
 Be selective: 3 great sources beat 10 skimmed ones. End with a one-paragraph summary of the plan.`;
   await runSession({ label: "morning-research", prompt, model: MODELS.decision, withTools: true, maxTurns: 40 });
+}
+
+/** Startup universe review (D30, Cam 2026-06-17) — the members demote the whole
+ *  universe to the watchlist; on the next boot the agent reviews every candidate
+ *  and BUILDS its own tradeable universe from the names it would genuinely invest
+ *  in, logs the reasoning, then plans/places entries. Runs in the bootstrap window
+ *  (per-week self-promote cap lifted; every quality gate still applies). */
+export async function runStartupUniverseReview(): Promise<void> {
+  const universe = await allUniverse();
+  const candidates = universe.filter((u) => u.status === "CANDIDATE");
+  if (candidates.length === 0) return;
+
+  const rows = await Promise.all(
+    candidates.map(async (c) => {
+      const dossier = await prisma.journalEntry.findFirst({ where: { symbol: c.symbol, stance: { not: null } }, orderBy: { at: "desc" } });
+      const sig = await computeSignals(c.symbol).catch(() => null);
+      const cad = isCadTradeable(c.currency, c.yahoo);
+      return `- ${c.symbol} (${c.name})${cad ? "" : " [non-CAD — research-only, can't promote]"}: your call ${dossier?.stance ?? "none yet"}${dossier?.confidence != null ? ` @ ${dossier.confidence}%` : ""}; signals ${sig ? signalsOneLine(sig) : "n/a"}`;
+    }),
+  );
+
+  const ctx = await buildContext();
+  const prompt = `${ctx}
+
+# TASK: Startup universe review (${etDateStr()})
+
+The members RESET the universe — everything is on the WATCHLIST now (candidates, not tradeable). Your job: decide which of these you would genuinely invest in, and BUILD the tradeable universe yourself.
+
+## Watchlist candidates (${candidates.length})
+${rows.join("\n")}
+
+For EACH candidate you would actually put real money into RIGHT NOW:
+1. Confirm conviction — your latest dossier must rate it ≥ Buy with confidence ≥ ${SELF_INVEST.minConfidence}. If you believe in it but the dossier is stale or weaker, write a fresh symbol-tagged RESEARCH entry (write_journal with stance + confidence + sources) FIRST, then promote.
+2. promote_to_universe it. CAD-tradeable + liquid only; rules are enforced and rejections explain themselves. Members get a Discord on each.
+Be SELECTIVE — promote only names you'd defend buying today, NOT the whole list. Quality over quantity; the universe caps at ${SELF_INVEST.maxUniverseSize}.
+
+Then:
+3. Write ONE RESEARCH journal entry titled "Startup universe review — ${etDateStr()}": which names you promoted and why, which you left on the watchlist and why, and your opening game plan.
+4. INVEST: if the market is OPEN, propose_order your best ideas now (full thesis, within the gate). If CLOSED, set_focus on them with the entry trigger you'll act on at the open.`;
+
+  setBootstrapMode(true);
+  try {
+    await runSession({ label: "startup-universe-review", prompt, model: MODELS.decision, withTools: true, maxTurns: 80 });
+  } finally {
+    setBootstrapMode(false);
+  }
 }
 
 /** Discovery hunt (2026-06-14) — the agent web-searches for under-the-radar,

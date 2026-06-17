@@ -518,3 +518,26 @@ wipes ALL fund data and resets the soak clock running since 2026-06-12) — unti
 $5k and the PERSONA figure runs ahead of reality. **Guardrails (`agent/policy.ts`) unchanged:** if any hard
 limit is absolute-dollar rather than % of NAV, revisit it for the 5×-larger account before relying on it. Also
 `.gitignore` now ignores `.env.*`.
+
+### D32 — Agent self-investing: it builds its own tradeable universe (Cam, 2026-06-17)
+**Context:** the goal is a *self-investing* agent. Until now the agent could only PROPOSE — promotion
+CANDIDATE→ACTIVE required two members + the liquidity screen (D16). Cam wanted the agent to expand its
+own universe, while keeping the real safety. **Decision (a two-gate distinction):** the **§6 order gate**
+(kill switch, no-short/no-margin, position caps, fee budget, daily-loss) is the hard safety and **never
+moves** — house rule #1 stands. The **universe/promotion** human-gate (D16, 2b) is *relaxed* into a new,
+code-gated **agent path** that sits ALONGSIDE the unchanged human watchlist→universe flow.
+**Built:** `agent/promote.ts` — `agentSelfPromote()` (CANDIDATE→ACTIVE) + `addCandidate()` (track a
+researched hunt find as a CANDIDATE). Tools `add_candidate` + `promote_to_universe` (`agent/tools.ts`,
+decision toolset). The **liquidity screen** moved to `lib/screen.ts` (shared by the human route + the agent,
+one bar). **Rules** (`agent/policy.ts → SELF_INVEST`, humans-only per D11): must be a researched CANDIDATE ·
+latest dossier ≥ Buy & confidence ≥75 · the screen (≥$2 · 20d ADV ≥100k · ≥30 bars) · CAD-tradeable · not
+BLOCKED · ≤2 self-promotions/rolling-week · ≤60 ACTIVE. Flag `GRQ_AGENT_SELF_PROMOTE` (default on).
+**Startup review** (`runStartupUniverseReview`, fired once per boot from the runner, 6h-guarded): the members
+demote the whole universe to the watchlist (done — 57 candidates), and on boot the agent reviews them,
+self-promotes the names it would genuinely invest in, journals a "Startup universe review — <date>", then
+sets focus / places entries. Runs in a **bootstrap window** (`setBootstrapMode`) that lifts ONLY the weekly
+cap — every quality gate still applies. **Alerting:** each self-promotion fires a distinct `🤖 GRQ
+self-promoted {symbol}` Discord (+ `🤖 GRQ is tracking` for new candidates); the human `🟢 joined the
+universe` alert is untouched and persists. **Loop is now closed:** hunt → dossier → add_candidate →
+promote_to_universe → trade, all agent-driven, with block/demote/kill + the order gate as the human brakes.
+**Chat persona** updated so the read-only chat agent can explain the new capability. Default-on, on `ibkr-paper`.

@@ -57,7 +57,11 @@ flip). **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq
 
 1. **Hard guardrails live in code and only humans change them** (`PROJECT_PLAN.md` §6).
    The agent proposes; the deterministic gate in `web/lib/broker/sim.ts` disposes. Never
-   wire a path that lets model output bypass or modify the gate.
+   wire a path that lets model output bypass or modify the gate. (**D32:** the agent may now
+   *self-promote* researched candidates into its own tradeable universe under code-enforced
+   rules — conviction ≥Buy/75, the liquidity screen, weekly + size caps, CAD-only, not-blocked
+   — but that only makes a name *eligible*; every order still clears this gate, and the rules +
+   gate themselves are humans-only. Members keep block/demote/kill. `agent/promote.ts`, `SELF_INVEST`.)
 2. **Kill switch is sacred.** Checked before every order inside `placeOrder`. Both members
    can flip it; nothing trades while engaged. Any new order path must go through the same gate.
 3. **No shorting, no margin borrowing, no options** — shorting is a config *toggle* that is

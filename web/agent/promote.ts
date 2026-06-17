@@ -6,13 +6,79 @@
 // distinct Discord so the members see each autonomous add and can veto it.
 
 import { prisma } from "../lib/db";
-import { universeEntry, activeUniverse, invalidateUniverseCache, isCadTradeable } from "../lib/universe";
+import { universeEntry, activeUniverse, invalidateUniverseCache, isCadTradeable, bareTicker, CANDIDATE_CAP } from "../lib/universe";
 import { promotionScreen } from "../lib/screen";
+import { probeYahooSymbol } from "../lib/broker/yahoo";
+import { refreshQuotesFor } from "../lib/broker/quotes";
+import { refreshBars } from "../lib/bars";
 import { stanceMeta } from "../lib/stance";
 import { SELF_INVEST, AGENT_VERSION } from "./policy";
 import { sendDiscord } from "./alerts";
 
 export type PromoteResult = { ok: boolean; tier?: string; reason?: string };
+export type CandidateResult = { ok: boolean; symbol?: string; reason?: string };
+
+// The runner opens a "bootstrap window" for the one-time startup universe review
+// (Cam 2026-06-17): inside it the per-week self-promotion cap is lifted so the agent
+// can rebuild a freshly-demoted watchlist in one pass. Every QUALITY gate (conviction,
+// liquidity screen, CAD-tradeable, not-blocked) and the hard universe-size cap STILL
+// apply — only the anti-churn weekly cap is relaxed.
+let bootstrapMode = false;
+export function setBootstrapMode(on: boolean): void {
+  bootstrapMode = on;
+}
+
+/** Track a researched name (e.g. a discovery-hunt find) as a CANDIDATE — the step
+ *  BEFORE self-promotion. Resolves the listing (CAD listings first), pulls a year
+ *  of bars so the liquidity screen can run later, queues a dossier if none exists,
+ *  and alerts the members. Mirrors the human "watch" action, attributed to the agent. */
+export async function addCandidate(symbol: string, reason: string, name?: string): Promise<CandidateResult> {
+  const key = bareTicker(symbol);
+
+  const existing = await universeEntry(key);
+  if (existing && existing.status !== "RETIRED") return { ok: false, reason: `${key} is already tracked (${existing.status}).` };
+
+  const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
+  if (candidates >= CANDIDATE_CAP) return { ok: false, reason: `candidate cap reached (${CANDIDATE_CAP}) — retire something first.` };
+
+  // Resolve the listing — hunt finds are TSX/TSXV, so try CAD listings first.
+  const tries = symbol.includes(".") ? [symbol.toUpperCase()] : [`${key}.TO`, `${key}.V`, key];
+  let resolved: { yahoo: string; priceCents: number; name: string | null } | null = null;
+  for (const y of tries) {
+    const p = await probeYahooSymbol(y).catch(() => null);
+    if (p) {
+      resolved = { yahoo: y, ...p };
+      break;
+    }
+  }
+  if (!resolved) return { ok: false, reason: `couldn't find a live quote for ${key} (tried ${tries.join(", ")}).` };
+  const currency = /\.(TO|V|NE|CN)$/i.test(resolved.yahoo) ? "CAD" : null;
+
+  if (existing) {
+    await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: "agent" } });
+  } else {
+    await prisma.universeMember.create({
+      data: { symbol: key, yahoo: resolved.yahoo, name: name ?? resolved.name ?? key, status: "CANDIDATE", addedBy: "agent", currency, note: reason.slice(0, 200) },
+    });
+  }
+  invalidateUniverseCache();
+  await refreshQuotesFor([key]).catch(() => 0);
+  await refreshBars([key], "1y").catch(() => 0); // bars now exist for the screen
+  const pending = await prisma.researchRequest.count({ where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } } });
+  const haveDossier = await prisma.journalEntry.count({ where: { kind: "RESEARCH", symbol: key, title: { startsWith: "Dossier" } } });
+  if (pending === 0 && haveDossier === 0) await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "agent" } });
+  await prisma.journalEntry.create({
+    data: {
+      kind: "DECISION",
+      symbol: key,
+      title: `Tracking — ${key}`,
+      body: `Agent is now tracking **${key}** (${name ?? resolved.name ?? ""}) as a research CANDIDATE — not tradeable yet. ${reason}`,
+      agentVersion: AGENT_VERSION,
+    },
+  });
+  await sendDiscord("info", `🤖 GRQ is tracking ${key}`, `Added as a research candidate. ${reason.slice(0, 160)}`);
+  return { ok: true, symbol: key };
+}
 
 /** Promote a researched candidate to ACTIVE if (and only if) every rule passes.
  *  Returns a reject reason (never throws) so the calling tool can hand it back to
@@ -50,11 +116,13 @@ export async function agentSelfPromote(symbol: string, tier: "large" | "mid" | u
   const failures = await promotionScreen(sym);
   if (failures.length > 0) return { ok: false, reason: `liquidity screen failed: ${failures.join("; ")}.` };
 
-  // Anti-runaway: rolling-weekly cap + total universe size.
-  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-  const recent = await prisma.journalEntry.count({ where: { title: { startsWith: "Self-promoted —" }, at: { gte: weekAgo } } });
-  if (recent >= SELF_INVEST.maxPerRollingWeek) {
-    return { ok: false, reason: `weekly self-promotion cap reached (${recent}/${SELF_INVEST.maxPerRollingWeek} in the last 7 days) — let these prove out first.` };
+  // Anti-runaway: rolling-weekly cap (lifted during the startup bootstrap) + total universe size.
+  if (!bootstrapMode) {
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const recent = await prisma.journalEntry.count({ where: { title: { startsWith: "Self-promoted —" }, at: { gte: weekAgo } } });
+    if (recent >= SELF_INVEST.maxPerRollingWeek) {
+      return { ok: false, reason: `weekly self-promotion cap reached (${recent}/${SELF_INVEST.maxPerRollingWeek} in the last 7 days) — let these prove out first.` };
+    }
   }
   const activeCount = (await activeUniverse()).length;
   if (activeCount >= SELF_INVEST.maxUniverseSize) {
