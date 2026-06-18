@@ -763,7 +763,10 @@ a clear risk-off tape, not as a reflex):
    setups, hunt market-wide (WebSearch) and self-promote, instead of re-chewing the same names.
 3. **Both check-ins** (scheduled + event): the game plan is a HYPOTHESIS, not a contract — the agent may
    revise or scrap it intraday on new information, not just execute the morning plan ("markets change").
-4. **`SELF_INVEST.maxPerRollingWeek` 2 → 5** so names it researches actually reach its tradeable universe.
+4. **`SELF_INVEST.maxPerRollingWeek` 2 → 5 → 25** (same-day: 5 was still too tight once the wider hunt
+   started surfacing more real ≥75 ideas than that — AC/COST/DAL got blocked) so names it researches
+   actually reach its tradeable universe. Still bounded by `maxUniverseSize` (60) and the dial's
+   `maxNewTradesPerWeek` BUY cap (the next ceiling).
 **Result same day:** the boot review self-promoted SLF/NVDA/TSM (a regime barbell), bought SLF + IFC,
 passed NVDA honestly (conviction 72 < 75, up not at its dip entry) and passed the XIC ballast add (68 < 75)
 — deploying *with* discipline, exactly the intent.
