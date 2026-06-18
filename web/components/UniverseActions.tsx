@@ -16,6 +16,8 @@ type Props = {
   // Hide the "Research now" button on the watchlist/universe tables — it belongs
   // on the stock page (where the same component still shows it). (Cam 2026-06-16)
   hideResearch?: boolean;
+  // Keep the buttons on one line (table cells) instead of wrapping. (Cam 2026-06-18)
+  nowrap?: boolean;
 };
 
 export default function UniverseActions({
@@ -27,6 +29,7 @@ export default function UniverseActions({
   researchInFlight,
   hideTierSelect,
   hideResearch,
+  nowrap,
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -56,7 +59,7 @@ export default function UniverseActions({
     "rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-40";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={`flex items-center gap-2 ${nowrap ? "flex-nowrap whitespace-nowrap" : "flex-wrap"}`}>
       {status !== "RETIRED" && !hideResearch && (
         <button
           disabled={busy || researchInFlight}

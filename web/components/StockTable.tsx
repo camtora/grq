@@ -340,7 +340,7 @@ export default function StockTable({
               </td>
               <td className="px-4 py-2.5 text-teal-100/70">
                 {r.name}
-                {r.note && <div className="mt-0.5 text-xs italic text-teal-200/40">{r.note}</div>}
+                {r.note && <div title={r.note} className="mt-0.5 line-clamp-1 text-xs italic text-teal-200/40">{r.note}</div>}
               </td>
               {columns.map((c) => (
                 <Cell key={c} col={c} r={r} />
@@ -368,6 +368,7 @@ export default function StockTable({
                         researchInFlight={r.researchInFlight}
                         hideTierSelect
                         hideResearch
+                        nowrap
                       />
                     </div>
                   ) : null}
