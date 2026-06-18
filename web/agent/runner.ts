@@ -18,7 +18,7 @@ import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
 import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
-import { markBoot, isDailyLossPaused } from "./validator";
+import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
 
@@ -157,13 +157,37 @@ async function checkDrawdown() {
   }
 }
 
+// Consecutive ticks day P&L has breached the pause threshold. Like the drawdown kill
+// above, the pause requires the breach to PERSIST across two ticks — a single transient
+// NAV misread (a just-filled position not yet mirrored → NAV understated by the trade
+// amount for a tick) must never block buys. A real −3% day persists; a marking blip
+// clears the moment reconcile catches up. Counter is scoped to the ET day.
+let dailyLossBreaches = 0;
+let dailyLossBreachDate = "";
 async function checkDailyLossPause() {
   const today = etDateStr();
-  if (dailyLossAlerted === today) return;
-  if (await isDailyLossPaused()) {
-    dailyLossAlerted = today;
-    await alert("warning", "Daily-loss pause engaged", "Day P&L ≤ −3% NAV: no new buys today. Risk-reducing sells still allowed.");
+  if (dailyLossBreachDate !== today) {
+    dailyLossBreaches = 0;
+    dailyLossBreachDate = today;
   }
+  if (dailyLossAlerted === today) return; // already confirmed + paused for the day
+  const bps = await dayPnlBps();
+  if (bps > HARD.dailyLossPauseBps) {
+    dailyLossBreaches = 0; // healthy / recovered — clear a transient single breach
+    return;
+  }
+  dailyLossBreaches++;
+  if (dailyLossBreaches < 2) {
+    await alert(
+      "warning",
+      "Daily-loss threshold breached — confirming",
+      `Day P&L ${(bps / 100).toFixed(1)}% ≤ −3%. Re-checking next tick before pausing buys (guards against a transient NAV misread, e.g. a fill not yet mirrored).`,
+    );
+    return;
+  }
+  dailyLossAlerted = today;
+  setDailyLossPauseConfirmed(today);
+  await alert("warning", "Daily-loss pause engaged", "Day P&L ≤ −3% NAV for two consecutive checks: no new buys today. Risk-reducing sells still allowed.");
 }
 
 async function evaluateTriggers() {

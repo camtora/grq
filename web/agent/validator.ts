@@ -5,7 +5,7 @@ import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry } from "../lib/universe";
 import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
-import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay } from "./calendar";
+import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay, etDateStr } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION } from "./policy";
 import { alert } from "./alerts";
 
@@ -55,8 +55,19 @@ export async function dayPnlBps(): Promise<number> {
   return Math.round(((pf.navCents - base) / base) * 10_000);
 }
 
+// The daily-loss pause is a CONFIRMED, sticky-for-the-day flag the runner sets only
+// after the loss persists across TWO consecutive ticks (mirrors the drawdown kill's
+// 2-tick confirm — runner.ts). The BUY gate reads THIS flag, never a live recompute —
+// so a transient NAV misread (a just-filled position not yet mirrored, which understates
+// NAV for a tick) can no longer block trading on one bad reading. "No new buys today":
+// once confirmed it holds for the rest of the ET day even if NAV bounces. In-memory —
+// resets on restart toward not-halting, same as the drawdown breach counter.
+let dailyLossPauseConfirmedDate: string | null = null;
+export function setDailyLossPauseConfirmed(etDate: string | null): void {
+  dailyLossPauseConfirmedDate = etDate;
+}
 export async function isDailyLossPaused(): Promise<boolean> {
-  return (await dayPnlBps()) <= HARD.dailyLossPauseBps;
+  return dailyLossPauseConfirmedDate === etDateStr();
 }
 
 const SUPERFICIAL_LOSS_DAYS = 30;
