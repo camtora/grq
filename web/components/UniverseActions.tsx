@@ -53,7 +53,7 @@ export default function UniverseActions({
   }
 
   const btn =
-    "rounded-lg border px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40";
+    "rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-40";
 
   return (
     <div className="flex flex-wrap items-center gap-2">

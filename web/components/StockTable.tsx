@@ -352,7 +352,7 @@ export default function StockTable({
                       <Link
                         href="/universe"
                         title="Already in the tradeable Universe — manage it there"
-                        className="rounded-lg border border-emerald-400/25 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-300/70 hover:bg-emerald-400/10"
+                        className="rounded-md border border-emerald-400/25 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-300/70 hover:bg-emerald-400/10"
                       >
                         In universe
                       </Link>
