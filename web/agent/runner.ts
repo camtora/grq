@@ -361,8 +361,10 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // 12:30–13:00 midday brief on market days (once/day) — the lunch read.
-  if (isMarketDay() && m >= 12 * 60 + 30 && m < 13 * 60) {
+  // 12:00–13:00 midday brief on market days (once/day) — the lunch read. NOON is the
+  // midday BRIEF (a readable summary), NOT a check-in (Cam 2026-06-18 — check-ins are the
+  // other hours 10/11/13/14/15). Moved from 12:30 to noon.
+  if (isMarketDay() && m >= 12 * 60 && m < 13 * 60) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Midday brief" } },
     });
@@ -377,7 +379,7 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // Fixed intraday trading check-ins (10:00 / 12:30 / 15:00 ET) — decision-capable
+  // Fixed intraday trading check-ins (HOURLY 10:00–15:00 ET) — decision-capable
   // sessions that act on the standing game plan. Each fires once/day inside a 60-min
   // window (wide enough that a same-slot research/brief, which returns earlier in this
   // function, runs first and the check-in falls through on a later tick). Restart-safe

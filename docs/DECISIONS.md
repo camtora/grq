@@ -819,3 +819,15 @@ intact. Lesson: the `agent`/`chat` images are ~3.57GB each (no multi-stage trim,
 rapid rebuilds are disk-expensive on this chronically-full shared host. BATCH changes into ONE build; after a
 build always swap (`up -d`) then `docker image prune -f` BEFORE the next build; never run two builds against a
 tight `/var`. See the CLAUDE.md disk gotcha.
+
+### D40 — Daily session cadence: hourly check-ins + noon midday brief (Cam, 2026-06-18)
+**Change:** Intraday trading check-ins go from 10:00/12:30/15:00 to **hourly** — but noon is reserved for the
+**midday brief**, not a check-in. Full day: **9:00 morning plan** ("open") → **10:00 / 11:00 check-ins** →
+**12:00 midday brief** (the readable lunch summary, `runMiddayReport`) → **13:00 / 14:00 / 15:00 check-ins**
+→ **16:15 EOD brief** ("close"). `CHECKIN_TIMES_ET = [10,11,13,14,15]`; the standalone 12:30 midday brief
+moved to noon. **Why:** denser intraday coverage so the agent reacts to the tape more often, while keeping a
+human-readable midday digest at lunch rather than a 6th decision session. Check-ins stay EXEMPT from
+`maxDecisionSessionsPerDay`, and the existing 60-min check-in windows already yield to same-slot research
+(the 10:00 hunt, 11:00 smart-money) so nothing collides. **Verified:** tsc clean; agent rebuilt + new
+`CHECKIN_TIMES_ET` + noon-brief block confirmed in the image; deployed (one careful build, `/var` watched —
+no db crash). Takes effect next market day.

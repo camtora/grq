@@ -18,11 +18,15 @@ export const HARD = {
   triageCooldownMs: 30 * 60_000, // per-symbol trigger cooldown
 };
 
-// Fixed intraday trading check-ins (ET). Each is a decision-capable session that
-// acts on the standing game plan, fires once/day, and runs AFTER any same-slot
-// research/brief (those blocks return first; the check-in falls through on a later
-// tick). EXEMPT from maxDecisionSessionsPerDay (see above). Humans edit this.
-export const CHECKIN_TIMES_ET = ["10:00", "12:30", "15:00"] as const;
+// Fixed intraday trading check-ins (ET) — HOURLY 10:00→15:00 EXCEPT noon (Cam 2026-06-18,
+// was 10:00/12:30/15:00). Each is a decision-capable session that acts on the standing game
+// plan, fires once/day in a 60-min window, and runs AFTER any same-slot research/brief (those
+// blocks return first; the check-in falls through on a later tick within the hour). NOON is
+// NOT a check-in — it's the midday BRIEF (runMiddayReport, in runner.ts), a readable lunch
+// summary rather than a decision session. The day is bookended by the 9:00 morning plan
+// ("open") and the 16:15 EOD brief ("close"). EXEMPT from maxDecisionSessionsPerDay (a short
+// fixed list). Humans edit this.
+export const CHECKIN_TIMES_ET = ["10:00", "11:00", "13:00", "14:00", "15:00"] as const;
 
 // Agent self-scheduling: how many of its own future check-ins may be PENDING at
 // once (anti-runaway). Same-day, market-hours wakeups only for now.
