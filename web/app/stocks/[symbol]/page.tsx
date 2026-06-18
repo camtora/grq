@@ -270,12 +270,12 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         {isMember && <AskGrq symbol={symbol} />}
         {/* The bull/bear bar rides the action row, pushed to the right (Cam 2026-06-18). */}
         {stance ? (
-          <div className="ml-auto w-44">
-            <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} note="GRQ's call" mascots />
+          <div className="ml-auto w-72 max-w-full">
+            <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} note="GRQ's call" mascots hideLabel className="w-full" />
           </div>
         ) : recMeta ? (
-          <div className="ml-auto w-44">
-            <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" mascots />
+          <div className="ml-auto w-72 max-w-full">
+            <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" mascots hideLabel className="w-full" />
           </div>
         ) : null}
       </div>

@@ -17,6 +17,8 @@ export default function RatingBar({
   title,
   size = "sm",
   mascots = false,
+  hideLabel = false,
+  className,
 }: {
   label: string;
   tone: string;
@@ -25,19 +27,23 @@ export default function RatingBar({
   title?: string;
   size?: "sm" | "lg";
   mascots?: boolean;
+  hideLabel?: boolean; // drop the big verdict word (e.g. stock page — it's in the bottom line)
+  className?: string; // override the root width (e.g. "w-full" to fill a wider wrapper)
 }) {
   const left = Math.max(3, Math.min(97, pos * 100));
   const text = STANCE_TONE_CLASSES[tone]?.text ?? "text-teal-200/60";
   const lg = size === "lg";
   return (
-    <div className={lg ? "w-full max-w-md" : "w-40"} title={title}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={`font-black leading-none ${lg ? "text-3xl" : "text-sm"} ${text}`}>{label}</span>
-        {note && (
-          <span className={`uppercase tracking-wider text-teal-200/30 ${lg ? "text-[11px]" : "text-[9px]"}`}>{note}</span>
-        )}
-      </div>
-      <div className={`flex items-center ${lg ? "mt-3 gap-2" : "mt-1.5"}`}>
+    <div className={className ?? (lg ? "w-full max-w-md" : "w-40")} title={title}>
+      {(!hideLabel || note) && (
+        <div className={`flex items-baseline gap-2 ${hideLabel ? "justify-end" : "justify-between"}`}>
+          {!hideLabel && <span className={`font-black leading-none ${lg ? "text-3xl" : "text-sm"} ${text}`}>{label}</span>}
+          {note && (
+            <span className={`uppercase tracking-wider text-teal-200/30 ${lg ? "text-[11px]" : "text-[9px]"}`}>{note}</span>
+          )}
+        </div>
+      )}
+      <div className={`flex items-center ${lg ? "mt-3 gap-2" : `mt-1.5 ${mascots ? "gap-2.5" : ""}`}`}>
         {mascots && (
           // Bear guards the "sell" end — walking grizzly, chart plunging down (bearish).
           <img src="/bear-splash.png" alt="" aria-hidden className="h-5 w-auto shrink-0 select-none" />

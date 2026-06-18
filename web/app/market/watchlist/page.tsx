@@ -39,11 +39,14 @@ export default async function Watchlist() {
   ]);
   const me = displayName(session);
   const isMember = session?.role === "member";
-  const candidates = universe.filter((u) => u.status === "CANDIDATE");
+  // Watchlist shows everything still in play: candidates being researched AND names
+  // already promoted into the Universe — so members see the stocks they added even
+  // after promotion (Cam 2026-06-18). Owner tabs filter to "your" names.
+  const tracked = universe.filter((u) => u.status !== "RETIRED");
   const retired = universe.filter((u) => u.status === "RETIRED");
 
-  // Rich data for the watchlist candidates.
-  const quotes = await getQuotes(candidates.map((c) => c.symbol));
+  // Rich data for the watchlist tracked.
+  const quotes = await getQuotes(tracked.map((c) => c.symbol));
   const stanceRows = await prisma.journalEntry.findMany({
     where: { stance: { not: null }, symbol: { not: null } },
     orderBy: { at: "desc" },
@@ -51,24 +54,24 @@ export default async function Watchlist() {
   });
   const stanceBy = new Map<string, string>();
   for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
-  const sigList = await Promise.all(candidates.map((c) => computeSignals(c.symbol).catch(() => null)));
+  const sigList = await Promise.all(tracked.map((c) => computeSignals(c.symbol).catch(() => null)));
   const dirBy = new Map(directives.map((d) => [d.symbol, d]));
   const jc = await prisma.journalEntry.groupBy({
     by: ["symbol"],
     _count: { id: true },
-    where: { symbol: { in: candidates.map((c) => c.symbol) } },
+    where: { symbol: { in: tracked.map((c) => c.symbol) } },
   });
   const jcBy = new Map(jc.map((j) => [j.symbol as string, j._count.id]));
 
   // Latest dossier per candidate — its price targets + confidence feed the table.
   const dossiers = await prisma.journalEntry.findMany({
-    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: candidates.map((c) => c.symbol) } },
+    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: tracked.map((c) => c.symbol) } },
     orderBy: { at: "desc" },
   });
   const dossierBy = new Map<string, (typeof dossiers)[number]>();
   for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
 
-  const rows: StockRow[] = candidates
+  const rows: StockRow[] = tracked
     .map((c, i) => {
       const q = quotes.get(c.symbol);
       const sig = sigList[i];
@@ -104,7 +107,7 @@ export default async function Watchlist() {
         mvCents: 0,
         upnlCents: 0,
         lastResearchedAt: null,
-        manageStatus: "CANDIDATE" as const,
+        manageStatus: c.status as "CANDIDATE" | "ACTIVE",
         promotionRequestedBy: c.promotionRequestedBy,
         proposedTier: c.proposedTier,
         researchInFlight: requests.some((r) => r.symbol === c.symbol && r.status === "RUNNING"),
@@ -124,13 +127,13 @@ export default async function Watchlist() {
 
   return (
     <main>
-      <PageHeader title="Watchlist" sub="Names GRQ is researching for you — promote one (both members) to let the agent trade it in the Universe." />
+      <PageHeader title="Watchlist" sub="Everything you and GRQ are tracking — candidates to promote (both members), plus the names you've already moved into the Universe." />
 
       <section className="mb-8">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Watchlist — {candidates.length} tracked</h2>
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Watchlist — {tracked.length} tracked</h2>
           <p className="text-xs text-teal-200/40">
-            Names GRQ is researching — promote one (both members) to let the agent trade it in the Universe.
+            Candidates GRQ is researching (promote one — both members) plus your in-Universe names. Filter by who added it.
           </p>
         </div>
 
@@ -156,7 +159,7 @@ export default async function Watchlist() {
                 </div>
               )}
             </div>
-            <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
+            <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} inUniverseLink />
           </>
         )}
 

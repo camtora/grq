@@ -271,11 +271,13 @@ export default function StockTable({
   columns,
   isMember,
   currentUser,
+  inUniverseLink = false,
 }: {
   rows: StockRow[];
   columns: StockColumn[];
   isMember: boolean;
   currentUser: string;
+  inUniverseLink?: boolean; // Watchlist: render ACTIVE rows as an "In universe" link, not the Demote action (which stays on the Universe page).
 }) {
   const colSpan = 2 + columns.length + (isMember ? 1 : 0);
   return (
@@ -345,7 +347,17 @@ export default function StockTable({
               ))}
               {isMember && (
                 <td className="px-4 py-2.5" data-no-expand>
-                  {r.manageStatus ? (
+                  {inUniverseLink && r.manageStatus === "ACTIVE" ? (
+                    <div className="flex justify-end">
+                      <Link
+                        href="/universe"
+                        title="Already in the tradeable Universe — manage it there"
+                        className="rounded-lg border border-emerald-400/25 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-300/70 hover:bg-emerald-400/10"
+                      >
+                        In universe
+                      </Link>
+                    </div>
+                  ) : r.manageStatus ? (
                     <div className="flex justify-end">
                       <UniverseActions
                         symbol={r.symbol}
