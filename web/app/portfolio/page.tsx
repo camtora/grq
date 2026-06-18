@@ -1,16 +1,13 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { greeting } from "@/lib/greetings";
-import { getPortfolio, getNavHistory } from "@/lib/portfolio";
+import { getPortfolio } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
-import Sparkline from "@/components/Sparkline";
-import KillSwitch from "@/components/KillSwitch";
 import ActivityFeed from "@/components/ActivityFeed";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import { getMacro, macroLine } from "@/lib/macro";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
 // midday review from the Today page, Cam 2026-06-16).
@@ -35,10 +32,9 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, history, recentJournal, latestPlan, midday, checkin, latestEod, macro] = await Promise.all([
+  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod] = await Promise.all([
     getSession(),
     getPortfolio(),
-    getNavHistory(60),
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
     prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
@@ -55,7 +51,6 @@ export default async function Portfolio() {
       orderBy: { at: "desc" },
     }),
     prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
-    getMacro().catch(() => null),
   ]);
   const name = session?.user?.name ?? "friend";
 
@@ -133,14 +128,6 @@ export default async function Portfolio() {
         />
       </section>
 
-      {macro && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
-          <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
-          <span className="text-teal-100/70">{macroLine(macro)}</span>
-          <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
-        </div>
-      )}
-
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
         {/* Main column: latest briefing, NAV, positions, latest journal */}
         <div className="space-y-6 lg:col-span-2">
@@ -158,14 +145,6 @@ export default async function Portfolio() {
               </CollapsibleMd>
             </Card>
           )}
-
-          <Card className="p-5">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-xs uppercase tracking-wider text-teal-200/50">NAV history</span>
-              <span className="text-xs text-teal-200/40">{history.length} snapshots</span>
-            </div>
-            <Sparkline values={history.map((h) => h.navCents)} dates={history.map((h) => h.at)} format={money} axes />
-          </Card>
 
           <Card className="overflow-x-auto">
             <div className="flex items-baseline justify-between px-5 pt-4">
@@ -272,10 +251,6 @@ export default async function Portfolio() {
             </div>
           </Card>
         </aside>
-      </section>
-
-      <section className="mt-6">
-        <KillSwitch engaged={pf.killSwitch} engagedBy={pf.killSwitchBy} canToggle={session?.role === "member"} />
       </section>
     </main>
   );

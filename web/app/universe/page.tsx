@@ -9,12 +9,16 @@ import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import { getSession, displayName } from "@/lib/session";
 import StockFilters from "@/components/StockFilters";
 import UniverseActions from "@/components/UniverseActions";
+import UniverseTabs from "@/components/UniverseTabs";
 import Term from "@/components/Term";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 
 export const dynamic = "force-dynamic";
 
 const COLUMNS: StockColumn[] = ["tier", "last", "day", "signals", "call", "position", "unrealized", "journal", "researched"];
+// Researched tab is a lean catalogue — call + the dossier's confidence + journal
+// depth + when it was last researched (no per-name quote/signal fetches).
+const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "journal", "researched"];
 
 function sortActive(rows: StockRow[]): StockRow[] {
   return rows.sort((a, b) => {
@@ -147,6 +151,57 @@ export default async function Universe() {
   const capOrder: CapTier[] = ["mega", "large", "mid", "small", "micro"];
   const capOpts = capOrder.filter((c) => capPresent.has(c)).map((c) => ({ value: c, label: CAP_LABEL[c] }));
 
+  // Researched tab — every name with a dossier (tradeable or not: universe,
+  // watchlist candidates, hunt finds, movers). Joins universe metadata where we have
+  // it, falls back to the bare ticker otherwise. Newest research first.
+  const allDossiers = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    select: { symbol: true, bottomLine: true, confidence: true, targetNearCents: true, targetNearDays: true, targetFarCents: true, at: true },
+  });
+  const latestDossierBy = new Map<string, (typeof allDossiers)[number]>();
+  for (const d of allDossiers) if (d.symbol && !latestDossierBy.has(d.symbol)) latestDossierBy.set(d.symbol, d);
+  const metaBy = new Map(allRows.map((u) => [u.symbol, u]));
+  const researchedRows: StockRow[] = [...latestDossierBy.values()]
+    .map((doss): StockRow => {
+      const sym = doss.symbol as string;
+      const u = metaBy.get(sym);
+      return {
+        symbol: sym,
+        name: u?.name ?? sym,
+        logoUrl: u?.logoUrl ?? null,
+        currency: u?.currency ?? null,
+        note: null,
+        tier: u?.tier ?? null,
+        country: u?.country ?? null,
+        exchange: u?.exchange ?? null,
+        sector: u?.sector ?? null,
+        marketCapM: u?.marketCapM ?? null,
+        lastCents: null,
+        dayBps: null,
+        signals: null,
+        rec: null,
+        stance: stanceBy.get(sym) ?? null,
+        pinnedBy: null,
+        blocked: false,
+        journal: jcBy.get(sym) ?? 0,
+        upsidePct: null,
+        nearPct: null,
+        nearDays: doss.targetNearDays ?? null,
+        confidence: doss.confidence ?? null,
+        bottomLine: doss.bottomLine ?? null,
+        held: null,
+        mvCents: 0,
+        upnlCents: 0,
+        lastResearchedAt: researchedBy.get(sym) ?? doss.at,
+        manageStatus: null,
+        promotionRequestedBy: null,
+        proposedTier: null,
+        researchInFlight: false,
+      };
+    })
+    .sort((a, b) => (b.lastResearchedAt?.getTime() ?? 0) - (a.lastResearchedAt?.getTime() ?? 0));
+
   return (
     <main>
       <PageHeader
@@ -159,6 +214,28 @@ export default async function Universe() {
         }
       />
 
+      <UniverseTabs
+        universeCount={active.length}
+        researchedCount={researchedRows.length}
+        researched={
+          <section>
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+                Researched — {researchedRows.length} with a dossier
+              </h2>
+              <p className="text-xs text-teal-200/40">
+                Every name GRQ has written a dossier on — tradeable or not. Sorted by most recently researched.
+              </p>
+            </div>
+            {researchedRows.length === 0 ? (
+              <Card className="p-6 text-sm text-teal-200/40">No dossiers on file yet.</Card>
+            ) : (
+              <StockTable rows={researchedRows} columns={RESEARCHED_COLUMNS} isMember={false} currentUser={me} />
+            )}
+          </section>
+        }
+        universe={
+          <>
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
@@ -216,6 +293,9 @@ export default async function Universe() {
         <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
         Click any row to read GRQ&apos;s reasoning. quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
       </p>
+          </>
+        }
+      />
     </main>
   );
 }

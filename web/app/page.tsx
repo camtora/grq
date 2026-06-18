@@ -14,6 +14,7 @@ import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile } from "@/lib/f
 import MarketIndices from "@/components/MarketIndices";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
+import { getMacro, macroLine } from "@/lib/macro";
 
 function signedPct(bps: number): string {
   return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
@@ -168,7 +169,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices] =
+  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, macro] =
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
@@ -195,6 +196,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       fmpEnabled() ? fmpNews(12).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpIndices().catch(() => []) : Promise.resolve([]),
+      getMacro().catch(() => null),
     ]);
   // Per-mover detail for the expandable whole-market movers (best-effort).
   const gainerProfiles = await Promise.all(
@@ -372,6 +374,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Market indices — live until the close (the screenshot strip). Live data,
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
       {isToday && <MarketIndices initial={marketIndices} />}
+
+      {/* Macro strip — rates/CPI/FX context (moved here from Portfolio, Cam 2026-06-18) */}
+      {isToday && macro && (
+        <div className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
+          <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
+          <span className="text-teal-100/70">{macroLine(macro)}</span>
+          <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
+        </div>
+      )}
 
       {/* The Tape — the day's NAV, start → finish. Above the headlines (Cam 2026-06-16) */}
       <Card className="mb-6 p-5">

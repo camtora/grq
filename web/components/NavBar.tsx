@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import ThemeToggle from "./ThemeToggle";
+import KillSwitch from "./KillSwitch";
 import Avatar from "./Avatar";
 
 // The market destinations sit directly in the header — no sub-navigation
@@ -28,6 +28,7 @@ export default function NavBar({
   name,
   photo = null,
   killSwitch,
+  killSwitchBy = null,
   broker,
   theme,
   isMember = true,
@@ -35,6 +36,7 @@ export default function NavBar({
   name: string;
   photo?: string | null;
   killSwitch: boolean;
+  killSwitchBy?: string | null;
   broker: string;
   theme: "light" | "dark";
   isMember?: boolean;
@@ -87,24 +89,12 @@ export default function NavBar({
               read-only
             </span>
           )}
+          {/* Halt-trading control sits between Chat and the broker badge (Cam 2026-06-18). */}
+          <KillSwitch compact engaged={killSwitch} engagedBy={killSwitchBy} canToggle={isMember} />
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>
-          <span
-            className={`inline-flex items-center gap-1.5 font-semibold ${
-              killSwitch ? "text-red-400" : "text-teal-200/50"
-            }`}
-            title={killSwitch ? "Kill switch engaged — trading halted" : "Trading permitted"}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                killSwitch ? "animate-pulse bg-red-400" : "bg-teal-400/60"
-              }`}
-            />
-            {killSwitch ? "HALTED" : "OK"}
-          </span>
           <Avatar src={photo} name={name} size="h-7 w-7" />
-          <ThemeToggle current={theme} />
         </div>
       </div>
     </nav>

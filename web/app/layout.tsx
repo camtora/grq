@@ -41,6 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           name={session?.user?.name ?? session?.email ?? "?"}
           photo={personByName(session?.user?.name)?.photo ?? null}
           killSwitch={settings?.killSwitch ?? false}
+          killSwitchBy={settings?.killSwitchBy ?? null}
           broker={(process.env.BROKER ?? "sim").toUpperCase()}
           theme={theme}
           isMember={session?.role === "member"}

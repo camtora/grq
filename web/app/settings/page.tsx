@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { USERS } from "@/lib/users";
 import { getSession } from "@/lib/session";
@@ -6,6 +7,7 @@ import { getBroker } from "@/lib/broker";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import SettingsForm from "@/components/SettingsForm";
 import KillSwitch from "@/components/KillSwitch";
+import ThemeToggle from "@/components/ThemeToggle";
 import OrderTicket from "@/components/OrderTicket";
 import JournalSection from "@/components/JournalSection";
 
@@ -18,13 +20,20 @@ const ROADMAP = [
 ];
 
 export default async function Settings({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
-  const [sp, settings, symbols, session] = await Promise.all([
+  const [sp, settings, symbols, session, cookieStore] = await Promise.all([
     searchParams,
     prisma.settings.findUnique({ where: { id: 1 } }),
     getBroker().listSymbols(),
     getSession(),
+    cookies(),
   ]);
   const isMember = session?.role === "member";
+
+  // Mirror the root layout's theme resolution: cookie override wins, else the
+  // member's saved default, else dark.
+  const cookieTheme = cookieStore.get("grq-theme")?.value;
+  const theme: "light" | "dark" =
+    cookieTheme === "light" || cookieTheme === "dark" ? cookieTheme : (session?.user?.theme ?? "dark");
 
   return (
     <main>
@@ -45,6 +54,16 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           engagedBy={settings?.killSwitchBy ?? null}
           canToggle={isMember}
         />
+
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Appearance</div>
+              <p className="mt-1 text-sm text-teal-200/50">Light or dark — remembered on this device.</p>
+            </div>
+            <ThemeToggle current={theme} />
+          </div>
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="p-5">

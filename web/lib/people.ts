@@ -64,3 +64,13 @@ export function personByName(name: string | null | undefined): Person | null {
   if (!name) return null;
   return BY_NAME.get(name.trim().toLowerCase()) ?? null;
 }
+
+export type OwnerKey = "cam" | "graham" | "agent";
+
+/**
+ * Bucket a watcher into a watchlist-tab owner. Anything not tagged to a member
+ * (legacy/seed adds, hunt finds, the agent's own watches) counts as "agent".
+ */
+export function ownerKeyFor(addedBy: string | null | undefined): OwnerKey {
+  return personByName(addedBy)?.key ?? "agent";
+}

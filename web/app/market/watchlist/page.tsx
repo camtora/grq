@@ -8,6 +8,8 @@ import { computeSignals, overallSignal } from "@/agent/signals";
 import AddTicker from "@/components/AddTicker";
 import UniverseActions from "@/components/UniverseActions";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
+import WatchlistTabs from "@/components/WatchlistTabs";
+import { ownerKeyFor, type OwnerKey } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +113,10 @@ export default async function Watchlist() {
     // Pinned (priority) names sort to the top; the rest alphabetical.
     .sort((a, b) => (a.pinnedBy ? -1 : b.pinnedBy ? 1 : a.symbol.localeCompare(b.symbol)));
 
+  // Per-owner tab counts (All / Graham / Cam / Agent — anything untagged is "agent").
+  const ownerCounts: Record<"all" | OwnerKey, number> = { all: rows.length, cam: 0, graham: 0, agent: 0 };
+  for (const r of rows) ownerCounts[ownerKeyFor(r.addedBy)]++;
+
   const running = requests.filter((r) => r.status === "RUNNING");
   const queued = requests.filter((r) => r.status === "QUEUED");
   const recentDone = requests.filter((r) => r.status === "DONE").slice(0, 8);
@@ -140,7 +146,10 @@ export default async function Watchlist() {
             body="Watch a name above, or find one on Browse / The Hunt — GRQ starts researching it the moment you do."
           />
         ) : (
-          <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
+          <>
+            <WatchlistTabs counts={ownerCounts} />
+            <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
+          </>
         )}
 
         <p className="mt-3 text-xs text-teal-200/40">

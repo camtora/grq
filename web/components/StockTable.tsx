@@ -14,7 +14,7 @@ import UniverseActions from "@/components/UniverseActions";
 import ExpandableRow from "@/components/ExpandableRow";
 import RowExtras from "@/components/RowExtras";
 import Avatar from "@/components/Avatar";
-import { personByName } from "@/lib/people";
+import { personByName, ownerKeyFor } from "@/lib/people";
 
 // One table for both the Universe (the tradeable set) and the Watchlist (candidates)
 // — same look, different column list + manage buttons (Cam 2026-06-16). Columns are
@@ -304,6 +304,7 @@ export default function StockTable({
                 "data-exchange": r.exchange ?? "",
                 "data-sector": r.sector ?? "",
                 "data-cap": capTier(r.marketCapM) ?? "",
+                "data-owner": ownerKeyFor(r.addedBy),
               }}
               colSpan={colSpan}
               detail={expandable ? <RowDetail r={r} /> : null}

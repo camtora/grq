@@ -7,10 +7,13 @@ export default function KillSwitch({
   engaged,
   engagedBy,
   canToggle = true,
+  compact = false,
 }: {
   engaged: boolean;
   engagedBy: string | null;
   canToggle?: boolean;
+  // compact = the header pill (just the toggle/status); default = the full panel.
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -36,6 +39,40 @@ export default function KillSwitch({
     } finally {
       setBusy(false);
     }
+  }
+
+  // Header pill: viewers see a non-interactive status dot; members get the toggle.
+  if (compact) {
+    if (!canToggle) {
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold ${engaged ? "text-red-400" : "text-teal-200/50"}`}
+          title={engaged ? `Trading halted${engagedBy ? ` by ${engagedBy}` : ""}` : "Trading permitted"}
+        >
+          <span className={`h-2 w-2 rounded-full ${engaged ? "animate-pulse bg-red-400" : "bg-teal-400/60"}`} />
+          {engaged ? "HALTED" : "OK"}
+        </span>
+      );
+    }
+    return (
+      <button
+        onClick={toggle}
+        disabled={busy}
+        title={
+          engaged
+            ? `Trading halted${engagedBy ? ` by ${engagedBy}` : ""} — click to resume`
+            : "Halt all trading instantly — no order is accepted until resumed"
+        }
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+          engaged
+            ? "border-red-400/40 bg-red-400/15 text-red-300 hover:bg-red-400/25"
+            : "border-red-400/20 text-red-300/60 hover:bg-red-400/10"
+        }`}
+      >
+        <span className={`h-2 w-2 rounded-full ${engaged ? "animate-pulse bg-red-400" : "bg-teal-400/60"}`} />
+        {busy ? "…" : engaged ? "Resume trading" : "Halt trading"}
+      </button>
+    );
   }
 
   return (

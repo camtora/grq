@@ -11,7 +11,7 @@ import UniverseActions from "@/components/UniverseActions";
 import AddNote from "@/components/AddNote";
 import AskGrq from "@/components/AskGrq";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { stanceMeta } from "@/lib/stance";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
@@ -268,6 +268,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           canEdit={isMember}
         />
         {isMember && <AskGrq symbol={symbol} />}
+        {/* The bull/bear bar rides the action row, pushed to the right (Cam 2026-06-18). */}
+        {stance ? (
+          <div className="ml-auto w-44">
+            <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} note="GRQ's call" mascots />
+          </div>
+        ) : recMeta ? (
+          <div className="ml-auto w-44">
+            <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" mascots />
+          </div>
+        ) : null}
       </div>
 
       {(stance || rec) && (
@@ -275,24 +285,23 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              {/* THE rating — the agent's judgment. Technicals are an input below, not a competing verdict. */}
+              {/* The verdict word lives here; the bull/bear bar (the same call) rides the
+                  action row above. Technicals are an input below, not a competing verdict. */}
               <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
                 <Term k="agent-call">GRQ&apos;s call</Term>
               </div>
               {stance ? (
-                <div>
-                  <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} size="lg" mascots />
+                <>
+                  <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
                   <p className="mt-2 text-sm text-teal-200/60">{stance.blurb}</p>
-                </div>
+                </>
               ) : recMeta ? (
-                <div>
-                  <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" size="lg" mascots />
+                <>
+                  <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[recMeta.tone].text}`}>{recMeta.label}</span>
                   <p className="mt-2 text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</p>
-                </div>
+                </>
               ) : (
-                <div className="text-sm text-teal-200/50">
-                  Not yet rated — the agent hasn&apos;t filed a call on this name.
-                </div>
+                <p className="text-sm text-teal-200/50">Not yet rated — the agent hasn&apos;t filed a call on this name.</p>
               )}
               {signals && (
                 <div className="mt-4">

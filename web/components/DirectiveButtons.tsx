@@ -17,13 +17,17 @@ export default function DirectiveButtons({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
+  // Match the UniverseActions button shape (research / promote / ✕) so the whole
+  // action row reads as one set (Cam 2026-06-18).
+  const btn = "rounded-lg border px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40";
+
   // Viewers see the directive state read-only (nothing if there's none).
   if (!canEdit) {
     if (!current) return null;
     const pinned = current.directive === "PINNED";
     return (
       <span
-        className={`rounded-xl border px-3 py-2 text-sm font-bold uppercase tracking-wider ${
+        className={`${btn} ${
           pinned ? "border-teal-400/50 bg-teal-400/20 text-teal-200" : "border-red-400/50 bg-red-400/15 text-red-300"
         }`}
       >
@@ -55,7 +59,7 @@ export default function DirectiveButtons({
         disabled={busy}
         onClick={() => set(isPinned ? null : "PINNED")}
         title={isPinned ? `Pinned by ${current?.by} — click to unpin` : "Pin: always on the watchlist"}
-        className={`rounded-xl border px-3 py-2 text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+        className={`${btn} ${
           isPinned
             ? "border-teal-400/50 bg-teal-400/20 text-teal-200"
             : "border-teal-400/20 text-teal-200/50 hover:bg-teal-400/10"
@@ -78,7 +82,7 @@ export default function DirectiveButtons({
             ? `Blocked by ${current?.by}${current?.note ? `: "${current.note}"` : ""} — click to unblock`
             : "No-fly: the agent may never buy this (sells still allowed)"
         }
-        className={`rounded-xl border px-3 py-2 text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+        className={`${btn} ${
           isBlocked
             ? "border-red-400/50 bg-red-400/15 text-red-300"
             : "border-red-400/20 text-red-300/50 hover:bg-red-400/10"
