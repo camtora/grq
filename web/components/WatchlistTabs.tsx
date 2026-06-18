@@ -31,7 +31,7 @@ export default function WatchlistTabs({ counts }: { counts: Record<"all" | Owner
   }, [tab]);
 
   return (
-    <div className="mb-4 inline-flex flex-wrap gap-1 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-1">
+    <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-1">
       {TABS.map((t) => {
         const active = tab === t.value;
         return (

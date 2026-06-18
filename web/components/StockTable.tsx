@@ -120,11 +120,12 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
       );
     case "watcher": {
       const p = personByName(r.addedBy);
-      if (!p && !r.addedBy) return <td className="px-4 py-2.5 text-center text-teal-200/25">—</td>;
+      // Cam/Graham → their photo; everything else (the agent, hunt finds, seed/legacy
+      // adds) → the GRQ bull. Every row gets a face — no empty "—" (Cam 2026-06-18).
       return (
         <td className="px-4 py-2.5">
           <div className="flex justify-center">
-            <Avatar src={p?.photo ?? null} name={p?.name ?? r.addedBy ?? "?"} />
+            <Avatar src={p?.photo ?? "/bull-splash.png"} name={p?.name ?? "Agent"} />
           </div>
         </td>
       );

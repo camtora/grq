@@ -134,20 +134,28 @@ export default async function Watchlist() {
           </p>
         </div>
 
-        {isMember && (
-          <div className="mb-4">
-            <AddTicker />
-          </div>
-        )}
-
         {rows.length === 0 ? (
-          <EmptyState
-            title="Nothing on the watchlist"
-            body="Watch a name above, or find one on Browse / The Hunt — GRQ starts researching it the moment you do."
-          />
+          <>
+            {isMember && (
+              <div className="mb-4">
+                <AddTicker />
+              </div>
+            )}
+            <EmptyState
+              title="Nothing on the watchlist"
+              body="Watch a name above, or find one on Browse / The Hunt — GRQ starts researching it the moment you do."
+            />
+          </>
         ) : (
           <>
-            <WatchlistTabs counts={ownerCounts} />
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <WatchlistTabs counts={ownerCounts} />
+              {isMember && (
+                <div className="ml-auto">
+                  <AddTicker />
+                </div>
+              )}
+            </div>
             <StockTable rows={rows} columns={COLUMNS} isMember={isMember} currentUser={me} />
           </>
         )}
