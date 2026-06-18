@@ -61,24 +61,24 @@ export default function AddTicker() {
   }
 
   return (
-    <div className="rounded-2xl border border-dashed border-teal-400/20 bg-teal-400/[0.02] p-4">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Watch a new stock</span>
+    <div>
+      {/* Compact pill group matching the watchlist owner tabs (All/Graham/Cam/Agent) — Cam 2026-06-18. */}
+      <div className="inline-flex items-center gap-1 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-1">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
-          placeholder="name or ticker — e.g. ANET, Shopify"
-          className="w-56 rounded-lg border border-teal-400/20 bg-(--field-bg) px-2.5 py-2 text-sm text-teal-50 outline-none placeholder:text-teal-200/30"
+          placeholder="watch a stock — name or ticker"
+          aria-label="Watch a new stock"
+          className="w-52 rounded-xl bg-transparent px-3 py-1.5 text-sm text-teal-50 outline-none placeholder:text-teal-200/30 focus:bg-teal-400/5"
         />
         <button
           onClick={search}
           disabled={searching || !q.trim()}
-          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25 disabled:opacity-40"
+          className="rounded-xl px-3 py-1.5 text-sm font-semibold text-teal-200/60 transition-colors hover:text-teal-100 disabled:opacity-40"
         >
           {searching ? "searching…" : "Search"}
         </button>
-        <span className="text-xs text-teal-200/40">pick the right listing — it joins your watchlist and the agent dossiers it; trading it still needs both of you to promote it</span>
       </div>
 
       {matches && matches.length > 0 && (
