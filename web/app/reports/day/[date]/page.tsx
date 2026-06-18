@@ -39,7 +39,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
         at: { gte: start, lt: end },
         OR: [{ title: { startsWith: "Check-in" } }, { title: { startsWith: "Midday brief" } }],
       },
-      orderBy: { at: "asc" },
+      orderBy: { at: "desc" }, // newest first — read the day backwards from the close
     }),
     prisma.report.findFirst({ where: { kind: "EOD", date: { gte: start, lt: end } } }),
   ]);
@@ -64,22 +64,26 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
         <EmptyState title="Nothing filed this day" body="No game plan, intraday check-ins, or close report for this date." />
       ) : (
         <div className="space-y-4">
-          {/* Morning plan — open by default */}
-          <Card className="p-5">
-            <details open className="group">
-              <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Morning plan</h2>
-                {plan && <span className="text-xs tabular-nums text-teal-200/40">{etTime(plan.at)} ET</span>}
-                <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
-                <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
-              </summary>
-              <div className="mt-3 border-t border-teal-400/10 pt-3">
-                {plan ? <Md text={plan.body} /> : <p className="text-sm text-teal-200/40">No game plan filed this day.</p>}
-              </div>
-            </details>
-          </Card>
+          {/* Newest first: the close, then intraday updates backwards, then the morning plan. */}
+          {/* The close — leads the day once it has actually closed; open by default. */}
+          {eod && (
+            <Card className="p-5">
+              <details open className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The close</h2>
+                  <span className="text-xs tabular-nums text-teal-200/40">{etTime(eod.createdAt)} ET</span>
+                  <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
+                  <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
+                </summary>
+                <div className="mt-3 border-t border-teal-400/10 pt-3">
+                  <Stats stats={parseStats(eod.statsJson)} />
+                  <Md text={eod.body} />
+                </div>
+              </details>
+            </Card>
+          )}
 
-          {/* Intraday updates — each entry its own collapsible, collapsed by default */}
+          {/* Intraday updates — newest first, each entry collapsed by default. */}
           <Card className="p-5">
             <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
               Intraday updates {intraday.length > 0 && <span className="text-teal-200/40">· {intraday.length}</span>}
@@ -106,24 +110,17 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
             )}
           </Card>
 
-          {/* The close — open by default */}
+          {/* Morning plan — the day's anchor, at the bottom; open by default. */}
           <Card className="p-5">
             <details open className="group">
               <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The close</h2>
-                {eod && <span className="text-xs tabular-nums text-teal-200/40">{etTime(eod.createdAt)} ET</span>}
+                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Morning plan</h2>
+                {plan && <span className="text-xs tabular-nums text-teal-200/40">{etTime(plan.at)} ET</span>}
                 <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
                 <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
               </summary>
               <div className="mt-3 border-t border-teal-400/10 pt-3">
-                {eod ? (
-                  <>
-                    <Stats stats={parseStats(eod.statsJson)} />
-                    <Md text={eod.body} />
-                  </>
-                ) : (
-                  <p className="text-sm text-teal-200/40">No close report filed this day.</p>
-                )}
+                {plan ? <Md text={plan.body} /> : <p className="text-sm text-teal-200/40">No game plan filed this day.</p>}
               </div>
             </details>
           </Card>
