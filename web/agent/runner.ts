@@ -263,11 +263,18 @@ async function maybeScheduledSessions() {
   // hunt off-schedule (any time), then clears the flag so it fires once per request.
   const state = await prisma.agentState.findUnique({ where: { id: 1 } });
   if (state?.huntRequestedAt) {
+    const brief = state.huntBrief?.trim() || undefined;
+    // Clear only the pending trigger — leave huntBrief as the record that powers the
+    // Hunt page's "directed hunt" banner until a blank refresh (or the daily hunt) resets it.
     await prisma.agentState.update({ where: { id: 1 }, data: { huntRequestedAt: null, huntRequestedBy: null } });
     sessionRunning = true;
     try {
-      await runDiscoveryHunt();
-      await alert("info", "Hunt refreshed on request", "Fresh under-the-radar names on the Discover tab.");
+      await runDiscoveryHunt(brief);
+      await alert(
+        "info",
+        brief ? "Directed hunt complete" : "Hunt refreshed on request",
+        brief ? `Focused on your brief: ${brief}` : "Fresh under-the-radar names on The Hunt.",
+      );
     } finally {
       sessionRunning = false;
     }
@@ -301,8 +308,10 @@ async function maybeScheduledSessions() {
     if (existing === 0) {
       sessionRunning = true;
       try {
+        // The daily hunt is broad — clear any lingering directed brief so the banner resets.
+        if (state?.huntBrief) await prisma.agentState.update({ where: { id: 1 }, data: { huntBrief: null } });
         await runDiscoveryHunt();
-        await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on the Ideas page.");
+        await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on The Hunt.");
       } finally {
         sessionRunning = false;
       }

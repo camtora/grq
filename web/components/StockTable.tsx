@@ -83,7 +83,7 @@ function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendatio
 
 const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   tier: { label: "Tier", align: false },
-  watcher: { label: "Watched by", align: false },
+  watcher: { label: "Added by", align: false },
   last: { label: "Last", align: true },
   day: { label: "Day", align: true },
   signals: { label: "Signals", align: false },

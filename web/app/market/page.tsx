@@ -8,16 +8,14 @@ import { type WatchState } from "@/components/WatchButton";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
 import DismissButton from "@/components/DismissButton";
 import IdeaCard, { type Idea } from "@/components/IdeaCard";
+import HuntBar from "@/components/HuntBar";
 
 export const dynamic = "force-dynamic";
-
-// Household names get deprioritised — "stocks you should look at" should lead
-// with names you do not already know (candidates / mid-caps over the big banks).
-const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
 
 export default async function Market() {
   const session = await getSession();
   const isMember = session?.role === "member";
+  const state = await prisma.agentState.findUnique({ where: { id: 1 } });
 
   const universe = await allUniverse();
   const uBy = new Map(universe.map((u) => [u.symbol, u]));
@@ -50,7 +48,6 @@ export default async function Market() {
     const u = uBy.get(sym);
     const cur = quotes.get(sym)?.midCents ?? null;
     const sig = await computeSignals(sym).catch(() => null);
-    const tier = u?.tier ?? null;
     return {
       sym,
       name: u?.name ?? sym,
@@ -65,11 +62,14 @@ export default async function Market() {
       stance: d.stance,
       body: d.body,
       sourcesJson: d.sourcesJson,
-      obscurity: HOUSEHOLD.has(sym) ? 3 : tier === "etf" || tier === "large" ? 2 : tier === "mid" ? 1 : 0,
+      obscurity: d.obscurity ?? null,
       watch: watchOf(sym),
     };
   };
   const huntIdeas: Idea[] = await Promise.all(huntFinds.map(toIdea));
+  // Surface obscurity — lead with the deepest cuts (agent's 1–5 score). Stable sort
+  // keeps the newest-first order as the tiebreak; unscored names sink to the bottom.
+  huntIdeas.sort((a, b) => (b.obscurity ?? -1) - (a.obscurity ?? -1));
 
   return (
     <main>
@@ -78,6 +78,18 @@ export default async function Market() {
         sub="The agent's search for under-the-radar names — earlier-stage leads, often before a price target. Proposals only: watch the ones you like, dismiss the ones you don't."
         right={isMember ? <RefreshHuntButton /> : undefined}
       />
+
+      {isMember && <HuntBar />}
+
+      {state?.huntBrief && (
+        <div className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/25 bg-teal-400/[0.06] px-3 py-2 text-sm">
+          <span aria-hidden>🎯</span>
+          <span className="text-teal-100/80">
+            Directed hunt: <b className="text-teal-50">{state.huntBrief}</b>
+          </span>
+          <span className="text-xs text-teal-200/40">— focused results below; hit ↻ refresh hunt to go broad again.</span>
+        </div>
+      )}
 
       {huntIdeas.length > 0 && (
         <section className="mb-8">

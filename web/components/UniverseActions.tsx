@@ -110,9 +110,11 @@ export default function UniverseActions({
           <button
             disabled={busy}
             onClick={() => window.confirm(`Stop researching ${symbol}? History is kept.`) && act("retire")}
+            title="Retire — stop researching (history is kept)"
+            aria-label={`Retire ${symbol}`}
             className={`${btn} border-teal-400/15 text-teal-200/40 hover:bg-teal-400/5`}
           >
-            Retire
+            ✕
           </button>
         </>
       )}

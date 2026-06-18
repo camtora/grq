@@ -34,6 +34,11 @@ list tables — `UniverseActions hideResearch`). **The Hunt** (was Discover; D30
 (`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Every hunt find gets a full
 dossier queued** (`lib/hunt.ts` `queueHuntDossier`, `requestedBy:"hunt"`) so the stock page is researched and
 ready when you click it — but it is **NOT added to the Watchlist** (watching a find is what tracks it); D30.
+**D38 — the hunt is now two-way:** a member can **brief** it in plain English (`HuntBar` → `/api/hunt/refresh`
+`{brief}` → `AgentState.huntBrief` → `runDiscoveryHunt(brief)` FOCUS block); the **🎯 Directed hunt** banner
+shows the active brief (a blank ↻ refresh / the daily 10:00 hunt goes broad again). Reach is **North America
+(CA + US, the fund holds CAD+USD — D34)**, not CAD-only. **Obscurity is agent-scored** (`JournalEntry.obscurity`
+1–5, set in `write_journal`) — shown as the amber badge on `IdeaCard` and **sorted obscure-first**.
 **Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
 **Smart Money (D28)** is a fifth top-level destination (`/market/smart-money`): **tracked-portfolio cards**
@@ -184,10 +189,10 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `docs/OWNERSHIP.md` | Whose money/account: options, tax notes, open decision |
 | `docs/LITERACY.md` | **Financial-literacy product pillar** — every number explainable; glossary + agent explainers |
 | `docs/NEWSPAPER.md` | "The Daily" — Today-as-newspaper: editions by time of day, sections, imagery roadmap |
-| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `ibkr.ts` (IBKR adapter — conid/orders/reconcile), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` (`getBroker()`) |
+| `web/lib/broker/` | BrokerAdapter seam: `types.ts`, `sim.ts` (engine), `ibkr.ts` (IBKR adapter — conid/orders/reconcile), `quotes.ts` (Yahoo delayed, DB-cached), `yahoo.ts`, `index.ts` (`getBroker()`). **D39:** `reconcile()` warms conids for EVERY active symbol each tick (not once) + the fill path reconciles in a retry loop until the bought position mirrors before snapshotting — fixes a name self-promoted *after* boot going unmirrored → understated NAV → a FALSE daily-loss pause |
 | `web/lib/stance.ts` · `web/components/RatingBar.tsx` | GRQ's call = the 7-point scale (Strong Buy→Strong Sell) + slider; back-compat maps retired words (D23). `RatingBar` `size="lg"`+`mascots` = the bull/bear stock-page hero (D36) |
 | `web/lib/people.ts` · `web/components/Avatar.tsx` · `PeopleBadges.tsx` | Member identity (D36): photos (`/public/people/`) + AI-readable career bios; circular avatars in the watchlist "Watched by" column, NavBar, chat bubbles + the Reports "about us" dialog |
-| `web/agent/` | The agent worker (Phase 2): `runner.ts` (orchestrator/tick loop), `validator.ts` (§6 gate), `policy.ts` (hard limits + model IDs), `sessions.ts` (LLM sessions), `tools.ts`, `context.ts`, `signals.ts`, `calendar.ts`, `alerts.ts`, `chat-server.ts`. **D35:** scheduled intraday check-ins (`CHECKIN_TIMES_ET` 10:00/12:30/15:00 ET) + agent self-scheduling (`AgentWakeup` + `schedule_checkin`/`list_scheduled`/`cancel_checkin`). **D37:** conviction tally (`TradeProposal`, logged at `propose_order`) + durable lesson banking |
+| `web/agent/` | The agent worker (Phase 2): `runner.ts` (orchestrator/tick loop), `validator.ts` (§6 gate), `policy.ts` (hard limits + model IDs), `sessions.ts` (LLM sessions), `tools.ts`, `context.ts`, `signals.ts`, `calendar.ts`, `alerts.ts`, `chat-server.ts`. **D35:** scheduled intraday check-ins (`CHECKIN_TIMES_ET` 10:00/12:30/15:00 ET) + agent self-scheduling (`AgentWakeup` + `schedule_checkin`/`list_scheduled`/`cancel_checkin`). **D37:** conviction tally (`TradeProposal`, logged at `propose_order`) + durable lesson banking. **D39:** active-deployment mandate — PERSONA flipped to "put the fund to work" (month-over-month scorecard, under-deployment = the failure mode), morning "WIDEN IF THIN" hunt, check-ins treat the plan as a revisable hypothesis, `SELF_INVEST.maxPerRollingWeek` 2→5. The §6 gate + 75% conviction bar are UNCHANGED — the fix is disposition + breadth, not a lower bar |
 | `web/lib/feed.ts` · `web/lib/auth-jwt.ts` | Mobile API: contract-shaped builders + GRQ-JWT mint/verify. Routes: `web/app/api/{portfolio,market,ideas,today,dossier/[symbol],auth/google,auth/me,auth/dev}` + GET on `settings`. Verify: `web/scripts/verify-mobile-api.ts` |
 | `ios/GRQ/Services/Services.swift` | iOS data layer: `APIClient` (real URLSession GETs, Bearer), `AuthManager` (Keychain token, Google/dev login), `GoogleAuth` stub |
 | `shared/contract.ts` | The one wire-shape source (zod → TS + Swift). Keep in lockstep with `lib/feed.ts` |

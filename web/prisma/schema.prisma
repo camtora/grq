@@ -172,6 +172,10 @@ model JournalEntry {
   // consensus (a technicals formula). One of BUY/ACCUMULATE/HOLD/WATCH/TRIM/AVOID/SELL.
   // Where this diverges from the signal read, that divergence is the point.
   stance          String?
+  // How under-the-radar a hunt find is (D38): the agent's 1–5 read — 5 = a deep cut
+  // almost nobody covers, 1 = a well-followed name. Surfaced as the obscurity badge
+  // on The Hunt and used to sort obscure-first. Null for non-hunt entries.
+  obscurity       Int?
   agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])
@@ -470,6 +474,11 @@ model AgentState {
   // runner's tick picks it up, runs the hunt off-schedule, and clears it.
   huntRequestedAt DateTime?
   huntRequestedBy String?
+  // Directed hunt (D38): the member's plain-English brief that steers the next
+  // on-demand hunt ("emerging medical names about to post trial data"). Also the
+  // record powering the Hunt page's "directed hunt" banner. A blank refresh and the
+  // daily scheduled hunt clear it (broad run); a briefed submit overwrites it.
+  huntBrief     String?
   updatedAt     DateTime  @updatedAt
 }
 

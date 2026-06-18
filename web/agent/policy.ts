@@ -38,7 +38,7 @@ export const SELF_INVEST = {
   enabled: (process.env.GRQ_AGENT_SELF_PROMOTE ?? "true").toLowerCase() !== "false",
   allowedStances: ["Strong Buy", "Buy"] as const, // must be a genuine buy call
   minConfidence: HARD.minBuyConfidence, // ≥75, same bar as the BUY gate
-  maxPerRollingWeek: 2, // anti-runaway: ≤2 self-promotions / rolling 7 days
+  maxPerRollingWeek: 5, // anti-runaway: ≤5 self-promotions / rolling 7 days (raised from 2 on 2026-06-18 — the agent was chronically under-deploying; it needs room to build a real book from its own research)
   maxUniverseSize: 60, // anti-runaway: total ACTIVE cap
   promotableTiers: ["large", "mid"] as const, // ETFs stay human-curated; default "mid"
 };

@@ -26,9 +26,32 @@ export type Idea = {
   stance: string | null;
   body: string;
   sourcesJson: string | null;
-  obscurity: number;
+  obscurity: number | null; // agent's 1–5 under-the-radar score (D38; null = no read)
   watch: WatchState;
 };
+
+const OBSCURITY_LABEL: Record<number, string> = {
+  5: "🔍 deep cut",
+  4: "under-the-radar",
+  3: "lesser-known",
+  2: "some coverage",
+  1: "well-followed",
+};
+
+// Surface obscurity (D38) — the agent's 1–5 read on how off-the-radar a hunt find is
+// (5 = almost nobody covers it). Amber so it reads apart from the teal conviction chip.
+// Only meaningful on discovery leads.
+function ObscurityBadge({ score }: { score?: number | null }) {
+  if (!score || !OBSCURITY_LABEL[score]) return null;
+  return (
+    <span
+      className="rounded-full border border-amber-400/20 bg-amber-400/5 px-2 py-0.5 text-[10px] font-semibold text-amber-200/70"
+      title="How under-the-radar this is — GRQ's read (5 = almost nobody covers it)"
+    >
+      {OBSCURITY_LABEL[score]}
+    </span>
+  );
+}
 
 export function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   if (!sourcesJson) return null;
@@ -99,7 +122,8 @@ export default function IdeaCard({
             </span>
           ) : null}
         </div>
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-teal-200/50">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-teal-200/50">
+          {discovery && <ObscurityBadge score={idea.obscurity} />}
           {idea.cur !== null && <span>now {money(idea.cur, idea.currency)}</span>}
           {!discovery && idea.far !== null && (
             <span className={idea.far > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
@@ -192,6 +216,11 @@ export default function IdeaCard({
                 </>
               ) : (
                 <p className="mt-1 text-sm text-teal-200/40">An early-stage find — not yet a position call.</p>
+              )}
+              {idea.obscurity != null && (
+                <div className="mt-2">
+                  <ObscurityBadge score={idea.obscurity} />
+                </div>
               )}
             </div>
           ) : sm ? (

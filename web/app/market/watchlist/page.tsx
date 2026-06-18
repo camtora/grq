@@ -22,7 +22,7 @@ function watchedBy(addedBy: string | null): string | null {
 // target upside, manage actions); clicking a row expands it for GRQ's call blurb +
 // the dossier's plain-English "why" (Cam 2026-06-17). The full long-form dossier
 // (business / bull / bear / sources) still lives one click away on the stock page.
-const COLUMNS: StockColumn[] = ["watcher", "last", "day", "signals", "call", "upside", "conf", "journal"];
+const COLUMNS: StockColumn[] = ["last", "day", "signals", "call", "upside", "conf", "journal", "watcher"];
 
 export default async function Watchlist() {
   const [session, universe, requests, directives] = await Promise.all([

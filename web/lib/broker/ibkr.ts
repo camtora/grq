@@ -245,7 +245,20 @@ export class IBKRBroker implements BrokerAdapter {
       }
 
       const orderRow = await this.recordFill(input, filledPriceCents, commissionCents);
-      await this.reconcile().catch(() => {});
+      // IBKR's positions ledger lags the fill by a few seconds, so a single
+      // immediate reconcile can miss the just-filled position — leaving it
+      // unmirrored: NAV understated, a false cash-only dip in the NAV tape, and the
+      // Universe tab showing no position. Reconcile in a short retry loop until the
+      // new BUY actually appears in the mirror, THEN snapshot, so the ledger and the
+      // tape reflect the trade rather than a transient understated state (2026-06-18).
+      const sym = input.symbol.toUpperCase();
+      for (let i = 0; i < 5; i++) {
+        await this.reconcile().catch(() => {});
+        if (input.side === "SELL") break; // sells reduce/close a position — never understate NAV
+        const pos = await prisma.position.findUnique({ where: { symbol: sym } });
+        if (pos && pos.qty > 0) break;
+        await sleep(2000);
+      }
       await writeNavSnapshot(`IBKR fill order #${orderRow}`).catch(() => {});
       return { ok: true, orderId: orderRow, status: "FILLED", fillPriceCents: filledPriceCents, commissionCents };
     } catch (e) {
@@ -402,9 +415,14 @@ export class IBKRBroker implements BrokerAdapter {
     const auth = await this.authStatus();
     if (!auth.authenticated || !auth.connected) return;
 
-    // Warm the conid→symbol map for the active universe so holdings resolve.
-    if (this.symbolByConid.size === 0) {
-      for (const s of await activeSymbols()) await this.conidFor(s).catch(() => null);
+    // Warm the conid→symbol map for EVERY active symbol so holdings resolve —
+    // including names promoted AFTER boot. The old once-only `size===0` warm meant
+    // a name self-promoted mid-session (e.g. SLF, 2026-06-18) never entered this
+    // long-lived instance's map, so getPositions() silently skipped its just-bought
+    // position → NAV understated → a FALSE daily-loss pause. conidFor short-circuits
+    // on cached symbols, so re-checking the (small) active set each tick is cheap.
+    for (const s of await activeSymbols()) {
+      if (!this.conidBySymbol.has(s.toUpperCase())) await this.conidFor(s).catch(() => null);
     }
     const [brokerPositions, cash] = await Promise.all([this.getPositions(), this.getCashByCurrency()]);
 

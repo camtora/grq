@@ -716,3 +716,76 @@ three parts, all humans-curated, none touching the §6 gate:**
 **Verified:** tsc clean; `TradeProposal` table pushed; web + agent rebuilt, fresh images stale-checked.
 **Watching:** if the per-trade-vs-dossier gap stays persistently negative, it's a calibration issue (the
 fund's real risk is under-deployment vs XIC, not bad picks) — the tally is how we'll tell.
+
+### D38 — The Hunt goes two-way: directed (briefed) hunts + surfaced obscurity (Cam, 2026-06-18)
+**Context:** The Hunt was push-only — the agent picked the theme and members could only `↻ refresh`
+(broad) or `✕ dismiss`. Cam wanted **pull**: keep the general dashboard, but be able to *brief* the hunt
+in plain English ("emerging medical names about to post trial data"). Second ask: **surface obscurity** —
+the page computed an `obscurity` number per card but never showed or sorted by it, and derived it from
+`tier` (null for ~all hunt finds, so meaningless). **Decision — research-only, touches no order path:**
+1. **Directed hunt** — a member's brief flows to the agent via a new `AgentState.huntBrief` (same
+   flag-on-state pattern as `huntRequestedAt`; web/alpine can't run a Claude session). The `HuntBar`
+   component POSTs `{brief}` to `/api/hunt/refresh`; the runner reads it and calls `runDiscoveryHunt(brief)`,
+   which prepends a FOCUS block making the brief the primary filter while keeping the under-the-radar,
+   leads-not-verdicts framing. `huntBrief` persists as the record powering the page's "🎯 Directed hunt"
+   banner; a blank refresh and the daily 10:00 broad hunt clear it. Latest submit wins.
+2. **Reach correction** — the hunt prompt said "Canadian-listed only," but the fund holds **CAD + USD**
+   (D34) and trades CA (TSX/TSX-V/CSE/NEO) + US (NYSE/Nasdaq). Reframed to range across **North America**,
+   prefer tradeable names, allow ~2 clearly-flagged foreign leads. (The "CAD-only" rule is just the agent's
+   narrow self-promotion path in `agent/promote.ts` — not a fund-wide constraint.)
+3. **Agent-scored obscurity** — new `JournalEntry.obscurity` (1–5; 5 = a deep cut almost nobody covers),
+   emitted via `write_journal` on each hunt find. Shown as an amber obscurity badge on the `IdeaCard`
+   (discovery mode) and used to **sort finds obscure-first** (stable, recency tiebreak), replacing the
+   defunct tier proxy.
+**Verified:** tsc clean; `huntBrief`/`obscurity` columns pushed; web + agent rebuilt + fresh-image
+stale-checked (new strings confirmed in both images); API write-path tested end-to-end (brief stored →
+read back → cleared, no session triggered). The two earlier UI tweaks shipped in the same build: the new
+red **bear** on the bull/bear `RatingBar` (`IMG_9624.png` → transparent `bear-splash.png`) and the
+Watchlist "Watched by" → **"Added by"** column moved to the far right with the Retire action as a bare ✕.
+**Out of scope (v1):** saved/named hunt "channels", per-find brief tagging in the DB (the banner covers
+provenance), market-cap/coverage enrichment for obscurity (the agent score is the source of truth).
+
+### D39 — Agent active-deployment mandate + IBKR reconcile/snapshot fixes (Cam, 2026-06-18)
+**Context:** The agent was chronically under-deploying — ~87% cash, re-chewing the same ~5 rate-sensitive
+blue chips, defaulting to an XIC ballast add, and standing down whenever nothing cleared. Cam's framing:
+day-to-day performance is NOT the goal, month-over-month is; the fund can't learn without taking real
+positions, and making a trade and being wrong is acceptable. The risk dial was already AGGRESSIVE (0% cash
+floor) — so the dial was never the constraint; the dial is a *ceiling, not a floor*, and nothing forces
+deployment. The brakes were (a) the agent's cash-praising disposition in the prompts and (b) it only ever
+looking at its short focus list. **Decision — prompts only; the §6 gate and the 75% conviction bar are
+UNCHANGED** (Cam, explicitly: keep the bar honest — if the few watched names don't clear it, research MORE
+names until something does; there's almost always a setup that passes; cash is earned after a wide look or
+a clear risk-off tape, not as a reflex):
+1. **PERSONA flipped** to active-manager / "put the fund to work": month-over-month is the scorecard,
+   day-to-day P&L is noise, a wrong trade is tuition, chronic under-deployment is the failure mode, "ahead
+   of XIC while in cash" is not a win. Never inflate conviction to clear a gate.
+2. **Morning research — "WIDEN IF THIN":** when the ACTIVE universe + watchlist don't offer enough ≥75
+   setups, hunt market-wide (WebSearch) and self-promote, instead of re-chewing the same names.
+3. **Both check-ins** (scheduled + event): the game plan is a HYPOTHESIS, not a contract — the agent may
+   revise or scrap it intraday on new information, not just execute the morning plan ("markets change").
+4. **`SELF_INVEST.maxPerRollingWeek` 2 → 5** so names it researches actually reach its tradeable universe.
+**Result same day:** the boot review self-promoted SLF/NVDA/TSM (a regime barbell), bought SLF + IFC,
+passed NVDA honestly (conviction 72 < 75, up not at its dip entry) and passed the XIC ballast add (68 < 75)
+— deploying *with* discipline, exactly the intent.
+
+**Reconcile bug the soak caught (+ two fixes).** A name self-promoted mid-session (SLF) was bought and
+**filled at IBKR but never mirrored into the `Position` table** → NAV understated by the purchase amount →
+a phantom −5.8% day → a **FALSE daily-loss pause** that blocked the rest of the plan. Root cause, two
+compounding issues: **(a)** `getBroker()` returns a NEW `IBKRBroker` per call, so the order path
+(`validator.ts`) and the runner's per-tick reconcile (`runner.ts`) hold *separate* conid caches; **(b)**
+`reconcile()` warmed the conid→symbol map only once (`if size===0`), so a symbol promoted AFTER boot never
+entered the long-lived runner instance's map and `getPositions()` silently skipped its real IBKR position
+(ibkr.ts "not one of ours"). Compounded by the post-fill `writeNavSnapshot` running before IBKR's positions
+ledger caught up (~a few-second lag) → every fill left a transient cash-only dip in the NAV tape.
+- **Fix 1:** `reconcile()` now warms conids for EVERY active symbol each tick (resolving only the missing
+  ones — `conidFor` short-circuits on cached, so it's cheap), so post-boot promotions mirror on the next tick.
+- **Fix 2:** the synchronous fill path reconciles in a short retry loop until the bought position actually
+  appears in the mirror, THEN snapshots — so the ledger and the tape reflect the trade, not a transient
+  understated state (sells skip the wait — they never understate NAV).
+- **Cleanup:** deleted the two glitch `NavSnapshot` rows (the cash-only cliff + the IFC-unmarked dip). The
+  fund was ~flat all day; the "drop" was never real money, just a marking artifact.
+**Verified:** tsc clean; agent rebuilt + fresh-image stale-checked (new strings confirmed in the image);
+live — XIC/SLF/IFC all mirrored, NAV ~$24,950, dayPnlBps −5, the false pause cleared.
+**Follow-ups (not done):** make `getBroker()` a singleton so the order + tick paths share one conid cache
+(the reconcile fix neutralizes the impact, but the duplicate-instance smell remains); slow PENDING fills
+still wait for an idle reconcile tick (the synchronous path is now self-correcting).

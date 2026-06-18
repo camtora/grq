@@ -40,7 +40,7 @@ export default function RatingBar({
       <div className={`flex items-center ${lg ? "mt-3 gap-2" : "mt-1.5"}`}>
         {mascots && (
           // Bear guards the "sell" end — walking grizzly, chart plunging down (bearish).
-          <img src="/bear-splash.png" alt="" aria-hidden className="h-6 w-auto shrink-0 select-none" />
+          <img src="/bear-splash.png" alt="" aria-hidden className="h-5 w-auto shrink-0 select-none" />
         )}
         <div
           className={`relative flex-1 rounded-full bg-gradient-to-r from-red-500/55 via-amber-400/45 to-emerald-500/55 ${lg ? "h-3" : "h-2"}`}
