@@ -109,6 +109,12 @@ Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), no
   Reclaim: `docker container prune -f` (stopped) + `docker image prune -f` (dangling — note it
   only frees the OLD image's layers AFTER `up -d` swaps to the new one). Shared host (tdarr,
   seerr, minecraft, infra…) so **never `image prune -a` / `system prune`** — too broad.
+  **The `agent`/`chat` images are ~3.57GB each** (no multi-stage trim; `web` is 266MB) so each
+  rebuild is disk-expensive. **2026-06-18: many `build agent` cycles in one session pushed `/var`
+  to 100% and crash-looped postgres** (checkpoint write → "No space left on device"; recovered with
+  `image prune -f`, no data loss). So: **BATCH changes into ONE build**, and rebuild ONE service at a
+  time — `build` → `up -d` → `image prune -f` → re-check `df -h /var` BEFORE the next build; never two
+  builds against a tight `/var`. My changes that only touch `agent/` don't need a `chat` rebuild.
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

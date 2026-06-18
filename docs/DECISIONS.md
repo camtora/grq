@@ -792,3 +792,30 @@ live — XIC/SLF/IFC all mirrored, NAV ~$24,950, dayPnlBps −5, the false pause
 **Follow-ups (not done):** make `getBroker()` a singleton so the order + tick paths share one conid cache
 (the reconcile fix neutralizes the impact, but the duplicate-instance smell remains); slow PENDING fills
 still wait for an idle reconcile tick (the synchronous path is now self-correcting).
+
+**Same-day hardening (2026-06-18, after the above shipped):**
+- **Daily-loss pause → 2-tick confirm.** The reconcile gap above also tripped the daily-loss pause: the BUY
+  gate evaluated `isDailyLossPaused()` live on each order, so a single transiently-understated NAV (cash out
+  for a fill, position not yet mirrored) read ≤ −3% and BLOCKED trading — hit twice (SLF, then AC as a
+  resting-limit slow-fill resolved via `finalizePending`, a path the synchronous retry-fix above didn't
+  cover). Fix: the pause is now a CONFIRMED, sticky-for-the-day flag set only after the loss persists across
+  TWO consecutive ticks (mirrors the drawdown kill's existing 2-tick confirm). `validator.isDailyLossPaused()`
+  reads the flag (`setDailyLossPauseConfirmed`), not a live recompute; `runner.checkDailyLossPause` counts
+  consecutive breaching ticks, resets on a healthy reading, scoped to the ET day. A real −3% day persists and
+  still pauses; a one-tick marking blip never does. In-memory, resets-on-restart toward not-halting (same as
+  the drawdown counter). Commit `2873feb`.
+- **PERSONA — research is always on tap.** Standing principle added: the agent may research / write a dossier
+  / `add_candidate` to the watchlist anytime, in any session; and when it wants to act but the dossier isn't
+  ready, `add_candidate` + `schedule_checkin` a return rather than dropping the idea or rushing a thesis.
+  Commit `f0949a1`.
+- **Self-promotion cap 5 → 25** — the wider hunt out-produced 5/wk (AC/COST/DAL got blocked). Commit `70545b4`.
+- **Stale lesson deleted** — the agent had banked "pace the 5/week promotion cap, don't spend it early"; its
+  scarcity premise died with the cap raise and it fought the deployment mandate, so it was removed.
+
+**Incident (2026-06-18) — repeated agent rebuilds filled `/var` → db crash.** Iterating with many
+`docker-compose build agent` cycles in one session pushed `/var` to 100%; postgres crash-looped on a
+checkpoint write ("No space left on device"). Recovered via `docker image prune -f` (no data loss); positions
+intact. Lesson: the `agent`/`chat` images are ~3.57GB each (no multi-stage trim, unlike `web` at 266MB), so
+rapid rebuilds are disk-expensive on this chronically-full shared host. BATCH changes into ONE build; after a
+build always swap (`up -d`) then `docker image prune -f` BEFORE the next build; never run two builds against a
+tight `/var`. See the CLAUDE.md disk gotcha.
