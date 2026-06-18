@@ -831,3 +831,19 @@ human-readable midday digest at lunch rather than a 6th decision session. Check-
 (the 10:00 hunt, 11:00 smart-money) so nothing collides. **Verified:** tsc clean; agent rebuilt + new
 `CHECKIN_TIMES_ET` + noon-brief block confirmed in the image; deployed (one careful build, `/var` watched —
 no db crash). Takes effect next market day.
+
+### D41 — Per-day report page: the full daily narrative (Cam, 2026-06-18)
+**Context:** Intraday check-ins and the midday brief are `JournalEntry` rows that only ever surfaced as
+the single latest "live brief" on the Portfolio page — once superseded they vanished from the UI. The
+Reports **Daily** tab paired only the morning Game plan + EOD close (each behind an inline "read all")
+and omitted the intraday narrative entirely. **Change:** new route **`/reports/day/[date]`** that
+aggregates the whole day — **Morning plan** (open), **Intraday updates** (all check-ins + the midday
+brief, chronological, each its own collapsible `<details>`), and **The close** (open, with stats).
+Reached via a **"View report →"** button: the Daily tab cards are now compact (day label + an
+intraday-count chip + one-line plan/close previews) instead of inline read-all, and the Portfolio brief
+gained a **"View full day →"** link (to the day of the current brief). `Stats`/`parseStats` lifted to
+`components/ReportStats.tsx` (shared by both). Date-keyed (not `/reports/[id]`) because a day spans
+JournalEntries + the EOD `Report`; SSR `<details>` (no JS); reuses the `?d=` day-window pattern
+(`startOfEtDay`). **Verified:** tsc clean; web rebuilt + deployed (one careful build, `/var` watched, no
+crash); `/reports/day/2026-06-18` renders all three sections with 14 check-ins + the midday brief; the
+Daily tab shows the View-report buttons.

@@ -6,6 +6,7 @@ import { etDateStr } from "@/agent/calendar";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Md from "@/components/Md";
+import { Stats, parseStats } from "@/components/ReportStats";
 import PeopleBadges from "@/components/PeopleBadges";
 import { PEOPLE } from "@/lib/people";
 
@@ -31,31 +32,17 @@ function dayLabel(d: Date): string {
   });
 }
 
-function parseStats(json: string | null): Record<string, string | number> | null {
-  if (!json) return null;
-  try {
-    return JSON.parse(json) as Record<string, string | number>;
-  } catch {
-    return null;
-  }
-}
-
-function Stats({ stats }: { stats: Record<string, string | number> | null }) {
-  if (!stats) return null;
-  return (
-    <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-teal-200/60">
-      {Object.entries(stats).map(([k, v]) => (
-        <span key={k}>
-          <span className="uppercase tracking-wider text-teal-200/40">{k.replace(/_/g, " ")}</span>{" "}
-          <span className="tabular-nums text-teal-50">{String(v)}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function Blank({ text }: { text: string }) {
-  return <p className="text-sm text-teal-200/40">{text}</p>;
+// One-line plain-text preview of a markdown body, for the compact Daily cards.
+function preview(body: string, n = 130): string {
+  const t = body
+    .replace(/[#*`_>]/g, " ")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t.length > n ? t.slice(0, n) + "…" : t;
 }
 
 function EntryCard({
@@ -105,15 +92,27 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   let content: React.ReactNode;
 
   if (tab === "daily") {
-    // Pair each day's morning game plan (a RESEARCH entry) with its EOD close.
-    const [eods, plans] = await Promise.all([
+    // Each day = morning game plan + EOD close + a count of intraday updates
+    // (check-ins + midday brief). The full per-day timeline lives at /reports/day/<date>.
+    const [eods, plans, intradayEntries] = await Promise.all([
       prisma.report.findMany({ where: { kind: "EOD" }, orderBy: { date: "desc" }, take: 40 }),
       prisma.journalEntry.findMany({
         where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
         orderBy: { at: "desc" },
         take: 40,
       }),
+      prisma.journalEntry.findMany({
+        where: { kind: "RESEARCH", OR: [{ title: { startsWith: "Check-in" } }, { title: { startsWith: "Midday brief" } }] },
+        orderBy: { at: "desc" },
+        take: 400,
+        select: { at: true },
+      }),
     ]);
+    const intradayCountBy = new Map<string, number>();
+    for (const e of intradayEntries) {
+      const k = etDateStr(e.at);
+      intradayCountBy.set(k, (intradayCountBy.get(k) ?? 0) + 1);
+    }
     type Day = { date: Date; eod?: (typeof eods)[number]; plan?: (typeof plans)[number] };
     const days = new Map<string, Day>();
     for (const e of eods) days.set(etDateStr(e.date), { date: e.date, eod: e });
@@ -122,6 +121,10 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       const cur = days.get(k);
       if (cur) cur.plan = p;
       else days.set(k, { date: p.at, plan: p });
+    }
+    // Days that only logged intraday updates (no plan/close) still get a card.
+    for (const k of intradayCountBy.keys()) {
+      if (!days.has(k)) days.set(k, { date: new Date(`${k}T12:00:00Z`) });
     }
     const dailyList = [...days.entries()]
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -135,34 +138,35 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
           body="Each market day pairs the morning game plan with the EOD close here — the first lands at ~9:00 and ~16:15 ET on the next market day."
         />
       ) : (
-        <div className="space-y-4">
-          {dailyList.map((d) => (
-            <Card key={d.date.toISOString()} className="p-5">
-              <div className="mb-3 flex items-center gap-3 border-b border-teal-400/10 pb-2">
-                <span className="text-sm font-semibold text-teal-50">{dayLabel(d.date)}</span>
-                <Link href={`/?d=${etDateStr(d.date)}`} className="ml-auto text-xs text-teal-300 hover:underline">
-                  that day →
-                </Link>
-              </div>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/40">Morning game plan</h3>
-                  {d.plan ? <CollapsibleMd text={d.plan.body} threshold={600} /> : <Blank text="No game plan filed this day." />}
+        <div className="space-y-3">
+          {dailyList.map((d) => {
+            const k = etDateStr(d.date);
+            const n = intradayCountBy.get(k) ?? 0;
+            return (
+              <Card key={k} className="p-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-semibold text-teal-50">{dayLabel(d.date)}</span>
+                  {n > 0 && <Chip tone="dim">{n} intraday update{n > 1 ? "s" : ""}</Chip>}
+                  <Link
+                    href={`/reports/day/${k}`}
+                    className="ml-auto rounded-md border border-teal-400/30 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-teal-300 hover:bg-teal-400/10"
+                  >
+                    View report →
+                  </Link>
                 </div>
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/40">The close</h3>
-                  {d.eod ? (
-                    <>
-                      <Stats stats={parseStats(d.eod.statsJson)} />
-                      <CollapsibleMd text={d.eod.body} threshold={600} />
-                    </>
-                  ) : (
-                    <Blank text="No close report filed this day." />
-                  )}
+                <div className="mt-3 grid gap-x-6 gap-y-2 text-sm text-teal-100/55 lg:grid-cols-2">
+                  <div>
+                    <span className="text-xs uppercase tracking-wider text-teal-200/40">Morning</span>{" "}
+                    {d.plan ? preview(d.plan.body) : <span className="text-teal-200/30">no plan filed</span>}
+                  </div>
+                  <div>
+                    <span className="text-xs uppercase tracking-wider text-teal-200/40">Close</span>{" "}
+                    {d.eod ? preview(d.eod.body) : <span className="text-teal-200/30">no close filed</span>}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       );
   } else if (tab === "weekly") {

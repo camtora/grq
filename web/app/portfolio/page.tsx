@@ -8,6 +8,7 @@ import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
 import ActivityFeed from "@/components/ActivityFeed";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
+import { etDateStr } from "@/agent/calendar";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
 // midday review from the Today page, Cam 2026-06-16).
@@ -143,6 +144,11 @@ export default async function Portfolio() {
               <CollapsibleMd text={latestBrief.body} threshold={600}>
                 <Sources sourcesJson={latestBrief.sourcesJson} />
               </CollapsibleMd>
+              <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
+                <Link href={`/reports/day/${etDateStr(latestBrief.at)}`} className="text-xs font-semibold text-teal-300 hover:underline">
+                  View full day →
+                </Link>
+              </div>
             </Card>
           )}
 
