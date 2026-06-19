@@ -298,15 +298,15 @@ export default function StockTable({
     <Card className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+          <tr className="text-center text-xs uppercase tracking-wider text-teal-200/40">
             <th className="px-4 py-3">Symbol</th>
             <th className="px-4 py-3">Name</th>
             {columns.map((c) => (
-              <th key={c} className={`px-4 py-3 ${c === "watcher" ? "text-center" : HEADERS[c].align ? "text-right" : ""}`}>
+              <th key={c} className="px-4 py-3">
                 {HEADERS[c].label}
               </th>
             ))}
-            {isMember && <th className="px-4 py-3 text-right">Manage</th>}
+            {isMember && <th className="px-4 py-3">Manage</th>}
           </tr>
         </thead>
         <tbody>

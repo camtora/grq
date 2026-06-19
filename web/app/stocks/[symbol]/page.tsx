@@ -87,7 +87,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <Chip tone="dim">not tracked</Chip>
           {researching ? <Chip tone="teal">researching…</Chip> : lead ? <Chip tone="teal">agent-flagged</Chip> : null}
           {pquote && (
-            <span className="ml-auto flex items-baseline gap-2">
+            <span className="ml-auto flex flex-col items-end gap-0.5">
               <LiveQuote
                 symbol={symbol}
                 initialCents={pquote.midCents}
@@ -125,7 +125,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               <span className="text-sm font-medium text-teal-50">{lead.title}</span>
               <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(lead.at)}</span>
             </div>
-            <CollapsibleMd text={lead.body}>
+            <CollapsibleMd text={lead.body} defaultOpen>
               <SourceChips sourcesJson={lead.sourcesJson} />
             </CollapsibleMd>
           </Card>
@@ -255,7 +255,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">agent watching</Chip>}
         {quote && (
-          <span className="ml-auto flex items-baseline gap-2">
+          <span className="ml-auto flex flex-col items-end gap-0.5">
             <LiveQuote
               symbol={symbol}
               initialCents={quote.midCents}
@@ -383,6 +383,95 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 signals are an input, not the verdict; the trade it actually places lives in its journal below.
               </p>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {/* The held-position stats ride one dense row on large screens — qty/cost/value/
+          P&L + the deterministic bracket (enforceExits) + the dossier targets, the full
+          "what happens next" at a glance. Equal columns flow in a single line (4–8 of
+          them); 2-up on phones, 4-up on tablets (Cam 2026-06-18). */}
+      {position && quote && (
+        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-none lg:auto-cols-fr lg:grid-flow-col">
+          <StatCard compact label="Held" value={`${position.qty} sh`} note={`since ${fmtWhen(position.openedAt)}`} />
+          <StatCard compact label="Avg cost (ACB)" value={money(position.avgCostCents)} />
+          <StatCard compact label="Market value" value={money(position.qty * quote.midCents)} />
+          <StatCard
+            compact
+            label="Unrealized P&L"
+            value={signedMoney(position.qty * (quote.midCents - position.avgCostCents))}
+            valueClassName={pnlClass(position.qty * (quote.midCents - position.avgCostCents))}
+          />
+          <StatCard
+            compact
+            label="Auto-stop"
+            term="stop-loss"
+            value={money(Math.round(position.avgCostCents * (1 - dial.stopPct / 100)))}
+            note={
+              <>
+                <span className="text-red-300/70">−{dial.stopPct}% vs cost</span> · auto-sells
+              </>
+            }
+          />
+          <StatCard
+            compact
+            label="Take-profit"
+            term="take-profit"
+            value={money(Math.round(position.avgCostCents * (1 + dial.takeProfitPct / 100)))}
+            note={
+              <>
+                <span className="text-emerald-300/70">+{dial.takeProfitPct}% vs cost</span> · auto-sells
+              </>
+            }
+          />
+          {targetEntry?.targetNearCents != null && (
+            <StatCard
+              compact
+              label="Near target"
+              term="price-target"
+              value={money(targetEntry.targetNearCents)}
+              note={
+                <>
+                  {nearPct !== null && (
+                    <span className={nearPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                      {nearPct > 0 ? "+" : ""}
+                      {pct(nearPct, 0)}
+                    </span>
+                  )}
+                  {targetEntry.targetNearDays ? ` · ~${Math.max(1, Math.round(targetEntry.targetNearDays / 5))} wks` : ""}
+                </>
+              }
+            />
+          )}
+          {targetEntry?.targetFarCents != null && (
+            <StatCard
+              compact
+              label="12-mo target"
+              term="price-target"
+              value={money(targetEntry.targetFarCents)}
+              note={
+                <>
+                  {farPct !== null && (
+                    <span className={farPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                      {farPct > 0 ? "+" : ""}
+                      {pct(farPct, 0)}
+                    </span>
+                  )}
+                  {" · 12-mo"}
+                </>
+              }
+            />
+          )}
+        </section>
+      )}
+
+      {watch?.note && (
+        <Card className="mb-6 p-4">
+          <div className="flex items-baseline gap-3">
+            <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+              The agent&apos;s note
+            </span>
+            <p className="text-sm text-teal-100/80">{watch.note}</p>
           </div>
         </Card>
       )}
@@ -611,95 +700,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           </Card>
         </div>
       </section>
-
-      {/* The held-position stats ride one dense row on large screens — qty/cost/value/
-          P&L + the deterministic bracket (enforceExits) + the dossier targets, the full
-          "what happens next" at a glance. Equal columns flow in a single line (4–8 of
-          them); 2-up on phones, 4-up on tablets (Cam 2026-06-18). */}
-      {position && quote && (
-        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-none lg:auto-cols-fr lg:grid-flow-col">
-          <StatCard compact label="Held" value={`${position.qty} sh`} note={`since ${fmtWhen(position.openedAt)}`} />
-          <StatCard compact label="Avg cost (ACB)" value={money(position.avgCostCents)} />
-          <StatCard compact label="Market value" value={money(position.qty * quote.midCents)} />
-          <StatCard
-            compact
-            label="Unrealized P&L"
-            value={signedMoney(position.qty * (quote.midCents - position.avgCostCents))}
-            valueClassName={pnlClass(position.qty * (quote.midCents - position.avgCostCents))}
-          />
-          <StatCard
-            compact
-            label="Auto-stop"
-            term="stop-loss"
-            value={money(Math.round(position.avgCostCents * (1 - dial.stopPct / 100)))}
-            note={
-              <>
-                <span className="text-red-300/70">−{dial.stopPct}% vs cost</span> · auto-sells
-              </>
-            }
-          />
-          <StatCard
-            compact
-            label="Take-profit"
-            term="take-profit"
-            value={money(Math.round(position.avgCostCents * (1 + dial.takeProfitPct / 100)))}
-            note={
-              <>
-                <span className="text-emerald-300/70">+{dial.takeProfitPct}% vs cost</span> · auto-sells
-              </>
-            }
-          />
-          {targetEntry?.targetNearCents != null && (
-            <StatCard
-              compact
-              label="Near target"
-              term="price-target"
-              value={money(targetEntry.targetNearCents)}
-              note={
-                <>
-                  {nearPct !== null && (
-                    <span className={nearPct > 0 ? "text-emerald-400" : "text-red-400"}>
-                      {nearPct > 0 ? "+" : ""}
-                      {pct(nearPct, 0)}
-                    </span>
-                  )}
-                  {targetEntry.targetNearDays ? ` · ~${Math.max(1, Math.round(targetEntry.targetNearDays / 5))} wks` : ""}
-                </>
-              }
-            />
-          )}
-          {targetEntry?.targetFarCents != null && (
-            <StatCard
-              compact
-              label="12-mo target"
-              term="price-target"
-              value={money(targetEntry.targetFarCents)}
-              note={
-                <>
-                  {farPct !== null && (
-                    <span className={farPct > 0 ? "text-emerald-400" : "text-red-400"}>
-                      {farPct > 0 ? "+" : ""}
-                      {pct(farPct, 0)}
-                    </span>
-                  )}
-                  {" · 12-mo"}
-                </>
-              }
-            />
-          )}
-        </section>
-      )}
-
-      {watch?.note && (
-        <Card className="mb-6 p-4">
-          <div className="flex items-baseline gap-3">
-            <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-              The agent&apos;s note
-            </span>
-            <p className="text-sm text-teal-100/80">{watch.note}</p>
-          </div>
-        </Card>
-      )}
 
       {closes.length > 1 && (
         <PriceChart data={closes.map((c) => ({ t: c.date.getTime(), c: c.closeCents }))} currency={entry.currency} />

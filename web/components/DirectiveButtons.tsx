@@ -17,9 +17,9 @@ export default function DirectiveButtons({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  // Match the UniverseActions button shape (research / promote / ✕) so the whole
-  // action row reads as one set (Cam 2026-06-18).
-  const btn = "rounded-lg border px-2.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-40";
+  // Match the UniverseActions button shape EXACTLY (research / promote / demote / ✕)
+  // so the whole action row is one consistent size (Cam 2026-06-19).
+  const btn = "rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-40";
 
   // Viewers see the directive state read-only (nothing if there's none).
   if (!canEdit) {
