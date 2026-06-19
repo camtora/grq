@@ -5,6 +5,7 @@ import { universeEntry } from "@/lib/universe";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
 import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
+import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
 import UniverseActions from "@/components/UniverseActions";
@@ -23,6 +24,7 @@ import { Card, Chip, StatCard, Pnl } from "@/components/ui";
 import Md from "@/components/Md";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
+import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import SignalStrip from "@/components/SignalStrip";
@@ -143,7 +145,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional, smartMoney] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional, smartMoney, settings] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -161,7 +163,12 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpInstitutional(entry.yahoo).catch(() => null) : Promise.resolve(null),
       getSmartMoneyForSymbol(symbol).catch(() => null),
+      prisma.settings.findUnique({ where: { id: 1 } }),
     ]);
+  // The risk dial sets the deterministic exits (enforceExits): a protective stop
+  // stopPct% below ACB and a take-profit takeProfitPct% above it — both enforced in
+  // code each tick, so the levels below are the REAL ones, not aspirational (D11).
+  const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
   const dayBps = quote?.dayChangeBps ?? 0;
@@ -225,7 +232,20 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         ← universe
       </Link>
 
-      <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+      {/* Hero band: the ticker/quote/actions ride the stock's own price tape — the
+          per-name "tape" as a faint backdrop so the chart reads as the headline
+          instead of getting buried below (Cam 2026-06-18). */}
+      <div className="relative mt-3 mb-6 overflow-hidden rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-4">
+        {closes.length > 1 && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-[0.13] [mask-image:linear-gradient(to_bottom,transparent,#000_45%,transparent)]"
+          >
+            <Sparkline values={closes.map((c) => c.closeCents)} className="h-full w-full" />
+          </div>
+        )}
+        <div className="relative space-y-4">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <StockLogo symbol={symbol} logoUrl={entry.logoUrl} className="h-10 w-10 self-center text-sm" />
         <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
         <span className="text-teal-200/60">{entry.name}</span>
@@ -242,16 +262,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               initialChangePct={dayBps / 10_000}
               currency={entry.currency}
               className="text-2xl font-semibold text-teal-50"
-            />
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
               live
-            </span>
+            />
           </span>
         )}
       </div>
 
-      <div className="mt-4 mb-6 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
         {isMember && (
           <UniverseActions
             symbol={symbol}
@@ -268,16 +285,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           canEdit={isMember}
         />
         {isMember && <AskGrq symbol={symbol} />}
-        {/* The bull/bear bar rides the action row, pushed to the right (Cam 2026-06-18). */}
-        {stance ? (
-          <div className="ml-auto w-72 max-w-full">
-            <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} note="GRQ's call" mascots hideLabel className="w-full" />
           </div>
-        ) : recMeta ? (
-          <div className="ml-auto w-72 max-w-full">
-            <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} note="technical lean" mascots hideLabel className="w-full" />
-          </div>
-        ) : null}
+        </div>
       </div>
 
       {(stance || rec) && (
@@ -285,20 +294,26 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
           <div className="grid gap-6 lg:grid-cols-2">
             <div>
-              {/* The verdict word lives here; the bull/bear bar (the same call) rides the
-                  action row above. Technicals are an input below, not a competing verdict. */}
+              {/* The verdict word, with the bull/bear bar (the same call) directly under
+                  it. Technicals are an input below, not a competing verdict. */}
               <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
                 <Term k="agent-call">GRQ&apos;s call</Term>
               </div>
               {stance ? (
                 <>
                   <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
-                  <p className="mt-2 text-sm text-teal-200/60">{stance.blurb}</p>
+                  <div className="mt-3 w-full max-w-xs">
+                    <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />
+                  </div>
+                  <p className="mt-3 text-sm text-teal-200/60">{stance.blurb}</p>
                 </>
               ) : recMeta ? (
                 <>
                   <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[recMeta.tone].text}`}>{recMeta.label}</span>
-                  <p className="mt-2 text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</p>
+                  <div className="mt-3 w-full max-w-xs">
+                    <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} mascots hideLabel className="w-full" />
+                  </div>
+                  <p className="mt-3 text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</p>
                 </>
               ) : (
                 <p className="text-sm text-teal-200/50">Not yet rated — the agent hasn&apos;t filed a call on this name.</p>
@@ -372,6 +387,160 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
+      {/* Key data panels — institutional · scoreboard · earnings · analyst, equal
+          height. Surfaced above the peer/valuation table (Cam 2026-06-18). */}
+      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {institutional && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+            </h2>
+            <Card className="p-4 text-sm flex-1">
+              <div className="flex items-baseline justify-between">
+                <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
+                <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {institutional.investorsHoldingChange >= 0 ? "+" : ""}
+                  {institutional.investorsHoldingChange} QoQ
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] text-teal-200/40">
+                From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
+              </p>
+            </Card>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
+          <Scoreboard
+            rows={symbolScores}
+            title=""
+            emptyText="No graded calls on this name yet — retros fill this in."
+            className="flex-1"
+          />
+        </div>
+
+        {earnings && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+            </h2>
+            <Card className="p-4 text-sm flex-1">
+              <div className="flex items-baseline justify-between">
+                <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
+                <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
+                {earnings.epsEstimated != null && (
+                  <span>
+                    EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
+                    {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
+                  </span>
+                )}
+                {earnings.revenueEstimated != null && (
+                  <span>
+                    Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
+            </Card>
+          </div>
+        )}
+
+        {grades && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+            <Card className="p-4 text-sm flex-1">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="font-bold text-teal-100/90">{grades.consensus}</span>
+                <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
+              </div>
+              {/* Bearish → bullish, left to right: sell · hold · buy (Cam 2026-06-18). */}
+              <div className="flex h-2 overflow-hidden rounded-full bg-teal-400/10">
+                {([["bg-red-500", grades.strongSell], ["bg-red-400", grades.sell], ["bg-teal-400/30", grades.hold], ["bg-emerald-400", grades.buy], ["bg-emerald-500", grades.strongBuy]] as const).map(
+                  ([cls, n], i) => (n > 0 ? <span key={i} className={cls} style={{ width: `${(n / grades.total) * 100}%` }} /> : null),
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-teal-200/50">
+                <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
+                <span>hold {grades.hold}</span>
+                <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
+              </div>
+              {analyst && (
+                <div className="mt-3 border-t border-teal-400/10 pt-2">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] uppercase tracking-wider text-teal-200/50">
+                      <Term k="analyst-target">Price target</Term>
+                    </span>
+                    <span className="text-xs">
+                      <span className="font-semibold tabular-nums text-teal-50">{money(analyst.consensusCents, analyst.currency)}</span>
+                      <span className={`ml-1.5 ${analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {analyst.upsidePct > 0 ? "+" : ""}
+                        {pct(analyst.upsidePct, 0)}
+                      </span>
+                    </span>
+                  </div>
+                  {analyst.lowCents > 0 && analyst.highCents > analyst.lowCents ? (
+                    (() => {
+                      // "Now" is implied by consensus + upside, so it shares the analyst's
+                      // currency (matters when a CA name's targets are the US listing's). The
+                      // band spans low→high; the domain also stretches to fit "now" if it sits
+                      // outside the band (e.g. trading below every target). Small pad so the
+                      // end markers aren't clipped at the edges.
+                      const now = analyst.upsidePct !== -1 ? Math.round(analyst.consensusCents / (1 + analyst.upsidePct)) : analyst.consensusCents;
+                      const lo = analyst.lowCents;
+                      const hi = analyst.highCents;
+                      const con = analyst.consensusCents;
+                      const pad = Math.round((Math.max(hi, now) - Math.min(lo, now)) * 0.06) || 1;
+                      const dMin = Math.min(lo, now) - pad;
+                      const dMax = Math.max(hi, now) + pad;
+                      const pos = (v: number) => ((v - dMin) / (dMax - dMin)) * 100;
+                      return (
+                        <>
+                          <div className="relative mt-3 h-1.5 rounded-full bg-teal-400/[0.07]">
+                            <div
+                              className="absolute inset-y-0 rounded-full bg-teal-400/20"
+                              style={{ left: `${pos(lo).toFixed(1)}%`, right: `${(100 - pos(hi)).toFixed(1)}%` }}
+                            />
+                            <div
+                              className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-teal-300"
+                              style={{ left: `${pos(con).toFixed(1)}%` }}
+                              title={`consensus ${money(con, analyst.currency)}`}
+                            />
+                            <div
+                              className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--card-bg)] bg-teal-50"
+                              style={{ left: `${pos(now).toFixed(1)}%` }}
+                              title={`now ${money(now, analyst.currency)}`}
+                            />
+                          </div>
+                          <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-teal-200/40">
+                            <span>low {money(lo, analyst.currency)}</span>
+                            <span>high {money(hi, analyst.currency)}</span>
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-teal-200/45">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block h-2 w-2 rounded-full bg-teal-50" /> now {money(now, analyst.currency)}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block h-1.5 w-1.5 rotate-45 bg-teal-300" /> consensus {money(con, analyst.currency)}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()
+                  ) : analyst.lowCents > 0 || analyst.highCents > 0 ? (
+                    <div className="mt-0.5 text-[10px] text-teal-200/40">
+                      range {money(analyst.lowCents, analyst.currency)} – {money(analyst.highCents, analyst.currency)}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+      </section>
+
       <section className="mb-6 grid items-start gap-6 lg:grid-cols-3">
         {peers.length > 1 && (
         <Card className="p-5 lg:col-span-2">
@@ -443,16 +612,81 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
       </section>
 
+      {/* The held-position stats ride one dense row on large screens — qty/cost/value/
+          P&L + the deterministic bracket (enforceExits) + the dossier targets, the full
+          "what happens next" at a glance. Equal columns flow in a single line (4–8 of
+          them); 2-up on phones, 4-up on tablets (Cam 2026-06-18). */}
       {position && quote && (
-        <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Held" value={`${position.qty} sh`} note={`since ${fmtWhen(position.openedAt)}`} />
-          <StatCard label="Avg cost (ACB)" value={money(position.avgCostCents)} />
-          <StatCard label="Market value" value={money(position.qty * quote.midCents)} />
+        <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-none lg:auto-cols-fr lg:grid-flow-col">
+          <StatCard compact label="Held" value={`${position.qty} sh`} note={`since ${fmtWhen(position.openedAt)}`} />
+          <StatCard compact label="Avg cost (ACB)" value={money(position.avgCostCents)} />
+          <StatCard compact label="Market value" value={money(position.qty * quote.midCents)} />
           <StatCard
+            compact
             label="Unrealized P&L"
             value={signedMoney(position.qty * (quote.midCents - position.avgCostCents))}
             valueClassName={pnlClass(position.qty * (quote.midCents - position.avgCostCents))}
           />
+          <StatCard
+            compact
+            label="Auto-stop"
+            term="stop-loss"
+            value={money(Math.round(position.avgCostCents * (1 - dial.stopPct / 100)))}
+            note={
+              <>
+                <span className="text-red-300/70">−{dial.stopPct}% vs cost</span> · auto-sells
+              </>
+            }
+          />
+          <StatCard
+            compact
+            label="Take-profit"
+            term="take-profit"
+            value={money(Math.round(position.avgCostCents * (1 + dial.takeProfitPct / 100)))}
+            note={
+              <>
+                <span className="text-emerald-300/70">+{dial.takeProfitPct}% vs cost</span> · auto-sells
+              </>
+            }
+          />
+          {targetEntry?.targetNearCents != null && (
+            <StatCard
+              compact
+              label="Near target"
+              term="price-target"
+              value={money(targetEntry.targetNearCents)}
+              note={
+                <>
+                  {nearPct !== null && (
+                    <span className={nearPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                      {nearPct > 0 ? "+" : ""}
+                      {pct(nearPct, 0)}
+                    </span>
+                  )}
+                  {targetEntry.targetNearDays ? ` · ~${Math.max(1, Math.round(targetEntry.targetNearDays / 5))} wks` : ""}
+                </>
+              }
+            />
+          )}
+          {targetEntry?.targetFarCents != null && (
+            <StatCard
+              compact
+              label="12-mo target"
+              term="price-target"
+              value={money(targetEntry.targetFarCents)}
+              note={
+                <>
+                  {farPct !== null && (
+                    <span className={farPct > 0 ? "text-emerald-400" : "text-red-400"}>
+                      {farPct > 0 ? "+" : ""}
+                      {pct(farPct, 0)}
+                    </span>
+                  )}
+                  {" · 12-mo"}
+                </>
+              }
+            />
+          )}
         </section>
       )}
 
@@ -468,102 +702,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       )}
 
       {closes.length > 1 && (
-        <Card className="mb-6 p-5">
-          <div className="mb-2 flex items-baseline justify-between">
-            <span className="text-xs uppercase tracking-wider text-teal-200/50">Price — {closes.length} sessions</span>
-            <span className="text-xs text-teal-200/40">
-              {money(closes[0].closeCents, entry.currency)} → {money(closes[closes.length - 1].closeCents, entry.currency)}
-            </span>
-          </div>
-          <Sparkline values={closes.map((c) => c.closeCents)} dates={closes.map((c) => c.date)} format={(c) => money(c, entry.currency)} axes />
-        </Card>
+        <PriceChart data={closes.map((c) => ({ t: c.date.getTime(), c: c.closeCents }))} currency={entry.currency} />
       )}
 
       {/* Smart money on THIS name — tracked investors' positions/trades + faces. */}
       {smartMoney && <StockSmartMoney sm={smartMoney} />}
-
-      {/* Key data panels under the chart — institutional · scoreboard · earnings · analyst, equal height. */}
-      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {institutional && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
-            </h2>
-            <Card className="p-4 text-sm flex-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
-                <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {institutional.investorsHoldingChange >= 0 ? "+" : ""}
-                  {institutional.investorsHoldingChange} QoQ
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] text-teal-200/40">
-                From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
-              </p>
-            </Card>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
-          <Scoreboard
-            rows={symbolScores}
-            title=""
-            emptyText="No graded calls on this name yet — retros fill this in."
-            className="flex-1"
-          />
-        </div>
-
-        {earnings && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
-            </h2>
-            <Card className="p-4 text-sm flex-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
-                <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
-                {earnings.epsEstimated != null && (
-                  <span>
-                    EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
-                    {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
-                  </span>
-                )}
-                {earnings.revenueEstimated != null && (
-                  <span>
-                    Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
-                  </span>
-                )}
-              </div>
-              <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
-            </Card>
-          </div>
-        )}
-
-        {grades && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
-            <Card className="p-4 text-sm flex-1">
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="font-bold text-teal-100/90">{grades.consensus}</span>
-                <span className="text-xs text-teal-200/40">{grades.total} analysts</span>
-              </div>
-              <div className="flex h-2 overflow-hidden rounded-full bg-teal-400/10">
-                {([["bg-emerald-500", grades.strongBuy], ["bg-emerald-400", grades.buy], ["bg-teal-400/30", grades.hold], ["bg-red-400", grades.sell], ["bg-red-500", grades.strongSell]] as const).map(
-                  ([cls, n], i) => (n > 0 ? <span key={i} className={cls} style={{ width: `${(n / grades.total) * 100}%` }} /> : null),
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-teal-200/50">
-                <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
-                <span>hold {grades.hold}</span>
-                <span className="text-red-400/80">sell {grades.sell + grades.strongSell}</span>
-              </div>
-            </Card>
-          </div>
-        )}
-      </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">

@@ -883,3 +883,39 @@ extras (earnings/grades), reports, chat history. After the nginx reload, the **f
 `/api/hunt` 302→403** (reaches the app, rejects the bad token) while `/` no-auth stayed 302 and `/`
 fake-Bearer returned 403 — fix confirmed, no SSO regression. The hunt populates on the *existing* installed
 build (server-side fix); the bull icon + top-right chat button need a Mac rebuild.
+
+### D43 — Stock-page + watchlist UI pass: the held-position bracket, interactive price chart, analyst targets (Cam, 2026-06-19)
+**Context:** A run of read-the-data-we-already-have refinements — the stock page surfaced an upside % but
+never the analyst *target prices*; the deterministic stop/take-profit were enforced in code (`enforceExits`)
+but invisible; the price history was a static 1-line squiggle; the watchlist showed today's % but not the
+dollar move. **Change (all UI; no schema, no agent-logic):**
+- **Held-position row** now shows the full "what happens next" as one dense single-line strip (4–8 equal
+  columns via `grid-flow-col`/`auto-cols-fr`, 2-up phones / 4-up tablets): qty · ACB · market value ·
+  unrealized P&L · **Auto-stop** (`ACB×(1−stopPct)`) · **Take-profit** (`ACB×(1+takeProfitPct)`, pulled from
+  `DIALS[riskLevel]` so they're the *real* enforced levels) · **near + 12-mo targets** (dossier). New
+  `StatCard compact` variant (tighter pad + `text-base`) so 8 fit one line.
+- **Interactive price chart** (`components/PriceChart.tsx`, client): timeframe picker **1M/3M/6M/YTD/1Y**
+  (client-side slice of the already-loaded ~1y of daily closes — no refetch; multi-year would need a one-time
+  `refreshBars(all,"max")`), a **hover tooltip + crosshair** snapping to the nearest session (price + date),
+  and a **round HTML dot** — the dot is *not* an SVG `<circle>` because the chart's `preserveAspectRatio="none"`
+  stretch ovals a circle (`non-scaling-stroke` only fixes strokes). The lightweight `Sparkline` (with a new
+  `className` prop) still backs the **stock-header "tape" backdrop**.
+- **Analyst card:** the buy/hold/sell distribution bar **flipped to sell→hold→buy** (bearish→bullish L→R) +
+  matching legend, and now surfaces the captured **price target** (`fmpAnalystTarget` already returns
+  consensus/high/low) as a **range bar with a "now" marker** — "now" derived from `consensus/(1+upside)` so it
+  shares the analyst's currency (US$ targets on a CA name stay self-consistent); domain stretches to fit "now"
+  if it sits outside low–high.
+- **Bottom line:** the bull/bear `RatingBar` moved from the action row down under the GRQ's-call word.
+- **Layout:** institutional/scoreboard/earnings/analyst row hoisted above Valuation-vs-peers.
+- **Watchlist/Universe:** the shared `StockTable` **Day** column now shows the **$ move beside the %**
+  (derived: `last − last/(1+day%)`).
+- **Smart Money:** every ticker now links to its stock page (was: only universe overlaps) and the page
+  **auto-research-queues** the names it surfaces (`lib/hunt.ts` `queueDossiers`, `requestedBy:"smart-money"`,
+  capped 12/render so it can't flood the queue; added to the runner's alert-exclusion list).
+- **LiveQuote:** a `live` marker now shows **"live · Ns ago"** ticking from the last successful fetch, going
+  amber/"stale" past ~8s so the badge can't claim live while a poll has silently frozen.
+- **Portfolio tab:** positions above the agent brief; brief defaults open (`CollapsibleMd defaultOpen`).
+- **Settings:** the IBKR-paper roadmap step crossed out ("plumbing proven & live-firing"; the soak is the
+  gate to the Live step, unchanged).
+**Verified:** `tsc --noEmit` clean throughout; `web` rebuilt (image checked fresh), deployed, `/var` steady
+at 73%, agent/ibeam untouched. Shipped together with D42's iOS-API tree in one web image (Cam's call).

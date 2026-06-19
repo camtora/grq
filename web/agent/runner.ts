@@ -578,7 +578,13 @@ async function processResearchQueue() {
         where: { id: next.id },
         data: { status: "DONE", completedAt: new Date() },
       });
-      if (next.requestedBy !== "rotation" && next.requestedBy !== "weekly-refresh" && next.requestedBy !== "movers" && next.requestedBy !== "hunt") {
+      if (
+        next.requestedBy !== "rotation" &&
+        next.requestedBy !== "weekly-refresh" &&
+        next.requestedBy !== "movers" &&
+        next.requestedBy !== "hunt" &&
+        next.requestedBy !== "smart-money"
+      ) {
         await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
       }
     }

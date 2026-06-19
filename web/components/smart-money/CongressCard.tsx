@@ -45,13 +45,12 @@ export default function CongressCard({ entry, overlap }: { entry: CongressMember
               {trades.slice(0, 10).map((t, i) => (
                 <div key={i} className="flex items-center gap-2 border-t border-teal-400/10 py-1.5 text-sm">
                   <span className="w-16 shrink-0">
-                    {overlap[t.symbol] ? (
-                      <Link href={`/stocks/${t.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                        {t.symbol}
-                      </Link>
-                    ) : (
-                      <span className="font-semibold text-teal-100/90">{t.symbol}</span>
-                    )}
+                    <Link
+                      href={`/stocks/${t.symbol}`}
+                      className={`font-semibold hover:underline ${overlap[t.symbol] ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
+                    >
+                      {t.symbol}
+                    </Link>
                   </span>
                   <span
                     className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${

@@ -130,28 +130,8 @@ export default async function Portfolio() {
       </section>
 
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-        {/* Main column: latest briefing, NAV, positions, latest journal */}
+        {/* Main column: positions, latest briefing, latest journal */}
         <div className="space-y-6 lg:col-span-2">
-          {latestBrief && (
-            <Card className="p-5">
-              <div className="mb-2 flex items-baseline justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
-                  {latestBrief.kicker}
-                </span>
-                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
-              </div>
-              <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
-              <CollapsibleMd text={latestBrief.body} threshold={600}>
-                <Sources sourcesJson={latestBrief.sourcesJson} />
-              </CollapsibleMd>
-              <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
-                <Link href={`/reports/day/${etDateStr(latestBrief.at)}`} className="text-xs font-semibold text-teal-300 hover:underline">
-                  View full day →
-                </Link>
-              </div>
-            </Card>
-          )}
-
           <Card className="overflow-x-auto">
             <div className="flex items-baseline justify-between px-5 pt-4">
               <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
@@ -217,6 +197,26 @@ export default async function Portfolio() {
               </table>
             )}
           </Card>
+
+          {latestBrief && (
+            <Card className="p-5">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
+                  {latestBrief.kicker}
+                </span>
+                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
+              </div>
+              <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
+              <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
+                <Sources sourcesJson={latestBrief.sourcesJson} />
+              </CollapsibleMd>
+              <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
+                <Link href={`/reports/day/${etDateStr(latestBrief.at)}`} className="text-xs font-semibold text-teal-300 hover:underline">
+                  View full day →
+                </Link>
+              </div>
+            </Card>
+          )}
 
           <Card className="p-5">
             <div className="mb-3 flex items-baseline justify-between">

@@ -15,7 +15,7 @@ const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
   { n: 1, label: "Mock fund — dashboard + sim engine", done: true },
   { n: 2, label: "Sim live-fire — agent trades $25,000 vs real markets", done: true },
-  { n: 3, label: "IBKR paper — real broker plumbing, ≥2 clean weeks", done: false },
+  { n: 3, label: "IBKR paper — real broker plumbing proven & live-firing", done: true },
   { n: 4, label: "Live — real money, Cautious dial for week 1", done: false },
 ];
 

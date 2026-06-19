@@ -32,3 +32,26 @@ export async function queueHuntDossier(symbol: string): Promise<HuntQueue> {
   await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "hunt" } });
   return "queued";
 }
+
+// Batch-queue full dossiers for a set of symbols surfaced on a page (e.g. Smart
+// Money), so every ticker links to a researched — or at least "researching…" —
+// stock page rather than a 404. Skips names already researched or with a request
+// already on file, and caps how many NEW names enter the queue per call so a big
+// page can't flood the agent's research queue: it catches up over repeat visits
+// (idempotent). Symbols are normalized to bare uppercase, matching the stock page's
+// route handling + the dossier journal key. Returns the number newly queued.
+export async function queueDossiers(symbols: string[], requestedBy: string, cap = 12): Promise<number> {
+  const keys = Array.from(new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean)));
+  if (keys.length === 0) return 0;
+
+  const [haveReq, haveJournal] = await Promise.all([
+    prisma.researchRequest.findMany({ where: { symbol: { in: keys } }, select: { symbol: true } }),
+    prisma.journalEntry.findMany({ where: { symbol: { in: keys } }, select: { symbol: true } }),
+  ]);
+  const known = new Set([...haveReq, ...haveJournal].map((r) => r.symbol));
+  const toQueue = keys.filter((s) => !known.has(s)).slice(0, cap);
+  if (toQueue.length === 0) return 0;
+
+  await prisma.researchRequest.createMany({ data: toQueue.map((symbol) => ({ symbol, requestedBy })) });
+  return toQueue.length;
+}

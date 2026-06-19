@@ -10,6 +10,7 @@ import PortfolioCard from "@/components/smart-money/PortfolioCard";
 import CongressCard from "@/components/smart-money/CongressCard";
 import Leaderboard, { type LeaderRow } from "@/components/smart-money/Leaderboard";
 import { fmtUsd, type WatchOverlap } from "@/lib/smart-money/types";
+import { queueDossiers } from "@/lib/hunt";
 import {
   getPortfolios,
   getCongressLeaderboard,
@@ -47,6 +48,22 @@ export default async function SmartMoney() {
     if (u.status === "ACTIVE") overlap[u.symbol] = "universe";
     else if (u.status === "CANDIDATE") overlap[u.symbol] = "watching";
   }
+
+  // Auto-research the names this page surfaces so every ticker links to a real,
+  // researched (or at least "researching…") stock page instead of a 404. Headline
+  // leaderboard + cluster names first, then the deeper holdings; capped per render
+  // so a busy page can't flood the agent's research queue — it catches up over
+  // repeat visits (idempotent). Skip names already in our universe — they have
+  // their own research flow. (Cam 2026-06-18)
+  const shownSymbols = [
+    ...congress.map((c) => c.symbol),
+    ...funds.map((f) => f.symbol),
+    ...insiders.map((t) => t.symbol),
+    ...clusters.map((c) => c.symbol),
+    ...portfolios.flatMap((p) => p.topHoldings.map((h) => h.symbol)),
+    ...members.flatMap((m) => m.trades.map((t) => t.symbol)),
+  ].filter((s) => s && !overlap[s]);
+  await queueDossiers(shownSymbols, "smart-money").catch(() => {});
 
   const congressRows: LeaderRow[] = congress.map((c) => ({
     symbol: c.symbol,

@@ -9,6 +9,7 @@ export default function Sparkline({
   dates,
   format,
   axes = false,
+  className = "h-20 w-full",
 }: {
   values: number[];
   width?: number;
@@ -16,6 +17,8 @@ export default function Sparkline({
   dates?: (Date | string | number)[];
   format?: (v: number) => string;
   axes?: boolean;
+  /** Sizing for the bare (no-axes) svg — override to stretch as a backdrop. */
+  className?: string;
 }) {
   if (values.length < 2) {
     return <div className="text-xs text-teal-200/40">Not enough history yet.</div>;
@@ -36,7 +39,7 @@ export default function Sparkline({
   const chart = (grid: boolean) => (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-20 w-full"
+      className={className}
       preserveAspectRatio="none"
       role="img"
       aria-label="price history"

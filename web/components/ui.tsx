@@ -21,20 +21,23 @@ export function StatCard({
   note,
   valueClassName = "text-teal-50",
   term,
+  compact = false,
 }: {
   label: string;
   value: string;
   note?: React.ReactNode;
   valueClassName?: string;
   term?: string;
+  /** Tighter padding + smaller value — for dense single-row stat strips. */
+  compact?: boolean;
 }) {
   return (
-    <Card className="p-5">
-      <div className="text-xs uppercase tracking-wider text-teal-200/50">
+    <Card className={compact ? "p-3" : "p-5"}>
+      <div className={`uppercase tracking-wider text-teal-200/50 ${compact ? "text-[10px]" : "text-xs"}`}>
         {term ? <Term k={term}>{label}</Term> : label}
       </div>
-      <div className={`mt-2 text-2xl font-semibold tabular-nums ${valueClassName}`}>{value}</div>
-      {note ? <div className="mt-1 text-xs text-teal-200/40">{note}</div> : null}
+      <div className={`font-semibold tabular-nums ${valueClassName} ${compact ? "mt-1 text-base" : "mt-2 text-2xl"}`}>{value}</div>
+      {note ? <div className={`text-teal-200/40 ${compact ? "mt-0.5 text-[10px]" : "mt-1 text-xs"}`}>{note}</div> : null}
     </Card>
   );
 }

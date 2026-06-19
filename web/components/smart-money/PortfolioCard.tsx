@@ -7,9 +7,10 @@ import SmartMoneyAvatar from "./SmartMoneyAvatar";
 import { fmtUsd, type SmPortfolio, type SmHolding, type WatchOverlap } from "@/lib/smart-money/types";
 
 // One tracked fund: a clickable header (avatar + name + meta) that expands into a
-// Watchlist-style holdings table. Holdings we already track link to the stock
-// page and wear an overlap badge; the rest are informational (mostly US-listed —
-// leads, not trades). PUT/CALL lines are flagged so a bearish book doesn't read bull.
+// Watchlist-style holdings table. Every holding links to its (auto-researched)
+// stock page; ones we already track wear an overlap badge. The rest are
+// informational (mostly US-listed — leads, not trades). PUT/CALL lines are flagged
+// so a bearish book doesn't read bull.
 
 const ACTION: Record<string, { label: string; cls: string }> = {
   NEW: { label: "NEW", cls: "border-teal-400/30 bg-teal-400/15 text-teal-200" },
@@ -30,13 +31,12 @@ function HoldingRow({ h, overlap, maxPct }: { h: SmHolding; overlap?: WatchOverl
     <div className="flex items-center gap-3 border-t border-teal-400/10 py-2 text-sm">
       <span className="w-5 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">{h.rank}</span>
       <div className="flex w-20 shrink-0 items-center gap-1.5">
-        {overlap ? (
-          <Link href={`/stocks/${h.symbol}`} className="font-semibold text-teal-300 hover:underline">
-            {h.symbol}
-          </Link>
-        ) : (
-          <span className="font-semibold text-teal-100/90">{h.symbol}</span>
-        )}
+        <Link
+          href={`/stocks/${h.symbol}`}
+          className={`font-semibold hover:underline ${overlap ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
+        >
+          {h.symbol}
+        </Link>
         {h.putCall && (
           <Term k={h.putCall === "PUT" ? "put-option" : "call-option"} className="!border-b-0">
             <Badge cls={h.putCall === "PUT" ? "border-red-400/30 bg-red-400/15 text-red-300" : "border-sky-400/30 bg-sky-400/15 text-sky-300"}>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { money, pct, fmtWhen } from "@/lib/money";
+import { money, signedMoney, pct, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
@@ -132,16 +132,30 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
     }
     case "last":
       return <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">{r.lastCents !== null ? money(r.lastCents, r.currency) : "—"}</td>;
-    case "day":
+    case "day": {
+      // Today's move in dollars alongside the percent: derive the $ change from the
+      // last price and the day % (prevClose = last / (1 + day%)), since the quote
+      // cache only carries the bps. (Cam 2026-06-18)
+      const f = (r.dayBps ?? 0) / 10_000;
+      const chgCents =
+        r.lastCents !== null && r.dayBps !== null && 1 + f !== 0 ? Math.round(r.lastCents - r.lastCents / (1 + f)) : null;
       return (
         <td
           className={`px-4 py-2.5 text-right tabular-nums ${
             (r.dayBps ?? 0) > 0 ? "text-emerald-400" : (r.dayBps ?? 0) < 0 ? "text-red-400" : "text-teal-200/50"
           }`}
         >
-          {r.dayBps !== null ? pct(r.dayBps / 10_000, 2) : "—"}
+          {r.dayBps !== null ? (
+            <span className="inline-flex items-baseline justify-end gap-1.5">
+              {chgCents !== null && <span className="text-xs opacity-70">{signedMoney(chgCents, r.currency)}</span>}
+              <span>{pct(r.dayBps / 10_000, 2)}</span>
+            </span>
+          ) : (
+            "—"
+          )}
         </td>
       );
+    }
     case "signals":
       return (
         <td className="px-4 py-2.5">

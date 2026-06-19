@@ -5,7 +5,8 @@ import type { WatchOverlap } from "@/lib/smart-money/types";
 
 // A ranked "most-bought" card, shared by the Congress / funds-piling-in / insider
 // boards. Rows lead with the ticker + a headline metric and a subtle magnitude
-// bar; names we track link to the stock page and wear an overlap badge.
+// bar; every ticker links to its (auto-researched) stock page, and names we track
+// wear an overlap badge.
 export type LeaderRow = {
   symbol: string;
   name?: string | null;
@@ -39,13 +40,12 @@ export default function Leaderboard({
             <li key={`${r.symbol}-${i}`} className="flex items-center gap-2.5">
               <span className="w-4 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">{i + 1}</span>
               <div className="flex w-16 shrink-0 items-center gap-1">
-                {r.overlap ? (
-                  <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                    {r.symbol}
-                  </Link>
-                ) : (
-                  <span className="font-semibold text-teal-100/90">{r.symbol}</span>
-                )}
+                <Link
+                  href={`/stocks/${r.symbol}`}
+                  className={`font-semibold hover:underline ${r.overlap ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
+                >
+                  {r.symbol}
+                </Link>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">

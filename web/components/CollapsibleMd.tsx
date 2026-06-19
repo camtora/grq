@@ -5,10 +5,13 @@ import Md from "./Md";
 export default function CollapsibleMd({
   text,
   threshold = 500,
+  defaultOpen = false,
   children,
 }: {
   text: string;
   threshold?: number;
+  /** Expand to the full body on first render instead of the one-line preview. */
+  defaultOpen?: boolean;
   /** Extra content (e.g. source chips) that should only show when expanded. */
   children?: React.ReactNode;
 }) {
@@ -31,7 +34,7 @@ export default function CollapsibleMd({
   const words = text.split(/\s+/).length;
 
   return (
-    <details className="group">
+    <details className="group" open={defaultOpen}>
       <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <span className="text-sm leading-relaxed text-teal-100/70 group-open:hidden">
           {preview}…{" "}
