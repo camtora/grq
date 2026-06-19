@@ -945,3 +945,46 @@ verified live (LAN member-header curls) and shipped across three commits (`d4544
 **Verified:** `tsc --noEmit` clean; `web` + `agent` rebuilt one at a time (`/var` watched, 73→77%, ibeam
 untouched, agent rebooted clean and working the research queue). Live: centered headers, no Signals/Journal
 columns, tape renders an `<svg>` (no "parked in cash"), masthead cleaned, buttons one size.
+
+### D45 — "The Hunt" redesign: heat-ranked feed, three layouts, real logos (Cam, 2026-06-19)
+**Context:** A design handoff (`design_handoff_the_hunt/`) reimagined The Hunt (`/market`) from a flat
+2-column `IdeaCard` grid into a higher-energy, **heat-ranked** discovery feed with live data-viz. Cam's
+direction: use GRQ's **existing styling system** (teal Tailwind v4 tokens, current fonts, light+dark — no
+new web fonts, no dark-only island) but adopt the **design's architecture**; surface that a briefed hunt
+**takes time** (the agent runs it async over a minute or two) by marking current results stale and checking
+for fresh ones; add **real company logos + links**; and ship **all three** prototype layouts behind a real
+switcher. Web-only — heat is *derived*, so no schema field, no `write_journal`/agent-prompt change, no agent
+image rebuild (avoids the tight-`/var` agent-rebuild hazard).
+**Change:**
+- **Heat** (`lib/heat.ts`) — a derived 0–100 "ready to pop" score (`computeHeat`): blends the agent's
+  conviction (`confidence`), 30-day price momentum (from daily bars), and `obscurity`, renormalizing when an
+  input is missing. `heatColor(h)` is a theme-agnostic oklch hue-sweep (teal→amber) that drives the rank
+  number, meter fill, and left rail. Explained on screen via a "how heat is scored" tooltip (literacy
+  pillar). Heat ranks the board; #1 gets the HOTTEST badge.
+- **Three layouts behind a persisted switcher** (`components/hunt/HuntResults.tsx`, client,
+  `localStorage` `grq-hunt-view`): **A Heat Board** (`HuntRow` — ranked rows: rank, identity, thesis
+  clamp+read-all, sparkline, heat meter, confidence gauge, watch/dismiss), **B Top Pick** (`HuntHero` big
+  #1 card + big 30-day area chart + 92px gauge, over a `HuntGridCard` 3-col grid), **C Scanner**
+  (`ScannerTable` dense terminal table). Shared SVG pieces: `ConfidenceGauge`, `HeatMeter` (theme tokens).
+- **Hero hunt bar** (`HuntBar.tsx`) — gradient-bordered panel, ⌖ tile, big input, ⚡ HUNT, in teal tokens;
+  copy sets the "lands in a minute or two — we check automatically" expectation.
+- **Pending / stale-results** (`components/hunt/HuntStatus.tsx` + `GET /api/hunt/status`) — a briefed/
+  refreshed hunt fires a `grq-hunt-submitted` event; HuntStatus shows a working banner, flags the current
+  results as "from your previous run," and **auto-polls** anchored on the newest "Hunt dossier" timestamp
+  (NOT the `huntRequestedAt` flag — the runner clears that at the *start* of the multi-minute run), then
+  `router.refresh()`es when fresh names land. `sessionStorage` survives reloads; gives up after 5 min;
+  honors reduced-motion.
+- **Real logos + links** (`lib/logos.ts` `fmpLogo`) — FMP's ticker-keyed image (US + CA listings, no key,
+  404→monogram fallback) for untracked finds; logo, ticker, and name all link to the dossier.
+- **`toYahoo()` fix** (`lib/universe.ts`) — the untracked-symbol fallback was forcing every ticker onto
+  `.TO` and mangling already-suffixed ones (`VCM.TO`→`VCM-TO.TO`), so US small-caps + CA finds got no
+  bars/quotes/logos. Now: an already-qualified listing is trusted as-is, a bare ticker is treated as US.
+  Took the feed's sparkline coverage from **1/12 → 12/12**. Only the untracked path changed (tracked names
+  carry `.yahoo` and skip the fallback), so quotes/bars/`/api/quotes` are unaffected for tracked names.
+- Reusable additions: `Sparkline` gained an `area` fill (hero chart); `WatchButton` an `iconOnly` mode
+  (dense grid/table).
+**Verified:** `tsc --noEmit` clean; local `next build` + `docker-compose build web` clean, fresh image
+checked for new code before swap (CLAUDE.md stale-bake guard), `/var` steady at 73%. Live (member-header
+curls, light theme): heat-ranked rows, HOTTEST badge, 12 sparklines, 36 FMP logos, all three switcher tabs;
+`/api/hunt/status` returns the brief/latest. **Caveat:** layouts B/C mount client-side on tab click and
+weren't driven in a live browser here — worth a click-through.

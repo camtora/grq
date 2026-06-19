@@ -38,7 +38,18 @@ ready when you click it — but it is **NOT added to the Watchlist** (watching a
 `{brief}` → `AgentState.huntBrief` → `runDiscoveryHunt(brief)` FOCUS block); the **🎯 Directed hunt** banner
 shows the active brief (a blank ↻ refresh / the daily 10:00 hunt goes broad again). Reach is **North America
 (CA + US, the fund holds CAD+USD — D34)**, not CAD-only. **Obscurity is agent-scored** (`JournalEntry.obscurity`
-1–5, set in `write_journal`) — shown as the amber badge on `IdeaCard` and **sorted obscure-first**.
+1–5, set in `write_journal`) — shown as the amber badge and **sorted obscure-first**.
+**D45 — The Hunt redesign:** the feed is now **heat-ranked** (`lib/heat.ts` `computeHeat`/`heatColor` — a
+*derived* 0–100 "ready to pop" score: conviction + 30-day momentum + obscurity; web-only, no schema/agent
+change) with **three layouts behind a persisted switcher** — **Heat Board** (default, ranked rows) ·
+**Top Pick** (hero #1 + grid) · **Scanner** (terminal table) — all in `components/hunt/*` (`HuntResults`
+switcher, `HuntRow`/`HuntHero`/`HuntGridCard`/`ScannerTable`, `ConfidenceGauge`, `HeatMeter`, GRQ tokens,
+light+dark). **Real company logos** via `lib/logos.ts` `fmpLogo` (FMP ticker-keyed, 404→monogram); logo/
+ticker/name all link to the dossier. A briefed hunt now shows a **pending/stale** state (`HuntStatus` +
+`GET /api/hunt/status`): marks current results old + **auto-polls** until fresh names land, anchored on the
+newest dossier (NOT `huntRequestedAt`, which the runner clears at the run's *start*). **`toYahoo()` fix
+(`lib/universe.ts`):** untracked symbols no longer get forced to `.TO`/mangled — bare→US, suffixed trusted
+as-is (sparkline coverage 1/12→12/12; tracked names unaffected).
 **Browse** has an inline
 **name/ticker search** that narrows the screener result set (fmpSearch+fmpProfile; Watch from the row).
 **Smart Money (D28)** is a fifth top-level destination (`/market/smart-money`): **tracked-portfolio cards**

@@ -9,6 +9,7 @@ export default function Sparkline({
   dates,
   format,
   axes = false,
+  area = false,
   className = "h-20 w-full",
 }: {
   values: number[];
@@ -17,6 +18,8 @@ export default function Sparkline({
   dates?: (Date | string | number)[];
   format?: (v: number) => string;
   axes?: boolean;
+  /** Fill the area under the line (a faint tint) — used by the larger hero chart. */
+  area?: boolean;
   /** Sizing for the bare (no-axes) svg — override to stretch as a backdrop. */
   className?: string;
 }) {
@@ -48,6 +51,9 @@ export default function Sparkline({
         [pad, height / 2, height - pad].map((y, i) => (
           <line key={i} x1={0} y1={y} x2={width} y2={y} stroke="var(--card-border)" strokeWidth="1" strokeDasharray="3 4" />
         ))}
+      {area && (
+        <polygon points={`${pts.join(" ")} ${width - pad},${height - pad} ${pad},${height - pad}`} fill={stroke} fillOpacity={0.12} stroke="none" />
+      )}
       <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={last[0]} cy={last[1]} r="3" fill={stroke} />
     </svg>

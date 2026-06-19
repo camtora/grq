@@ -14,11 +14,14 @@ export default function WatchButton({
   exchange,
   currency,
   state: initial = "none",
+  iconOnly = false,
 }: {
   symbol: string;
   exchange?: string;
   currency?: string;
   state?: WatchState;
+  /** Collapse to a 34×34 star (dense grid/table layouts). */
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<WatchState>(initial);
@@ -52,7 +55,14 @@ export default function WatchButton({
   }
 
   if (state === "universe") {
-    return (
+    return iconOnly ? (
+      <span
+        className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 text-sm text-emerald-300/80"
+        title="In the tradeable universe — the agent may buy it"
+      >
+        ✓
+      </span>
+    ) : (
       <span
         className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-300/80"
         title="In the tradeable universe — the agent may buy it"
@@ -63,6 +73,20 @@ export default function WatchButton({
   }
 
   const watching = state === "watching";
+  if (iconOnly) {
+    return (
+      <button
+        onClick={() => call(watching ? "retire" : "add")}
+        disabled={busy}
+        title={err || (watching ? "On your watchlist — click to stop watching." : "Watch — the agent dossiers it and it joins your watchlist")}
+        className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border text-sm transition-colors disabled:opacity-40 ${
+          watching ? "border-teal-400/45 bg-teal-400/15 text-teal-200" : "border-teal-400/20 text-teal-300/70 hover:bg-teal-400/10"
+        }`}
+      >
+        {busy ? "…" : err ? "↻" : watching ? "★" : "☆"}
+      </button>
+    );
+  }
   return (
     <button
       onClick={() => call(watching ? "retire" : "add")}

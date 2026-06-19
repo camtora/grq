@@ -54,6 +54,14 @@ export async function resolveLogo(name: string): Promise<string | null> {
   }
 }
 
+/** FMP's ticker-keyed logo image (no API key, no server round-trip — the browser
+ *  loads it). Works for both US (bare) and CA (suffixed, e.g. VCM.TO, SYH.V) listings,
+ *  and 404s on unknown tickers so <StockLogo>'s onError cleanly falls back to the
+ *  monogram. Used for untracked hunt finds that have no resolved UniverseMember logo. */
+export function fmpLogo(symbol: string): string {
+  return `https://financialmodelingprep.com/image-stock/${encodeURIComponent(symbol.trim().toUpperCase())}.png`;
+}
+
 /** Resolve logos for any universe members not yet tried. Stores the URL on a
  *  hit, "" on a miss, so each name is attempted exactly once. Returns hits. */
 export async function backfillLogos(): Promise<number> {

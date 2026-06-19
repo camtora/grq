@@ -105,7 +105,14 @@ export async function inUniverse(symbol: string): Promise<boolean> {
 
 export async function toYahoo(symbol: string): Promise<string> {
   const e = await universeEntry(symbol);
-  return e?.yahoo ?? `${symbol.toUpperCase().replace(".", "-")}.TO`;
+  if (e?.yahoo) return e.yahoo;
+  // Untracked name (e.g. a hunt find with no universe row): an already-qualified
+  // listing (VCM.TO, PCRX.V) is trusted as-is; a bare ticker is treated as a US
+  // listing — the hunt reaches all of North America and CA finds arrive suffixed.
+  // Either way, never append ".TO" or rewrite the dot: the old fallback turned
+  // "VCM.TO" into "VCM-TO.TO" and forced US tickers (STRT, QTTB…) onto the TSX,
+  // so their quotes/bars came back empty.
+  return symbol.trim().toUpperCase();
 }
 
 // Exchange (FMP shortName) → Yahoo suffix. US venues are bare; Canadian venues

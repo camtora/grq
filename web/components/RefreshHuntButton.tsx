@@ -16,7 +16,11 @@ export default function RefreshHuntButton() {
       const r = await fetch("/api/hunt/refresh", { method: "POST" });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) setMsg(d.error ?? `HTTP ${r.status}`);
-      else setMsg(d.queued ? "Queued — fresh names land in a minute or two." : (d.note ?? "Already queued."));
+      else if (d.queued) {
+        setMsg("");
+        // Kick the pending/stale watcher (marks current results old, polls for fresh).
+        window.dispatchEvent(new Event("grq-hunt-submitted"));
+      } else setMsg(d.note ?? "Already queued.");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
