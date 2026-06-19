@@ -919,3 +919,29 @@ dollar move. **Change (all UI; no schema, no agent-logic):**
   gate to the Live step, unchanged).
 **Verified:** `tsc --noEmit` clean throughout; `web` rebuilt (image checked fresh), deployed, `/var` steady
 at 73%, agent/ibeam untouched. Shipped together with D42's iOS-API tree in one web image (Cam's call).
+
+### D44 — Web UI polish pass + smart-money auto-research-on-publish (Cam, 2026-06-19)
+**Context:** A rapid review round of small, surgical fixes to the live web app, plus one feature. All
+verified live (LAN member-header curls) and shipped across three commits (`d45446b`, `2ee86c2`, `ba13bba`).
+**Change:**
+- **Stock page** (`app/stocks/[symbol]/page.tsx` + `DirectiveButtons`/`AskGrq`): the `live · Ns ago`
+  freshness marker now stacks **below** the price (`flex-col`); a held name's **position bracket + the
+  agent note** moved **above** the institutional/scoreboard row (then valuation vs peers); the hunt-find
+  (not-tracked) dossier **defaults open** (`CollapsibleMd defaultOpen`); pin / block / Ask GRQ resized to
+  match research-now / demote (`px-2 py-1 text-[11px] font-semibold`) so the action row is one size.
+- **Universe/Watchlist** (`StockTable` + the two pages): **column headers centered**; the **Signals** and
+  **Journal** columns removed (row data kept — `StockTable` still uses signals for the call-rating
+  fallback + expand panel), and the now-orphaned Signals legend trimmed from both footnotes.
+- **Today / GRQ Daily** (`app/page.tsx`): dropped the redundant inline **bull** beside "GRQ Daily" (the
+  NavBar already carries the logo), the **top rule** above the masthead, the **💡** on "Did you know?",
+  and the **NAV figure** (kept the day-move). **The Tape bug:** it showed "Flat line — parked in cash"
+  whenever there were `< 2` NAV snapshots today (sparse on a closed-market day) **even while the fund holds
+  positions** — now the tape **closes on the live NAV** so it always draws open→now when there's an open
+  snapshot, and the rare empty-state copy is honest about held positions (no false "cash").
+- **Smart Money auto-research** (`agent/sessions.ts` `runSmartMoneyScan`): once the daily scan **publishes
+  its report**, it now `queueDossiers(...)` a **full dossier for every surfaced name** (congress + funds +
+  insiders + every tracked-portfolio holding), idempotent (skips tracked/queued/researched), cap 100 so the
+  whole board gets researched, not a 12-name sample. Complements the existing page-visit queueing.
+**Verified:** `tsc --noEmit` clean; `web` + `agent` rebuilt one at a time (`/var` watched, 73→77%, ibeam
+untouched, agent rebooted clean and working the research queue). Live: centered headers, no Signals/Journal
+columns, tape renders an `<svg>` (no "parked in cash"), masthead cleaned, buttons one size.
