@@ -243,6 +243,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const tape = todaySnaps.map((s) => s.navCents);
   if (dayOpenSnap) tape.unshift(dayOpenSnap.navCents);
+  // Close the tape on the live NAV so a quiet day (sparse snapshots / market closed)
+  // still draws open→now instead of a misleading flat line (Cam 2026-06-19).
+  if (isToday && tape.length >= 1 && tape[tape.length - 1] !== pf.navCents) tape.push(pf.navCents);
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
   const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
@@ -328,17 +331,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               {edition} · {dayLabel}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
-              <Term k="nav" align="right">Net asset value</Term>
-            </div>
-            <div className="text-3xl font-bold tabular-nums text-teal-50">{money(pf.navCents)}</div>
-            <div className="text-sm">
-              <Pnl cents={dayPnl} />{" "}
-              <span className="text-teal-200/50">
-                ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
-              </span>
-            </div>
+          <div className="text-right text-sm">
+            <Pnl cents={dayPnl} />{" "}
+            <span className="text-teal-200/50">
+              ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
+            </span>
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4 border-t border-teal-400/10 pt-3">
@@ -400,9 +397,14 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
         {tape.length >= 2 ? (
           <Sparkline values={tape} />
+        ) : pf.positions.length > 0 ? (
+          <p className="py-4 text-sm text-teal-200/40">
+            Quiet tape — not enough NAV snapshots yet today; it fills in as the agent ticks through the session.
+            The fund holds {pf.positions.length} position{pf.positions.length > 1 ? "s" : ""}, not cash.
+          </p>
         ) : (
           <p className="py-4 text-sm text-teal-200/40">
-            Flat line — the fund's parked in cash. The tape comes alive the day the agent takes a position.
+            Flat line — the fund&apos;s parked in cash. The tape comes alive the day the agent takes a position.
           </p>
         )}
       </Card>

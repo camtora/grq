@@ -24,7 +24,7 @@ function watchedBy(addedBy: string | null): string | null {
 // target upside, manage actions); clicking a row expands it for GRQ's call blurb +
 // the dossier's plain-English "why" (Cam 2026-06-17). The full long-form dossier
 // (business / bull / bear / sources) still lives one click away on the stock page.
-const COLUMNS: StockColumn[] = ["last", "day", "signals", "call", "upside", "conf", "journal", "watcher"];
+const COLUMNS: StockColumn[] = ["last", "day", "call", "upside", "conf", "watcher"];
 
 export default async function Watchlist() {
   const [session, universe, requests, directives] = await Promise.all([
@@ -164,7 +164,6 @@ export default async function Watchlist() {
         )}
 
         <p className="mt-3 text-xs text-teal-200/40">
-          <span className="font-semibold text-teal-200/60">Signals</span> are inputs (T trend · R rsi · M macd · V volatility);{" "}
           <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the verdict.{" "}
           <span className="font-semibold text-teal-200/60">12-mo</span> is the agent&apos;s target upside (hover for near-term).{" "}
           Click a row for GRQ&apos;s reasoning; open a name for the full dossier — business, bull &amp; bear case, sources.

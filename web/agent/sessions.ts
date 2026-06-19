@@ -4,7 +4,7 @@ import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse, isTradeable } from "../lib/universe";
 import { setBootstrapMode } from "./promote";
-import { queueHuntDossier } from "../lib/hunt";
+import { queueHuntDossier, queueDossiers } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -253,6 +253,18 @@ Names marked (OURS) overlap GRQ's universe.
 
 Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we now trade CAD + USD) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
   await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 16 });
+
+  // Once the report is published, queue a FULL dossier for every name it surfaces so
+  // each ticker links to researched (not a 404). Idempotent — skips names already
+  // tracked / queued / researched; generous cap since the member wants the whole
+  // board researched, not a sample (Cam 2026-06-19).
+  const surfaced = [
+    ...congress.map((c) => c.symbol),
+    ...funds.map((f) => f.symbol),
+    ...insiders.map((t) => t.symbol),
+    ...portfolios.flatMap((p) => p.topHoldings.map((h) => h.symbol)),
+  ];
+  await queueDossiers(surfaced, "smart-money", 100).catch(() => {});
 }
 
 export async function runMiddayCheckIn(reason: string): Promise<void> {

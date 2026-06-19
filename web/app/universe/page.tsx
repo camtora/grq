@@ -15,10 +15,10 @@ import StockTable, { type StockColumn, type StockRow } from "@/components/StockT
 
 export const dynamic = "force-dynamic";
 
-const COLUMNS: StockColumn[] = ["tier", "last", "day", "signals", "call", "position", "unrealized", "journal", "researched"];
-// Researched tab is a lean catalogue — call + the dossier's confidence + journal
-// depth + when it was last researched (no per-name quote/signal fetches).
-const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "journal", "researched"];
+const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "position", "unrealized", "researched"];
+// Researched tab is a lean catalogue — call + the dossier's confidence + when it was
+// last researched (no per-name quote/signal fetches).
+const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "researched"];
 
 function sortActive(rows: StockRow[]): StockRow[] {
   return rows.sort((a, b) => {
@@ -284,12 +284,6 @@ export default async function Universe() {
       )}
 
       <p className="mt-6 text-xs text-teal-200/40">
-        <span className="font-semibold text-teal-200/60">Signals</span> (hover for detail):{" "}
-        <span className="font-semibold text-teal-200/60">T</span> trend ·{" "}
-        <span className="font-semibold text-teal-200/60">R</span> rsi ·{" "}
-        <span className="font-semibold text-teal-200/60">M</span> macd ·{" "}
-        <span className="font-semibold text-teal-200/60">V</span> volatility — green BUY · red SELL · dim HOLD.{" "}
-        These are <span className="font-semibold text-teal-200/60">inputs</span>, not the verdict.{" "}
         <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
         Click any row to read GRQ&apos;s reasoning. quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
       </p>
