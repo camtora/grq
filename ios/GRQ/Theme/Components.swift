@@ -37,6 +37,211 @@ enum Fmt {
     }
     static func bps(_ b: Int) -> String { String(format: "%+.2f%%", Double(b) / 100) }
     static func pctBps(_ b: Int) -> String { String(format: "%.0f%%", Double(b) / 100) }
+    /// Signed whole-percent from bps — "+42%" / "−18%" (the hunt/idea upside style).
+    static func pct0(_ b: Int) -> String {
+        let v = Int((Double(b) / 100).rounded())
+        return v < 0 ? "−\(abs(v))%" : "+\(v)%"
+    }
+    /// Compact USD for smart-money values — "$2.1M", "$940K".
+    static func usd(_ v: Double) -> String {
+        let a = abs(v)
+        if a >= 1_000_000_000 { return String(format: "$%.1fB", v / 1_000_000_000) }
+        if a >= 1_000_000 { return String(format: "$%.1fM", v / 1_000_000) }
+        if a >= 1_000 { return String(format: "$%.0fK", v / 1_000) }
+        return String(format: "$%.0f", v)
+    }
+}
+
+// MARK: - Rating (the 7-point scale)
+
+extension Theme {
+    /// Map a stance tone (emerald/teal/amber/red) → a palette colour.
+    static func toneColor(_ tone: String, _ scheme: ColorScheme) -> Color {
+        let p = palette(scheme)
+        switch tone {
+        case "emerald": return p.pos
+        case "teal":    return p.accent
+        case "amber":   return scheme == .dark ? Color(hex: "fcd34d") : Color(hex: "b45309")
+        case "red":     return p.neg
+        default:        return p.textMuted
+        }
+    }
+}
+
+/// GRQ's call as a coloured pill (abbr or full label).
+struct StanceBadge: View {
+    @Environment(\.colorScheme) private var scheme
+    let rating: Rating
+    var full = false
+    var body: some View {
+        let c = Theme.toneColor(rating.tone, scheme)
+        Text(full ? rating.label.uppercased() : rating.abbr)
+            .font(.caption2.weight(.bold))
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(Capsule().fill(c.opacity(0.16)))
+            .foregroundStyle(c)
+    }
+}
+
+/// The red→amber→green rating track with a needle at `pos`, the bull/bear mascots
+/// optional at the ends. Mirrors web/components/RatingBar.tsx (GRQ's call hero).
+struct RatingBar: View {
+    @Environment(\.colorScheme) private var scheme
+    let rating: Rating
+    var note: String? = nil
+    var mascots = false
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(rating.label)
+                    .font(.system(.title3, design: .rounded).weight(.black))
+                    .foregroundStyle(Theme.toneColor(rating.tone, scheme))
+                if let note {
+                    Text(note).font(.caption2.weight(.bold)).tracking(0.5).foregroundStyle(p.textMuted)
+                }
+                Spacer()
+            }
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(LinearGradient(
+                        colors: [Color(hex: "dc2626"), Color(hex: "f59e0b"), Color(hex: "10b981")],
+                        startPoint: .leading, endPoint: .trailing)).frame(height: 8).opacity(0.85)
+                    Circle().fill(.white)
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(Theme.toneColor(rating.tone, scheme), lineWidth: 3))
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                        .offset(x: max(0, min(w - 16, CGFloat(rating.pos) * w - 8)))
+                }
+                .frame(height: 16)
+            }
+            .frame(height: 16)
+            if mascots {
+                HStack {
+                    mascot("bear-splash"); Spacer(); mascot("bull-splash")
+                }
+            }
+            Text(rating.blurb).font(.caption).foregroundStyle(p.textMuted)
+        }
+    }
+    private func mascot(_ name: String) -> some View {
+        Image(name).resizable().scaledToFit().frame(height: 26).opacity(0.9)
+    }
+}
+
+// MARK: - Markdown
+
+/// Lightweight markdown for dossier bodies (mirrors components/Md.tsx well enough for
+/// mobile): headings, bullets, and inline **bold**/*italic*/`code`/[links] per line.
+struct MarkdownText: View {
+    @Environment(\.colorScheme) private var scheme
+    let text: String
+    var body: some View {
+        let p = Theme.palette(scheme)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(blocks().enumerated()), id: \.offset) { _, block in
+                switch block.kind {
+                case .heading:
+                    inline(block.text).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                case .bullet:
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("•").foregroundStyle(p.accent)
+                        inline(block.text).foregroundStyle(p.textPrimary.opacity(0.9))
+                    }.font(.callout)
+                case .body:
+                    inline(block.text).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private enum Kind { case heading, bullet, body }
+    private struct Block { let kind: Kind; let text: String }
+    private func blocks() -> [Block] {
+        text.split(separator: "\n", omittingEmptySubsequences: true).map { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") {
+                return Block(kind: .heading, text: line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces))
+            }
+            if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                return Block(kind: .bullet, text: String(line.dropFirst(2)))
+            }
+            return Block(kind: .body, text: line)
+        }
+    }
+    private func inline(_ s: String) -> Text {
+        if let a = try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            return Text(a)
+        }
+        return Text(s)
+    }
+}
+
+/// Markdown that clamps long bodies behind a "Show more" toggle (components/CollapsibleMd.tsx).
+struct CollapsibleMd: View {
+    @Environment(\.colorScheme) private var scheme
+    let text: String
+    var threshold = 240
+    @State private var expanded = false
+    var body: some View {
+        let long = text.count > threshold
+        let shown = (!expanded && long) ? String(text.prefix(threshold)) + "…" : text
+        VStack(alignment: .leading, spacing: 6) {
+            MarkdownText(text: shown)
+            if long {
+                Button(expanded ? "Show less" : "Show more") { withAnimation { expanded.toggle() } }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.palette(scheme).accentText)
+            }
+        }
+    }
+}
+
+// MARK: - Stock logo
+
+/// Company logo with the initials-circle fallback (mirrors components/StockLogo.tsx).
+struct StockLogo: View {
+    @Environment(\.colorScheme) private var scheme
+    let symbol: String
+    var url: String? = nil
+    var size: CGFloat = 38
+    var body: some View {
+        let p = Theme.palette(scheme)
+        Group {
+            if let url, let u = URL(string: url) {
+                AsyncImage(url: u) { phase in
+                    switch phase {
+                    case .success(let img): img.resizable().scaledToFit()
+                    default: initials(p)
+                    }
+                }
+            } else {
+                initials(p)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(Circle().fill(p.accent.opacity(0.14)))
+        .overlay(Circle().strokeBorder(p.accent.opacity(0.25), lineWidth: 1))
+        .clipShape(Circle())
+    }
+    private func initials(_ p: Palette) -> some View {
+        Text(String(symbol.prefix(1)))
+            .font(.system(size: size * 0.42, weight: .black, design: .rounded))
+            .foregroundStyle(Theme.brandGradient)
+    }
+}
+
+/// The masthead logo (light/dark variant), used in place of the text wordmark.
+struct BrandLogo: View {
+    @Environment(\.colorScheme) private var scheme
+    var height: CGFloat = 26
+    var body: some View {
+        Image(scheme == .light ? "grq-logo-light" : "grq-logo")
+            .resizable().scaledToFit().frame(height: height)
+    }
 }
 
 // MARK: - Screen scaffold (one flashy header per screen, ambient background, no system bar)

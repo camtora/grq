@@ -1,0 +1,6 @@
+{
+  "images" : [
+    { "idiom" : "universal", "filename" : "bull-splash.png" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

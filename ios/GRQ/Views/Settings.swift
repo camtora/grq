@@ -1,32 +1,68 @@
 import SwiftUI
 
-struct SettingsView: View {
+// MORE — the fund's controls + the long tail: profile, the risk dial, the (real,
+// Face-ID-gated) kill switch, the soak gate, Reports, About, theme, sign out.
+struct MoreView: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: ThemeManager
     @Environment(\.colorScheme) private var scheme
     @State private var settings: FundSettings?
     @State private var killOn = false
     @State private var showKillConfirm = false
+    @State private var busy = false
+    @State private var note: String?
+
+    private var isMember: Bool { auth.currentUser?.role == .member }
 
     var body: some View {
         NavigationStack {
-            GRQScreen(title: "Settings", subtitle: "risk dial & controls") {
-                memberCard
-                if let s = settings {
-                    riskCard(s)
-                    killCard
-                    soakCard(s)
-                } else {
-                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top) {
+                        ScreenHeader(title: "More", subtitle: "controls & the fund")
+                        ChatButton()
+                    }
+                    memberCard
+                    if let s = settings {
+                        riskCard(s)
+                        if isMember { killCard }
+                        soakCard(s)
+                    } else {
+                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
+                    }
+                    NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
+                    NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }
+                    themeCard
+                    if let note { Text(note).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
+                    signOutButton
                 }
-                themeCard
-                signOutButton
+                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
             }
+            .background(ScreenBackground().ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             let s = await APIClient.shared.settings()
             settings = s
             killOn = s?.killSwitch ?? false
+        }
+        .alert(killOn ? "Resume trading?" : "Halt all trading now?", isPresented: $showKillConfirm) {
+            Button(killOn ? "Resume trading" : "Engage", role: killOn ? .cancel : .destructive) { Task { await toggleKill() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(killOn ? "The order gate opens again." : "Nothing trades until a member turns it back on.")
+        }
+    }
+
+    private func linkRow(_ title: String, _ icon: String) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            HStack {
+                Image(systemName: icon).foregroundStyle(p.accent)
+                Text(title).foregroundStyle(p.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted.opacity(0.5))
+            }
         }
     }
 
@@ -34,9 +70,7 @@ struct SettingsView: View {
         let p = Theme.palette(scheme)
         return Card {
             HStack(spacing: 12) {
-                Circle().fill(Theme.brandGradient).frame(width: 44, height: 44)
-                    .overlay(Text(String((auth.currentUser?.name ?? "?").prefix(1)))
-                        .font(.headline.weight(.black)).foregroundStyle(Color.black.opacity(0.8)))
+                MemberAvatar(email: auth.currentUser?.email ?? "", size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(auth.currentUser?.name ?? "Member").font(.headline).foregroundStyle(p.textPrimary)
                     Text(auth.currentUser?.email ?? "").font(.caption).foregroundStyle(p.textMuted)
@@ -62,8 +96,7 @@ struct SettingsView: View {
                 KeyValueRow(label: "Take-profit", value: Fmt.pctBps(s.takeProfitBps), term: "take-profit")
                 Divider().overlay(p.cardBorder)
                 KeyValueRow(label: "Fees this month",
-                            value: "\(Fmt.money(s.feeSpentMonthCents)) / \(Fmt.money(s.feeBudgetCentsMonth))",
-                            term: "fee-budget")
+                            value: "\(Fmt.money(s.feeSpentMonthCents)) / \(Fmt.money(s.feeBudgetCentsMonth))", term: "fee-budget")
             }
         }
     }
@@ -76,21 +109,15 @@ struct SettingsView: View {
                     TermLink(slug: "kill-switch", label: "Kill switch").font(.subheadline.weight(.bold))
                     Spacer()
                     Toggle("", isOn: Binding(get: { killOn }, set: { _ in showKillConfirm = true }))
-                        .labelsHidden().tint(p.neg)
+                        .labelsHidden().tint(p.neg).disabled(busy)
                 }
                 Text(killOn
-                     ? Strings.shared.s("guardrails.killEngaged", "Kill switch ENGAGED. Nothing trades until a member releases it.")
+                     ? "Kill switch ENGAGED. Nothing trades until a member releases it."
                      : "Halt all trading instantly. Either member can flip it.")
                     .font(.caption).foregroundStyle(killOn ? p.neg : p.textMuted)
-                Text(Strings.shared.s("guardrails.faceIdReason", "Confirm it's you before changing the fund."))
+                Text("Confirm it's you (Face ID) before changing the fund.")
                     .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
             }
-        }
-        .alert(killOn ? "Resume trading?" : "Halt all trading now?", isPresented: $showKillConfirm) {
-            Button(killOn ? "Resume trading" : "Engage", role: killOn ? .cancel : .destructive) { killOn.toggle() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(killOn ? "The order gate opens again." : "Nothing trades until a member turns it back on.")
         }
     }
 
@@ -124,8 +151,111 @@ struct SettingsView: View {
 
     private var signOutButton: some View {
         Button(role: .destructive) { auth.signOut() } label: {
-            Text(Strings.shared.s("auth.signOut", "Sign out")).frame(maxWidth: .infinity)
+            Text("Sign out").frame(maxWidth: .infinity)
         }
         .padding(.top, 4)
+    }
+
+    private func toggleKill() async {
+        guard !busy else { return }
+        let target = !killOn
+        guard await BiometricGate.confirm(target ? "Confirm it's you to HALT trading." : "Confirm it's you to resume trading.") else { return }
+        busy = true
+        let res = await APIClient.shared.setKillSwitch(target)
+        if res.ok { killOn = target; note = target ? "Trading halted." : "Trading resumed." }
+        else { note = res.error }
+        busy = false
+    }
+}
+
+// MARK: - Reports (A10)
+
+struct ReportsView: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var reports: [ReportSummary] = []
+    @State private var loaded = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if !loaded {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
+                } else if reports.isEmpty {
+                    EmptyState(title: "No reports yet", message: "Daily and weekly write-ups land here as the agent files them.")
+                } else {
+                    ForEach(reports) { r in
+                        Card {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Chip(text: r.kind, tone: .dim)
+                                    Text(r.dateISO).font(.caption2).foregroundStyle(Theme.palette(scheme).textMuted)
+                                    Spacer()
+                                }
+                                Text(r.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.palette(scheme).textPrimary)
+                                if let s = r.summary { Text(s).font(.caption).foregroundStyle(Theme.palette(scheme).textMuted).lineLimit(3) }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(ScreenBackground().ignoresSafeArea())
+        .navigationTitle("Reports")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { reports = await APIClient.shared.reports(); loaded = true }
+    }
+}
+
+// MARK: - About
+
+struct AboutView: View {
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        let p = Theme.palette(scheme)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                BrandLogo(height: 34)
+                Text("Get rich quick, slowly, with receipts.").font(.callout.italic()).foregroundStyle(p.textMuted)
+                Text("An autonomous, Claude-powered investing fund for Cam & Graham. A trading agent manages a real brokerage account within hard, code-enforced guardrails. The agent proposes; the deterministic gate disposes. Nothing trades while the kill switch is on, and real money never trades until the soak gate passes.")
+                    .font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                HStack(spacing: 16) {
+                    member("Cam", "cam"); member("Graham", "graham")
+                }
+            }
+            .padding(20)
+        }
+        .background(ScreenBackground().ignoresSafeArea())
+        .navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    private func member(_ name: String, _ asset: String) -> some View {
+        VStack(spacing: 6) {
+            Image(asset).resizable().scaledToFill().frame(width: 64, height: 64).clipShape(Circle())
+                .overlay(Circle().strokeBorder(Theme.palette(scheme).accent.opacity(0.3), lineWidth: 1))
+            Text(name).font(.caption.weight(.semibold)).foregroundStyle(Theme.palette(scheme).textPrimary)
+        }
+    }
+}
+
+// MARK: - Member avatar (headshot by email)
+
+struct MemberAvatar: View {
+    @Environment(\.colorScheme) private var scheme
+    let email: String
+    var size: CGFloat = 44
+    var body: some View {
+        let p = Theme.palette(scheme)
+        Group {
+            if email.hasPrefix("cameron") { Image("cam").resizable().scaledToFill() }
+            else if email.hasPrefix("g.j.appleby") { Image("graham").resizable().scaledToFill() }
+            else {
+                Circle().fill(Theme.brandGradient).overlay(
+                    Text(String((email.first.map(String.init) ?? "?")).uppercased())
+                        .font(.headline.weight(.black)).foregroundStyle(Color.black.opacity(0.8)))
+            }
+        }
+        .frame(width: size, height: size).clipShape(Circle())
+        .overlay(Circle().strokeBorder(p.accent.opacity(0.25), lineWidth: 1))
     }
 }

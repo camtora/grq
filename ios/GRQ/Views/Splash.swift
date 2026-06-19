@@ -28,9 +28,7 @@ struct SplashView: View {
                 .animation(.easeOut(duration: 0.6), value: showWelcome)
 
             VStack(spacing: 14) {
-                Text("GRQ")
-                    .font(.system(size: 78, weight: .black, design: .rounded))
-                    .foregroundStyle(Theme.brandGradient)
+                BrandLogo(height: 60)
                     .shadow(color: .black.opacity(0.3), radius: 10, y: 2)
                 if showWelcome {
                     Text(welcomeLine)

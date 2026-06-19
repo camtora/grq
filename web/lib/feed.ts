@@ -6,7 +6,17 @@ import { allUniverse, type UniverseRow } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
-import { fmpEnabled, fmpAnalystTarget } from "./fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison } from "./fmp";
+import { stanceMeta } from "./stance";
+import {
+  getPortfolios,
+  getCongressLeaderboard,
+  getFundsPilingIn,
+  getInsiderTopBuys,
+  getInsiderClusters,
+  getSmartMoneyFreshness,
+} from "./smart-money/queries";
+import { fmtUsd } from "./smart-money/types";
 
 // Builders that produce the exact shared/contract.ts shapes for the mobile app
 // (docs/IOS-PLAN.md). Same Prisma source the web server components read, so the
@@ -43,6 +53,20 @@ function directiveToContract(d: "PINNED" | "BLOCKED" | string | null | undefined
   if (d === "PINNED") return "pin";
   if (d === "BLOCKED") return "no_fly";
   return null;
+}
+
+// GRQ's call as the 7-point rating object (mirrors lib/stance.ts `stanceMeta`) — the
+// shape the app's RatingBar renders. Accepts either the new 7-point label or a legacy
+// call word; null when unrated (A6).
+type ContractRating = { label: string; abbr: string; tone: string; pos: number; blurb: string };
+function ratingFor(stance: string | null | undefined): ContractRating | null {
+  const m = stanceMeta(stance);
+  return m ? { label: m.label, abbr: m.abbr, tone: m.tone, pos: m.pos, blurb: m.blurb } : null;
+}
+
+// Universe status → the app's "watch" state (none | watching | universe).
+function watchFor(status: string | null | undefined): "none" | "watching" | "universe" {
+  return status === "ACTIVE" ? "universe" : status === "CANDIDATE" ? "watching" : "none";
 }
 
 const HOUSEHOLD = new Set(["RY", "TD", "BNS", "BMO", "CM", "NA", "ENB", "SHOP", "CNR", "CP", "BCE", "T", "SU", "CNQ", "XIC", "XIU", "BN", "ATD", "CSU"]);
@@ -82,7 +106,8 @@ export async function meResponse(session: Session) {
 
 /* ---------- /api/portfolio ---------- */
 export async function portfolioResponse() {
-  const pf = await getPortfolio();
+  const [pf, all] = await Promise.all([getPortfolio(), allUniverse()]);
+  const logoBy = new Map(all.map((u) => [u.symbol, u.logoUrl]));
   return {
     cashCents: pf.cashCents,
     positions: pf.positions.map((p) => ({
@@ -94,6 +119,7 @@ export async function portfolioResponse() {
       unrealizedPnlCents: p.unrealizedPnlCents,
       dayChangeBps: p.dayChangeBps,
       openedAt: p.openedAt.toISOString(),
+      logoUrl: logoBy.get(p.symbol) ?? null,
     })),
     positionsCents: pf.positionsCents,
     navCents: pf.navCents,
@@ -191,6 +217,8 @@ export async function marketResponse() {
       agentCall: stanceToCall(stances.get(r.symbol)),
       directive: directiveToContract(dirBy.get(r.symbol)),
       signals: sigBy.get(r.symbol) ?? null,
+      logoUrl: r.logoUrl ?? null,
+      rating: ratingFor(stances.get(r.symbol)),
     };
   };
 
@@ -209,6 +237,8 @@ type IdeaShape = {
   call: AgentCall | null;
   target: { nearCents: number | null; nearHorizon: string | null; farCents: number | null; expectedReturnBps: number | null; confidence: number | null };
   unfamiliar: boolean;
+  logoUrl: string | null;
+  rating: ContractRating | null;
 };
 
 export async function ideasResponse(limit = 12): Promise<IdeaShape[]> {
@@ -216,6 +246,7 @@ export async function ideasResponse(limit = 12): Promise<IdeaShape[]> {
   const nameBy = new Map(all.map((u) => [u.symbol, u.name]));
   const tierBy = new Map(all.map((u) => [u.symbol, u.tier]));
   const currencyBy = new Map(all.map((u) => [u.symbol, u.currency]));
+  const logoByIdea = new Map(all.map((u) => [u.symbol, u.logoUrl]));
 
   // Latest dossier-with-a-target per symbol (mirrors the Today page's ideas).
   const rows = await prisma.journalEntry.findMany({
@@ -254,6 +285,8 @@ export async function ideasResponse(limit = 12): Promise<IdeaShape[]> {
         confidence: d.confidence ?? null,
       },
       unfamiliar: !HOUSEHOLD.has(sym),
+      logoUrl: logoByIdea.get(sym) ?? null,
+      rating: ratingFor(d.stance),
       _obscurity: HOUSEHOLD.has(sym) ? 3 : tierBy.get(sym) === "etf" || tierBy.get(sym) === "large" ? 2 : 1,
       _far: farBps ?? -9_999,
     };
@@ -283,6 +316,7 @@ export async function todayResponse() {
 
   const nameBy = new Map(all.map((u) => [u.symbol, u.name]));
   const currencyBy = new Map(all.map((u) => [u.symbol, u.currency]));
+  const logoBy = new Map(all.map((u) => [u.symbol, u.logoUrl]));
   const trackedSymbols = all.filter((u) => u.status !== "RETIRED").map((u) => u.symbol);
   const quotes = await getQuotes(trackedSymbols);
 
@@ -300,13 +334,21 @@ export async function todayResponse() {
   // Movers across the universe, biggest up then biggest down.
   const moverRows = [...quotes.entries()]
     .filter(([sym]) => nameBy.has(sym))
-    .map(([sym, q]) => ({ symbol: sym, name: nameBy.get(sym) ?? sym, currency: currencyBy.get(sym) ?? "CAD", lastCents: q.midCents, dayChangeBps: q.dayChangeBps ?? 0 }))
+    .map(([sym, q]) => ({ symbol: sym, name: nameBy.get(sym) ?? sym, currency: currencyBy.get(sym) ?? "CAD", lastCents: q.midCents, dayChangeBps: q.dayChangeBps ?? 0, logoUrl: logoBy.get(sym) ?? null }))
     .sort((a, b) => b.dayChangeBps - a.dayChangeBps);
   const movers = [...moverRows.filter((m) => m.dayChangeBps > 0).slice(0, 5), ...moverRows.filter((m) => m.dayChangeBps < 0).slice(-5).reverse()];
 
   const topHitters = [...pf.positions]
     .sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps))
-    .map((p) => ({ symbol: p.symbol, name: nameBy.get(p.symbol) ?? p.symbol, currency: currencyBy.get(p.symbol) ?? "CAD", lastCents: p.lastCents, dayChangeBps: p.dayChangeBps }));
+    .map((p) => ({ symbol: p.symbol, name: nameBy.get(p.symbol) ?? p.symbol, currency: currencyBy.get(p.symbol) ?? "CAD", lastCents: p.lastCents, dayChangeBps: p.dayChangeBps, logoUrl: logoBy.get(p.symbol) ?? null }));
+
+  // Live indices strip (A4) — folded into Today so the app makes one call. FMP shape
+  // {symbol,label,price,changePct} → contract {symbol,name,priceCents,changeBps}.
+  const indices = fmpEnabled()
+    ? await fmpIndices()
+        .then((rows) => rows.map((r) => ({ symbol: r.symbol, name: r.label, priceCents: Math.round(r.price * 100), changeBps: Math.round(r.changePct * 100) })))
+        .catch(() => [] as { symbol: string; name: string; priceCents: number; changeBps: number }[])
+    : [];
 
   const lead = eod ?? midday ?? plan ?? latestPlan ?? latestResearch;
   // Title by WHAT the lead is, mirroring the web Today page's section header —
@@ -326,6 +368,7 @@ export async function todayResponse() {
     movers,
     topHitters,
     onTheRadar: await ideasResponse(8),
+    indices,
   };
 }
 
@@ -337,6 +380,164 @@ function editionNow(): Edition {
   return "evening";
 }
 
+/* ---------- /api/hunt (A1) ---------- */
+// The discovery hunt feed — the same leads the web Market page renders (IdeaCard
+// discovery), as the app's HuntFind shape. Obscurity-first; the active brief rides along.
+export async function huntResponse() {
+  const [state, all] = await Promise.all([
+    prisma.agentState.findUnique({ where: { id: 1 } }),
+    allUniverse(),
+  ]);
+  const uBy = new Map(all.map((u) => [u.symbol, u]));
+  const statusBy = new Map(all.map((u) => [u.symbol, u.status]));
+
+  const raw = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    take: 24,
+  });
+  const seen = new Set<string>();
+  const picked = raw
+    .filter((d) => {
+      if (!d.symbol || seen.has(d.symbol)) return false;
+      seen.add(d.symbol);
+      return true;
+    })
+    .slice(0, 12);
+
+  const quotes = await getQuotes(picked.map((d) => d.symbol as string));
+  const finds = picked.map((d) => {
+    const sym = d.symbol as string;
+    const u = uBy.get(sym);
+    const cur = quotes.get(sym)?.midCents ?? null;
+    const nearBps = cur && d.targetNearCents != null ? Math.round(((d.targetNearCents - cur) / cur) * 10_000) : null;
+    const farBps = cur && d.targetFarCents != null ? Math.round(((d.targetFarCents - cur) / cur) * 10_000) : null;
+    let sources: string[] = [];
+    try {
+      sources = d.sourcesJson ? JSON.parse(d.sourcesJson) : [];
+    } catch {
+      sources = [];
+    }
+    return {
+      sym,
+      name: u?.name ?? sym,
+      logoUrl: u?.logoUrl ?? null,
+      currency: u?.currency ?? "CAD",
+      cur,
+      nearBps,
+      farBps,
+      nearDays: d.targetNearDays ?? null,
+      confidence: d.confidence ?? null,
+      body: d.body,
+      sources,
+      obscurity: d.obscurity ?? null,
+      watch: watchFor(statusBy.get(sym)),
+    };
+  });
+  finds.sort((a, b) => (b.obscurity ?? -1) - (a.obscurity ?? -1));
+  return { brief: state?.huntBrief ?? null, finds };
+}
+
+/* ---------- /api/smart-money (A3) ---------- */
+const tidyName = (s: string) =>
+  s.replace(/\b(INC|CORP|CO|LTD|PLC|LP|LLC|N V|S A|GROUP|THE)\b\.?/gi, "").replace(/\s+/g, " ").trim() || s;
+
+export async function smartMoneyResponse() {
+  const [universe, portfolios, congress, funds, insiders, clusters, fresh, narrative] = await Promise.all([
+    allUniverse(),
+    getPortfolios(),
+    getCongressLeaderboard(90, 8),
+    getFundsPilingIn(8),
+    getInsiderTopBuys(14, 10),
+    getInsiderClusters(30, 8),
+    getSmartMoneyFreshness(),
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
+  ]);
+
+  const overlap = new Map<string, "universe" | "watching">();
+  for (const u of universe) {
+    if (u.status === "ACTIVE") overlap.set(u.symbol, "universe");
+    else if (u.status === "CANDIDATE") overlap.set(u.symbol, "watching");
+  }
+
+  let narrSources: string[] = [];
+  try {
+    narrSources = narrative?.sourcesJson ? JSON.parse(narrative.sourcesJson) : [];
+  } catch {
+    narrSources = [];
+  }
+
+  return {
+    portfolios: portfolios.map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      subtitle: p.firm || p.blurb || null,
+      asOf: p.asOf ?? null,
+      totalValueUsd: p.totalValueUsd ?? null,
+      topHoldings: p.topHoldings.map((h) => ({
+        symbol: h.symbol,
+        name: h.name ?? null,
+        changeKind: h.action ?? null,
+        valueUsd: h.valueUsd ?? null,
+        weightBps: h.pctOfPort != null ? Math.round(h.pctOfPort * 100) : null,
+        putCall: h.putCall ?? null,
+        overlap: overlap.get(h.symbol) ?? null,
+      })),
+    })),
+    congress: congress.map((c) => ({
+      symbol: c.symbol,
+      name: tidyName(c.assetName),
+      primary: `${c.buyers} member${c.buyers > 1 ? "s" : ""}`,
+      secondary: `${c.trades} trade${c.trades > 1 ? "s" : ""}`,
+      overlap: overlap.get(c.symbol) ?? null,
+    })),
+    funds: funds.map((f) => ({
+      symbol: f.symbol,
+      name: tidyName(f.name),
+      primary: `${f.funds} fund${f.funds > 1 ? "s" : ""}`,
+      secondary: fmtUsd(f.totalValueUsd),
+      overlap: overlap.get(f.symbol) ?? null,
+    })),
+    insiders: insiders.map((t) => ({
+      symbol: t.symbol,
+      name: t.insiderName.length > 26 ? `${t.insiderName.slice(0, 26)}…` : t.insiderName,
+      primary: fmtUsd(t.valueUsd),
+      secondary: t.insiderTitle ? t.insiderTitle.split(/[,:]/)[0] : null,
+      overlap: overlap.get(t.symbol) ?? null,
+    })),
+    clusters: clusters.map((c) => ({ symbol: c.symbol, insiders: c.insiders, totalValueUsd: c.totalValueUsd ?? null })),
+    narrative: narrative ? { title: narrative.title, body: narrative.body, at: iso(narrative.at), sources: narrSources } : null,
+    updatedAt: iso(fresh.congress ?? fresh.insider ?? fresh.portfolio),
+  };
+}
+
+/* ---------- /api/reports (A10) ---------- */
+function firstLine(body: string): string {
+  const line = body.split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
+  return line.length > 160 ? line.slice(0, 160) + "…" : line;
+}
+
+export async function reportsResponse(limit = 40) {
+  const reports = await prisma.report.findMany({ orderBy: { date: "desc" }, take: limit });
+  return {
+    reports: reports.map((r) => ({
+      id: String(r.id),
+      kind: r.kind,
+      dateISO: etDateStr(r.date),
+      title: r.title,
+      summary: firstLine(r.body),
+    })),
+  };
+}
+
+export async function reportDayResponse(date: string) {
+  // date = YYYY-MM-DD (ET). Match the EOD report whose ET calendar date matches.
+  const reports = await prisma.report.findMany({ where: { kind: "EOD" }, orderBy: { date: "desc" }, take: 120 });
+  const match = reports.find((r) => etDateStr(r.date) === date);
+  if (!match) return null;
+  return { id: String(match.id), title: match.title, dateISO: etDateStr(match.date), bodyMarkdown: match.body };
+}
+
 /* ---------- /api/dossier/[symbol] ---------- */
 export async function dossierResponse(symbol: string) {
   const sym = symbol.toUpperCase();
@@ -344,11 +545,15 @@ export async function dossierResponse(symbol: string) {
   const entry = all.find((u) => u.symbol === sym);
   if (!entry) return null;
 
-  const [quote, journal, signals, analyst] = await Promise.all([
+  const [quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peers] = await Promise.all([
     getQuote(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }),
     contractSignals(sym).catch(() => null),
+    computeSignals(sym).catch(() => null),
     fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
+    prisma.symbolDirective.findUnique({ where: { symbol: sym } }).catch(() => null),
+    prisma.researchRequest.count({ where: { symbol: sym, status: { in: ["QUEUED", "RUNNING"] } } }).catch(() => 0),
+    fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
   ]);
 
   const currentRead = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
@@ -358,6 +563,12 @@ export async function dossierResponse(symbol: string) {
   const cur = quote?.midCents ?? null;
   const farBps = cur && targetEntry?.targetFarCents ? Math.round(((targetEntry.targetFarCents - cur) / cur) * 10_000) : null;
   const nearWeeks = targetEntry?.targetNearDays ? Math.max(1, Math.round(targetEntry.targetNearDays / 5)) : null;
+
+  // The technical-lean fallback rating (the deterministic signal consensus), tagged
+  // as such so the app's RatingBar always has an axis even before GRQ files a call.
+  const rec = sigFull ? overallSignal(sigFull) : null;
+  const recMeta = rec ? stanceMeta(rec.label) : null;
+  const selfPeer = (peers as Array<{ self?: boolean; peTtm?: number | null }>).find((p) => p.self);
 
   const body =
     currentRead?.body ??
@@ -381,9 +592,19 @@ export async function dossierResponse(symbol: string) {
     signals,
     analystTargetCents: analyst?.consensusCents ?? null,
     marketCapCents: entry.marketCapM != null ? entry.marketCapM * 100_000_000 : null,
-    peRatio: null,
+    peRatio: selfPeer?.peTtm ?? null,
     freeCashFlowCents: null,
     dividendYieldBps: null,
     filedAt: iso((currentRead ?? stanceEntry ?? targetEntry)?.at ?? null),
+    // A5 enrichment — the app's rich dossier (rating bar, status, bottom line, controls).
+    logoUrl: entry.logoUrl ?? null,
+    status: entry.status,
+    watch: watchFor(entry.status),
+    rating: ratingFor(stanceEntry?.stance),
+    recLabel: recMeta?.label ?? null,
+    recPos: recMeta?.pos ?? null,
+    bottomLine: bottomLineEntry?.bottomLine ?? null,
+    researching: pendingResearch > 0,
+    directive: directiveToContract(directiveRow?.directive),
   };
 }

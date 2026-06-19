@@ -22,6 +22,9 @@
 		96363CB5EBCC30A61F4071BB /* SignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28CCBC41FFE7CEF5DD6F9804 /* SignIn.swift */; };
 		B31F2F27371FDEBD5F80903E /* Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F796D9398F99243C3EDFADD /* Content.swift */; };
 		BDEEBC01FA5034AAF9DB633E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA75C1DAF2E6B24CCCC1EC94 /* Theme.swift */; };
+		BF1000000000000000000001 /* Stock.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000002 /* Stock.swift */; };
+		BF1000000000000000000003 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004 /* Chat.swift */; };
+		BF1000000000000000000005 /* SmartMoney.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000006 /* SmartMoney.swift */; };
 		C159A609C96E1F8F9762D1D9 /* Today.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F428DA09D80E965B1098CF /* Today.swift */; };
 		F0E4F2404DC0E86EF83F5874 /* glossary.json in Resources */ = {isa = PBXBuildFile; fileRef = D46B6171477883110108E4BB /* glossary.json */; };
 		F772115B3AC886D14D606C98 /* tokens.json in Resources */ = {isa = PBXBuildFile; fileRef = 30269A0F511DCEBA9ADC0011 /* tokens.json */; };
@@ -44,6 +47,9 @@
 		9F85470E1F6CC79DC6533DF7 /* GRQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GRQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA75C1DAF2E6B24CCCC1EC94 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		AB85AE2C68665DD108541D5A /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		BF1000000000000000000002 /* Stock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stock.swift; sourceTree = "<group>"; };
+		BF1000000000000000000004 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
+		BF1000000000000000000006 /* SmartMoney.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartMoney.swift; sourceTree = "<group>"; };
 		D46B6171477883110108E4BB /* glossary.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = glossary.json; sourceTree = "<group>"; };
 		DA1A3BC6F95426464ECB4E52 /* Splash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Splash.swift; sourceTree = "<group>"; };
 		E78A5C786089AD88B49CF118 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -91,6 +97,9 @@
 				28CCBC41FFE7CEF5DD6F9804 /* SignIn.swift */,
 				DA1A3BC6F95426464ECB4E52 /* Splash.swift */,
 				41F428DA09D80E965B1098CF /* Today.swift */,
+				BF1000000000000000000002 /* Stock.swift */,
+				BF1000000000000000000004 /* Chat.swift */,
+				BF1000000000000000000006 /* SmartMoney.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -265,6 +274,9 @@
 				0C75C51F804596C7C80029BE /* Splash.swift in Sources */,
 				BDEEBC01FA5034AAF9DB633E /* Theme.swift in Sources */,
 				C159A609C96E1F8F9762D1D9 /* Today.swift in Sources */,
+				BF1000000000000000000001 /* Stock.swift in Sources */,
+				BF1000000000000000000003 /* Chat.swift in Sources */,
+				BF1000000000000000000005 /* SmartMoney.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

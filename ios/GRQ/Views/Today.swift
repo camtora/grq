@@ -1,27 +1,67 @@
 import SwiftUI
 
+// THE DAILY — Today as a newspaper (docs/NEWSPAPER.md): masthead, NAV hero, the live
+// indices strip, The Tape, the lead story, movers, top hitters, on the radar.
 struct TodayView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var today: Today?
 
     var body: some View {
         NavigationStack {
-            if let t = today {
-                GRQScreen(title: "GRQ Daily", subtitle: "\(t.edition.label) Edition · \(t.dateISO)") {
-                    heroCard(t)
-                    moversCard("Market Movers", t.movers)
-                    tapeCard(t)
-                    leadCard(t)
-                    moversCard("Top Hitters", t.topHitters)
-                    radarCard(t)
-                    funFact
+            ScrollView {
+                if let t = today {
+                    VStack(alignment: .leading, spacing: 16) {
+                        masthead(t)
+                        if let idx = t.indices, !idx.isEmpty { indicesStrip(idx) }
+                        heroCard(t)
+                        tapeCard(t)
+                        leadCard(t)
+                        moversCard("Market Movers", t.movers)
+                        moversCard("Top Hitters", t.topHitters)
+                        radarCard(t)
+                        funFact
+                    }
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
+                } else {
+                    VStack { ProgressView().tint(Theme.brandAccent) }.frame(maxWidth: .infinity).padding(.top, 120)
                 }
-            } else {
-                ZStack { ScreenBackground().ignoresSafeArea(); ProgressView().tint(Theme.brandAccent) }
-                    .toolbar(.hidden, for: .navigationBar)
             }
+            .background(ScreenBackground().ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { today = await APIClient.shared.today() }
         }
         .task { today = await APIClient.shared.today() }
+    }
+
+    private func masthead(_ t: Today) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(alignment: .center, spacing: 10) {
+            BrandLogo(height: 28)
+            Spacer()
+            Text("\(t.edition.label) · \(t.dateISO)")
+                .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
+            ChatButton()
+        }
+        .padding(.top, 4)
+    }
+
+    private func indicesStrip(_ idx: [IndexQuote]) -> some View {
+        let p = Theme.palette(scheme)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(idx) { q in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(q.name).font(.caption2.weight(.semibold)).foregroundStyle(p.textMuted).lineLimit(1)
+                        if let pr = q.priceCents { Text(Fmt.money(pr)).font(.caption.weight(.bold)).monospacedDigit().foregroundStyle(p.textPrimary) }
+                        if let ch = q.changeBps { BpsBadge(bps: ch).font(.caption2) }
+                    }
+                    .padding(10)
+                    .frame(minWidth: 96, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p.cardBg))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(p.cardBorder, lineWidth: 1))
+                }
+            }
+        }
     }
 
     private func heroCard(_ t: Today) -> some View {
@@ -71,8 +111,11 @@ struct TodayView: View {
         return Card {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: t.leadTitle)
-                Text(t.leadStoryMarkdown ?? "No wrap filed yet — quiet day.")
-                    .font(.callout).foregroundStyle(p.textPrimary.opacity(0.92))
+                if let lead = t.leadStoryMarkdown {
+                    MarkdownText(text: lead)
+                } else {
+                    Text("No wrap filed yet — quiet day.").font(.callout).foregroundStyle(p.textMuted)
+                }
                 Text("— the robot").font(.caption2.italic()).foregroundStyle(p.textMuted)
             }
         }
@@ -84,12 +127,12 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: title)
                 if movers.isEmpty {
-                    Text("Quiet — nothing's moved yet today.")
-                        .font(.subheadline).foregroundStyle(p.textMuted)
+                    Text("Quiet — nothing's moved yet today.").font(.subheadline).foregroundStyle(p.textMuted)
                 }
                 ForEach(Array(movers.enumerated()), id: \.element.id) { idx, m in
                     NavigationLink { StockDetailView(symbol: m.symbol) } label: {
-                        HStack {
+                        HStack(spacing: 12) {
+                            StockLogo(symbol: m.symbol, url: m.logoUrl, size: 32)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                                 Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
@@ -115,22 +158,25 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: "On the Radar")
                 ForEach(t.onTheRadar) { idea in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(idea.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                            Text(idea.name).font(.caption).foregroundStyle(p.textMuted)
-                            Spacer()
-                            if idea.unfamiliar { Chip(text: "new", tone: .dim) }
-                        }
-                        if let er = idea.target.expectedReturnBps {
-                            HStack(spacing: 6) {
-                                Text("\(Fmt.bps(er)) expected").font(.caption.weight(.semibold)).foregroundStyle(p.pos)
-                                if let c = idea.target.confidence {
-                                    Text("· \(c)% conf").font(.caption).foregroundStyle(p.textMuted)
+                    NavigationLink { StockDetailView(symbol: idea.symbol) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                StockLogo(symbol: idea.symbol, url: idea.logoUrl, size: 26)
+                                Text(idea.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                Text(idea.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+                                Spacer()
+                                if idea.unfamiliar { Chip(text: "new", tone: .dim) }
+                            }
+                            if let er = idea.target.expectedReturnBps {
+                                HStack(spacing: 6) {
+                                    Text("\(Fmt.bps(er)) expected").font(.caption.weight(.semibold)).foregroundStyle(p.pos)
+                                    if let c = idea.target.confidence { Text("· \(c)% conf").font(.caption).foregroundStyle(p.textMuted) }
                                 }
                             }
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
                 TermLink(slug: "expected-return", label: "targets are hypotheses, not promises").font(.caption2)
             }

@@ -1,6 +1,7 @@
 import SwiftUI
 import Security
 import UIKit
+import LocalAuthentication
 
 #if canImport(GoogleSignIn)
 import GoogleSignIn
@@ -175,6 +176,138 @@ final class APIClient {
     func market() async -> (universe: [MarketName], watchlist: [MarketName]) {
         let r: MarketPayload? = await get("market")
         return (r?.universe ?? [], r?.watchlist ?? [])
+    }
+
+    // The Hunt (A1) — the centerpiece feed + the on-demand refresh/brief.
+    func hunt() async -> HuntResponse? { await get("hunt") }
+    func refreshHunt(brief: String?) async -> ActionResult { await postResult("hunt/refresh", ["brief": brief ?? ""]) }
+    func smartMoney() async -> SmartMoneyResponse? { await get("smart-money") }
+    func stockExtras(_ symbol: String) async -> StockExtras? { await get("stock-extras/\(symbol)") }
+    func reportForDay(_ date: String) async -> ReportDetail? { await get("reports/day/\(date)") }
+
+    func reports() async -> [ReportSummary] {
+        struct R: Decodable { let reports: [ReportSummary] }
+        let r: R? = await get("reports")
+        return r?.reports ?? []
+    }
+
+    func search(_ q: String) async -> [SearchHit] {
+        struct R: Decodable { let matches: [SearchHit] }
+        let r: R? = await get("symbol-search?q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")
+        return r?.matches ?? []
+    }
+
+    func chatHistory(owner: String? = nil) async -> ChatThread? {
+        await get(owner.map { "chat?owner=\($0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" } ?? "chat")
+    }
+
+    // MARK: - Writes (members; the server re-checks role + the guardrail gate)
+
+    func setKillSwitch(_ engaged: Bool) async -> ActionResult { await postResult("killswitch", ["engaged": engaged]) }
+
+    func setDirective(_ symbol: String, _ directive: String?) async -> ActionResult {
+        await postResult("stocks/directive", ["symbol": symbol, "directive": directive ?? NSNull()])
+    }
+
+    /// Universe lifecycle: add | dismiss | research | promote | demote | retire.
+    func universeAction(_ symbol: String, _ action: String, extra: [String: Any] = [:]) async -> ActionResult {
+        var body: [String: Any] = ["symbol": symbol, "action": action]
+        body.merge(extra) { _, new in new }
+        return await postResult("universe", body)
+    }
+    func watch(_ symbol: String, exchange: String? = nil, currency: String? = nil, name: String? = nil) async -> ActionResult {
+        var extra: [String: Any] = [:]
+        if let exchange { extra["exchange"] = exchange }
+        if let currency { extra["currency"] = currency }
+        if let name { extra["name"] = name }
+        return await universeAction(symbol, "add", extra: extra)
+    }
+
+    // MARK: - Low-level POST + chat stream
+
+    /// POST JSON, decode `{ error }` on failure so the UI can show the guardrail verbatim.
+    private func postResult(_ path: String, _ body: [String: Any]) async -> ActionResult {
+        guard let url = URL(string: "\(baseURL)/\(path)") else { return .failure("Bad URL.") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(code) { return .success }
+            struct E: Decodable { let error: String? }
+            let msg = (try? decoder.decode(E.self, from: data))?.error
+            return .failure(msg ?? "Request failed (\(code)).")
+        } catch {
+            return .failure(error.localizedDescription)
+        }
+    }
+
+    /// Stream the agent's reply (SSE: `data: {type,text}`). Members-only, cookie/Bearer
+    /// resolved server-side. `onText` gets cumulative text; `onStatus` the "thinking" line.
+    func chatStream(message: String, symbol: String?, owner: String?,
+                    onText: @escaping (String) -> Void,
+                    onStatus: @escaping (String?) -> Void) async throws {
+        guard let url = URL(string: "\(baseURL)/chat") else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 120
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["message": message]
+        if let symbol { body["symbol"] = symbol }
+        if let owner { body["owner"] = owner }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (bytes, resp) = try await URLSession.shared.bytes(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        var acc = ""
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let json = String(line.dropFirst(6))
+            guard let d = json.data(using: .utf8),
+                  let ev = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { continue }
+            let type = ev["type"] as? String
+            let text = ev["text"] as? String ?? ""
+            switch type {
+            case "text":   acc += (acc.isEmpty ? "" : "\n\n") + text; onText(acc); onStatus(nil)
+            case "status": onStatus(text)
+            case "error":  onStatus("⚠️ \(text)")
+            default: break
+            }
+        }
+    }
+}
+
+/// Result of a member write — success, or the server's guardrail message to show.
+enum ActionResult {
+    case success
+    case failure(String)
+    var ok: Bool { if case .success = self { return true }; return false }
+    var error: String? { if case .failure(let m) = self { return m }; return nil }
+}
+
+// MARK: - Face ID gate (it's a finance app — sensitive actions confirm it's you)
+
+/// Gates a sensitive member action behind biometrics (kill switch, orders, directives —
+/// docs/IOS-PLAN.md). Falls through to success where no biometric is enrolled (simulator)
+/// so the flow stays testable; the server still enforces the real authz.
+enum BiometricGate {
+    static func confirm(_ reason: String) async -> Bool {
+        let ctx = LAContext()
+        ctx.localizedFallbackTitle = "Use passcode"
+        var err: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else { return true }
+        return await withCheckedContinuation { cont in
+            ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { ok, _ in
+                cont.resume(returning: ok)
+            }
+        }
     }
 }
 

@@ -10,9 +10,7 @@ struct SignInView: View {
             ScreenBackground().ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer()
-                Text("GRQ")
-                    .font(.system(size: 72, weight: .black, design: .rounded))
-                    .foregroundStyle(Theme.brandGradient)
+                BrandLogo(height: 56)
                     .shadow(color: Theme.brandAccent.opacity(0.4), radius: 18, y: 6)
                 Text(Strings.shared.s("brand.tagline", "Get rich quick, slowly, with receipts."))
                     .font(.subheadline).foregroundStyle(p.textMuted).multilineTextAlignment(.center)

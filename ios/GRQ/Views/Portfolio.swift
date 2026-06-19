@@ -1,22 +1,34 @@
 import SwiftUI
 
+// THE FUND — the portfolio: NAV, total P&L vs the benchmark, the risk/cash/fees grid,
+// and holdings with logos, day moves and weights.
 struct PortfolioView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var pf: Portfolio?
 
     var body: some View {
         NavigationStack {
-            GRQScreen(title: "Portfolio", subtitle: "the fund") {
-                if let pf {
-                    heroCard(pf)
-                    statRow(pf)
-                    holdings(pf)
-                    Text("Tap a term like ACB or weight for a plain-English definition.")
-                        .font(.caption).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
-                } else {
-                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top) {
+                        ScreenHeader(title: "The Fund", subtitle: "net asset value")
+                        ChatButton()
+                    }
+                    if let pf {
+                        heroCard(pf)
+                        statRow(pf)
+                        holdings(pf)
+                        Text("Tap a term like ACB or weight for a plain-English definition.")
+                            .font(.caption).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
+                    } else {
+                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
+                    }
                 }
+                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
             }
+            .background(ScreenBackground().ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { pf = await APIClient.shared.portfolio() }
         }
         .task { pf = await APIClient.shared.portfolio() }
     }
@@ -30,8 +42,7 @@ struct PortfolioView: View {
                 HStack(spacing: 10) {
                     HStack(spacing: 6) {
                         Pnl(cents: pf.totalPnlCents).font(.subheadline.weight(.bold))
-                        Text(percent(pf.totalPnlCents, pf.contributionsCents))
-                            .font(.caption).foregroundStyle(pal.textMuted)
+                        Text(percent(pf.totalPnlCents, pf.contributionsCents)).font(.caption).foregroundStyle(pal.textMuted)
                     }
                     if let b = pf.benchmarkCents {
                         Divider().frame(height: 16).overlay(pal.cardBorder)
@@ -41,19 +52,23 @@ struct PortfolioView: View {
                         }
                     }
                 }
+                if pf.killSwitch {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(pal.neg)
+                        Text("Kill switch engaged\(pf.killSwitchBy.map { " by \($0)" } ?? "") — nothing trades.")
+                            .font(.caption.weight(.semibold)).foregroundStyle(pal.neg)
+                    }
+                }
             }
         }
     }
 
     private func statRow(_ pf: Portfolio) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatCard(label: "Cash", value: Fmt.money(pf.cashCents), term: "cash-floor",
-                     note: weight(pf.cashCents, pf.navCents))
+            StatCard(label: "Cash", value: Fmt.money(pf.cashCents), term: "cash-floor", note: weight(pf.cashCents, pf.navCents))
             StatCard(label: "Risk", value: pf.riskLevel.label)
-            StatCard(label: "Fees (mo)", value: Fmt.money(pf.feeSpentMonthCents), term: "fee-budget",
-                     note: "of \(Fmt.money(pf.feeBudgetCentsMonth))")
-            StatCard(label: "Invested", value: Fmt.money(pf.positionsCents),
-                     note: weight(pf.positionsCents, pf.navCents))
+            StatCard(label: "Fees (mo)", value: Fmt.money(pf.feeSpentMonthCents), term: "fee-budget", note: "of \(Fmt.money(pf.feeBudgetCentsMonth))")
+            StatCard(label: "Invested", value: Fmt.money(pf.positionsCents), note: weight(pf.positionsCents, pf.navCents))
         }
     }
 
@@ -63,30 +78,32 @@ struct PortfolioView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionTitle(text: "Holdings")
                 if pf.positions.isEmpty {
-                    Text("Nothing held yet. The robot is still shopping.")
-                        .font(.subheadline).foregroundStyle(pal.textMuted)
+                    Text("Nothing held yet. The robot is still shopping.").font(.subheadline).foregroundStyle(pal.textMuted)
                 } else {
                     ForEach(Array(pf.positions.enumerated()), id: \.element.id) { idx, pos in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(pos.symbol).font(.subheadline.weight(.bold)).foregroundStyle(pal.textPrimary)
-                                    BpsBadge(bps: pos.dayChangeBps).font(.caption2)
+                        NavigationLink { StockDetailView(symbol: pos.symbol) } label: {
+                            HStack(spacing: 12) {
+                                StockLogo(symbol: pos.symbol, url: pos.logoUrl, size: 36)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(pos.symbol).font(.subheadline.weight(.bold)).foregroundStyle(pal.textPrimary)
+                                        BpsBadge(bps: pos.dayChangeBps).font(.caption2)
+                                    }
+                                    Text("\(pos.qty) sh · now \(Fmt.money(pos.lastCents)) · avg \(Fmt.money(pos.avgCostCents))")
+                                        .font(.caption).foregroundStyle(pal.textMuted)
                                 }
-                                Text("\(pos.qty) sh · now \(Fmt.money(pos.lastCents)) · avg \(Fmt.money(pos.avgCostCents))")
-                                    .font(.caption).foregroundStyle(pal.textMuted)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                MoneyText(cents: pos.marketValueCents).font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(pal.textPrimary)
-                                HStack(spacing: 6) {
-                                    Pnl(cents: pos.unrealizedPnlCents).font(.caption)
-                                    Text(weight(pos.marketValueCents, pf.navCents))
-                                        .font(.caption2).foregroundStyle(pal.textMuted)
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    MoneyText(cents: pos.marketValueCents).font(.subheadline.weight(.semibold)).foregroundStyle(pal.textPrimary)
+                                    HStack(spacing: 6) {
+                                        Pnl(cents: pos.unrealizedPnlCents).font(.caption)
+                                        Text(weight(pos.marketValueCents, pf.navCents)).font(.caption2).foregroundStyle(pal.textMuted)
+                                    }
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         if idx < pf.positions.count - 1 { Divider().overlay(pal.cardBorder.opacity(0.5)) }
                     }
                 }

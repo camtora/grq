@@ -16,19 +16,32 @@ const DENIED_HTML = `<!doctype html>
 <p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">No identity on this request — reach GRQ through the front door.</p>
 </div></body></html>`;
 
-// Mobile-app API surface (docs/IOS-PLAN.md). The native app authenticates with a
-// GRQ-JWT Bearer token, not the oauth2-proxy cookie, so these routes can't pass
-// the cookie door — they self-guard in the Node runtime via lib/session.ts
-// (which verifies the token) + memberFromRequest for any writes. We only need to
-// let the edge admit them; no token is checked here (no Edge-runtime JWT).
-// Listed explicitly so sensitive routes (chat, explain, quotes) stay cookie-only.
+// Mobile-app API surface (docs/IOS-PLAN.md + IOS-REBUILD-PLAN.md). The native app
+// authenticates with a GRQ-JWT Bearer token, not the oauth2-proxy cookie, so these
+// routes can't pass the cookie door — they self-guard in the Node runtime via
+// lib/session.ts (which verifies the token) + memberFromRequest for any writes. We
+// only let the edge admit them; no token is checked here (no Edge-runtime JWT).
+// Listed explicitly so anything NOT here (explain, quotes) stays cookie-only.
 const MOBILE_API = [
+  // Reads (self-guard via sessionFromRequest — viewers may read).
   "/api/portfolio",
   "/api/market",
   "/api/ideas",
   "/api/today",
   "/api/dossier",
   "/api/fund-settings",
+  "/api/hunt",            // GET feed (A1) + POST /api/hunt/refresh (member, A9)
+  "/api/smart-money",     // A3
+  "/api/reports",         // A10 (list + /day/[date])
+  "/api/stock-extras",    // A7 (lazy earnings/grades)
+  "/api/symbol-search",   // A7 (Browse; member-guarded in-route)
+  // Member writes (self-guard via memberFromRequest; the order gate still disposes).
+  "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
+  "/api/killswitch",
+  "/api/universe",
+  "/api/stocks/directive",
+  "/api/note",
+  "/api/notes",
 ];
 
 function isMobileApi(path: string): boolean {

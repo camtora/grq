@@ -70,14 +70,23 @@ struct RootView: View {
     }
 }
 
+// The 5-tab bar with THE HUNT dead center (the star, and the default landing tab —
+// the app is a toilet-reader centered on the feed). Chat is reachable from a top-right
+// button on every screen (ChatButton) — the sheet is presented once, here.
 struct MainTabView: View {
+    @EnvironmentObject private var auth: AuthManager
+    @StateObject private var chat = ChatLauncher()
+    @State private var selection = 2     // The Hunt
+
     var body: some View {
-        TabView {
-            TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }
-            WatchlistView().tabItem { Label("Watchlist", systemImage: "star.fill") }
-            PortfolioView().tabItem { Label("Portfolio", systemImage: "briefcase.fill") }
-            IdeasView().tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
-            SettingsView().tabItem { Label("Settings", systemImage: "gearshape.fill") }
+        TabView(selection: $selection) {
+            TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }.tag(0)
+            PortfolioView().tabItem { Label("Fund", systemImage: "briefcase.fill") }.tag(1)
+            HuntView().tabItem { Label("Hunt", systemImage: "binoculars.fill") }.tag(2)
+            MarketsView().tabItem { Label("Markets", systemImage: "chart.bar.fill") }.tag(3)
+            MoreView().tabItem { Label("More", systemImage: "ellipsis.circle.fill") }.tag(4)
         }
+        .environmentObject(chat)
+        .sheet(isPresented: $chat.show) { ChatView().environmentObject(auth) }
     }
 }

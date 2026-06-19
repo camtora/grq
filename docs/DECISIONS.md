@@ -847,3 +847,39 @@ JournalEntries + the EOD `Report`; SSR `<details>` (no JS); reuses the `?d=` day
 (`startOfEtDay`). **Verified:** tsc clean; web rebuilt + deployed (one careful build, `/var` watched, no
 crash); `/reports/day/2026-06-18` renders all three sections with 14 check-ins + the midday brief; the
 Daily tab shows the View-report buttons.
+
+### D42 — iOS IA-v5 rebuild + mobile API expansion + Bearer-skips-SSO at the edge (Cam, 2026-06-19)
+**Context:** The native app was frozen at IA-v2 (tabs Today · Watchlist · Portfolio · Ideas · Settings;
+the retired word-stance; mock actions) while the web moved to IA-v5 (The Hunt · Smart Money · Chat · the
+7-point rating · rich dossiers · new branding). The mobile API served only 6 read endpoints, and nginx's
+mobile bypass forwarded only those 6 — so any new route fell through to the SSO `location /`, which wants
+the oauth2 *cookie*; the app sends a *Bearer*, so new routes 302'd to login (the "hunt is quiet" bug).
+**Change (three layers):**
+- **iOS (client, blind-authored on Linux; builds on the Mac):** full rebuild to a 5-tab shell with **The
+  Hunt dead-center as the default tab** ("scrollable Instagram of stocks"), a **Markets hub** (Watchlist ·
+  Universe · Browse · Smart Money), the rich **dossier** (RatingBar + bull/bear mascots, status, bottom
+  line, fundamentals, lazy earnings/grades, member controls), streaming **Chat** (SSE over
+  `URLSession.bytes`), Face-ID-gated member writes, and a **top-right chat button on every screen** (the
+  bottom FAB was undiscoverable). Rebrand: real logo/mascots/photos bundled; the **app icon is now the
+  teal bull** (`AppIcon-1024.png` composited from `bull-splash.png`). New fields are Optional so the app
+  keeps decoding today's payloads. Docs: `IOS-REBUILD-PLAN.md` (the plan + Appendix A), `IOS-BUILD-LOG.md`.
+- **Mobile API (web):** `lib/feed.ts` gained `rating` (7-point, from `stance.ts`) + `logoUrl` across
+  market/ideas/portfolio/today/dossier, folded the live **indices** strip into `todayResponse`, enriched
+  the dossier (status/watch/recLabel+pos/bottomLine/researching/directive/peRatio), and added builders +
+  routes for **`/api/hunt`, `/api/smart-money`, `/api/reports`(+`/day/[date]`)**. `middleware.ts` now
+  admits the mobile reads **and** member writes (chat, killswitch, universe, stocks/directive, note) for
+  a Bearer (they self-guard via `memberFromRequest`; the §6 order gate is unchanged).
+- **Edge (infra `nginx/conf.d/29-grq.conf`):** a `map $http_authorization $grq_has_bearer` + a one-line
+  `if ($grq_has_bearer) { return 200; }` in grq's internal `= /oauth2/auth` lets **any Bearer-bearing
+  request skip the SSO subrequest** — the app server then *cryptographically verifies* the GRQ-JWT and
+  rejects bad ones, so this fixes EVERY mobile route at once without enumerating each, and **without
+  weakening the browser cookie path** (no Bearer → full SSO). Scoped to grq's server block; other apps on
+  the shared proxy are untouched. (This was the long-pending P0.5 nginx step; it touches the shared auth
+  gate, so a human applies it — the agent's auto-mode classifier blocks it by design.)
+**Verified:** `tsc --noEmit` clean; `web` rebuilt (image checked fresh, not a stale bake), deployed,
+`/var` steady at 73%, agent/ibeam untouched. Live smoke (header path): hunt 12 finds + brief, smart-money
+5 portfolios + leaderboards, today 6 indices + logos, market `rating`+`logoUrl`, dossier enrichment,
+extras (earnings/grades), reports, chat history. After the nginx reload, the **fake-Bearer probe flipped
+`/api/hunt` 302→403** (reaches the app, rejects the bad token) while `/` no-auth stayed 302 and `/`
+fake-Bearer returned 403 — fix confirmed, no SSO regression. The hunt populates on the *existing* installed
+build (server-side fix); the bull icon + top-right chat button need a Mac rebuild.

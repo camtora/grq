@@ -145,3 +145,92 @@ files the agent owns, so they were intentionally left:
 **P0** contract + dual-auth seam + nginx + Google Sign-In → first authenticated GET ·
 **P1** read-only screens on live data · **P2** member actions (kill switch/order/directives)
 behind Face ID · **P3** push + agent chat · **P4** TestFlight, parity enforced.
+
+---
+
+## 2026-06-18 — IA-v5 full rebuild (Claude session, iOS-only)
+
+The app was frozen at IA-v2 while web moved to IA-v5 (The Hunt · Smart Money · Chat ·
+the 7-point rating scale · rich dossiers · new branding). Plan: **`docs/IOS-REBUILD-PLAN.md`**.
+This session was again constrained to **`ios/` only** (a second agent is editing `web/`),
+so the server-side contract work is collected as a handoff (Appendix A of the plan) and
+**not yet built** — the client is written to the target contract and lights up per endpoint.
+
+**Built this session (client-side P0–P5):**
+
+- **New IA** — 5-tab shell with **The Hunt dead center** (the default tab; a toilet-reader
+  centered on the feed): `Today · Fund · Hunt · Markets · More`. Chat is a global FAB
+  (members). `App/GRQApp.swift` rewritten.
+- **The Hunt** (`Views/Ideas.swift` → `HuntView`) — the centerpiece: a vertically scrollable
+  feed of large "stock post" cards (12-mo upside, conviction, obscurity badge, dossier
+  narrative, sources), the directed-hunt brief bar, refresh, watch/dismiss, pull-to-refresh.
+- **Markets hub** (`Views/Market.swift` → `MarketsView`) — segmented Watchlist · Universe ·
+  Browse (symbol-search→add) · Smart Money, with rating-aware rows + member directives/promote.
+- **Smart Money** (`Views/SmartMoney.swift`, new) — tracked-portfolio cards, leaderboards,
+  cluster buys, GRQ's read.
+- **Rich dossier** (`Views/Stock.swift`, new — keeps `StockDetailView`) — logo + price, the
+  RatingBar (GRQ's call + technical lean, bull/bear mascots), targets, bottom line,
+  fundamentals, signals, the narrative, lazy earnings/grades, member controls, "Ask GRQ".
+- **Chat** (`Views/Chat.swift`, new) — streaming SSE over `URLSession.bytes`, markdown
+  bubbles with member avatars, members-only.
+- **The Daily + Fund** rebuilt (`Today.swift`, `Portfolio.swift`) — masthead logo, live
+  indices strip, logos on movers/holdings, pull-to-refresh.
+- **More** (`Views/Settings.swift` → `MoreView`) — real **Face-ID kill switch**, risk dial,
+  soak, Reports, About, theme, sign out.
+- **Rating + primitives** (`Theme/Components.swift`) — `RatingBar` (red→amber→green track +
+  needle + mascots), `StanceBadge`, `MarkdownText`, `CollapsibleMd`, `StockLogo`, `BrandLogo`,
+  `Fmt.pct0`/`Fmt.usd`, `Theme.toneColor`. 7-point `Stance`/`Rating` in `Models.swift`
+  (derived client-side from the legacy `agentCall` so it renders before the contract migrates).
+- **Data layer** (`Services/Services.swift`) — `hunt`, `refreshHunt`, `smartMoney`,
+  `stockExtras`, `reports`, `search`, `chatHistory`/`chatStream`, and member writes
+  (`setKillSwitch`, `setDirective`, `universeAction`/`watch`) with an `ActionResult` that
+  surfaces the server's guardrail text. `BiometricGate` (Face ID) for sensitive actions.
+- **Branding** — real assets bundled into `Assets.xcassets` (logo light/dark, bull/bear
+  mascots, Cam/Graham photos); the text wordmark replaced by `BrandLogo` on splash + sign-in.
+- **Project** — 3 new files (`Stock`/`Chat`/`SmartMoney.swift`) registered in
+  `project.pbxproj` (build file + file ref + Views group + Sources phase). `project.yml`
+  globs `GRQ/`, so **`xcodegen generate` is the clean recovery** if the hand-edited pbxproj
+  ever drifts.
+
+**Robustness choices:** every field the *current* backend doesn't emit is **Optional** in
+`Models.swift`, so the app keeps decoding live `/api/{portfolio,market,today,dossier,…}`
+today; new endpoints (hunt, smart-money, chat, reports) return nil on 404 → views show empty
+states until the backend lands. `SmartMoneyResponse` has a tolerant decoder.
+
+**Not done / needs a Mac or the web agent:**
+
+- **Mac build** — the Linux box has no iOS SDK; this is blind-authored Swift. Compile + run
+  on Cam's Mac is the verification step (open `ios/GRQ.xcodeproj`, or `xcodegen generate` first).
+- **Backend (Appendix A of the plan)** — `GET /api/hunt`, `/api/smart-money`, `/api/reports`;
+  enrich `/api/dossier` + fold indices into `/api/today`; add `rating`/`logoUrl` to list
+  shapes; **admit the mobile read routes + member write routes for Bearer in `middleware.ts`**
+  (today only the 6 read GETs pass the edge, so every mobile write 403s); the `Stance`/`Rating`
+  contract migration. Until these land, Hunt/Smart Money/Chat/Reports show empty + writes fail
+  gracefully with the server message.
+- **Infra (P0.5)** — GRQ-iOS OAuth client + nginx mobile route (still the gate to live-on-phone;
+  develop against the LAN box + dev login meanwhile).
+- `IOS-CONTENT.md` still describes the old tab set (`Today · Market · Portfolio · Ideas ·
+  Settings`) — update to the new IA on a later pass.
+
+## 2026-06-19 — backend shipped + edge unblocked + branding (Claude session)
+
+The rebuild's server half landed and the app now reaches live data end-to-end (D42).
+
+- **Appendix A backend (web) — built, typechecked, deployed.** `lib/feed.ts` emits `rating`
+  (7-point) + `logoUrl` everywhere, folds the live **indices** strip into Today, and enriches the
+  dossier (status/watch/recLabel+pos/bottomLine/researching/directive/peRatio); new routes
+  `GET /api/{hunt,smart-money,reports,reports/day/[date]}`; `middleware.ts` admits the mobile reads
+  **and** member writes for a Bearer. `grq_web` rebuilt (image verified fresh), deployed, `/var` 73%,
+  agent/ibeam untouched. Smoke-tested every endpoint (header path) — all return live, correctly-shaped.
+- **Edge fix (infra `nginx/conf.d/29-grq.conf`).** Root cause of "the hunt is quiet": nginx forwarded
+  only the original 6 routes without SSO; new routes 302'd the app's Bearer to login. Fix: a `map`
+  detecting a Bearer + `if ($grq_has_bearer) { return 200; }` in grq's internal `= /oauth2/auth` →
+  Bearer requests skip the cookie SSO subrequest (the app verifies the JWT itself). Verified: fake-Bearer
+  `/api/hunt` **302→403**; `/` no-auth still 302; `/` fake-Bearer 403 (pages not exposed). **Human-applied**
+  — the agent's safety classifier blocks edits to the shared SSO gate by design.
+- **Branding.** App icon is now the **teal bull** (`AppIcon-1024.png`, bull composited on a dark
+  teal-glow bg, opaque 1024²). **Chat moved to a top-right button on every screen** (the bottom FAB was
+  undiscoverable) via a shared `ChatLauncher` + one centralized sheet; `ChatButton` in each header.
+- **What's where:** Hunt/Smart-Money/Reports/Chat now work on the **existing installed app build** (the
+  fix was server + edge). The **bull icon** and **top-right chat button** need a Mac rebuild. TestFlight
+  still gated on the Apple **PLA acceptance + distribution cert** (account-side, not code).
