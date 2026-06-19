@@ -320,14 +320,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   return (
     <main>
       {/* Masthead */}
-      <header className="mb-6 border-y-2 border-teal-400/30 py-4">
+      <header className="mb-6 border-b-2 border-teal-400/30 pb-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/bull-splash.png" alt="" className="h-9 w-auto" />
-              <div className="text-3xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
-            </div>
+            <div className="text-3xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
             <div className="mt-1 text-[11px] uppercase tracking-[0.3em] text-teal-300/70">
               {edition} · {dayLabel}
             </div>
@@ -349,7 +345,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <div className="min-w-0 flex-1">
             <p className="text-sm italic text-teal-200/60">{dailyQuote(anchor)}</p>
             <p className="mt-2 text-xs text-teal-100/70">
-              <span className="font-semibold uppercase tracking-[0.15em] text-teal-300/70">💡 Did you know?</span>{" "}
+              <span className="font-semibold uppercase tracking-[0.15em] text-teal-300/70">Did you know?</span>{" "}
               {funFact}
             </p>
           </div>
