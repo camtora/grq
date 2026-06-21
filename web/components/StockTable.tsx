@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { money, signedMoney, pct, fmtWhen } from "@/lib/money";
+import { money, pct, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
@@ -146,9 +146,20 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
           }`}
         >
           {r.dayBps !== null ? (
-            <span className="inline-flex items-baseline justify-end gap-1.5">
-              {chgCents !== null && <span className="text-xs opacity-70">{signedMoney(chgCents, r.currency)}</span>}
-              <span>{pct(r.dayBps / 10_000, 2)}</span>
+            // Stacked to match the design: a direction arrow + today's $ change on top,
+            // the percent in parentheses beneath — same font size. The arrow + cell
+            // colour carry the sign, so the $ value is unsigned (Cam 2026-06-19).
+            <span className="flex flex-col items-end leading-tight">
+              <span className="inline-flex items-center gap-1">
+                {f > 0 ? <span aria-hidden>↗</span> : f < 0 ? <span aria-hidden>↘</span> : null}
+                <span>{chgCents !== null ? money(Math.abs(chgCents), r.currency) : pct(f, 2)}</span>
+              </span>
+              {chgCents !== null && (
+                <span>
+                  ({f > 0 ? "+" : ""}
+                  {pct(f, 2)})
+                </span>
+              )}
             </span>
           ) : (
             "—"

@@ -57,7 +57,7 @@ The agent arrives. Scope:
    mapping); sim fund reseeded to a clean $5,000.
 2. **grq-agent container** — same repo, own entrypoint (tsx worker): orchestrator with
    ET market-hours calendar (TSX/NYSE holidays), scheduled sessions (9:00 research,
-   intraday check-ins, 16:15 EOD report, Sunday deep review), trigger evaluation, resting
+   intraday check-ins, 16:15 EOD report, Saturday 09:00 deep review), trigger evaluation, resting
    limit-order sweeper.
 3. **Guardrail validator** — full §6 matrix on top of the engine gate: position caps by risk
    dial, cash floors, universe screens, trade-rate limits, daily-loss pause, drawdown
@@ -67,7 +67,7 @@ The agent arrives. Scope:
 5. **Learning loop** — thesis at entry, retro at exit, lessons injected into context,
    weekly self-review + proposed tweaks, `agentVersion` stamping (git-derived).
 6. **Reports** — EOD (P&L, trades w/ reasoning, fees vs budget, vs-XIC benchmark, tomorrow's
-   watchlist) + Sunday weekly (attribution, lessons, strategy proposals, capital
+   watchlist) + Saturday weekly (attribution, lessons, strategy proposals, capital
    recommendation). Optional Discord webhook.
 7. **Ops** — kill-switch fire drill under agent load; daily NAV snapshot job; alerting on
    agent failure (journal SYSTEM + health endpoint field).
@@ -249,7 +249,7 @@ Tiered instead, same outcome with sane economics:
 | Layer | Coverage | Cadence | Cost |
 |---|---|---|---|
 | Signals + bars + quotes | ALL tracked symbols (ACTIVE + CANDIDATE) | daily (nightly job) | $0, deterministic |
-| **Weekly full refresh** | every tracked symbol gets a fresh deep dossier | Saturdays from 02:00 ET, whole universe overnight — all fresh for Sunday's 10:00 review (replaced 3/day rotation, 2026-06-12) | bounded |
+| **Weekly full refresh** | every tracked symbol gets a fresh deep dossier | Saturdays from 02:00 ET, whole universe overnight — all fresh for the Saturday 09:00 review (replaced 3/day rotation, 2026-06-12) | bounded |
 | Event-triggered dossiers | big movers, signal flips, (later) earnings | as they fire, within the daily budget | bounded |
 | Holdings + watchlist | deep attention | every morning session (already live) | existing |
 | **"Research now" button** | any symbol, on demand | queued `ResearchRequest`, agent picks it up within a tick; **30/day** shared between members (Max 20x); hard safety ceiling 60 dossiers/day all sources | bounded |

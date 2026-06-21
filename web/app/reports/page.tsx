@@ -11,7 +11,7 @@ import PeopleBadges from "@/components/PeopleBadges";
 import { PEOPLE } from "@/lib/people";
 
 // Reports is a hub over every kind of report the fund files: the Daily (morning
-// game plan beside the EOD close), the Sunday Weekly review, Smart-money
+// game plan beside the EOD close), the Saturday Weekly review, Smart-money
 // roundups, Retros (source post-mortems), and Lessons. URL-param tabs keep it SSR.
 const TABS = [
   { key: "daily", label: "Daily" },
@@ -175,7 +175,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       weeklies.length === 0 ? (
         <EmptyState
           title="No weekly reviews yet"
-          body="The Sunday deep review — what worked, the lessons, source grades, and the capital recommendation — lands once a full week is in the books."
+          body="The Saturday deep review — what worked, the lessons, source grades, and the capital recommendation — lands once a full week is in the books."
         />
       ) : (
         <div className="space-y-4">
@@ -314,7 +314,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
     <main>
       <PageHeader
         title="Reports"
-        sub="Every report the fund files — the daily plan & close, the Sunday review, smart-money roundups, post-mortems, and lessons."
+        sub="Every report the fund files — the daily plan & close, the Saturday review, smart-money roundups, post-mortems, and lessons."
         right={
           <PeopleBadges
             people={PEOPLE.map((p) => ({

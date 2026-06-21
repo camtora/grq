@@ -296,6 +296,33 @@ export async function fmpEarnings(symbol: string): Promise<FmpEarnings | null> {
   return { ...pick, upcoming: pick.date >= today };
 }
 
+// Richer earnings for the stock page: BOTH the last reported quarter (actuals vs
+// estimates → beat/miss) AND the next scheduled date. Same endpoint as fmpEarnings,
+// just split into the two halves rather than picking one. Tier 6.
+export type EarningsRow = { date: string; epsEstimated: number | null; epsActual: number | null; revenueEstimated: number | null; revenueActual: number | null };
+export type FmpEarningsReport = { last: EarningsRow | null; next: EarningsRow | null };
+
+export async function fmpEarningsReport(symbol: string): Promise<FmpEarningsReport | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`earnings?symbol=${encodeURIComponent(stripSuffix(symbol))}&limit=8`);
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows: EarningsRow[] = raw
+    .map((r) => ({
+      date: String(r.date ?? ""),
+      epsEstimated: numOrNull(r.epsEstimated),
+      epsActual: numOrNull(r.epsActual),
+      revenueEstimated: numOrNull(r.revenueEstimated),
+      revenueActual: numOrNull(r.revenueActual),
+    }))
+    .filter((r) => r.date);
+  // "Last" = most recent quarter that has actuals filed; "next" = nearest upcoming
+  // date not yet reported. A row reported today lands in "last", not "next".
+  const last = rows.filter((r) => r.epsActual != null || r.revenueActual != null).sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+  const next = rows.filter((r) => r.date >= today && r.epsActual == null && r.revenueActual == null).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
+  if (!last && !next) return null;
+  return { last, next };
+}
+
 // --- Tier 7: per-stock news ---------------------------------------------------
 export type StockNews = { title: string; publisher: string; url: string; at: string; image: string };
 
@@ -325,6 +352,66 @@ export async function fmpGrades(symbol: string): Promise<FmpGrades | null> {
   const total = strongBuy + buy + hold + sell + strongSell;
   if (total === 0) return null;
   return { strongBuy, buy, hold, sell, strongSell, consensus: String(g.consensus ?? ""), total };
+}
+
+// The latest analyst RATING ACTIONS behind the consensus — firm, what they did
+// (upgrade/downgrade/maintain/initiate), and the old→new grade. Fleshes out the
+// ratings panel with named receipts. Keyed to the US/primary listing like the rest
+// of FMP's analyst coverage; date-desc from FMP, sliced to the freshest few.
+export type FmpGradeAction = { date: string; company: string; action: string; fromGrade: string; toGrade: string };
+
+export async function fmpGradeActions(symbol: string, limit = 4): Promise<FmpGradeAction[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`grades?symbol=${encodeURIComponent(stripSuffix(symbol))}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({
+      date: String(r.date ?? "").slice(0, 10),
+      company: String(r.gradingCompany ?? "").trim(),
+      action: String(r.action ?? "").toLowerCase().trim(),
+      fromGrade: String(r.previousGrade ?? "").trim(),
+      toGrade: String(r.newGrade ?? "").trim(),
+    }))
+    .filter((a) => a.date && a.company && a.toGrade)
+    .slice(0, limit);
+}
+
+// Whether the analyst consensus is drifting bull/bear. grades-historical gives
+// monthly buy/hold/sell snapshots; we compare the latest to ~3 months back and net
+// the buy-side vs sell-side moves into a one-line direction. null if too thin.
+export type FmpGradesTrend = { direction: "more bullish" | "more bearish" | "steady"; buyDelta: number; sellDelta: number; months: number };
+
+export async function fmpGradesTrend(symbol: string): Promise<FmpGradesTrend | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`grades-historical?symbol=${encodeURIComponent(stripSuffix(symbol))}&limit=6`);
+  if (!Array.isArray(raw) || raw.length < 2) return null;
+  const n = (v: unknown) => (typeof v === "number" ? v : 0);
+  const bulls = (r: Record<string, unknown>) => n(r.analystRatingsStrongBuy) + n(r.analystRatingsBuy);
+  const bears = (r: Record<string, unknown>) => n(r.analystRatingsSell) + n(r.analystRatingsStrongSell);
+  // FMP returns these date-desc → index 0 is the latest snapshot.
+  const latest = raw[0];
+  const priorIdx = Math.min(3, raw.length - 1);
+  const prior = raw[priorIdx];
+  const buyDelta = bulls(latest) - bulls(prior);
+  const sellDelta = bears(latest) - bears(prior);
+  const net = buyDelta - sellDelta;
+  const direction = net > 0 ? "more bullish" : net < 0 ? "more bearish" : "steady";
+  return { direction, buyDelta, sellDelta, months: priorIdx };
+}
+
+// Whether Wall St.'s PRICE targets are climbing. price-target-summary gives avg
+// targets + counts over rolling windows; we express the move as a currency-invariant
+// % (last quarter vs last year) so it's valid for a CDR/TSX listing too. null if thin.
+export type FmpTargetTrend = { changePct: number; recentCount: number; lastMonthCount: number };
+
+export async function fmpTargetTrend(symbol: string): Promise<FmpTargetTrend | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`price-target-summary?symbol=${encodeURIComponent(stripSuffix(symbol))}`);
+  const s = Array.isArray(raw) ? raw[0] : null;
+  if (!s) return null;
+  const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
+  const recentAvg = num(s.lastQuarterAvgPriceTarget);
+  const yearAvg = num(s.lastYearAvgPriceTarget);
+  const recentCount = num(s.lastQuarterCount);
+  if (recentAvg <= 0 || yearAvg <= 0 || recentCount === 0) return null;
+  return { changePct: (recentAvg - yearAvg) / yearAvg, recentCount, lastMonthCount: num(s.lastMonthCount) };
 }
 
 // --- Live ticker quotes (FMP Ultimate batch-quote-short) ----------------------
@@ -390,6 +477,53 @@ export async function fmpInstitutional(symbol: string): Promise<FmpInstitutional
     }
   }
   return null;
+}
+
+// The actual institutions behind that summary — the top holders of THIS symbol by
+// position size, with the Q/Q change in their stake + how much of the company they
+// own. Same 13F universe (US-listed, ~45-day lag); walks back recent quarters for
+// the freshest filing with holders. Option (put/call) lines are dropped — share
+// ownership only.
+export type FmpHolder = { name: string; ownershipPct: number; sharesChangePct: number; isNew: boolean; marketValueUsd: number };
+
+export async function fmpTopHolders(symbol: string, limit = 5): Promise<FmpHolder[]> {
+  const base = stripSuffix(symbol);
+  const now = new Date();
+  const cands: { year: number; quarter: number }[] = [];
+  let y = now.getUTCFullYear();
+  let q = Math.floor(now.getUTCMonth() / 3) + 1;
+  for (let i = 0; i < 4; i++) {
+    cands.push({ year: y, quarter: q });
+    q -= 1;
+    if (q < 1) { q = 4; y -= 1; }
+  }
+  const results = await Promise.all(
+    cands.map((c) =>
+      fmpGet<Array<Record<string, unknown>>>(
+        `institutional-ownership/extract-analytics/holder?symbol=${encodeURIComponent(base)}&year=${c.year}&quarter=${c.quarter}&page=0&limit=40`,
+      ),
+    ),
+  );
+  const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
+  for (const raw of results) {
+    if (!Array.isArray(raw) || raw.length === 0) continue;
+    const holders = raw
+      .map((r) => ({
+        name: String(r.investorName ?? "").trim(),
+        ownershipPct: num(r.ownership),
+        sharesChangePct: num(r.changeInSharesNumberPercentage),
+        isNew: r.isNew === true,
+        marketValueUsd: num(r.marketValue),
+        shares: num(r.sharesNumber),
+        putCall: String(r.putCallShare ?? "").toLowerCase(),
+      }))
+      .filter((h) => h.name && h.shares > 0 && h.putCall !== "put" && h.putCall !== "call")
+      .sort((a, b) => b.marketValueUsd - a.marketValueUsd)
+      .slice(0, limit)
+      .map(({ name, ownershipPct, sharesChangePct, isNew, marketValueUsd }) => ({ name, ownershipPct, sharesChangePct, isNew, marketValueUsd }));
+    if (holders.length > 0) return holders;
+  }
+  return [];
 }
 
 // --- Smart Money: 13F holdings BY HOLDER (Tier 5) -----------------------------

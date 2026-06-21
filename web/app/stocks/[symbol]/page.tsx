@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { universeEntry } from "@/lib/universe";
+import { universeEntry, bareTicker } from "@/lib/universe";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
 import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
@@ -15,7 +15,7 @@ import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
-import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarnings, fmpStockNews, fmpGrades, fmpInstitutional } from "@/lib/fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpStockNews, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
 import LiveQuote from "@/components/LiveQuote";
@@ -31,6 +31,52 @@ import SignalStrip from "@/components/SignalStrip";
 import Term from "@/components/Term";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
+
+// Honest empty state for a data panel that has no coverage for this name. Every
+// panel renders on every stock page (CA or US, held or not) — when a feed is dark
+// we say so + why, rather than hiding the panel and making pages inconsistent.
+// Compact "today / 3d / 2w / 4mo" relative age from a YYYY-MM-DD date — used for
+// analyst-action timestamps in the ratings panel.
+function agoShort(dateStr: string): string {
+  const t = Date.parse(dateStr);
+  if (isNaN(t)) return "";
+  const days = Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+  if (days < 1) return "today";
+  if (days < 14) return `${days}d`;
+  if (days < 60) return `${Math.round(days / 7)}w`;
+  return `${Math.round(days / 30)}mo`;
+}
+
+// 13F holder names arrive ALL-CAPS ("BLACKROCK, INC.") — title-case them for the
+// panel, but keep the common corporate-form tokens upper (LLC, LP, INC…).
+const HOLDER_UPPER = new Set(["LLC", "LP", "NA", "PLC", "AG", "SA", "NV", "LTD", "INC", "CO", "SE", "LLP"]);
+function prettyHolder(name: string): string {
+  return name
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => {
+      const bare = w.replace(/[.,]/g, "").toUpperCase();
+      if (HOLDER_UPPER.has(bare)) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(" ")
+    .replace(/,\s*$/, "");
+}
+
+// Compact revenue: $111.2B / $940M — for the earnings actual-vs-estimate bullets.
+function fmtRev(v: number): string {
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${Math.round(v).toLocaleString()}`;
+}
+
+function PanelEmpty({ reason }: { reason: string }) {
+  return (
+    <Card className="flex flex-1 items-center p-4 text-sm">
+      <p className="text-teal-200/40">{reason}</p>
+    </Card>
+  );
+}
 
 function SourceChips({ sourcesJson }: { sourcesJson: string | null }) {
   if (!sourcesJson) return null;
@@ -75,7 +121,22 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     // Today) reaches us with a quote + a pending request: render it, don't 404.
     if (pjournal.length === 0 && !pquote && !pendingReq) notFound();
     const lead = pjournal.find((j) => j.kind === "RESEARCH") ?? pjournal[0];
-    const researching = !lead && !!pendingReq;
+    // On-demand dossier (Cam 2026-06-19): the hunt now writes only LEADS, so opening a
+    // find's page is what kicks off its FULL dossier — idempotent (skipped once a full
+    // "Dossier —" exists or research is already in flight). Members only; viewers just
+    // read what's there. Mirrors the precedent of Today auto-queuing mover dossiers.
+    const hasFullDossier = pjournal.some((j) => j.kind === "RESEARCH" && j.title.startsWith("Dossier"));
+    let pending = !!pendingReq;
+    if (isMember && lead && !hasFullDossier && !pending) {
+      try {
+        await prisma.researchRequest.create({ data: { symbol: bareTicker(symbol), requestedBy: me } });
+        pending = true;
+      } catch {
+        /* best-effort — a race just means it's already queued */
+      }
+    }
+    const researching = !lead && pending;
+    const fullDossierPending = !!lead && !hasFullDossier && pending;
     return (
       <main>
         <Link href="/market" className="text-xs text-teal-300 hover:underline">
@@ -86,6 +147,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
           <Chip tone="dim">not tracked</Chip>
           {researching ? <Chip tone="teal">researching…</Chip> : lead ? <Chip tone="teal">agent-flagged</Chip> : null}
+          {fullDossierPending && <Chip tone="teal">full dossier researching…</Chip>}
           {pquote && (
             <span className="ml-auto flex flex-col items-end gap-0.5">
               <LiveQuote
@@ -94,6 +156,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 initialChangePct={(pquote.dayChangeBps ?? 0) / 10_000}
                 className="text-2xl font-semibold text-teal-50"
               />
+              {lead && (
+                <span className="text-[11px] text-teal-200/40" title="When the agent last researched this name">
+                  researched {fmtWhen(lead.at)}
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -106,9 +173,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </>
             ) : (
               <>
-                The agent flagged <b className="text-teal-200">{symbol}</b> — an early-stage idea it can&apos;t add to
+                The agent flagged <b className="text-teal-200">{symbol}</b> — an early-stage lead it can&apos;t add to
                 the universe itself.
-                {isMember ? " Watch it to put it on your watchlist, and the agent will write a full dossier." : ""}
+                {fullDossierPending
+                  ? " A full dossier is being written now — check back in a few minutes."
+                  : hasFullDossier
+                    ? " Its full dossier is ready below."
+                    : ""}
+                {isMember ? " Watch it to put it on your watchlist." : ""}
               </>
             )}
           </p>
@@ -145,7 +217,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, institutional, smartMoney, settings] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -158,10 +230,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       getScoreboard(symbol).catch(() => []),
       fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
-      fmpEnabled() ? fmpEarnings(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpEarningsReport(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpStockNews(entry.yahoo, 5).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpGradeActions(entry.yahoo).catch(() => []) : Promise.resolve([]),
+      fmpEnabled() ? fmpGradesTrend(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpTargetTrend(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpInstitutional(entry.yahoo).catch(() => null) : Promise.resolve(null),
+      fmpEnabled() ? fmpTopHolders(entry.yahoo).catch(() => []) : Promise.resolve([]),
       getSmartMoneyForSymbol(symbol).catch(() => null),
       prisma.settings.findUnique({ where: { id: 1 } }),
     ]);
@@ -171,6 +247,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
+  // When the agent last researched this name (latest dossier / research entry) — shown
+  // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
+  const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
   const dayBps = quote?.dayChangeBps ?? 0;
 
   // The at-a-glance verdict + the agent's expected return (latest dossier target).
@@ -198,7 +277,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const coverage: Cov[] = [
     { tier: 1, name: "Price/vol", status: closes.length > 1 ? "live" : "partial", detail: `${closes.length} sessions of OHLCV → signals` },
     { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
-    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? `${earnings.upcoming ? "next" : "last"} ${earnings.date}` : "no FMP coverage for this name" },
+    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : "no FMP coverage for this name" },
     { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
     { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
     {
@@ -264,6 +343,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               className="text-2xl font-semibold text-teal-50"
               live
             />
+            <span className="text-[11px] text-teal-200/40" title="When the agent last researched this name">
+              {lastResearched ? `researched ${fmtWhen(lastResearched)}` : "not yet researched"}
+            </span>
           </span>
         )}
       </div>
@@ -476,70 +558,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
-      {/* Key data panels — institutional · scoreboard · earnings · analyst, equal
-          height. Surfaced above the peer/valuation table (Cam 2026-06-18). */}
-      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {institutional && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
-            </h2>
-            <Card className="p-4 text-sm flex-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
-                <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {institutional.investorsHoldingChange >= 0 ? "+" : ""}
-                  {institutional.investorsHoldingChange} QoQ
-                </span>
-              </div>
-              <p className="mt-2 text-[11px] text-teal-200/40">
-                From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
-              </p>
-            </Card>
-          </div>
-        )}
-
+      {/* Key data panels — analyst ratings · price targets · institutional · signals ·
+          earnings, equal height, 5-wide. Ratings + targets are split into their own panels
+          and lead on the left; signals rides this row while the scoreboard sits beside the
+          peer/valuation table below (Cam 2026-06-19). */}
+      <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
-          <Scoreboard
-            rows={symbolScores}
-            title=""
-            emptyText="No graded calls on this name yet — retros fill this in."
-            className="flex-1"
-          />
-        </div>
-
-        {earnings && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
-            </h2>
-            <Card className="p-4 text-sm flex-1">
-              <div className="flex items-baseline justify-between">
-                <span className="text-teal-100/80">{earnings.upcoming ? "Next report" : "Last report"}</span>
-                <span className="font-semibold tabular-nums text-teal-50">{earnings.date}</span>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-teal-200/50">
-                {earnings.epsEstimated != null && (
-                  <span>
-                    EPS est <b className="text-teal-100/80">{earnings.epsEstimated.toFixed(2)}</b>
-                    {earnings.epsActual != null ? ` · act ${earnings.epsActual.toFixed(2)}` : ""}
-                  </span>
-                )}
-                {earnings.revenueEstimated != null && (
-                  <span>
-                    Rev est <b className="text-teal-100/80">${(earnings.revenueEstimated / 1e9).toFixed(2)}B</b>
-                  </span>
-                )}
-              </div>
-              <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
-            </Card>
-          </div>
-        )}
-
-        {grades && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+          {grades ? (
             <Card className="p-4 text-sm flex-1">
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="font-bold text-teal-100/90">{grades.consensus}</span>
@@ -556,84 +582,350 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 <span>hold {grades.hold}</span>
                 <span className="text-emerald-400/80">buy {grades.strongBuy + grades.buy}</span>
               </div>
-              {analyst && (
-                <div className="mt-3 border-t border-teal-400/10 pt-2">
+              {/* Direction: is the consensus drifting bull/bear vs ~3mo ago? (D-analyst). */}
+              {gradesTrend && (gradesTrend.buyDelta !== 0 || gradesTrend.sellDelta !== 0) && (() => {
+                const arrow = gradesTrend.direction === "more bullish" ? "▲" : gradesTrend.direction === "more bearish" ? "▼" : "→";
+                const cls =
+                  gradesTrend.direction === "more bullish"
+                    ? "text-emerald-400/80"
+                    : gradesTrend.direction === "more bearish"
+                      ? "text-red-400/80"
+                      : "text-teal-200/50";
+                const parts = [
+                  gradesTrend.buyDelta !== 0 ? `${gradesTrend.buyDelta > 0 ? "+" : "−"}${Math.abs(gradesTrend.buyDelta)} buy` : null,
+                  gradesTrend.sellDelta !== 0 ? `${gradesTrend.sellDelta > 0 ? "+" : "−"}${Math.abs(gradesTrend.sellDelta)} sell` : null,
+                ].filter(Boolean);
+                return (
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-teal-400/10 pt-2 text-[11px]">
+                    <span className={cls}>{arrow} {gradesTrend.direction}</span>
+                    <span className="text-teal-200/40">{parts.join(" · ")} vs {gradesTrend.months}mo ago</span>
+                  </div>
+                );
+              })()}
+              {/* Recent moves: the named actions behind the consensus — the receipts. */}
+              {gradeActions.length > 0 && (
+                <div className="mt-2 border-t border-teal-400/10 pt-2">
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/40">Recent moves</div>
+                  <ul className="space-y-1">
+                    {gradeActions.map((a, i) => {
+                      const tone = a.action === "upgrade" ? "text-emerald-400/80" : a.action === "downgrade" ? "text-red-400/80" : "text-teal-200/55";
+                      const mark = a.action === "upgrade" ? "↑" : a.action === "downgrade" ? "↓" : a.action === "initiate" ? "✦" : "·";
+                      return (
+                        <li key={i} className="flex items-baseline justify-between gap-2 text-[11px]">
+                          <span className="truncate text-teal-100/80" title={a.company}>{a.company}</span>
+                          <span className="flex shrink-0 items-baseline gap-1.5">
+                            <span className={tone} title={a.fromGrade && a.fromGrade !== a.toGrade ? `${a.fromGrade} → ${a.toGrade}` : a.action}>
+                              {mark} {a.toGrade}
+                            </span>
+                            <span className="tabular-nums text-teal-200/35">{agoShort(a.date)}</span>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <PanelEmpty
+              reason={
+                cadListing
+                  ? "No analyst-rating breakdown from FMP for this TSX listing yet."
+                  : "No analyst ratings on record for this name yet."
+              }
+            />
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            <Term k="analyst-target">Price targets</Term> <span className="normal-case text-teal-200/40">· Tier 2</span>
+          </h2>
+          {analyst ? (
+            (() => {
+              // The analyst feed keys off the BARE ticker, so for a CDR or cross-listing it
+              // returns the US underlying's targets in USD (AAPL ~$240) — nonsense beside this
+              // page's CAD price (the Apple CDR trades ~$30 CAD). The upside % is scale-invariant
+              // (the predicted MOVE), so when the analyst currency differs from this listing's we
+              // re-anchor every target to the page's own live price + currency. US-on-US pages are
+              // unchanged (Cam 2026-06-19).
+              const pageCur = entry.currency ?? (cadListing ? "CAD" : "USD");
+              const reanchor = cur != null && analyst.currency.toUpperCase() !== pageCur.toUpperCase();
+              const usNow = analyst.upsidePct !== -1 ? analyst.consensusCents / (1 + analyst.upsidePct) : analyst.consensusCents;
+              const anchor = reanchor ? (cur as number) : usNow;
+              const dispCur = reanchor ? pageCur : analyst.currency;
+              const sc = (v: number) => (usNow > 0 ? Math.round((anchor * v) / usNow) : v);
+              const con = sc(analyst.consensusCents);
+              const lo = sc(analyst.lowCents);
+              const hi = sc(analyst.highCents);
+              const now = Math.round(anchor);
+              return (
+                <Card className="p-4 text-sm flex-1">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[11px] uppercase tracking-wider text-teal-200/50">
-                      <Term k="analyst-target">Price target</Term>
-                    </span>
-                    <span className="text-xs">
-                      <span className="font-semibold tabular-nums text-teal-50">{money(analyst.consensusCents, analyst.currency)}</span>
-                      <span className={`ml-1.5 ${analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {analyst.upsidePct > 0 ? "+" : ""}
-                        {pct(analyst.upsidePct, 0)}
-                      </span>
+                    <span className="text-[11px] uppercase tracking-wider text-teal-200/50">Consensus</span>
+                    <span className="text-[11px] text-teal-200/40">
+                      {reanchor ? "US analysts" : analyst.currency !== "CAD" ? "US listing" : "Wall St."}
                     </span>
                   </div>
-                  {analyst.lowCents > 0 && analyst.highCents > analyst.lowCents ? (
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="text-base font-semibold tabular-nums text-teal-50">{money(con, dispCur)}</span>
+                    <span className={`text-sm font-semibold ${analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {analyst.upsidePct > 0 ? "+" : ""}
+                      {pct(analyst.upsidePct, 0)}
+                    </span>
+                  </div>
+                  {lo > 0 && hi > lo ? (
                     (() => {
-                      // "Now" is implied by consensus + upside, so it shares the analyst's
-                      // currency (matters when a CA name's targets are the US listing's). The
-                      // band spans low→high; the domain also stretches to fit "now" if it sits
-                      // outside the band (e.g. trading below every target). Small pad so the
-                      // end markers aren't clipped at the edges.
-                      const now = analyst.upsidePct !== -1 ? Math.round(analyst.consensusCents / (1 + analyst.upsidePct)) : analyst.consensusCents;
-                      const lo = analyst.lowCents;
-                      const hi = analyst.highCents;
-                      const con = analyst.consensusCents;
+                      // The band spans low→high; the domain stretches to fit "now" if it sits
+                      // outside the band (e.g. trading below every target). Small pad so the end
+                      // markers aren't clipped at the edges.
                       const pad = Math.round((Math.max(hi, now) - Math.min(lo, now)) * 0.06) || 1;
                       const dMin = Math.min(lo, now) - pad;
                       const dMax = Math.max(hi, now) + pad;
                       const pos = (v: number) => ((v - dMin) / (dMax - dMin)) * 100;
                       return (
                         <>
-                          <div className="relative mt-3 h-1.5 rounded-full bg-teal-400/[0.07]">
+                          <div className="relative mt-4 h-2 rounded-full bg-teal-400/[0.07]">
                             <div
                               className="absolute inset-y-0 rounded-full bg-teal-400/20"
                               style={{ left: `${pos(lo).toFixed(1)}%`, right: `${(100 - pos(hi)).toFixed(1)}%` }}
                             />
                             <div
-                              className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-teal-300"
+                              className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-teal-300"
                               style={{ left: `${pos(con).toFixed(1)}%` }}
-                              title={`consensus ${money(con, analyst.currency)}`}
+                              title={`consensus ${money(con, dispCur)}`}
                             />
                             <div
-                              className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--card-bg)] bg-teal-50"
+                              className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--card-bg)] bg-teal-50"
                               style={{ left: `${pos(now).toFixed(1)}%` }}
-                              title={`now ${money(now, analyst.currency)}`}
+                              title={`now ${money(now, dispCur)}`}
                             />
                           </div>
-                          <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-teal-200/40">
-                            <span>low {money(lo, analyst.currency)}</span>
-                            <span>high {money(hi, analyst.currency)}</span>
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] tabular-nums text-teal-200/45">
-                            <span className="inline-flex items-center gap-1">
-                              <span className="inline-block h-2 w-2 rounded-full bg-teal-50" /> now {money(now, analyst.currency)}
+                          {/* Endpoints under the band — low red, high green, sized up so the
+                              dollar figures read at a glance (Cam 2026-06-21). */}
+                          <div className="mt-2 flex justify-between tabular-nums">
+                            <span className="flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-teal-200/40">low</span>
+                              <span className="text-base font-semibold text-red-400">{money(lo, dispCur)}</span>
                             </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span className="inline-block h-1.5 w-1.5 rotate-45 bg-teal-300" /> consensus {money(con, analyst.currency)}
+                            <span className="flex flex-col items-end">
+                              <span className="text-[10px] uppercase tracking-wider text-teal-200/40">high</span>
+                              <span className="text-base font-semibold text-emerald-400">{money(hi, dispCur)}</span>
+                            </span>
+                          </div>
+                          {/* The live price re-listed beside consensus; consensus is green when it
+                              sits above the current price, red below — an instant read of the gap. */}
+                          <div className="mt-3 flex items-center justify-between gap-2 tabular-nums">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="inline-block h-2 w-2 rounded-full bg-teal-50" />
+                              <span className="text-[10px] uppercase tracking-wider text-teal-200/40">now</span>
+                              <span className="text-sm font-semibold text-teal-50">{money(now, dispCur)}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="inline-block h-1.5 w-1.5 rotate-45 bg-teal-300" />
+                              <span className="text-[10px] uppercase tracking-wider text-teal-200/40">consensus</span>
+                              <span className={`text-sm font-semibold ${con > now ? "text-emerald-400" : con < now ? "text-red-400" : "text-teal-50"}`}>
+                                {money(con, dispCur)}
+                              </span>
                             </span>
                           </div>
                         </>
                       );
                     })()
-                  ) : analyst.lowCents > 0 || analyst.highCents > 0 ? (
-                    <div className="mt-0.5 text-[10px] text-teal-200/40">
-                      range {money(analyst.lowCents, analyst.currency)} – {money(analyst.highCents, analyst.currency)}
+                  ) : lo > 0 || hi > 0 ? (
+                    <div className="mt-2 flex items-center gap-2 tabular-nums">
+                      <span className="text-[10px] uppercase tracking-wider text-teal-200/40">range</span>
+                      <span className="text-base font-semibold text-red-400">{money(lo, dispCur)}</span>
+                      <span className="text-teal-200/40">–</span>
+                      <span className="text-base font-semibold text-emerald-400">{money(hi, dispCur)}</span>
                     </div>
                   ) : null}
+                  {/* Momentum: are targets climbing? % is currency-invariant (last quarter
+                      vs last year), so it's valid for this listing even when re-anchored. */}
+                  {targetTrend && targetTrend.changePct !== 0 && (
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-teal-400/10 pt-2 text-[11px]">
+                      <span className={targetTrend.changePct > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
+                        {targetTrend.changePct > 0 ? "▲ targets rising +" : "▼ targets falling "}
+                        {pct(targetTrend.changePct, 0)}
+                      </span>
+                      <span className="text-teal-200/40">
+                        {targetTrend.recentCount} analyst{targetTrend.recentCount === 1 ? "" : "s"} · 3mo
+                      </span>
+                    </div>
+                  )}
+                  {reanchor && (
+                    <p className="mt-2 text-[11px] text-teal-200/40">
+                      US analyst targets, rescaled from the US-listed shares to this {cadListing ? "Canadian " : ""}listing&apos;s price.
+                    </p>
+                  )}
+                </Card>
+              );
+            })()
+          ) : (
+            <PanelEmpty
+              reason={
+                cadListing
+                  ? "No analyst price targets from FMP for this TSX listing yet."
+                  : "No analyst price targets on record for this name yet."
+              }
+            />
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+          </h2>
+          {institutional ? (
+            <Card className="p-4 text-sm flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-teal-100/80">{institutional.investorsHolding.toLocaleString()} institutions hold</span>
+                <span className={`text-xs font-semibold ${institutional.investorsHoldingChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {institutional.investorsHoldingChange >= 0 ? "+" : ""}
+                  {institutional.investorsHoldingChange}{" "}
+                  <Term k="qoq" align="right">QoQ</Term>
+                </span>
+              </div>
+              {/* The names behind the count — top holders by position size, with the Q/Q
+                  change in their stake + the % of the company they own (Cam 2026-06-21). */}
+              {holders.length > 0 && (
+                <ul className="mt-3 space-y-1 border-t border-teal-400/10 pt-2">
+                  {holders.map((h, i) => (
+                    <li key={i} className="flex items-baseline justify-between gap-2 text-[11px]">
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <span className="truncate text-teal-100/80" title={prettyHolder(h.name)}>{prettyHolder(h.name)}</span>
+                        {h.isNew && <span className="shrink-0 rounded-sm bg-emerald-400/15 px-1 text-[9px] font-semibold uppercase text-emerald-300/90">new</span>}
+                      </span>
+                      <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+                        <span className="text-teal-200/50">{h.ownershipPct.toFixed(1)}% own</span>
+                        {Math.abs(h.sharesChangePct) >= 0.05 && (
+                          <span className={h.sharesChangePct > 0 ? "text-emerald-400/80" : "text-red-400/80"}>
+                            {h.sharesChangePct > 0 ? "▲" : "▼"} {Math.abs(h.sharesChangePct).toFixed(1)}%
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 text-[11px] text-teal-200/40">
+                From 13F filings (as of {institutional.date}) — US-listed holdings; smart-money colour, ~45-day lag, not timing.
+              </p>
+            </Card>
+          ) : (
+            <PanelEmpty
+              reason={
+                cadListing
+                  ? "No 13F data — 13F filings cover US-listed securities only, so a pure-TSX listing like this one doesn't appear."
+                  : "No institutional (13F) holdings on record for this name yet."
+              }
+            />
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Signals <span className="normal-case text-teal-200/40">· v1</span>
+          </h2>
+          <Card className="p-4 text-sm flex-1">
+            {!signals ? (
+              <p className="text-teal-200/40">Insufficient bar history yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {signals.families.map((f) => (
+                  <li key={f.family} className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
+                        {f.family}
+                      </Term>
+                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
+                      <span className="ml-auto text-[11px] tabular-nums text-teal-200/40">{f.confidence}%</span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-teal-200/50">{f.rationale}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+          </h2>
+          {earnings ? (
+            <Card className="p-4 text-sm flex-1">
+              {/* Next scheduled date (with the consensus estimate it'll be judged against). */}
+              {earnings.next && (
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-teal-100/80">Next report</span>
+                    <span className="font-semibold tabular-nums text-teal-50">{earnings.next.date}</span>
+                  </div>
+                  {(earnings.next.epsEstimated != null || earnings.next.revenueEstimated != null) && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-teal-200/45">
+                      {earnings.next.epsEstimated != null && <span>est EPS {earnings.next.epsEstimated.toFixed(2)}</span>}
+                      {earnings.next.revenueEstimated != null && <span>est Rev {fmtRev(earnings.next.revenueEstimated)}</span>}
+                    </div>
+                  )}
                 </div>
               )}
+              {/* Last reported quarter, as bullets: actual vs estimate → beat/miss. */}
+              {earnings.last && (() => {
+                const e = earnings.last;
+                const tag = (act: number, est: number | null) => {
+                  if (est == null) return null;
+                  const beat = act > est, miss = act < est;
+                  return <span className={beat ? "text-emerald-400/80" : miss ? "text-red-400/80" : "text-teal-200/50"}>{beat ? "▲ beat" : miss ? "▼ miss" : "in line"}</span>;
+                };
+                return (
+                  <div className={earnings.next ? "mt-3 border-t border-teal-400/10 pt-2" : ""}>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-teal-100/80">Last report</span>
+                      <span className="text-xs tabular-nums text-teal-200/50">{e.date}</span>
+                    </div>
+                    <ul className="mt-1.5 space-y-1 text-[11px]">
+                      {e.epsActual != null && (
+                        <li className="flex items-baseline justify-between gap-2">
+                          <span className="text-teal-200/55">
+                            EPS <b className="font-semibold tabular-nums text-teal-100/85">{e.epsActual.toFixed(2)}</b>
+                            {e.epsEstimated != null && <span className="text-teal-200/40"> vs {e.epsEstimated.toFixed(2)} est</span>}
+                          </span>
+                          {tag(e.epsActual, e.epsEstimated)}
+                        </li>
+                      )}
+                      {e.revenueActual != null && (
+                        <li className="flex items-baseline justify-between gap-2">
+                          <span className="text-teal-200/55">
+                            Rev <b className="font-semibold tabular-nums text-teal-100/85">{fmtRev(e.revenueActual)}</b>
+                            {e.revenueEstimated != null && <span className="text-teal-200/40"> vs {fmtRev(e.revenueEstimated)} est</span>}
+                          </span>
+                          {tag(e.revenueActual, e.revenueEstimated)}
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                );
+              })()}
+              <p className="mt-2 text-[11px] text-teal-200/40">Stocks often move more on guidance than the number itself.</p>
             </Card>
-          </div>
-        )}
+          ) : (
+            <PanelEmpty
+              reason={
+                cadListing
+                  ? "No earnings-calendar coverage from FMP for this TSX listing yet."
+                  : "No earnings-calendar coverage from FMP for this name yet."
+              }
+            />
+          )}
+        </div>
       </section>
 
       <section className="mb-6 grid items-start gap-6 lg:grid-cols-3">
-        {peers.length > 1 && (
-        <Card className="p-5 lg:col-span-2">
-          <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Valuation vs peers</div>
+        <div className="space-y-2 lg:col-span-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Valuation vs peers</h2>
+          <Card className="p-5">
+          {peers.length > 1 ? (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
@@ -666,38 +958,26 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               })}
             </tbody>
           </table>
+          ) : (
+            <p className="text-sm text-teal-200/40">
+              No peer comparison available — FMP didn&apos;t return a peer set for this name
+              {cadListing ? " (peer + ratio coverage is thin for pure-TSX listings)" : ""}.
+            </p>
+          )}
           <p className="mt-2 text-[11px] text-teal-200/40">
-            {selfPeer?.peTtm != null && avgPeerPe != null
+            {peers.length > 1 && selfPeer?.peTtm != null && avgPeerPe != null
               ? `At ${selfPeer.peTtm.toFixed(1)}× earnings, ${symbol} trades ${selfPeer.peTtm < avgPeerPe ? "cheaper than" : "richer than"} its peers' average of ${avgPeerPe.toFixed(1)}×. Cheap can mean value — or trouble.`
               : "P/E and P/B against the company's closest peers (FMP)."}
           </p>
-        </Card>
-        )}
-        <div className={`space-y-2 ${peers.length > 1 ? "" : "lg:col-span-3"}`}>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Signals <span className="normal-case text-teal-200/40">(v1 · on scoreboard probation)</span>
-          </h2>
-          <Card className="p-4">
-            {!signals ? (
-              <p className="text-sm text-teal-200/40">Insufficient bar history yet.</p>
-            ) : (
-              <ul className="space-y-2.5">
-                {signals.families.map((f) => (
-                  <li key={f.family} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <Term k={f.family} className="font-semibold uppercase text-teal-100/80">
-                        {f.family}
-                      </Term>
-                      <Chip tone={SIG_TONE[f.signal]}>{f.signal}</Chip>
-                      <span className="ml-auto text-xs tabular-nums text-teal-200/40">{f.confidence}%</span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-teal-200/50">{f.rationale}</div>
-                  </li>
-                ))}
-                <li className="pt-1 text-[10px] uppercase tracking-wider text-teal-200/30">as of {signals.asOf}</li>
-              </ul>
-            )}
           </Card>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
+          <Scoreboard
+            rows={symbolScores}
+            title=""
+            emptyText="No graded calls on this name yet — retros fill this in."
+          />
         </div>
       </section>
 
@@ -778,22 +1058,27 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             )}
           </Card>
 
-          {news.length > 0 && (
-            <>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-                Recent news <span className="normal-case text-teal-200/40">· Tier 7</span>
-              </h2>
-              <Card className="divide-y divide-[color:var(--card-border)]">
-                {news.map((n, i) => (
-                  <a key={i} href={n.url} target="_blank" rel="noreferrer" className="block px-4 py-2.5 hover:bg-teal-400/[0.04]">
-                    <div className="text-sm text-teal-100/80">{n.title}</div>
-                    <div className="mt-0.5 text-[11px] text-teal-200/40">
-                      {n.publisher} · {n.at}
-                    </div>
-                  </a>
-                ))}
-              </Card>
-            </>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            Recent news <span className="normal-case text-teal-200/40">· Tier 7</span>
+          </h2>
+          {news.length > 0 ? (
+            <Card className="divide-y divide-[color:var(--card-border)]">
+              {news.map((n, i) => (
+                <a key={i} href={n.url} target="_blank" rel="noreferrer" className="block px-4 py-2.5 hover:bg-teal-400/[0.04]">
+                  <div className="text-sm text-teal-100/80">{n.title}</div>
+                  <div className="mt-0.5 text-[11px] text-teal-200/40">
+                    {n.publisher} · {n.at}
+                  </div>
+                </a>
+              ))}
+            </Card>
+          ) : (
+            <Card className="p-4 text-sm">
+              <p className="text-teal-200/40">
+                No recent headlines from FMP for this name
+                {cadListing ? " — news coverage is thinner for TSX-only listings" : ""}.
+              </p>
+            </Card>
           )}
 
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Data coverage</h2>

@@ -73,7 +73,7 @@ export default async function Universe() {
   const dossiers = await prisma.journalEntry.findMany({
     where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: allSyms } },
     orderBy: { at: "desc" },
-    select: { symbol: true, bottomLine: true, confidence: true, targetNearCents: true, targetNearDays: true, targetFarCents: true },
+    select: { symbol: true, bottomLine: true, confidence: true, targetNearCents: true, targetNearDays: true, targetFarCents: true, at: true },
   });
   const dossierBy = new Map<string, (typeof dossiers)[number]>();
   for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
@@ -128,7 +128,10 @@ export default async function Universe() {
       held: p ? { qty: p.qty } : null,
       mvCents: p && q ? p.qty * q.midCents : 0,
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
-      lastResearchedAt: researchedBy.get(u.symbol) ?? null,
+      // Prefer a completed research request; fall back to the dossier's own timestamp
+      // so a name researched without a tracked request (older dossiers, hunt finds)
+      // still shows when it was last looked at, not "—" (Cam 2026-06-19).
+      lastResearchedAt: researchedBy.get(u.symbol) ?? doss?.at ?? null,
       manageStatus: "ACTIVE",
       promotionRequestedBy: null,
       proposedTier: null,

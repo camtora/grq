@@ -195,6 +195,12 @@ export default async function SmartMoney() {
       <p className="mt-4 text-xs text-teal-200/40">
         GRQ surfaces what smart money is doing as one input — it does not copy these trades. Most are US-listed and outside our
         guardrailed CAD universe; where one overlaps a name we track, we flag it.
+        {" "}
+        <span className="text-teal-200/30">
+          Schedule: the congress and insider feeds refresh daily and fund 13Fs whenever a new one is filed (these lag
+          ~45 days by law); GRQ&apos;s own written read — the &ldquo;GRQ&apos;s read&rdquo; panel above — is a weekly
+          scan, posted early each week on the first market day, around 11:00&nbsp;AM ET.
+        </span>
       </p>
     </main>
   );

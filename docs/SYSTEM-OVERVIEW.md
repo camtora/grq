@@ -133,7 +133,7 @@ between Claude sessions; LLM is only invoked at decision points.
 Scheduled sessions (maybeScheduledSessions):
   09:00 ET, market days   → runMorningResearch()     [Opus 4.8, withTools, 40 turns]
   16:15 ET, market days   → runEodReport()            [Opus 4.8, no tools, 4 turns]
-  Sunday 10:00 ET         → runWeeklyReview()         [Opus 4.8, withTools, 30 turns]
+  Saturday 09:00 ET       → runWeeklyReview()         [Opus 4.8, withTools, 30 turns]
 
 Learning loop (D13 — first-class requirement):
   1. thesis at entry → DECISION journal (cite sources, target, stop, horizon, confidence)

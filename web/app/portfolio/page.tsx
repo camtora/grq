@@ -33,7 +33,7 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod] = await Promise.all([
+  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod, weekly] = await Promise.all([
     getSession(),
     getPortfolio(),
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
@@ -52,17 +52,22 @@ export default async function Portfolio() {
       orderBy: { at: "desc" },
     }),
     prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
+    // The Saturday 09:00 weekly review takes the briefing slot all weekend until
+    // Monday's game plan (a newer brief) supersedes it (Cam 2026-06-21).
+    prisma.report.findFirst({ where: { kind: "WEEKLY" }, orderBy: { createdAt: "desc" } }),
   ]);
   const name = session?.user?.name ?? "friend";
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
   // the last — morning game plan → midday brief → EOD close → next morning. Show
   // only the single newest so a stale prior-day brief never lingers (Cam 2026-06-17).
+  const dayHref = (at: Date) => `/reports/day/${etDateStr(at)}`;
   const briefs = [
-    latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson },
-    midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson },
-    checkin && { kicker: "Intraday Check-in · the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson },
-    latestEod && { kicker: "Evening Brief · the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null },
+    latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson, href: dayHref(latestPlan.at), cta: "View full day" },
+    midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson, href: dayHref(midday.at), cta: "View full day" },
+    checkin && { kicker: "Intraday Check-in · the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson, href: dayHref(checkin.at), cta: "View full day" },
+    latestEod && { kicker: "Evening Brief · the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null, href: dayHref(latestEod.createdAt), cta: "View full day" },
+    weekly && { kicker: "Weekly Review · the week in receipts", title: weekly.title, body: weekly.body, at: weekly.createdAt, sourcesJson: null as string | null, href: `/reports/${weekly.id}`, cta: "View full review" },
   ].filter((b): b is NonNullable<typeof b> => Boolean(b));
   const latestBrief = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
@@ -211,8 +216,8 @@ export default async function Portfolio() {
                 <Sources sourcesJson={latestBrief.sourcesJson} />
               </CollapsibleMd>
               <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
-                <Link href={`/reports/day/${etDateStr(latestBrief.at)}`} className="text-xs font-semibold text-teal-300 hover:underline">
-                  View full day →
+                <Link href={latestBrief.href} className="text-xs font-semibold text-teal-300 hover:underline">
+                  {latestBrief.cta} →
                 </Link>
               </div>
             </Card>

@@ -35,7 +35,7 @@ export const CANDIDATE_CAP = 200;
 // (ON_DEMAND_RESEARCH_PER_DAY removed 2026-06-15 — Cam lifted the on-demand cap;
 // research is unlimited. The weekly-refresh size is the only remaining bound.)
 // Full-universe dossier refresh runs weekly: Saturday from 02:00 ET, so every
-// name is fresh before Sunday's 10:00 weekly review.
+// name is fresh before the Saturday 09:00 weekly review (~7h later).
 export const WEEKLY_REFRESH_WEEKDAY = 6; // Saturday
 export const WEEKLY_REFRESH_START_MIN = 2 * 60; // 02:00 ET
 // (RESEARCH_DAILY_CEILING removed 2026-06-13 — Cam lifted the daily cap; the

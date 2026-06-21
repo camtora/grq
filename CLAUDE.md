@@ -31,9 +31,11 @@ dossier's plain-English *why* (`bottomLine`) + targets, **+ lazily-loaded earnin
 a client wrapper so `StockTable` stays server). Universe has a **Demoted** shelf; **"Research now" lives only on the stock page** (off the
 list tables — `UniverseActions hideResearch`). **The Hunt** (was Discover; D30) = the hunt (8–12 names · **↻ refresh** via
 `AgentState.huntRequestedAt` · **✕ dismiss**→RETIRED); hunt cards are **leads, not verdicts**
-(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **Every hunt find gets a full
-dossier queued** (`lib/hunt.ts` `queueHuntDossier`, `requestedBy:"hunt"`) so the stock page is researched and
-ready when you click it — but it is **NOT added to the Watchlist** (watching a find is what tracks it); D30.
+(`IdeaCard discovery` — lead with 12-mo upside + conviction, no Buy/Hold/Sell). **D46 (2026-06-19): the hunt
+writes only LEADS now — the full dossier is NOT auto-queued for every find.** It's kicked **on demand** when a
+member opens the find's stock page (the not-in-universe branch auto-creates the `researchRequest`, idempotently)
+or clicks **Research** on Browse — saving ~8–12 redundant Opus passes per hunt. A find is still **NOT added to the
+Watchlist** (watching a find is what tracks it); D30/D46.
 **D38 — the hunt is now two-way:** a member can **brief** it in plain English (`HuntBar` → `/api/hunt/refresh`
 `{brief}` → `AgentState.huntBrief` → `runDiscoveryHunt(brief)` FOCUS block); the **🎯 Directed hunt** banner
 shows the active brief (a blank ↻ refresh / the daily 10:00 hunt goes broad again). Reach is **North America

@@ -419,12 +419,14 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // Sunday 10:00+ weekly review
-  if (p.weekday === 0 && m >= 10 * 60) {
-    const recent = await prisma.report.count({
-      where: { kind: "WEEKLY", createdAt: { gte: new Date(Date.now() - 6 * 24 * 60 * 60_000) } },
-    });
-    if (recent === 0) {
+  // Saturday 09:00+ weekly review (Cam 2026-06-21, was Sunday 10:00). It takes the
+  // portfolio page's briefing slot and stays there all weekend until Monday's 9:00
+  // game plan supersedes it. The Saturday 02:00 weekly-refresh has ~7h to finish
+  // fresh dossiers first. Dedupe on a WEEKLY already dated today (mirrors the EOD
+  // guard above) — a 6-day window would block the first Sat run after the Sun→Sat move.
+  if (p.weekday === 6 && m >= 9 * 60) {
+    const existing = await prisma.report.count({ where: { date: dayStart, kind: "WEEKLY" } });
+    if (existing === 0) {
       sessionRunning = true;
       try {
         await runWeeklyReview();
@@ -512,7 +514,7 @@ async function tick() {
 }
 
 // Weekly full-universe dossier refresh: Saturday from 02:00 ET, every tracked
-// symbol gets re-researched overnight — all fresh for Sunday's 10:00 review.
+// symbol gets re-researched overnight — all fresh for the Saturday 09:00 review (~7h later).
 async function maybeWeeklyRefreshEnqueue() {
   const p = etParts();
   if (p.weekday !== WEEKLY_REFRESH_WEEKDAY || p.minutesSinceMidnight < WEEKLY_REFRESH_START_MIN) return;
@@ -533,8 +535,8 @@ async function maybeWeeklyRefreshEnqueue() {
     await prisma.researchRequest.create({ data: { symbol: s, requestedBy: "weekly-refresh" } });
     queued++;
   }
-  console.log(`[weekly-refresh] queued ${queued} dossiers for the Sunday review`);
-  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before Sunday's review.");
+  console.log(`[weekly-refresh] queued ${queued} dossiers for the Saturday review`);
+  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before the Saturday review.");
 }
 
 // Work the research queue one dossier at a time. Uncapped (Cam removed the daily

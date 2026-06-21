@@ -17,7 +17,7 @@ they meet in the database (orders, journal, reports, settings).
   holidays — implement as a static table per year + weekend rule; refuse to trade outside
   9:30–16:00 ET; restrict first/last 15 minutes (open/close noise) for new entries.
 - **Schedule:** 9:00 pre-market research session · intraday check-ins every 30 min during
-  market hours · 16:15 EOD report · Sunday 10:00 weekly deep review.
+  market hours · 16:15 EOD report · Saturday 09:00 weekly deep review.
 - **Tick loop (1–5 min during market hours):** refresh quotes for holdings + watchlist →
   sweep resting PENDING limit orders against fresh quotes (the engine gap noted in
   SIM-ENGINE.md) → write intraday NAV snapshot (throttled, e.g. every 30 min) → evaluate
@@ -141,7 +141,7 @@ Risk-dial parameter table lives in code as config (`agent/policy.ts`), displayed
    itself (Cam, 2026-06-11: "document what sources lead to a decision as part of the retro").
 3. **Lessons** (journal `LESSON`): durable patterns distilled during weekly review;
    the latest N lessons are injected into every decision session's context.
-4. **Weekly self-review** (Sunday): attribution, open-thesis grades, proposed strategy
+4. **Weekly self-review** (Saturday 09:00): attribution, open-thesis grades, proposed strategy
    tweaks → humans approve at the tune-up while in soak; `agentVersion` (git describe)
    stamped on every entry so version-over-version performance is measurable.
 5. Hard limits are not in scope for self-modification. Ever. (D11)
@@ -154,7 +154,7 @@ Risk-dial parameter table lives in code as config (`agent/policy.ts`), displayed
 contribution), tomorrow's watchlist, any guardrail events. statsJson keys:
 `{day_pnl, nav, fees_mtd, vs_xic_bps, trades, rejections}`.
 
-**Weekly (Sunday):** performance attribution, lessons added, strategy proposals,
+**Weekly (Saturday 09:00):** performance attribution, lessons added, strategy proposals,
 soak-week cleanliness verdict (clean / incident + why), and the **capital recommendation**
 (contribute / hold / withdraw) with the honest framing (more capital amortizes overhead,
 doesn't raise ROI %) — advisory only.

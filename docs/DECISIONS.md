@@ -988,3 +988,80 @@ checked for new code before swap (CLAUDE.md stale-bake guard), `/var` steady at 
 curls, light theme): heat-ranked rows, HOTTEST badge, 12 sparklines, 36 FMP logos, all three switcher tabs;
 `/api/hunt/status` returns the brief/latest. **Caveat:** layouts B/C mount client-side on tab click and
 weren't driven in a live browser here — worth a click-through.
+
+### D46 — On-demand hunt dossiers + stock-page panel consistency + Browse "Research" (Cam, 2026-06-19)
+**Context:** A long UI-iteration session over the stock page, Universe/Watchlist tables, and Browse, plus a
+question about hunt cost. The hunt was researching every find **twice**: the hunt session writes a lead
+("Hunt dossier — TICKER") *and* `runDiscoveryHunt` auto-queued a separate full "Dossier — TICKER" for all
+8–12 finds (D30). Cam: run the hunt's lead pass all at once (as now), but make the **full dossier on-demand** —
+"clicking a find kicks off the dossier."
+**Change:**
+- **On-demand hunt dossiers.** `runDiscoveryHunt` no longer loops `queueHuntDossier` over its finds (the
+  per-find auto-queue + its `startedAt`/import were removed). Instead the **not-in-universe stock page**
+  (`app/stocks/[symbol]/page.tsx`) auto-creates the `researchRequest` when a **member** opens a find that has a
+  lead but no full "Dossier —" and nothing in flight (idempotent; viewers just read). New `fullDossierPending`
+  state → a "full dossier researching…" chip + CTA copy. Mirrors the existing Today-queues-movers precedent.
+  Saves ~8–12 redundant Opus passes per hunt. (Agent + web change → both images rebuilt.)
+- **Browse = Research, not just Watch** (`components/ResearchButton.tsx`, `/api/universe` `research` action now
+  handles **untracked** names by keying on `bareTicker`, ahead of the not-tracked guard). Per row: **Research**
+  (kicks a dossier without adding it anywhere) → **Researching…** → **View dossier** (the same pattern for any
+  already-researched name). Watch stays as the secondary action.
+- **Stock-page panel consistency** — every data panel renders on every page (CA/US, held/not); dark FMP feeds
+  show an honest "no data because…" (`PanelEmpty`) instead of vanishing. Panels row is **5-wide**: Analyst
+  ratings · **Price targets** (split out, larger then re-sized to match the held-row StatCards) · Institutional
+  · **Signals** (swapped up from below; fonts shrunk to match the row; "as of" date dropped) · Earnings. The
+  **Scoreboard** moved down beside Valuation-vs-peers, whose title moved **out** of the card to an `<h2>` like
+  the rest. **Last-researched timestamp** under the price in the header.
+- **Price targets re-anchored** for CDRs/cross-listings (`AAPL.NE`, `TD.TO`): FMP returns the **US** target in
+  USD off the bare ticker; the upside % is scale-invariant, so targets are rescaled to **this listing's own
+  live price + currency** with a footnote — fixes a USD target shown against a CAD page.
+- **Universe "Researched"** column falls back to the dossier's own `at` when there's no DONE `researchRequest`
+  (AC showed "—"). **Day column** on Universe/Watchlist stacked to match the design: ↗/↘ + $ change over (%).
+**Verified:** `tsc --noEmit` clean; web + agent images built, fresh-image string-checked before swap, pruned;
+`/var` ~74%. Live curls: Browse Research/View-dossier/Watch buttons, TD targets in CA$, header timestamp,
+Valuation `<h2>`, Day arrows; agent rebooted clean. **Caveat:** didn't fire a live on-demand dossier (spends an
+Opus session) — path is render-verified only.
+
+### D47 — Thesis-axis diversification promoted to a standing PERSONA rule (Cam, 2026-06-21)
+**Context:** The 2026-06-21 weekly review (`Report` id 8) flagged that three of the book's six names
+(IFC/SLF/TD) are really *one* macro bet — higher-for-longer rates — and proposed (§4) keeping "a minimum of
+2–3 independent thesis axes live as a soft internal rule." It was already banked as LESSON #2 ("diversify the
+thesis, not the tickers"); Cam approved promoting it from a re-read lesson to a standing mandate rule.
+**Change:** Added an Operating-principles bullet to `PERSONA` in `web/agent/sessions.ts` — count *independent
+thesis axes* (rates / secular compounders / idiosyncratic catalysts / index ballast / commodity), not symbols;
+keep ≥2–3 live whenever the book holds more than a couple of names; name single-factor concentration out loud
+as it drifts. This is **disposition/guidance, not a code-enforced gate** — the §6 validator and the 75%
+conviction bar are unchanged; it shapes what the agent *proposes*, never what the gate *allows*. The other §4
+proposals: "deploy more cash" already matched config (dial is AGGRESSIVE + D39 mandate — the 75% bar, not
+policy, is the brake), L dossier re-research kicked by Cam (the prior dossier had a sign-flipped CPI error),
+capital rec HOLD accepted (no contribute/withdraw).
+**Verified:** edit string-checked inside `grq_agent:latest` before swap (`grep 'Diversify the THESIS'`); agent
+rebuilt (only `agent`, not `chat` — PERSONA is decision-session only), fresh image confirmed, swapped, old
+layers pruned (1.7GB); `/var` 77%, 14G free. Agent rebooted clean — `/api/health` heartbeat ticking, mid
+startup-universe-review on Opus 4.8.
+
+### D48 — Weekly review moves to Saturday 09:00 + lands on the portfolio page all weekend (Cam, 2026-06-21)
+**Context:** Cam wanted the weekly deep review to run Saturday 09:00 ET (was Sunday 10:00) and to surface in the
+portfolio page's briefing slot — taking over from Friday's EOD close — and *stay* there across the weekend until
+Monday's 9:00 game plan supersedes it.
+**Change:**
+- **Schedule:** `runner.ts` weekly-review trigger `p.weekday === 0 && m >= 10*60` → `p.weekday === 6 && m >= 9*60`
+  (Sat=6). Dedupe switched from a 6-day `createdAt` window to "a WEEKLY already dated today" (`date: dayStart`,
+  mirroring the EOD guard) — the 6-day window would have *blocked* the first Saturday run, since the prior weekly
+  (Sun, 6 days earlier) still fell inside it. The Saturday 02:00 full-universe dossier refresh now has ~7h (not
+  ~32h) to finish before the review; one-at-a-time at ~5–10 min/dossier over ~30 names clears well before 09:00.
+- **Portfolio surfacing:** the page's single "latest briefing" slot already shows the newest of
+  morning-plan/midday/check-in/EOD by timestamp. Added the latest `WEEKLY` report as a candidate (kicker
+  "Weekly Review · the week in receipts", `at = createdAt`, link → `/reports/[id]` with a "View full review" CTA;
+  the day-based briefs keep their `/reports/day/[date]` "View full day" link). Newest-wins does the rest: the
+  Saturday review is newest through the weekend (no weekend plan/EOD), and Monday's 9:00 game plan naturally
+  reclaims the slot. No new schema/flag.
+- **Copy/comments:** retired the now-stale "Sunday" references (reports hub page user copy ×3; runner/universe
+  refresh comments + the weekly-refresh log/alert; AGENT-SPEC, PHASES, SYSTEM-OVERVIEW docs).
+**Verified:** `tsc --noEmit` clean. web + agent images rebuilt one-at-a-time, fresh-image string-checked before
+each swap (`week in receipts` in `portfolio/page.js`; `p.weekday === 6` in `runner.ts`), pruned between; `/var`
+77%, 14G free; agent rebooted clean (heartbeat ticking). Live curl of `/portfolio` (today, Sun) shows the
+weekly review in the slot with the "View full review →" CTA and no competing brief. **Caveat:** the Saturday-09:00
+*firing* itself can't be verified until 2026-06-27 — only the schedule predicate + surfacing are tested today. A
+later web rebuild shipped the "Sunday"→"Saturday" copy fixes; the agent's internal comment/log text changes ride
+the next functional agent build (non-functional, no behavior impact).

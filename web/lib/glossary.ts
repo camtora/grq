@@ -198,6 +198,10 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "13F filing",
     def: "A quarterly report big investment managers (over $100M) must file listing their U.S. stock holdings. It's a snapshot, filed up to ~45 days after quarter-end, and it shows only longs and options — never short positions.",
   },
+  qoq: {
+    term: "QoQ — quarter over quarter",
+    def: "The change from one quarter (a three-month reporting period) to the next. Here, '+24 QoQ' means 24 more institutions hold the stock than in the previous quarter's 13F filings — a measure of whether big money is building or trimming the position.",
+  },
   "form-4": {
     term: "Form 4 — insider trade",
     def: "The filing a company's executives, directors, and 10%+ owners must submit within two days of trading its stock. Open-market purchases are the meaningful 'insider buying' signal; option exercises and grants are noise.",

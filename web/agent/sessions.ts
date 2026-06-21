@@ -4,7 +4,7 @@ import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse, isTradeable } from "../lib/universe";
 import { setBootstrapMode } from "./promote";
-import { queueHuntDossier, queueDossiers } from "../lib/hunt";
+import { queueDossiers } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -27,6 +27,7 @@ Disposition:
 Operating principles:
 - Hard guardrails are enforced in code. You cannot change them. A rejection from propose_order is FINAL — adapt, never retry the same order hoping for a different answer.
 - Every thesis must be falsifiable (target, stop, horizon, invalidation) and must cite sources. Your retros grade those sources' hit-rates — the fund learns which inputs deserve trust.
+- Diversify the THESIS, not just the tickers. Count independent thesis axes (e.g. rates / secular compounders / idiosyncratic catalysts / index ballast / commodity), not symbols — three names riding one rate bet is ONE bet, not three positions. Whenever the book holds more than a couple of names, keep at least 2–3 independent axes live, and name the concentration out loud the moment it drifts toward a single factor. (Approved standing rule, 2026-06-21 weekly review §4.)
 - Fees and taxes are real drags on a small account: a trade must clear ≥3× its round-trip commissions, and when you realize a gain, name the tax consequence. Taxes (Canadian, CRA): ${taxContext()} This is a reason to pick well and let winners run — NOT a reason to never trade.
 - "vs just buying XIC" is the benchmark you must beat — and you beat it by deploying into better ideas, not by hiding in cash to stay nominally "ahead" of the index. Being ahead of XIC while sitting in cash is not a win; it's an un-deployed fund.
 - Be honest in journals and reports: luck is luck, mistakes are named.
@@ -181,30 +182,12 @@ For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journ
 - sources = every source you used
 
 Lead with WHY it matters, not just what the company is. Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. You can't add anything to the TRADEABLE universe; each name you surface is automatically queued for a FULL dossier, and Cam & Graham decide which to promote to tradeable.`;
-  const startedAt = new Date();
   await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
 
-  // D (Cam 2026-06-17): every name the hunt surfaces gets a FULL dossier queued so the
-  // stock page is researched and ready when a member clicks it — but it is NOT added to
-  // the universe/Watchlist (members don't want every find there). Watching a find is what
-  // tracks it. The agent still can't trade anything.
-  const finds = await prisma.journalEntry.findMany({
-    where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, at: { gte: startedAt }, symbol: { not: null } },
-    select: { symbol: true },
-  });
-  const seen = new Set<string>();
-  let queued = 0;
-  for (const f of finds) {
-    const s = f.symbol as string;
-    if (seen.has(s)) continue;
-    seen.add(s);
-    try {
-      if ((await queueHuntDossier(s)) === "queued") queued++;
-    } catch (e) {
-      console.error(`[hunt] queue dossier ${s} failed:`, e instanceof Error ? e.message : e);
-    }
-  }
-  if (queued > 0) console.log(`[hunt] queued ${queued} full dossier(s) for hunt finds`);
+  // D (Cam 2026-06-19): the hunt writes only LEADS ("Hunt dossier — TICKER") — all in this
+  // one pass. The full dossier is NO LONGER auto-queued for every find; it's kicked ON
+  // DEMAND when a member opens the find's stock page (or clicks Research on Browse). That
+  // drops ~8–12 redundant Opus research passes per hunt — finds nobody opens cost nothing.
 }
 
 /** Smart-money read (D27) — the EDITORIAL narrative on top of the structured

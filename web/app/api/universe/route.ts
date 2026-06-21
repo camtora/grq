@@ -157,18 +157,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, status: "RETIRED" });
   }
 
-  if (!entry) return bad(`${symbol} is not tracked — add it first.`, 404);
-
   // ---------- on-demand research ----------
+  // Works for an untracked Browse/search name too: queues a dossier WITHOUT adding it
+  // to the universe (exactly like a hunt find) — the stock page renders the dossier
+  // when it lands, and the member watches it separately if they want to track it.
+  // Tracked names keep the existing behavior.
   if (action === "research") {
-    if (entry.status === "RETIRED") return bad(`${symbol} is retired — re-add it first.`);
-    const pending = await prisma.researchRequest.count({ where: { symbol, status: { in: ["QUEUED", "RUNNING"] } } });
-    if (pending > 0) return bad(`${symbol} already has research in flight.`);
+    const key = entry ? symbol : bareTicker(symbol);
+    if (entry?.status === "RETIRED") return bad(`${symbol} is retired — re-add it first.`);
+    const pending = await prisma.researchRequest.count({ where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } } });
+    if (pending > 0) return bad(`${key} already has research in flight.`);
     // No daily cap — Cam lifted it 2026-06-15 (research as much as we want).
-    await prisma.researchRequest.create({ data: { symbol, requestedBy: who } });
-    await sendDiscord("info", `${who} queued research on ${symbol}`);
-    return NextResponse.json({ ok: true, queued: true });
+    await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });
+    await sendDiscord("info", `${who} queued research on ${key}`);
+    return NextResponse.json({ ok: true, queued: true, symbol: key });
   }
+
+  if (!entry) return bad(`${symbol} is not tracked — add it first.`, 404);
 
   // ---------- promote: two-person rule ----------
   if (action === "promote") {

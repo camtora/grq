@@ -1,9 +1,11 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { getSession } from "@/lib/session";
-import { allUniverse } from "@/lib/universe";
+import { allUniverse, bareTicker } from "@/lib/universe";
+import { prisma } from "@/lib/db";
 import { money } from "@/lib/money";
 import { Card, PageHeader } from "@/components/ui";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
+import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +116,33 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
     });
   }
 
+  // Per-row research state: a dossier already exists (→ "View dossier"), research is in
+  // flight (→ "Researching…"), or neither (→ "Research"). Keyed by the bare ticker, which
+  // is the dossier/researchRequest key + the stock-page route (Cam 2026-06-19).
+  const keys = [...new Set(rows.map((r) => bareTicker(r.symbol).toUpperCase()))];
+  const [dossierRows, inflightRows] = keys.length
+    ? await Promise.all([
+        prisma.journalEntry.findMany({
+          where: {
+            kind: "RESEARCH",
+            symbol: { in: keys },
+            OR: [{ title: { startsWith: "Dossier" } }, { title: { startsWith: "Hunt dossier" } }],
+          },
+          select: { symbol: true },
+        }),
+        prisma.researchRequest.findMany({
+          where: { symbol: { in: keys }, status: { in: ["QUEUED", "RUNNING"] } },
+          select: { symbol: true },
+        }),
+      ])
+    : [[], []];
+  const hasDossier = new Set(dossierRows.map((d) => d.symbol));
+  const inFlight = new Set(inflightRows.map((r) => r.symbol));
+  const researchState = (sym: string): ResearchState => {
+    const k = bareTicker(sym).toUpperCase();
+    return hasDossier.has(k) ? "done" : inFlight.has(k) ? "inflight" : "none";
+  };
+
   return (
     <main>
       <PageHeader title="Browse" sub="Search any name or screen the whole market — watch the ones worth a closer look." />
@@ -220,8 +249,11 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
                     {r.priceCents !== null ? money(r.priceCents, r.currency) : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
-                    {isMember && <WatchButton symbol={stripSuffix(r.symbol)} exchange={r.exchange ?? undefined} state={watchState(r.symbol)} />}
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <ResearchButton symbol={bareTicker(r.symbol)} state={researchState(r.symbol)} canResearch={isMember} />
+                      {isMember && <WatchButton symbol={stripSuffix(r.symbol)} exchange={r.exchange ?? undefined} state={watchState(r.symbol)} />}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -230,8 +262,9 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
         </Card>
       )}
       <p className="mt-3 text-xs text-teal-200/40">
-        Powered by FMP. Prices are in each listing&apos;s native currency. <b>Watch</b> adds a name to your watchlist — the
-        agent dossiers it; trading it still needs both members to promote it into the universe.
+        Powered by FMP. Prices are in each listing&apos;s native currency. <b>Research</b> queues a full dossier without
+        adding the name anywhere — once it lands, <b>View dossier</b> opens it. <b>Watch</b> adds it to your watchlist;
+        trading it still needs both members to promote it into the universe.
       </p>
     </main>
   );
