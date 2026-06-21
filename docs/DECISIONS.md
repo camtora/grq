@@ -1065,3 +1065,37 @@ weekly review in the slot with the "View full review →" CTA and no competing b
 *firing* itself can't be verified until 2026-06-27 — only the schedule predicate + surfacing are tested today. A
 later web rebuild shipped the "Sunday"→"Saturday" copy fixes; the agent's internal comment/log text changes ride
 the next functional agent build (non-functional, no behavior impact).
+
+### D49 — Dossier-freshness hardening: self-promotion needs a real dossier + gated daily refresh (Cam, 2026-06-21)
+**Context:** Investigating why the 2026-06-21 weekly review flagged L's dossier as stale surfaced a real failure,
+not staleness. L sat a standing ~62 HOLD on every dossier *except* a thin 1,523-char one the agent dashed off at
+04:18 the instant it self-promoted L back after a Cam demote — that one read the BoC CPI feed as "**−2.7%
+deflation**" (a sign-flip of the correct **+2.8%** feed), reframed deflation as a grocer-margin tailwind, and
+scored **Buy 77** — clearing the 75 self-promotion bar **on bad data**. The next clean pipeline dossier reverted
+it to 63. So a thin, un-cross-checked inline dossier poisoned the conviction bar (a guardrail input) and made a
+name tradeable. Separately: the weekly review reported L off that *remembered* error even though the 06-20
+refresh had already corrected it (it was never actually "parked"), and the universe is only re-researched
+**weekly** (Saturday) — so a bad/stale dossier can anchor decisions for up to ~7 days.
+**Change (agent-only, one rebuild):**
+- **Self-promotion needs a completed pipeline dossier** (`promote.ts agentSelfPromote`). The conviction dossier
+  must be backed by a `DONE` researchRequest completing alongside it — an inline same-session note no longer
+  counts. No backing pass → it queues a full dossier and **defers** (the agent comes back via `schedule_checkin`).
+  Encodes the persona's own "decide with the finished dossier in front of you" rule. (Would've blocked L's 77.)
+- **Gated daily refresh** (`runner.ts maybeDailyRefreshEnqueue`, pre-market 05:00–09:00 ET, market days, once/day):
+  **held positions re-dossier every day**; other tracked names only when their dossier is **stale >18h AND the
+  name moved ≥4%** (`Quote.dayChangeBps`) — so a Tuesday catalyst gets a same-day refresh without burning an Opus
+  pass on every quiet name. Deterministic gates, no extra LLM call. The Saturday full refresh stays as the
+  every-name backstop. Knobs are tunable consts (`DAILY_REFRESH_*`). Skips weekends/holidays.
+- **Weekly-review prompt nudge** (`sessions.ts`): grade open theses against the *current* dossier; don't flag a
+  "refresh" without confirming the issue still exists.
+- **Lesson #1 corrected** (DB `JournalEntry` id 1216 — re-read before every decision): reframed L's error as a
+  *structured-feed sign-flip* (not a web scrape), dropped the false "L is parked," and added the completed-dossier
+  rule. Data edit, not code.
+- **Dead `rotation` code removed** (the 3/day rotation was killed 2026-06-12; only a vestigial default arg +
+  no-alert check remained — the latter now silences the new `daily-refresh` source instead).
+**Verified:** `tsc --noEmit` clean; agent image rebuilt, string-checked before swap (`maybeDailyRefreshEnqueue`,
+the inline-note reason, the nudge, rotation-default gone), swapped, dangling images + stopped containers pruned;
+`/var` 78%, 13G free; agent rebooted clean (heartbeat ticking). Lesson update applied + verified. **Did NOT
+`docker volume prune`** — the only unused volumes are other tenants' (haymaker test DB, infra mod-picker, an
+anon vol; ~55MB), which a shared-host prune would destroy. **Caveat:** the daily-refresh's first *firing* is
+Monday 2026-06-22 pre-market — today only the predicate/build are verified, not a live run.

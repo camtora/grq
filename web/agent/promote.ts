@@ -112,6 +112,26 @@ export async function agentSelfPromote(symbol: string, tier: "large" | "mid" | u
     return { ok: false, reason: `conviction on ${sym} is ${dossier?.confidence ?? 0}% — need ≥${SELF_INVEST.minConfidence}% to self-promote.` };
   }
 
+  // Freshness: that conviction must come from a COMPLETED research-pipeline pass — not a
+  // dossier the agent wrote inline in this same session. A thin, un-cross-checked inline
+  // note can carry a data error straight into the conviction bar (L's BoC-CPI sign-flip
+  // turned a standing 62 HOLD into a 77 Buy and self-promoted it on bad data; D49).
+  // Pipeline dossiers are written by runStockDossier with a DONE researchRequest
+  // completing alongside them; an inline note has none. No backing pass → queue one and
+  // defer, and the agent comes back to promote once the real dossier lands (the persona's
+  // own "add_candidate now, schedule_checkin to decide with the finished dossier" pattern).
+  const key = bareTicker(sym);
+  const backed = dossier
+    ? await prisma.researchRequest.findFirst({
+        where: { symbol: key, status: "DONE", completedAt: { gte: new Date(dossier.at.getTime() - 5 * 60_000) } },
+      })
+    : null;
+  if (!backed) {
+    const inflight = await prisma.researchRequest.count({ where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } } });
+    if (inflight === 0) await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "agent" } });
+    return { ok: false, reason: `your latest call on ${sym} is an inline note, not a finished research pass — I've queued a full dossier. Promote it once that lands (schedule_checkin to come back and decide with it in front of you).` };
+  }
+
   // Deterministic liquidity screen — the SAME bar the human path uses.
   const failures = await promotionScreen(sym);
   if (failures.length > 0) return { ok: false, reason: `liquidity screen failed: ${failures.join("; ")}.` };

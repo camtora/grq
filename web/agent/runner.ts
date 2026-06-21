@@ -15,7 +15,7 @@ import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
-import { trackedSymbols, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
+import { trackedSymbols, trackedUniverse, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
@@ -35,6 +35,7 @@ let lastBarsDay = "";
 let lastLogoBackfill = 0;
 let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
+let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
 let startupReviewChecked = false;
 let dailyLossAlerted = "";
@@ -510,6 +511,7 @@ async function tick() {
 
   await maybeScheduledSessions();
   await maybeWeeklyRefreshEnqueue();
+  await maybeDailyRefreshEnqueue();
   await processResearchQueue();
 }
 
@@ -537,6 +539,57 @@ async function maybeWeeklyRefreshEnqueue() {
   }
   console.log(`[weekly-refresh] queued ${queued} dossiers for the Saturday review`);
   await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before the Saturday review.");
+}
+
+// Daily research-freshness pass (Cam 2026-06-21): once per market day, pre-market.
+// HELD positions always re-dossier — real money rides on them. Other tracked names
+// re-dossier only when their dossier is STALE *and* the name actually MOVED, so a
+// Tuesday catalyst gets a same-day refresh instead of waiting for the Saturday full
+// pass — without burning an Opus pass on every quiet name. Deterministic gates only
+// (staleness + day-move); no extra LLM call to choose. The Saturday full refresh stays
+// as the every-name backstop. Skips weekends/holidays (the Saturday pass covers those).
+// Humans tune the knobs.
+const DAILY_REFRESH_OPEN_MIN = 5 * 60; // 05:00 ET — pre-market window opens
+const DAILY_REFRESH_CLOSE_MIN = 9 * 60; // …closes 09:00 ET (before the morning plan)
+const DAILY_REFRESH_STALE_MS = 18 * 60 * 60_000; // skip names re-dossiered within ~18h
+const DAILY_REFRESH_MOVE_BPS = 400; // non-held: refresh only on a |day move| ≥ 4%
+async function maybeDailyRefreshEnqueue() {
+  const p = etParts();
+  if (!isMarketDay()) return;
+  if (p.minutesSinceMidnight < DAILY_REFRESH_OPEN_MIN || p.minutesSinceMidnight >= DAILY_REFRESH_CLOSE_MIN) return;
+  if (lastDailyRefreshDay === p.dateStr) return;
+  lastDailyRefreshDay = p.dateStr;
+
+  const [tracked, positions, inFlightRows, quotes] = await Promise.all([
+    trackedUniverse(),
+    prisma.position.findMany({ select: { symbol: true } }),
+    prisma.researchRequest.findMany({ where: { status: { in: ["QUEUED", "RUNNING"] } }, select: { symbol: true } }),
+    prisma.quote.findMany({ select: { symbol: true, dayChangeBps: true } }),
+  ]);
+  const held = new Set(positions.map((x) => x.symbol.toUpperCase()));
+  const inFlight = new Set(inFlightRows.map((r) => r.symbol));
+  const moveBps = new Map(quotes.map((q) => [q.symbol.toUpperCase(), Math.abs(q.dayChangeBps)]));
+  const staleBefore = new Date(Date.now() - DAILY_REFRESH_STALE_MS);
+
+  let queued = 0;
+  let heldCount = 0;
+  for (const row of tracked) {
+    const sym = row.symbol;
+    if (inFlight.has(sym)) continue;
+    const latest = await prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", symbol: sym.toUpperCase(), title: { startsWith: "Dossier" } },
+      orderBy: { at: "desc" },
+      select: { at: true },
+    });
+    if (latest && latest.at > staleBefore) continue; // re-dossiered recently — leave it
+    const isHeld = held.has(sym.toUpperCase());
+    const moved = (moveBps.get(sym.toUpperCase()) ?? 0) >= DAILY_REFRESH_MOVE_BPS;
+    if (!isHeld && !moved) continue; // non-held names only refresh when they actually moved
+    await prisma.researchRequest.create({ data: { symbol: sym, requestedBy: "daily-refresh" } });
+    queued++;
+    if (isHeld) heldCount++;
+  }
+  if (queued > 0) console.log(`[daily-refresh] queued ${queued} dossiers (${heldCount} held + ${queued - heldCount} movers, pre-market)`);
 }
 
 // Work the research queue one dossier at a time. Uncapped (Cam removed the daily
@@ -581,7 +634,7 @@ async function processResearchQueue() {
         data: { status: "DONE", completedAt: new Date() },
       });
       if (
-        next.requestedBy !== "rotation" &&
+        next.requestedBy !== "daily-refresh" &&
         next.requestedBy !== "weekly-refresh" &&
         next.requestedBy !== "movers" &&
         next.requestedBy !== "hunt" &&

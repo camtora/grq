@@ -292,7 +292,7 @@ Keep it tight.`;
 /** Deep single-stock dossier (2.7) — research tools only, never trades.
  *  Returns the session result (null if the session errored), so the queue can
  *  tell a real failure from a success instead of marking everything DONE. */
-export async function runStockDossier(symbol: string, requestedBy = "rotation"): Promise<string | null> {
+export async function runStockDossier(symbol: string, requestedBy: string): Promise<string | null> {
   const sym = symbol.toUpperCase();
   const [entry, quote, sig, recent, sm] = await Promise.all([
     universeEntry(sym),
@@ -437,7 +437,7 @@ This week's decisions: ${decisions.length}
 Do the full review, using tools:
 1. RETRO entries (write_journal kind=RETRO) for every position closed this week and every resolved thesis — outcome vs thesis, right-for-the-right-reasons or lucky. **After each RETRO, call grade_sources** for every source that thesis cited (+1 pointed right, −1 misleading, 0 neutral) — including signal families like signal:rsi. The scoreboard is how the fund learns whom to trust.
 2. LESSON entries for durable patterns worth carrying forward (only real ones).
-3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades, lessons added, proposed strategy adjustments (these need Cam & Graham's approval — say so), source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
+3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades (re-read each name's CURRENT dossier before grading — never carry forward a data error a later refresh already corrected, and don't flag a name for "refresh" without confirming the issue still exists), lessons added, proposed strategy adjustments (these need Cam & Graham's approval — say so), source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
 
 Your ENTIRE final response must be just the report body.`;
   const body = await runSession({ label: "weekly-review", prompt, model: MODELS.decision, withTools: true, maxTurns: 30 });
