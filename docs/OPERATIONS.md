@@ -88,11 +88,37 @@ Named members (greeting + role): `web/lib/users.ts` → rebuild web. Quick extra
 append to `GRQ_ALLOWED_EMAILS` in `.env` → `docker-compose up -d web` (recreate to reload
 env). They also need to be on the infra oauth2-proxy allowlist to get past SSO at all.
 
+## Alerting (Discord)
+
+Single chokepoint: `agent/alerts.ts`. `alert(severity, title, body)` → `DISCORD_WEBHOOK_URL`
+(empty = journal-only). **`info` is Discord-only and leaves NO journal trace**; `warning`/
+`critical` also write a `SYSTEM` journal entry. Discord failures never take the agent down.
+`sendDiscord()` is the Discord-only variant for callers that journal themselves (member-action
+API routes, `promote.ts`).
+
+**What pings Discord — and what doesn't.** Alerts are tied to *events/outcomes*, not to "a
+session ran." The scheduled sessions split into two groups:
+
+| Scheduled session | Pings Discord? |
+|---|---|
+| Discovery hunt (~10:00), Smart-money scan (~11:00), Midday brief (noon), EOD report (16:15), Weekly review | **Yes** — each fires a dedicated `info` "posted" alert |
+| Morning **Game plan** (09:00) · fixed trading **check-ins** (10/11/13/14/15 ET, `runScheduledCheckin`) | **No "ran" alert** — these ping *only when they act*: a **FILLED** trade (`validator.ts` → `Bought/Sold …`), a **self-promote/track** (`promote.ts`), or a system stop/take-profit (runner). A stood-down "no trade" check-in is **intentionally silent on Discord** (it still posts to the dashboard/journal). |
+
+Also always ping: kill-switch flips, daily-loss pause, drawdown checks, session failures,
+finalize-pending fills, and member actions (universe add/demote/retire, directive, kill switch).
+
+**"I expected a ping and didn't get one"** — first confirm the session actually *did* something
+(a FILLED order, a promotion). The Game plan and the trading check-ins are **outcome-only** by
+design (affirmed 2026-06-22, D50): a quiet check-in won't ping. And because `info` alerts don't
+journal, the absence of a journal entry does NOT mean the alert didn't fire — verify the *outcome*
+(check `Order`/positions) or send a test ping to confirm webhook delivery.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `docker: unknown command: docker compose` | legacy compose v1 host | use `docker-compose` |
+| Expected a Discord ping, got none | Game plan / check-in stood down (no trade) — outcome-only by design | confirm the session acted (FILLED order / promote); quiet check-ins are dashboard-only |
 | compose: `Unsupported config option` | missing `version: "2.4"` | keep the version key |
 | web 502 via nginx | container down / wrong port | `docker ps`, health curl, logs |
 | 403 for a member | header not arriving (direct LAN hit) or email not in users.ts/env | check `X-Forwarded-Email`, member list |

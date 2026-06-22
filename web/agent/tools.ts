@@ -339,7 +339,7 @@ const listScheduledTool = tool("list_scheduled", "Your PENDING self-scheduled ch
 
 const cancelCheckinTool = tool(
   "cancel_checkin",
-  "Cancel a PENDING self-scheduled check-in by id (from list_scheduled). Fixed daily check-ins (10:00/12:30/15:00) are not yours to cancel.",
+  "Cancel a PENDING self-scheduled check-in by id (from list_scheduled). Fixed daily check-ins (the hourly intraday schedule) are not yours to cancel.",
   { id: z.number().int() },
   async (args) => {
     const w = await prisma.agentWakeup.findUnique({ where: { id: args.id } });

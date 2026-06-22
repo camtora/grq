@@ -1099,3 +1099,26 @@ the inline-note reason, the nudge, rotation-default gone), swapped, dangling ima
 `docker volume prune`** — the only unused volumes are other tenants' (haymaker test DB, infra mod-picker, an
 anon vol; ~55MB), which a shared-host prune would destroy. **Caveat:** the daily-refresh's first *firing* is
 Monday 2026-06-22 pre-market — today only the predicate/build are verified, not a live run.
+
+### D50 — Stale check-in times in the agent's context + documenting the Discord alerting policy (Cam, 2026-06-22)
+**Context:** Cam asked why the morning plan / 10:00 check-in didn't ping Discord. Two findings. (1) A real
+bug: the hourly-check-in switch (D40, `policy.ts CHECKIN_TIMES_ET = 10/11/13/14/15`) left two agent-read strings
+still saying the **old `10:00, 12:30, 15:00`** — `context.ts` (injected into *every* session's context) and the
+`cancel_checkin` tool description (`tools.ts`). So the 10:00 check-in was telling *itself* the next one was 12:30
+and writing "standing down until 12:30." (2) Not a bug: there is **no "a session ran" Discord alert** for the 09:00
+Game plan or the fixed trading check-ins, and there never has been (git-confirmed). Those two are **outcome-only** —
+they ping only on a FILLED trade (`validator.ts`), a self-promote/track (`promote.ts`), or a system stop. The
+discovery hunt / midday brief / EOD / weekly review *do* each fire a dedicated `info` "posted" alert. On 2026-06-22
+the 09:00 plan traded nothing (silent, correct) and the 10:00 check-in **bought 13 MRU @ $90.22 (order #24, FILLED)**
+— whose `Bought …` ping Cam *did* receive, confirming webhook delivery is healthy.
+**Decision:** Leave Discord alerting **as-is** (outcome-only for plan/check-ins — no per-session summary ping; a
+quiet "no trade" check-in stays dashboard/journal-only on purpose). Fix the stale strings and **document** the
+alerting policy so the next "why no ping?" is self-serve.
+**Change (agent-only, one rebuild):**
+- `context.ts` + `tools.ts` now **derive the check-in times from `CHECKIN_TIMES_ET`** (`.join(", ")`) instead of a
+  hardcoded list — single source of truth, can't drift again.
+- New **"Alerting (Discord)"** section in `docs/OPERATIONS.md`: the fires-vs-silent matrix, the outcome-only rule,
+  and an "I expected a ping and didn't get one" troubleshooting note (incl. that `info` alerts leave no journal
+  trace, so absence of a journal entry ≠ alert didn't fire).
+**Verified:** `tsc --noEmit` clean; agent image rebuilt + string-checked before swap, swapped, pruned. No schema,
+no behavior change beyond the corrected times string.

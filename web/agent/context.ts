@@ -7,7 +7,7 @@ import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreb
 import { fmpEnabled, fmpEarnings } from "../lib/fmp";
 import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { getMacro, macroLine } from "../lib/macro";
-import { HARD, DIALS, SOURCES, MACRO_SWEEP } from "./policy";
+import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET } from "./policy";
 
 function money(c: number): string {
   return `$${(c / 100).toFixed(2)}`;
@@ -119,7 +119,7 @@ ${
     ? "  (none — schedule_checkin to be woken later today for an event or price level)"
     : wakeups.map((w) => `  ${pad2(etParts(w.dueAt).hour)}:${pad2(etParts(w.dueAt).minute)} ET — ${w.reason}`).join("\n")
 }
-Fixed daily trading check-ins run at 10:00, 12:30, and 15:00 ET (you don't schedule those).
+Fixed daily trading check-ins run at ${CHECKIN_TIMES_ET.join(", ")} ET (you don't schedule those).
 
 ## Upcoming earnings (next 3 weeks — a catalyst; size and time around it)
 ${earnings.length === 0 ? "  (none on holdings or focus)" : earnings.map((e) => `  ${e.symbol}: reports ${e.date} (in ${e.days}d)${e.eps != null ? `, EPS est ${e.eps}` : ""}`).join("\n")}
