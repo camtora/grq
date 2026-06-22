@@ -512,6 +512,48 @@ model AgentWakeup {
   @@index([status, dueAt])
 }
 
+// --- Push notifications (D53) ------------------------------------------------
+// iOS push (APNs). The same events that fan out to Discord (web/agent/alerts.ts)
+// also fan out to each member's registered devices, gated by their per-user
+// NotificationPreference. Members only — viewers don't get a device row.
+
+// A registered APNs device token, keyed by member email. A member can have many
+// devices (phone + iPad); the unique pair makes re-registration idempotent. The
+// sender prunes a token when APNs reports it Unregistered/BadDeviceToken (410).
+model DeviceToken {
+  id           Int      @id @default(autoincrement())
+  email        String // member email (normalized lowercase)
+  token        String // APNs device token (hex)
+  platform     String   @default("ios") // "ios" (room for "android" later)
+  // The app build env the token belongs to: "production" (TestFlight/App Store)
+  // or "sandbox" (Xcode debug build) — they use DIFFERENT APNs gateways, so a
+  // token must be sent to the gateway that minted it.
+  apnsEnv      String   @default("production")
+  registeredAt DateTime @default(now())
+  lastUsedAt   DateTime @updatedAt
+
+  @@unique([email, token])
+  @@index([email])
+}
+
+// Per-user notification toggles. One row per member (email is the PK). Every
+// category defaults ON ("default opt in for all categories" — Cam, 2026-06-22).
+// trades + risk are NOT stored here: they're force-on in code (non-toggleable),
+// as is any critical-severity alert (agent crash / drawdown halt). A missing row
+// means "never touched settings" → treated as all-on. priceTargets is reserved
+// for the later "set a target, get pinged" feature (no event wired to it yet).
+model NotificationPreference {
+  email        String   @id // member email (normalized lowercase)
+  dossiers     Boolean  @default(true) // a requested research dossier is ready
+  hunt         Boolean  @default(true) // new hunt names / directed-hunt / smart-money scan
+  agentMoves   Boolean  @default(true) // the agent self-tracks or self-promotes a name
+  reports      Boolean  @default(true) // morning plan / midday / EOD / weekly review
+  members      Boolean  @default(true) // the OTHER member's universe/directive/kill actions
+  system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
+  priceTargets Boolean  @default(true) // reserved — price-target hits (not yet wired)
+  updatedAt    DateTime @updatedAt
+}
+
 // Conviction tally (Cam, 2026-06-17): every agent BUY/SELL proposal, logged at
 // the propose_order boundary — including conviction-gate REJECTIONS, which
 // refuse() before the DECISION journal is ever written. Lets us track the

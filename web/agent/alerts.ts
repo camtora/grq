@@ -1,11 +1,18 @@
 import { prisma } from "../lib/db";
 import { AGENT_VERSION } from "./policy";
+import { pushNotify, type NotifCategory } from "../lib/push/notify";
 
 export type Severity = "info" | "warning" | "critical";
 
-// Single alerting chokepoint (AGENT-SPEC "Alerting"). Discord if configured;
-// warning+ always lands in the journal; failures never take the agent down.
-export async function alert(severity: Severity, title: string, body = ""): Promise<void> {
+/** Routing for an alert: which notification category it belongs to (gates iOS
+ *  push per-user), who triggered it (so we don't ping the actor), and the symbol
+ *  it concerns (lock-screen grouping + app deep link). Default category "system". */
+export type AlertOpts = { category?: NotifCategory; actorEmail?: string; symbol?: string };
+
+// Single alerting chokepoint (AGENT-SPEC "Alerting"). Discord if configured + iOS
+// push to each member's eligible devices; warning+ always lands in the journal;
+// failures never take the agent down.
+export async function alert(severity: Severity, title: string, body = "", opts: AlertOpts = {}): Promise<void> {
   try {
     if (severity !== "info") {
       await prisma.journalEntry.create({
@@ -22,10 +29,33 @@ export async function alert(severity: Severity, title: string, body = ""): Promi
   }
 
   await sendDiscord(severity, title, body);
+  await pushNotify({
+    category: opts.category ?? "system",
+    severity,
+    title,
+    body,
+    actorEmail: opts.actorEmail,
+    symbol: opts.symbol,
+  });
 }
 
-/** Discord-only delivery — for callers that handle their own journaling
- *  (e.g. the kill-switch API route). */
+/** Discord + iOS push, WITHOUT a journal write — for callers that journal
+ *  themselves (the kill-switch / universe / directive routes, agent self-promotion).
+ *  Same routing opts as alert(); default category "system". */
+export async function notifyOut(severity: Severity, title: string, body = "", opts: AlertOpts = {}): Promise<void> {
+  await sendDiscord(severity, title, body);
+  await pushNotify({
+    category: opts.category ?? "system",
+    severity,
+    title,
+    body,
+    actorEmail: opts.actorEmail,
+    symbol: opts.symbol,
+  });
+}
+
+/** Discord-only delivery — the low-level webhook send. Most callers want
+ *  alert() (journals + push) or notifyOut() (push, no journal) instead. */
 export async function sendDiscord(severity: Severity, title: string, body = ""): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL;
   if (!url) return;

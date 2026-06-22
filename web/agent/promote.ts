@@ -13,7 +13,7 @@ import { refreshQuotesFor } from "../lib/broker/quotes";
 import { refreshBars } from "../lib/bars";
 import { stanceMeta } from "../lib/stance";
 import { SELF_INVEST, AGENT_VERSION } from "./policy";
-import { sendDiscord } from "./alerts";
+import { notifyOut } from "./alerts";
 
 export type PromoteResult = { ok: boolean; tier?: string; reason?: string };
 export type CandidateResult = { ok: boolean; symbol?: string; reason?: string };
@@ -76,7 +76,7 @@ export async function addCandidate(symbol: string, reason: string, name?: string
       agentVersion: AGENT_VERSION,
     },
   });
-  await sendDiscord("info", `🤖 GRQ is tracking ${key}`, `Added as a research candidate. ${reason.slice(0, 160)}`);
+  await notifyOut("info", `🤖 GRQ is tracking ${key}`, `Added as a research candidate. ${reason.slice(0, 160)}`, { category: "agentMoves", symbol: key });
   return { ok: true, symbol: key };
 }
 
@@ -165,6 +165,6 @@ export async function agentSelfPromote(symbol: string, tier: "large" | "mid" | u
       agentVersion: AGENT_VERSION,
     },
   });
-  await sendDiscord("info", `🤖 GRQ self-promoted ${sym} (${finalTier})`, `${m.label} @ ${dossier?.confidence}% · screen passed. ${reason.slice(0, 240)}`);
+  await notifyOut("info", `🤖 GRQ self-promoted ${sym} (${finalTier})`, `${m.label} @ ${dossier?.confidence}% · screen passed. ${reason.slice(0, 240)}`, { category: "agentMoves", symbol: sym });
   return { ok: true, tier: finalTier };
 }

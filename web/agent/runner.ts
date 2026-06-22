@@ -58,7 +58,7 @@ async function refreshQuotes(open: boolean) {
     const n = await refreshAllQuotes();
     lastFullRefresh = now;
     lastFastRefresh = now;
-    if (n === 0) await alert("warning", "Quote refresh returned 0 symbols", "Yahoo may be unhappy. Engine staleness guard will refuse blind fills.");
+    if (n === 0) await alert("warning", "Quote refresh returned 0 symbols", "Yahoo may be unhappy. Engine staleness guard will refuse blind fills.", { category: "system" });
     return;
   }
   if (open && now - lastFastRefresh >= 2 * 60_000) {
@@ -100,6 +100,7 @@ async function enforceExits() {
         res.ok ? "warning" : "critical",
         res.ok ? `Stop triggered: sold ${p.qty} ${p.symbol}` : `Stop FAILED for ${p.symbol}`,
         res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)} (${dial.stopPct}% stop).` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
+        { category: "trades", symbol: p.symbol },
       );
     } else if (q.midCents >= takeProfitLevel) {
       const res = await broker.placeOrder({
@@ -114,6 +115,7 @@ async function enforceExits() {
         res.ok ? "info" : "warning",
         res.ok ? `Take-profit: sold ${p.qty} ${p.symbol} (+${dial.takeProfitPct}%)` : `Take-profit FAILED for ${p.symbol}`,
         res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)}.` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
+        { category: "trades", symbol: p.symbol },
       );
     }
   }
@@ -142,6 +144,7 @@ async function checkDrawdown() {
       "warning",
       "Drawdown threshold breached — confirming",
       `NAV $${(pf.navCents / 100).toFixed(2)} is ${(ddBps / 100).toFixed(1)}% off the high-water mark $${(hwm / 100).toFixed(2)}. Re-checking next tick before engaging the kill switch (guards against a transient misread).`,
+      { category: "risk" },
     );
     return;
   }
@@ -154,6 +157,7 @@ async function checkDrawdown() {
       "critical",
       "DRAWDOWN KILL SWITCH ENGAGED",
       `NAV $${(pf.navCents / 100).toFixed(2)} is ${(ddBps / 100).toFixed(1)}% off the high-water mark $${(hwm / 100).toFixed(2)} for two consecutive ticks. All trading halted until a human re-enables.`,
+      { category: "risk" },
     );
   }
 }
@@ -183,12 +187,13 @@ async function checkDailyLossPause() {
       "warning",
       "Daily-loss threshold breached — confirming",
       `Day P&L ${(bps / 100).toFixed(1)}% ≤ −3%. Re-checking next tick before pausing buys (guards against a transient NAV misread, e.g. a fill not yet mirrored).`,
+      { category: "risk" },
     );
     return;
   }
   dailyLossAlerted = today;
   setDailyLossPauseConfirmed(today);
-  await alert("warning", "Daily-loss pause engaged", "Day P&L ≤ −3% NAV for two consecutive checks: no new buys today. Risk-reducing sells still allowed.");
+  await alert("warning", "Daily-loss pause engaged", "Day P&L ≤ −3% NAV for two consecutive checks: no new buys today. Risk-reducing sells still allowed.", { category: "risk" });
 }
 
 async function evaluateTriggers() {
@@ -216,7 +221,7 @@ async function evaluateTriggers() {
         sessionRunning = false;
       }
     } else if (action === "note") {
-      await alert("info", `Noted: ${p.symbol} moved ${(q.dayChangeBps / 100).toFixed(1)}% (no action)`);
+      await alert("info", `Noted: ${p.symbol} moved ${(q.dayChangeBps / 100).toFixed(1)}% (no action)`, "", { category: "system", symbol: p.symbol });
     }
   }
 }
@@ -239,7 +244,7 @@ async function fireDueWakeups() {
   if (!due) return;
   if (decisionSessionsToday >= HARD.maxDecisionSessionsPerDay) {
     await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "CANCELLED" } });
-    await alert("warning", "Self-scheduled check-in skipped — budget spent", `"${due.reason}" came due, but today's ${HARD.maxDecisionSessionsPerDay} ad-hoc decision sessions are used up.`);
+    await alert("warning", "Self-scheduled check-in skipped — budget spent", `"${due.reason}" came due, but today's ${HARD.maxDecisionSessionsPerDay} ad-hoc decision sessions are used up.`, { category: "system" });
     return;
   }
   await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "FIRED", firedAt: new Date() } });
@@ -247,7 +252,7 @@ async function fireDueWakeups() {
   sessionRunning = true;
   try {
     await runScheduledCheckin(`self-scheduled — ${due.reason}`);
-    await alert("info", "Self-scheduled check-in ran", due.reason);
+    await alert("info", "Self-scheduled check-in ran", due.reason, { category: "reports" });
   } finally {
     sessionRunning = false;
   }
@@ -276,7 +281,7 @@ async function maybeScheduledSessions() {
         await prisma.journalEntry.create({
           data: { kind: "SYSTEM", title: "Startup universe review — completed", body: "Boot review of the watchlist completed; the agent built its universe.", agentVersion: AGENT_VERSION },
         });
-        await alert("info", "Startup universe review complete", "The agent reviewed the watchlist and built its universe from the names it would invest in.");
+        await alert("info", "Startup universe review complete", "The agent reviewed the watchlist and built its universe from the names it would invest in.", { category: "agentMoves" });
       } finally {
         sessionRunning = false;
       }
@@ -299,6 +304,7 @@ async function maybeScheduledSessions() {
         "info",
         brief ? "Directed hunt complete" : "Hunt refreshed on request",
         brief ? `Focused on your brief: ${brief}` : "Fresh under-the-radar names on The Hunt.",
+        { category: "hunt" },
       );
     } finally {
       sessionRunning = false;
@@ -336,7 +342,7 @@ async function maybeScheduledSessions() {
         // The daily hunt is broad — clear any lingering directed brief so the banner resets.
         if (state?.huntBrief) await prisma.agentState.update({ where: { id: 1 }, data: { huntBrief: null } });
         await runDiscoveryHunt();
-        await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on The Hunt.");
+        await alert("info", "Discovery hunt posted", "Fresh under-the-radar names on The Hunt.", { category: "hunt" });
       } finally {
         sessionRunning = false;
       }
@@ -354,7 +360,7 @@ async function maybeScheduledSessions() {
       sessionRunning = true;
       try {
         await runSmartMoneyScan();
-        await alert("info", "Smart-money scan posted", "What notable public portfolios are buying — on the Ideas page.");
+        await alert("info", "Smart-money scan posted", "What notable public portfolios are buying — on the Ideas page.", { category: "hunt" });
       } finally {
         sessionRunning = false;
       }
@@ -451,7 +457,7 @@ async function tick() {
       // Finalise any PENDING orders whose fill landed after the synchronous poll
       // window BEFORE reconcile, so a sell's realized P&L reads the pre-fill ACB.
       const fills = await (broker as IBKRBroker).finalizePending().catch(async (e) => {
-        await alert("warning", "IBKR finalize-pending failed", String(e));
+        await alert("warning", "IBKR finalize-pending failed", String(e), { category: "system" });
         return [];
       });
       for (const f of fills) {
@@ -461,12 +467,13 @@ async function tick() {
           "info",
           `${f.side === "BUY" ? "Bought" : "Sold"} ${f.qty} ${f.symbol} @ $${(f.priceCents / 100).toFixed(2)}`,
           (f.reason ?? "Filled — confirmed from broker truth after the order rested.").slice(0, 280),
+          { category: "trades", symbol: f.symbol },
         );
       }
-      await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e)));
+      await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e), { category: "system" }));
     }
     const swept = await broker.sweepPendingOrders();
-    if (swept > 0) await alert("info", `Resting orders filled: ${swept}`);
+    if (swept > 0) await alert("info", `Resting orders filled: ${swept}`, "", { category: "trades" });
     await enforceExits();
     await checkDrawdown();
     await checkDailyLossPause();
@@ -538,7 +545,7 @@ async function maybeWeeklyRefreshEnqueue() {
     queued++;
   }
   console.log(`[weekly-refresh] queued ${queued} dossiers for the Saturday review`);
-  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before the Saturday review.");
+  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before the Saturday review.", { category: "dossiers" });
 }
 
 // Daily research-freshness pass (Cam 2026-06-21): once per market day, pre-market.
@@ -626,7 +633,7 @@ async function processResearchQueue() {
       // runSession already alerts on a hard error; this catches the quiet
       // "ran but produced nothing" case it can't see.
       if (result !== null) {
-        await alert("warning", `Dossier produced nothing: ${next.symbol}`, "Session ended without writing a RESEARCH entry.");
+        await alert("warning", `Dossier produced nothing: ${next.symbol}`, "Session ended without writing a RESEARCH entry.", { category: "dossiers", symbol: next.symbol });
       }
     } else {
       await prisma.researchRequest.update({
@@ -640,7 +647,7 @@ async function processResearchQueue() {
         next.requestedBy !== "hunt" &&
         next.requestedBy !== "smart-money"
       ) {
-        await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`);
+        await alert("info", `Dossier ready: ${next.symbol}`, `Requested by ${next.requestedBy} — on the stock page now.`, { category: "dossiers", symbol: next.symbol });
       }
     }
   } catch (e) {
@@ -648,7 +655,7 @@ async function processResearchQueue() {
       where: { id: next.id },
       data: { status: "FAILED", error: e instanceof Error ? e.message : String(e) },
     });
-    await alert("warning", `Dossier failed: ${next.symbol}`, e instanceof Error ? e.message : String(e));
+    await alert("warning", `Dossier failed: ${next.symbol}`, e instanceof Error ? e.message : String(e), { category: "dossiers", symbol: next.symbol });
   } finally {
     sessionRunning = false;
   }
@@ -665,7 +672,7 @@ async function main() {
     data: { status: "QUEUED" },
   });
   if (requeued.count > 0) console.log(`[boot] requeued ${requeued.count} orphaned RUNNING dossier(s)`);
-  await alert("warning", `Agent restarted (${AGENT_VERSION})`, `Warm-up: no trading for ${HARD.warmupMs / 60_000} minutes. Resuming watch.`);
+  await alert("warning", `Agent restarted (${AGENT_VERSION})`, `Warm-up: no trading for ${HARD.warmupMs / 60_000} minutes. Resuming watch.`, { category: "system" });
   console.log(`[grq-agent] ${AGENT_VERSION} up. Market ${isMarketOpen() ? "OPEN" : "closed"}.`);
 
   for (;;) {
@@ -673,7 +680,7 @@ async function main() {
       await tick();
     } catch (e) {
       console.error("[tick] error", e);
-      await alert("warning", "Agent tick error", e instanceof Error ? e.message : String(e)).catch(() => {});
+      await alert("warning", "Agent tick error", e instanceof Error ? e.message : String(e), { category: "system" }).catch(() => {});
     }
     // Tick fast while research is queued (batch nights), otherwise relax off-hours.
     const queuedCount = await prisma.researchRequest.count({ where: { status: "QUEUED" } }).catch(() => 0);
@@ -684,6 +691,6 @@ async function main() {
 process.on("unhandledRejection", (e) => console.error("[unhandledRejection]", e));
 main().catch(async (e) => {
   console.error("[fatal]", e);
-  await alert("critical", "Agent crashed at top level", e instanceof Error ? e.message : String(e)).catch(() => {});
+  await alert("critical", "Agent crashed at top level", e instanceof Error ? e.message : String(e), { category: "system" }).catch(() => {});
   process.exit(1);
 });

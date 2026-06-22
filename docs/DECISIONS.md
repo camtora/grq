@@ -1175,3 +1175,35 @@ keeping `existing` for the size check); updated the hard-limits line the agent r
 `maxDecisionSessionsPerDay: 4→6` there). Web app + sim engine don't use this gate (`validateAndPlace` is
 agent-only), so no web rebuild.
 **Verified:** `tsc --noEmit` clean; agent image rebuilt + string-checked + swapped; heartbeat ticking. `/var` 75%.
+
+### D53 — iOS push notifications: wire the Discord stream to APNs, per-user configurable (Cam, 2026-06-22)
+**Context:** Everything operationally interesting already fans out to Discord (`alerts.ts`). Cam wants the same on
+his phone — "I expect to always have stock buy notifications," with the rest opt-in per user. Build the push infra,
+wire what goes to Discord, and make it configurable in Settings for each member. Price-target alerts ("set a target,
+get pinged") are explicitly deferred.
+**Decision — categories + always-on policy:** Trades + Risk are **non-toggleable** (always-on), and **any
+`critical`-severity alert** (agent crash, drawdown kill switch) pushes regardless of toggles — that's the "system
+outages" guarantee without forcing the noisy restart/session-error chatter. Everything else is **per-user, default
+ON** ("default opt in for all categories"): `dossiers`, `hunt`, `agentMoves`, `reports`, `members`, `system`. The
+member who *takes* an action isn't pinged about their own action (actorEmail skip). Mobile is members-only, so only
+members register devices — no viewer leak.
+**Architecture:** One chokepoint, unchanged on the surface. `alert(sev,title,body,{category,actorEmail,symbol})`
+and a new `notifyOut()` (Discord+push, no journal — for routes that journal themselves) both call `pushNotify()`
+(`lib/push/notify.ts`), which resolves recipients (DeviceToken × NotificationPreference, with the always-on rules)
+and calls `sendApns()` (`lib/push/apns.ts`). APNs is **token-based** (a .p8 Auth Key) over Node's built-in HTTP/2 +
+`jsonwebtoken` ES256 — **no new dependency**; the provider JWT is cached ~50 min; a `410`/`BadDeviceToken`/
+`Unregistered` reply prunes the dead token. Every `alert()`/`sendDiscord()` call site (~40, across runner/validator/
+sessions/promote + the killswitch/universe/directive routes) was tagged with a category. **Configured-or-no-op:** with
+no `APNS_*` env, push is silent and Discord is unchanged.
+**Schema:** `DeviceToken` (email × token, `apnsEnv` sandbox|production so a token reaches the gateway that minted it)
++ `NotificationPreference` (email PK, 6 toggleable booleans default true; trades/risk aren't stored — force-on in
+code). `priceTargets` column reserved for the later feature (no event wired).
+**Surfaces:** `GET/PUT /api/notifications/preferences` + `POST/DELETE /api/notifications/register` (members-only,
+admitted to the mobile API in `middleware.ts`); web `NotificationSettings.tsx` on the Settings page; iOS
+`@UIApplicationDelegateAdaptor` + `PushManager` (permission, register-after-auth, token upload, foreground banners,
+tap→stock deep-link), `NotificationSettingsView`, and sign-out unregister (so the next member on the same phone
+doesn't inherit tokens). pbxproj wired `CODE_SIGN_ENTITLEMENTS` + `GRQ.entitlements` (`aps-environment`).
+**Humans-only remainder:** create the .p8 Auth Key + enable Push on the App ID + add the Xcode capability + set
+`APNS_KEY_ID/TEAM_ID/BUNDLE_ID/KEY_B64` in `.env` (stubbed, commented). Full runbook: `docs/PUSH-NOTIFICATIONS.md`.
+**Verified:** `tsc --noEmit` clean (web+agent). iOS can't compile on this host (no macOS SDK) — written against the
+existing patterns; needs an Xcode build + a real-device token to light up end-to-end. Not yet deployed.

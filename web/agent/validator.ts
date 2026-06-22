@@ -275,6 +275,7 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
       "info",
       `${order.side === "BUY" ? "Bought" : "Sold"} ${order.qty} ${symbol} @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)}`,
       `${thesis.thesis}${sellLossNote}`,
+      { category: "trades", symbol },
     );
   }
 

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications (D53). "development" is the Xcode-debug value; the
+	     distribution/Archive flow (or the Signing & Capabilities "Push Notifications"
+	     capability) promotes it to "production" for TestFlight/App Store builds. The
+	     app reports which env minted each token (#if DEBUG → sandbox, else production)
+	     so the server sends to the matching APNs gateway. See docs/PUSH-NOTIFICATIONS.md. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest, displayName } from "@/lib/session";
 import { inUniverse } from "@/lib/universe";
-import { sendDiscord } from "@/agent/alerts";
+import { notifyOut } from "@/agent/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
             : "The agent's normal rules apply again."),
     },
   });
-  await sendDiscord("info", title, note ? `"${note}"` : "");
+  await notifyOut("info", title, note ? `"${note}"` : "", { category: "members", actorEmail: session.email, symbol });
 
   return NextResponse.json({ ok: true });
 }

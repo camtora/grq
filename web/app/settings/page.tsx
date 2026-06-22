@@ -10,6 +10,8 @@ import KillSwitch from "@/components/KillSwitch";
 import ThemeToggle from "@/components/ThemeToggle";
 import OrderTicket from "@/components/OrderTicket";
 import JournalSection from "@/components/JournalSection";
+import NotificationSettings from "@/components/NotificationSettings";
+import { prefsFromRow } from "@/lib/push/categories";
 
 const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
@@ -28,6 +30,9 @@ export default async function Settings({ searchParams }: { searchParams: Promise
     cookies(),
   ]);
   const isMember = session?.role === "member";
+  const notifPrefs = prefsFromRow(
+    session?.email ? await prisma.notificationPreference.findUnique({ where: { email: session.email } }) : null,
+  );
 
   // Mirror the root layout's theme resolution: cookie override wins, else the
   // member's saved default, else dark.
@@ -63,6 +68,10 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             </div>
             <ThemeToggle current={theme} />
           </div>
+        </Card>
+
+        <Card className="p-5">
+          <NotificationSettings initial={notifPrefs} readOnly={!isMember} />
         </Card>
 
         <div className="grid gap-6 lg:grid-cols-2">

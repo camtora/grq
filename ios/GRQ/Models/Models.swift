@@ -134,6 +134,30 @@ struct FundSettings: Codable {
     let soakPaperDaysRequired: Int
 }
 
+// MARK: - Notification preferences (per-user push toggles — D53)
+
+/// The toggleable push categories (mirrors shared/contract.ts NotificationPreferences).
+/// trades + risk + critical outages are always-on server-side and aren't here. Every
+/// field defaults true so a partial/missing payload reads as all-on.
+struct NotificationPreferences: Codable, Equatable {
+    var dossiers: Bool = true
+    var hunt: Bool = true
+    var agentMoves: Bool = true
+    var reports: Bool = true
+    var members: Bool = true
+    var system: Bool = true
+
+    /// UI catalog: field key-path + its API JSON key + copy. Mirrors web/lib/push/categories.ts.
+    static let catalog: [(key: WritableKeyPath<NotificationPreferences, Bool>, apiKey: String, label: String, desc: String)] = [
+        (\.dossiers, "dossiers", "Research dossiers", "A dossier you or the agent requested is ready."),
+        (\.hunt, "hunt", "The Hunt & ideas", "New hunt names, directed-hunt results, and smart-money scans."),
+        (\.agentMoves, "agentMoves", "Agent universe moves", "When the agent tracks or self-promotes a name into its tradeable universe."),
+        (\.reports, "reports", "Daily reports", "Morning plan, midday brief, end-of-day close, and the weekly review."),
+        (\.members, "members", "Member activity", "When the other member blocks, pins, promotes, or demotes a name."),
+        (\.system, "system", "System health", "Agent restarts and data-feed or broker hiccups (non-critical)."),
+    ]
+}
+
 // MARK: - Signals (advisory technicals consensus)
 
 struct Signals: Codable {

@@ -2,6 +2,7 @@ import SwiftUI
 import Security
 import UIKit
 import LocalAuthentication
+import UserNotifications
 
 #if canImport(GoogleSignIn)
 import GoogleSignIn
@@ -109,9 +110,14 @@ final class AuthManager: ObservableObject {
     }
 
     func signOut() {
+        // Forget this device server-side with the OLD bearer before clearing it, so the
+        // next member to sign in on this phone doesn't inherit our push tokens (D53).
+        let oldBearer = APIClient.shared.token
+        let hex = PushManager.shared.deviceTokenHex
         currentUser = nil
         APIClient.shared.token = nil
         Keychain.delete(Self.tokenKey)
+        if let hex { Task { await APIClient.shared.unregisterDeviceToken(hex, bearer: oldBearer) } }
     }
 }
 
@@ -221,6 +227,44 @@ final class APIClient {
         if let currency { extra["currency"] = currency }
         if let name { extra["name"] = name }
         return await universeAction(symbol, "add", extra: extra)
+    }
+
+    // MARK: - Push notifications (D53)
+
+    /// Register this device's APNs token under the signed-in member. `apnsEnv` is
+    /// "sandbox" (Xcode debug) or "production" (TestFlight/App Store) — they use
+    /// different APNs gateways, so the server stores which one minted the token.
+    func registerDeviceToken(_ token: String, apnsEnv: String) async -> ActionResult {
+        await postResult("notifications/register", ["token": token, "platform": "ios", "apnsEnv": apnsEnv])
+    }
+
+    /// Forget this device server-side (sign-out). Uses an explicit bearer because the
+    /// caller has usually already cleared the live session token.
+    func unregisterDeviceToken(_ token: String, bearer: String?) async {
+        guard let url = URL(string: "\(baseURL)/notifications/register") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.timeoutInterval = 15
+        if let bearer { req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["token": token])
+        _ = try? await URLSession.shared.data(for: req)
+    }
+
+    func notificationPreferences() async -> NotificationPreferences? {
+        await get("notifications/preferences")
+    }
+
+    /// PUT a subset of toggles; returns the full, server-canonical prefs.
+    func updateNotificationPreferences(_ patch: [String: Bool]) async -> NotificationPreferences? {
+        guard let url = URL(string: "\(baseURL)/notifications/preferences") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.timeoutInterval = 20
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: patch)
+        return await send(req)
     }
 
     // MARK: - Low-level POST + chat stream
@@ -344,5 +388,110 @@ enum GoogleAuth {
         var vc = scene?.keyWindow?.rootViewController
         while let presented = vc?.presentedViewController { vc = presented }
         return vc
+    }
+}
+
+// MARK: - Push notifications (APNs — D53)
+
+/// A tapped notification's deep-link target (a stock to open).
+struct SymbolRoute: Identifiable, Equatable { let id: String }
+
+/// Owns the push lifecycle: ask permission, register with APNs, upload the device
+/// token under the signed-in member, surface a tapped notification as a deep link.
+/// The server gates WHICH notifications arrive (per-user prefs); this just plumbs the
+/// device in. trades/risk/critical always arrive; everything else is the member's call.
+@MainActor
+final class PushManager: ObservableObject {
+    static let shared = PushManager()
+
+    /// Set when the member taps a notification carrying a `symbol` — the UI opens it.
+    @Published var route: SymbolRoute?
+
+    /// The current device token (hex). Kept so sign-out can unregister it.
+    private(set) var deviceTokenHex: String?
+
+    /// The APNs gateway this build's tokens belong to. The real environment is the
+    /// `aps-environment` entitlement, which the SIGNING profile sets — NOT the build
+    /// config (a dev-signed Release build run locally is still sandbox; only a
+    /// distribution build is production). Read it from the embedded provisioning
+    /// profile; an App Store build strips that file → default production. The server
+    /// also self-heals a wrong value, so this is belt-and-suspenders.
+    static var apnsEnv: String {
+        #if targetEnvironment(simulator)
+        return "sandbox"
+        #else
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let raw = String(data: data, encoding: .isoLatin1),
+              let keyRange = raw.range(of: "<key>aps-environment</key>") else {
+            return "production" // no embedded profile → App Store build → production
+        }
+        let after = raw[keyRange.upperBound...]
+        guard let open = after.range(of: "<string>"),
+              let close = after.range(of: "</string>"),
+              open.upperBound <= close.lowerBound else { return "production" }
+        return after[open.upperBound..<close.lowerBound].contains("development") ? "sandbox" : "production"
+        #endif
+    }
+
+    /// Ask for permission (the OS prompts once) and register with APNs. Safe to call
+    /// on every authenticated launch — iOS dedupes, and a token can rotate.
+    func registerForPush() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+            guard granted else { return }
+            Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
+        }
+    }
+
+    /// APNs handed us a token (via the AppDelegate). Stash + upload it.
+    func didRegister(deviceToken: Data) {
+        deviceTokenHex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { await uploadTokenIfPossible() }
+    }
+
+    /// Upload the stored token if we have one and we're signed in. Called both when the
+    /// token lands and right after sign-in (covers either ordering of the two events).
+    func uploadTokenIfPossible() async {
+        guard let hex = deviceTokenHex, APIClient.shared.token != nil else { return }
+        _ = await APIClient.shared.registerDeviceToken(hex, apnsEnv: Self.apnsEnv)
+    }
+}
+
+/// Minimal app delegate — SwiftUI has no lifecycle hook for remote-notification
+/// registration, so we adapt one in (GRQApp `@UIApplicationDelegateAdaptor`). It does
+/// notifications ONLY; auth stays in AuthManager.
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in PushManager.shared.didRegister(deviceToken: deviceToken) }
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("[push] APNs registration failed: \(error.localizedDescription)")
+    }
+
+    // Show banners even when the app is foregrounded (a fill mid-session still pings).
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .list])
+    }
+
+    // Tap → deep-link to the stock if the payload named one.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let symbol = response.notification.request.content.userInfo["symbol"] as? String, !symbol.isEmpty {
+            Task { @MainActor in PushManager.shared.route = SymbolRoute(id: symbol) }
+        }
+        completionHandler()
     }
 }

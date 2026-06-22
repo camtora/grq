@@ -84,6 +84,18 @@ export const FundSettings = z.object({
   soakPaperDaysRequired: z.number().int(),
 });
 
+/* ---------- notification preferences (per-user iOS push toggles — D53) ---------- */
+// The toggleable categories only. trades + risk + critical outages are force-on in
+// code (non-toggleable) and never appear here. GET/PUT /api/notifications/preferences.
+export const NotificationPreferences = z.object({
+  dossiers: z.boolean(), // a requested research dossier is ready
+  hunt: z.boolean(), // new hunt names / directed-hunt / smart-money scan
+  agentMoves: z.boolean(), // the agent self-tracks or self-promotes a name
+  reports: z.boolean(), // morning plan / midday / EOD / weekly review
+  members: z.boolean(), // the OTHER member's universe/directive actions
+  system: z.boolean(), // agent restarts, data-feed/broker hiccups (non-critical)
+});
+
 /* ---------- signals (advisory technicals consensus; see glossary) — v0 ---------- */
 export const Signals = z.object({
   recommendationPct: z.number().int(), // 0–100 share of signal-confidence behind the call
@@ -186,3 +198,4 @@ export type Idea = z.infer<typeof Idea>;
 export type Dossier = z.infer<typeof Dossier>;
 export type Mover = z.infer<typeof Mover>;
 export type Today = z.infer<typeof Today>;
+export type NotificationPreferences = z.infer<typeof NotificationPreferences>;

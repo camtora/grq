@@ -30,6 +30,7 @@ struct MoreView: View {
                     } else {
                         ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
                     }
+                    NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
                     NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
                     NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }
                     themeCard
@@ -234,6 +235,99 @@ struct AboutView: View {
             Image(asset).resizable().scaledToFill().frame(width: 64, height: 64).clipShape(Circle())
                 .overlay(Circle().strokeBorder(Theme.palette(scheme).accent.opacity(0.3), lineWidth: 1))
             Text(name).font(.caption.weight(.semibold)).foregroundStyle(Theme.palette(scheme).textPrimary)
+        }
+    }
+}
+
+// MARK: - Notification settings (per-user push toggles — D53)
+
+struct NotificationSettingsView: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var prefs = NotificationPreferences()
+    @State private var loaded = false
+    @State private var note: String?
+
+    private let alwaysOn: [(String, String)] = [
+        ("Trades", "Every buy, sell, stop, and take-profit fill."),
+        ("Risk & safety", "Kill switch, drawdown halt, and daily-loss pause."),
+        ("Critical outages", "Agent crashes and total data-feed failures."),
+    ]
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("What pings your phone. Per-person — you and Graham each set your own.")
+                    .font(.caption).foregroundStyle(p.textMuted)
+
+                if !loaded {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 30)
+                } else {
+                    ForEach(Array(NotificationPreferences.catalog.enumerated()), id: \.offset) { _, c in
+                        toggleCard(c.label, c.desc, c.key, c.apiKey)
+                    }
+                    alwaysOnCard
+                    if let note { Text(note).font(.caption).foregroundStyle(p.accentText) }
+                }
+            }
+            .padding(16)
+        }
+        .background(ScreenBackground().ignoresSafeArea())
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if let fetched = await APIClient.shared.notificationPreferences() { prefs = fetched }
+            loaded = true
+        }
+    }
+
+    private func toggleCard(_ label: String, _ desc: String, _ kp: WritableKeyPath<NotificationPreferences, Bool>, _ apiKey: String) -> some View {
+        let p = Theme.palette(scheme)
+        let binding = Binding(get: { prefs[keyPath: kp] }, set: { update(kp, apiKey, $0) })
+        return Card {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    Text(desc).font(.caption).foregroundStyle(p.textMuted)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: binding).labelsHidden().tint(p.accent)
+            }
+        }
+    }
+
+    private var alwaysOnCard: some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Always on").font(.caption.weight(.bold)).foregroundStyle(p.textMuted)
+                    Text("can't be turned off")
+                        .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .overlay(Capsule().strokeBorder(p.cardBorder, lineWidth: 1))
+                }
+                ForEach(alwaysOn, id: \.0) { item in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("●").font(.caption2).foregroundStyle(p.accent.opacity(0.7))
+                        Text("**\(item.0)** — \(item.1)").font(.caption).foregroundStyle(p.textMuted)
+                    }
+                }
+            }
+        }
+    }
+
+    private func update(_ kp: WritableKeyPath<NotificationPreferences, Bool>, _ apiKey: String, _ value: Bool) {
+        let prev = prefs
+        prefs[keyPath: kp] = value
+        note = nil
+        Task {
+            if let saved = await APIClient.shared.updateNotificationPreferences([apiKey: value]) {
+                prefs = saved
+            } else {
+                prefs = prev
+                note = "Couldn't save — check your connection and try again."
+            }
         }
     }
 }

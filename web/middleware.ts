@@ -42,6 +42,7 @@ const MOBILE_API = [
   "/api/stocks/directive",
   "/api/note",
   "/api/notes",
+  "/api/notifications",   // device-token register + per-user push prefs (D53)
 ];
 
 function isMobileApi(path: string): boolean {

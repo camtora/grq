@@ -6,9 +6,11 @@ import GoogleSignIn
 
 @main
 struct GRQApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var auth = AuthManager()
     @StateObject private var theme = ThemeManager()
     @StateObject private var glossary = GlossaryPresenter()
+    @StateObject private var push = PushManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -16,6 +18,7 @@ struct GRQApp: App {
                 .environmentObject(auth)
                 .environmentObject(theme)
                 .environmentObject(glossary)
+                .environmentObject(push)
                 .tint(Theme.brandAccent)
                 .preferredColorScheme(theme.colorScheme)
                 .sheet(item: $glossary.entry) { entry in
@@ -48,6 +51,8 @@ final class GlossaryPresenter: ObservableObject {
 struct RootView: View {
     @EnvironmentObject var auth: AuthManager
     @EnvironmentObject var theme: ThemeManager
+    @EnvironmentObject var glossary: GlossaryPresenter
+    @EnvironmentObject var push: PushManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSplash = true
 
@@ -66,6 +71,20 @@ struct RootView: View {
         .onChange(of: scenePhase) { old, new in
             // Make it rain on every open — cold launch and every return from background.
             if new == .active && old == .background { showSplash = true }
+        }
+        // Register for push once the member is signed in (the OS prompts once); also
+        // (re)upload the token in case APNs handed it to us before auth landed (D53).
+        .task(id: auth.isAuthenticated) {
+            if auth.isAuthenticated {
+                push.registerForPush()
+                await push.uploadTokenIfPossible()
+            }
+        }
+        // A tapped notification carrying a symbol opens that stock's dossier.
+        .sheet(item: $push.route) { r in
+            NavigationStack { StockDetailView(symbol: r.id) }
+                .environmentObject(auth)
+                .environmentObject(glossary)
         }
     }
 }

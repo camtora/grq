@@ -7,3 +7,7 @@ node_modules/
 ._*
 screenshots/
 *.tsbuildinfo
+
+# APNs auth keys — secret, never commit (D53)
+*.p8
+AuthKey_*.p8

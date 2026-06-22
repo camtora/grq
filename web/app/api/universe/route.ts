@@ -14,7 +14,7 @@ import { promotionScreen } from "@/lib/screen";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
 import { refreshQuotesFor } from "@/lib/broker/quotes";
 import { refreshBars } from "@/lib/bars";
-import { sendDiscord } from "@/agent/alerts";
+import { notifyOut } from "@/agent/alerts";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -119,14 +119,14 @@ export async function POST(req: Request) {
       await refreshBars([key], "1y").catch(() => 0);
       await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });
       await journal(key, `${who} added ${key} to research`, `${pickName ?? resolved.name ?? bare} (${resolved.yahoo}${pickCurrency ? `, ${pickCurrency}` : ""}) is now a CANDIDATE — researched, not tradeable. Dossier queued. Promotion to the universe requires both members + the automated screen.`);
-      await sendDiscord("info", `${who} added ${key} to research`, `${pickName ?? resolved.name ?? ""} — dossier queued.`);
+      await notifyOut("info", `${who} added ${key} to research`, `${pickName ?? resolved.name ?? ""} — dossier queued.`, { category: "members", actorEmail: session.email, symbol: key });
       return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key, yahoo: resolved.yahoo, name: pickName ?? resolved.name });
     }
     // revive (same listing, was retired)
     await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: who } });
     invalidateUniverseCache();
     await journal(key, `${who} re-opened research on ${key}`, "Back to CANDIDATE — history was kept.");
-    await sendDiscord("info", `${who} re-opened research on ${key}`);
+    await notifyOut("info", `${who} re-opened research on ${key}`, "", { category: "members", actorEmail: session.email, symbol: key });
     return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key });
   }
 
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
     });
     invalidateUniverseCache();
     await journal(symbol, `${who} dismissed ${symbol} from the hunt`, "Marked RETIRED — the hunt won't resurface it. Re-add from the watchlist any time.");
-    await sendDiscord("info", `${who} dismissed ${symbol} from the hunt`);
+    await notifyOut("info", `${who} dismissed ${symbol} from the hunt`, "", { category: "members", actorEmail: session.email, symbol });
     return NextResponse.json({ ok: true, status: "RETIRED" });
   }
 
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
     if (pending > 0) return bad(`${key} already has research in flight.`);
     // No daily cap — Cam lifted it 2026-06-15 (research as much as we want).
     await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });
-    await sendDiscord("info", `${who} queued research on ${key}`);
+    await notifyOut("info", `${who} queued research on ${key}`, "", { category: "members", actorEmail: session.email, symbol: key });
     return NextResponse.json({ ok: true, queued: true, symbol: key });
   }
 
@@ -194,7 +194,7 @@ export async function POST(req: Request) {
       });
       invalidateUniverseCache();
       await journal(symbol, `${who} requested promotion of ${symbol}`, `Proposed tier: ${tier}. Awaiting the other member's approval — universe additions take both of you.`);
-      await sendDiscord("info", `${who} wants ${symbol} in the universe (${tier})`, "Needs the other member's approval on the Research tab.");
+      await notifyOut("info", `${who} wants ${symbol} in the universe (${tier})`, "Needs the other member's approval on the Research tab.", { category: "members", actorEmail: session.email, symbol });
       return NextResponse.json({ ok: true, pending: who });
     }
     if (entry.promotionRequestedBy === who) {
@@ -208,7 +208,7 @@ export async function POST(req: Request) {
     });
     invalidateUniverseCache();
     await journal(symbol, `${symbol} promoted to the universe`, `Approved by ${entry.promotionRequestedBy} + ${who} (tier: ${tier}). Screen passed. The agent may now trade it within all guardrails.`);
-    await sendDiscord("info", `🟢 ${symbol} joined the universe (${tier})`, `${entry.promotionRequestedBy} + ${who} — screen passed.`);
+    await notifyOut("info", `🟢 ${symbol} joined the universe (${tier})`, `${entry.promotionRequestedBy} + ${who} — screen passed.`, { category: "members", actorEmail: session.email, symbol });
     return NextResponse.json({ ok: true, status: "ACTIVE" });
   }
 
@@ -223,7 +223,7 @@ export async function POST(req: Request) {
     invalidateUniverseCache();
     const held = await prisma.position.findUnique({ where: { symbol } });
     await journal(symbol, `${who} demoted ${symbol} from the universe`, `Back to CANDIDATE: no new buys.${held ? ` The current ${held.qty}-share position may be held or sold normally — exits are never trapped.` : ""}`);
-    await sendDiscord("warning", `${who} demoted ${symbol} from the universe`, held ? `Position of ${held.qty} sh unaffected; no new buys.` : "No new buys.");
+    await notifyOut("warning", `${who} demoted ${symbol} from the universe`, held ? `Position of ${held.qty} sh unaffected; no new buys.` : "No new buys.", { category: "members", actorEmail: session.email, symbol });
     return NextResponse.json({ ok: true, status: "CANDIDATE" });
   }
 
@@ -234,7 +234,7 @@ export async function POST(req: Request) {
     await prisma.universeMember.update({ where: { symbol }, data: { status: "RETIRED" } });
     invalidateUniverseCache();
     await journal(symbol, `${who} retired ${symbol}`, "Research stops (quotes/bars/dossiers). All history is kept; re-add any time.");
-    await sendDiscord("info", `${who} retired ${symbol} from research`);
+    await notifyOut("info", `${who} retired ${symbol} from research`, "", { category: "members", actorEmail: session.email, symbol });
     return NextResponse.json({ ok: true, status: "RETIRED" });
   }
 

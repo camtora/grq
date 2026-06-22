@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest, displayName } from "@/lib/session";
-import { sendDiscord } from "@/agent/alerts";
+import { notifyOut } from "@/agent/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +41,12 @@ export async function POST(req: Request) {
     }),
   ]);
 
-  await sendDiscord(
+  await notifyOut(
     body.engaged ? "critical" : "warning",
     body.engaged ? `Kill switch ENGAGED by ${who}` : `Trading resumed by ${who}`,
     body.engaged ? "All order placement is halted at the gate." : "The order gate is open again.",
+    // Risk = forced-on; skip the member who flipped it so only the OTHER is pinged.
+    { category: "risk", actorEmail: session.email },
   );
 
   return NextResponse.json({ ok: true, engaged: body.engaged });

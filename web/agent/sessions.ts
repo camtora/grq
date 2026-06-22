@@ -72,7 +72,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
       if (message.type === "result") {
         result = message.subtype === "success" ? message.result : null;
         if (message.subtype !== "success") {
-          await alert("warning", `Agent session "${opts.label}" ended: ${message.subtype}`);
+          await alert("warning", `Agent session "${opts.label}" ended: ${message.subtype}`, "", { category: "system" });
         }
       }
     }
@@ -80,7 +80,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
     console.log(`[session] ${opts.label} done (${result ? result.length : 0} chars)`);
     return result;
   } catch (e) {
-    await alert("warning", `Agent session "${opts.label}" failed`, e instanceof Error ? e.message : String(e));
+    await alert("warning", `Agent session "${opts.label}" failed`, e instanceof Error ? e.message : String(e), { category: "system" });
     return null;
   }
 }
@@ -402,7 +402,7 @@ Write the EOD report body in markdown (no top-level title — the dashboard adds
     create: { date: startOfEtDay(), kind: "EOD", title: `EOD — ${etDateStr()}`, body, statsJson: JSON.stringify(stats) },
     update: { body, statsJson: JSON.stringify(stats) },
   });
-  await alert("info", `EOD report — ${etDateStr()}`, `Day P&L ${stats.day_pnl} · NAV ${stats.nav} · vs XIC ${stats.vs_xic} · ${stats.trades} trade(s)`);
+  await alert("info", `EOD report — ${etDateStr()}`, `Day P&L ${stats.day_pnl} · NAV ${stats.nav} · vs XIC ${stats.vs_xic} · ${stats.trades} trade(s)`, { category: "reports" });
 }
 
 export async function runMiddayReport(): Promise<void> {
@@ -418,7 +418,7 @@ Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: wh
   await prisma.journalEntry.create({
     data: { kind: "RESEARCH", title: `Midday brief — ${etDateStr()}`, body, agentVersion: AGENT_VERSION },
   });
-  await alert("info", `Midday brief — ${etDateStr()}`, `Day P&L $${(dayPnlCents / 100).toFixed(2)} · NAV $${(pf.navCents / 100).toFixed(2)}\n${body.slice(0, 1000)}`);
+  await alert("info", `Midday brief — ${etDateStr()}`, `Day P&L $${(dayPnlCents / 100).toFixed(2)} · NAV $${(pf.navCents / 100).toFixed(2)}\n${body.slice(0, 1000)}`, { category: "reports" });
 }
 
 export async function runWeeklyReview(): Promise<void> {
@@ -448,7 +448,7 @@ Your ENTIRE final response must be just the report body.`;
     create: { date: startOfEtDay(), kind: "WEEKLY", title: `Weekly review — ${etDateStr()}`, body },
     update: { body },
   });
-  await alert("info", `Weekly review — ${etDateStr()}`, "Posted to the dashboard, capital recommendation included.");
+  await alert("info", `Weekly review — ${etDateStr()}`, "Posted to the dashboard, capital recommendation included.", { category: "reports" });
 }
 
 export { AGENT_VERSION };

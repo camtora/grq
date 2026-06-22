@@ -126,7 +126,10 @@ the public App Store (guideline 4.8) — Google-only is fine for internal TestFl
 - **P1** — read-only iOS: Splash, Today (The Daily), Portfolio, Market. **Client wired
   (2026-06-16)** — goes live the moment auth + nginx land; no view rewrites needed.
 - **P2** — member actions (kill switch, order, directives) behind member role + Face ID.
-- **P3** — push (APNs) + agent chat.
+- **P3** — push (APNs) + agent chat. **Push code-complete (2026-06-22, D53)** — the
+  Discord event stream now fans out to APNs, per-user configurable in Settings (trades +
+  risk always-on). Silent no-op until the `APNS_*` env + the Apple-portal steps land; see
+  **docs/PUSH-NOTIFICATIONS.md**. Agent chat already shipped (read-only).
 - **P4** — TestFlight to Cam & Graham; parity enforced from here on.
 
 ## Open items for Cam
