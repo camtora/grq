@@ -4,7 +4,9 @@ export const AGENT_VERSION = "v1.0-phase2";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
-  maxPositions: 8,
+  // No cap on the NUMBER of distinct holdings (Cam, 2026-06-22, D52): breadth is the
+  // agent's call. Still bounded by maxUniverseSize (eligible names), the dial's
+  // maxNewTradesPerWeek + cashFloorPct, the fee-edge floor, and the order-rate caps below.
   maxOrdersPerDay: 10,
   maxOrdersPerHour: 4,
   dailyLossPauseBps: -300, // day P&L ≤ −3% NAV → no new buys today

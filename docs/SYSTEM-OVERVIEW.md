@@ -205,10 +205,10 @@ Kill switch · quote staleness (>90 min → refuse) · integer qty > 0 · cash s
 **Hard limits** (agent/policy.ts — never agent-configurable):
 
 ```
-maxPositions: 8          maxOrdersPerDay: 10      maxOrdersPerHour: 4
-dailyLossPauseBps: -300  drawdownKillBps: -1500   feeEdgeMultiple: 3
-warmupMs: 5 min          noEntriesFirstMin: 15    noEntriesLastMin: 15
-maxDecisionSessionsPerDay: 4
+(no holdings-count cap, D52)  maxOrdersPerDay: 10      maxOrdersPerHour: 4
+dailyLossPauseBps: -300        drawdownKillBps: -1500   feeEdgeMultiple: 3
+warmupMs: 5 min                noEntriesFirstMin: 15    noEntriesLastMin: 15
+maxDecisionSessionsPerDay: 6
 ```
 
 The stop-loss is **deterministic code, not an LLM decision**: `enforceStops()` in

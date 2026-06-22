@@ -188,9 +188,9 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
 
   if (order.side === "BUY") {
     const existing = pf.positions.find((p) => p.symbol === symbol);
-    if (!existing && pf.positions.length >= HARD.maxPositions) {
-      return refuse(`Max position count reached (${HARD.maxPositions}).`);
-    }
+    // No cap on the number of distinct holdings (D52) — breadth is the agent's call.
+    // Position sizing (maxPositionPct), the cash floor, the weekly BUY cap, and the
+    // fee-edge floor still bound how many names it can realistically open.
     const commIn = ibkrFixedCommissionCents(order.qty, estPrice);
     const costCad = cad(order.qty * estPrice + commIn);
     const newPosValueCad = (existing?.marketValueCadCents ?? 0) + cad(order.qty * estPrice);

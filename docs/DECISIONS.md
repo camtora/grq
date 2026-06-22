@@ -1156,3 +1156,22 @@ collision-prone (AII is a real NYSE listing too), so the fix is to capture the e
 **Verified:** `tsc --noEmit` clean; `db push` applied; backfill dry-run hand-checked then applied; web rebuilt +
 string-checked + swapped; board re-rendered shows Almonty $27.04 CAD / Logan $0.84 / Kraken $7.29 / Propel $24.34
 and NO American Integrity or Legence; agent rebuilt + swapped. `/var` 75%, 15G free.
+
+### D52 — Remove the holdings-count cap: breadth is the agent's call (Cam, 2026-06-22)
+**Context:** The §6 gate refused a BUY of a NEW name once the book held ≥ `HARD.maxPositions` (8) — `validator.ts`
+`Max position count reached`. Cam: "I don't think we should have a cap — it's whatever the agent thinks is best."
+A flat count cap is a blunt instrument: with NAV ~25k it was forcing either ≤8 names or none, when the right
+breadth is a judgment the agent should make per its theses. The fund was at 7/8 (AC, ATD, IFC, MRU, SLF, TD, XIC),
+one name from being unable to open anything new.
+**Decision:** No cap on the NUMBER of distinct holdings. Breadth is the agent's call — but the fund is NOT
+unbounded: it's still held in by `maxUniverseSize` (≤60 *eligible* names, so ≤60 distinct holdings), the dial's
+`maxNewTradesPerWeek` BUY pace + `cashFloorPct`, `maxPositionPct` (per-name size), the `feeEdgeMultiple` floor
+(a position too small can't clear 3× round-trip commissions), and the order-rate caps. So removing the count cap
+removes an *arbitrary* limit, not the anti-runaway protection. The §6 gate, kill switch, and 75% conviction bar
+are all UNCHANGED. Per rule #1, a human made this change; the agent still can't touch the gate.
+**Change (agent-only, one rebuild):** dropped `HARD.maxPositions` (`policy.ts`) + its enforcement (`validator.ts`,
+keeping `existing` for the size check); updated the hard-limits line the agent reads (`context.ts`) to "no cap on
+# of holdings (breadth is your call …)"; refreshed `docs/SYSTEM-OVERVIEW.md` (also corrected a stale
+`maxDecisionSessionsPerDay: 4→6` there). Web app + sim engine don't use this gate (`validateAndPlace` is
+agent-only), so no web rebuild.
+**Verified:** `tsc --noEmit` clean; agent image rebuilt + string-checked + swapped; heartbeat ticking. `/var` 75%.
