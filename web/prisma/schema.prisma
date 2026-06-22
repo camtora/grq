@@ -176,6 +176,14 @@ model JournalEntry {
   // almost nobody covers, 1 = a well-followed name. Surfaced as the obscurity badge
   // on The Hunt and used to sort obscure-first. Null for non-hunt entries.
   obscurity       Int?
+  // The find's listing (D51): the exchange the agent researched it on — NYSE/NASDAQ/
+  // AMEX/TSX/TSXV/CSE/NEO. A BARE ticker is ambiguous (AII = American Integrity on
+  // NYSE but Almonty on TSX), so this resolves the EXACT listing — the suffixed symbol
+  // (yahooForListing) drives the find's quote, bars, and logo so we never show a
+  // same-ticker different-company's price/chart. companyName = the FMP-confirmed name
+  // for that listing (the identity record + display name). Null on legacy/unresolved.
+  exchange        String?
+  companyName     String?
   agentVersion String      @default("v1.0-phase2")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])

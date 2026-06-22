@@ -1122,3 +1122,37 @@ alerting policy so the next "why no ping?" is self-serve.
   trace, so absence of a journal entry ≠ alert didn't fire).
 **Verified:** `tsc --noEmit` clean; agent image rebuilt + string-checked before swap, swapped, pruned. No schema,
 no behavior change beyond the corrected times string.
+
+### D51 — Hunt finds carry their exchange (a bare ticker is ambiguous → wrong-company data) (Cam, 2026-06-22)
+**Context:** Cam asked why so many logos were missing on The Hunt. Investigation found the logo was the visible
+tip of a **data-correctness** bug: hunt finds are stored as BARE tickers (D46, leads-not-tracked, so they skip
+the universe add-flow that resolves a listing), and a bare ticker is ambiguous. `toYahoo()` trusts a bare ticker
+as a US listing, so the board was pulling whatever US company owns that ticker — for CA finds, a *different
+company entirely*. Live on the board: **AII** showed **American Integrity Insurance** ($17.32 USD) instead of
+**Almonty Industries** ($27 CAD, the tungsten miner the dossier was about); **LGN** showed **Legence** ($87.52)
+instead of **Logan Energy** ($0.84 CAD); **PNG** (Kraken Robotics) showed nothing. The dossier *prose* was right
+(the agent researches by company name); only the attached price, 30-day momentum, **heat rank**, and logo were a
+same-ticker stranger's — AII even had 63 cached daily bars of the insurer. Reverse-resolving a bare ticker is
+collision-prone (AII is a real NYSE listing too), so the fix is to capture the exchange the agent already knew.
+**Decision:** Capture the exchange at the source and key everything off the EXACT listing — no guessing.
+**Change (schema + agent + web, one db-push + two rebuilds):**
+- **Schema:** `JournalEntry.exchange` + `companyName` (the FMP-confirmed name — identity record + display name).
+- **Agent** (`tools.ts write_journal`): new `exchange` enum (NYSE/NASDAQ/AMEX/TSX/TSXV/CSE/NEO); on save it
+  confirms `(ticker, exchange)` via `fmpProfile(yahooForListing(...))` and stores the canonical company name
+  (best-effort — an FMP miss still stores the exchange). Hunt prompt (`sessions.ts`) now REQUIRES the exchange,
+  with the AII/LGN ambiguity spelled out.
+- **Web** (`app/market/page.tsx`): each find resolves to `yahooForListing(sym, d.exchange)`; that one listing
+  drives **quote, bars, AND logo** (was `fmpLogo(bareSym)` + bare-keyed quotes). `companyName` becomes the display
+  name; the exchange shows in the tag. Legacy finds with no exchange stay bare (unchanged) — US names already
+  resolve correctly bare; only CA names needed the suffix.
+- **Backfill** (`scripts/backfill-hunt-exchange.ts`, one-time): name-grounds existing finds — for each, picks the
+  `fmpSearch` listing whose company name is best-corroborated (whole-word, multi-token) by the dossier body, so a
+  collision resolves to the company the dossier is ABOUT. **48 finds corrected** (AII→Almonty/TSX, LGN→Logan/TSXV,
+  PNG→Kraken/TSXV, WUC→Western Uranium/CSE, RECO→Reconnaissance/TSXV, …); stale wrong-company bare Quote/Bar rows
+  purged (AII's 63 insurer bars, LGN's 63 Legence bars, etc.). Genuinely-uncovered or US "no-match" names stay
+  monogram/bare (safe — bare already resolves US). Lone CA miss: `HPS.A` (class-share ticker; rare edge case).
+  NB the FMP key lives in the ROOT `.env`, not `web/.env`, so the host-side script needs it injected
+  (`FMP_API_KEY=… npx tsx …`) — Prisma auto-loads `DATABASE_URL` but nothing else.
+**Verified:** `tsc --noEmit` clean; `db push` applied; backfill dry-run hand-checked then applied; web rebuilt +
+string-checked + swapped; board re-rendered shows Almonty $27.04 CAD / Logan $0.84 / Kraken $7.29 / Propel $24.34
+and NO American Integrity or Legence; agent rebuilt + swapped. `/var` 75%, 15G free.

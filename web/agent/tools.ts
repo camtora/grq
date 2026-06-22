@@ -3,10 +3,11 @@ import { z } from "zod";
 import { prisma } from "../lib/db";
 import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
-import { universeEntry, activeSymbols } from "../lib/universe";
+import { universeEntry, activeSymbols, yahooForListing } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
 import { computeSignals, overallSignal } from "./signals";
+import { fmpProfile } from "../lib/fmp";
 import { AGENT_VERSION, MAX_PENDING_WAKEUPS } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
@@ -87,7 +88,7 @@ const getJournalTool = tool(
 
 const writeJournalTool = tool(
   "write_journal",
-  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page. ALSO set stance: YOUR OWN call on the name — one of Strong Buy, Buy, Weak Buy, Hold, Weak Sell, Sell, Strong Sell (the SAME 7-point scale as the technical signal, so the two read uniformly side by side). This is your judgment as the fund's manager and may differ from the deterministic technical signal consensus; when it does, make the bottomLine say why. It surfaces as 'GRQ's call' on the stock page, next to the signal read. For a DISCOVERY-HUNT find (a 'Hunt dossier' entry), ALSO set obscurity 1–5: how under-the-radar / under-covered the name is — 5 = a deep cut almost nobody covers (no analysts, tiny float, no front-page coverage), 1 = a widely-followed name. This drives the obscurity badge + sort on The Hunt; the whole point of the hunt is the obscure end, so be honest about it.",
+  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page. ALSO set stance: YOUR OWN call on the name — one of Strong Buy, Buy, Weak Buy, Hold, Weak Sell, Sell, Strong Sell (the SAME 7-point scale as the technical signal, so the two read uniformly side by side). This is your judgment as the fund's manager and may differ from the deterministic technical signal consensus; when it does, make the bottomLine say why. It surfaces as 'GRQ's call' on the stock page, next to the signal read. For a DISCOVERY-HUNT find (a 'Hunt dossier' entry), ALSO set obscurity 1–5: how under-the-radar / under-covered the name is — 5 = a deep cut almost nobody covers (no analysts, tiny float, no front-page coverage), 1 = a widely-followed name. This drives the obscurity badge + sort on The Hunt; the whole point of the hunt is the obscure end, so be honest about it. ALSO, for ANY new-symbol dossier (a hunt find OR a name not yet in our universe), set exchange: the EXACT exchange the ticker trades on — one of NYSE, NASDAQ, AMEX, TSX, TSXV, CSE, NEO. This is REQUIRED to show the right company: a bare ticker is ambiguous (AII is American Integrity Insurance on NYSE but Almonty Industries on TSX; LGN is Legence on NASDAQ but Logan Energy on TSXV) — without the exchange we'd attach a same-ticker DIFFERENT company's price, chart, and logo. Get it right; it's confirmed against FMP on save.",
   {
     kind: z.enum(["RESEARCH", "RETRO", "LESSON"]),
     symbol: z.string().optional(),
@@ -101,8 +102,18 @@ const writeJournalTool = tool(
     bottomLine: z.string().max(2000).optional(),
     stance: z.enum(["Strong Buy", "Buy", "Weak Buy", "Hold", "Weak Sell", "Sell", "Strong Sell"]).optional(),
     obscurity: z.number().int().min(1).max(5).optional(),
+    exchange: z.enum(["NYSE", "NASDAQ", "AMEX", "TSX", "TSXV", "CSE", "NEO"]).optional(),
   },
   async (args) => {
+    // Confirm the (ticker, exchange) resolves to a real listing and record its
+    // canonical company name — the identity check that stops a same-ticker wrong
+    // company's data from being attached (best-effort: FMP miss → name stays null,
+    // the suffixed listing still drives quote/bars/logo). Only for new-symbol dossiers.
+    let companyName: string | null = null;
+    if (args.exchange && args.symbol) {
+      const listing = yahooForListing(args.symbol, args.exchange);
+      companyName = (await fmpProfile(listing).catch(() => null))?.companyName || null;
+    }
     const e = await prisma.journalEntry.create({
       data: {
         kind: args.kind as JournalKind,
@@ -117,10 +128,12 @@ const writeJournalTool = tool(
         bottomLine: args.bottomLine,
         stance: args.stance,
         obscurity: args.obscurity,
+        exchange: args.exchange,
+        companyName,
         agentVersion: AGENT_VERSION,
       },
     });
-    return text(`Journaled #${e.id} (${args.kind})${args.targetFarCents || args.targetNearCents ? " with targets" : ""}.`);
+    return text(`Journaled #${e.id} (${args.kind})${args.exchange ? ` · ${args.symbol?.toUpperCase()} on ${args.exchange}${companyName ? ` = ${companyName}` : " (FMP unconfirmed)"}` : ""}${args.targetFarCents || args.targetNearCents ? " with targets" : ""}.`);
   },
 );
 

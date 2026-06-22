@@ -171,6 +171,7 @@ Use WebSearch (and WebFetch for promising leads) to find ${b ? "as many genuine 
 
 For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
 - symbol = the bare ticker (e.g. "PRL")
+- exchange = the EXACT exchange it trades on — one of NYSE, NASDAQ, AMEX, TSX, TSXV, CSE, NEO. REQUIRED: a bare ticker is ambiguous (AII is American Integrity Insurance on NYSE but Almonty Industries on TSX; LGN is Legence on NASDAQ but Logan Energy on TSXV) — without the right exchange we'd show a same-ticker DIFFERENT company's price, chart, and logo. This resolves the exact listing; it's confirmed against FMP on save.
 - title = "Hunt dossier — TICKER — ${etDateStr()}"
 - body = markdown that LEADS with the two things that matter most, in this order:
   **Why we care** — 1–2 sentences a non-expert grasps: the catalyst / asymmetry / why it looks mispriced or is being overlooked *right now*. This is the most important line.

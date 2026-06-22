@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { allUniverse } from "@/lib/universe";
+import { allUniverse, yahooForListing } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
 import { getSession } from "@/lib/session";
@@ -41,24 +41,36 @@ export default async function Market() {
       return true;
     })
     .slice(0, 12);
-  const symbols = dossiers.map((d) => d.symbol as string);
+  // Resolve each find to its EXACT listing (D51). A bare ticker is ambiguous — AII is
+  // American Integrity Insurance on NYSE but Almonty on TSX — so use the agent-captured
+  // exchange to suffix it (yahooForListing: AII+TSX→AII.TO). Tracked names already carry
+  // their listing via the universe row. This listing drives quote, bars, AND logo, so we
+  // never show a same-ticker different-company's price/chart/logo. Legacy finds with no
+  // exchange stay bare (unchanged) until the backfill or the next hunt sets it.
+  const listingOf = (d: (typeof dossiers)[number]): string => {
+    const sym = d.symbol as string;
+    return uBy.has(sym) ? sym : yahooForListing(sym, d.exchange);
+  };
+  const listings = dossiers.map(listingOf);
 
-  // Price + 30-day closes for the data-viz. Quotes live-fetch on a miss; daily bars exist
-  // only for tracked names, so backfill any find with too little history once (then cached).
-  const quotes = await getQuotes(symbols);
-  const closesBySym = new Map<string, { date: Date; closeCents: number }[]>();
-  await Promise.all(symbols.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
-  const missing = symbols.filter((s) => (closesBySym.get(s)?.length ?? 0) < 8);
+  // Price + 30-day closes for the data-viz, keyed by the resolved listing. Quotes
+  // live-fetch on a miss; daily bars exist only for tracked names, so backfill any find
+  // with too little history once (then cached).
+  const quotes = await getQuotes(listings);
+  const closesByListing = new Map<string, { date: Date; closeCents: number }[]>();
+  await Promise.all(listings.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
+  const missing = listings.filter((s) => (closesByListing.get(s)?.length ?? 0) < 8);
   if (missing.length) {
     await refreshBars(missing, "3mo").catch(() => 0);
-    await Promise.all(missing.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
+    await Promise.all(missing.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
   }
 
   const finds: HuntFind[] = dossiers.map((d) => {
     const sym = d.symbol as string;
     const u = uBy.get(sym);
-    const q = quotes.get(sym);
-    const spark = (closesBySym.get(sym) ?? []).slice(-30).map((c) => c.closeCents);
+    const listing = listingOf(d);
+    const q = quotes.get(listing);
+    const spark = (closesByListing.get(listing) ?? []).slice(-30).map((c) => c.closeCents);
     const change30d =
       spark.length >= 2 && spark[0] > 0
         ? (spark[spark.length - 1] - spark[0]) / spark[0]
@@ -67,14 +79,16 @@ export default async function Market() {
           : null;
     return {
       sym,
-      name: u?.name ?? sym,
-      // Real company logo: the tracked entry's resolved logo if we have one, else FMP's
-      // ticker-keyed image (monogram fallback handled in <StockLogo> on a 404).
-      logoUrl: u?.logoUrl || fmpLogo(sym),
+      // FMP-confirmed company name for the resolved listing (D51) > tracked name > ticker.
+      name: d.companyName ?? u?.name ?? sym,
+      // Real company logo keyed off the EXACT listing (D51) — the tracked entry's resolved
+      // logo if we have one, else FMP's ticker-keyed image for the suffixed listing
+      // (monogram fallback handled in <StockLogo> on a 404).
+      logoUrl: u?.logoUrl || fmpLogo(listing),
       currency: u?.currency ?? null,
       cur: q?.midCents ?? null,
       change30d,
-      tag: [u?.exchange, u?.sector].filter(Boolean).join(" · ") || null,
+      tag: [u?.exchange ?? d.exchange, u?.sector].filter(Boolean).join(" · ") || null,
       spark,
       heat: computeHeat({ confidence: d.confidence, change30d, obscurity: d.obscurity }),
       confidence: d.confidence,
