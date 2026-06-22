@@ -1207,3 +1207,25 @@ doesn't inherit tokens). pbxproj wired `CODE_SIGN_ENTITLEMENTS` + `GRQ.entitleme
 `APNS_KEY_ID/TEAM_ID/BUNDLE_ID/KEY_B64` in `.env` (stubbed, commented). Full runbook: `docs/PUSH-NOTIFICATIONS.md`.
 **Verified:** `tsc --noEmit` clean (web+agent). iOS can't compile on this host (no macOS SDK) — written against the
 existing patterns; needs an Xcode build + a real-device token to light up end-to-end. Not yet deployed.
+
+### D54 — Settlement-aware cash mirror: kill the phantom post-buy NAV-tape dip (Cam, 2026-06-22)
+**Context:** The Daily Tape (and the live NAV header) showed a small dip *every* time the agent bought, then
+recovered a tick later. Root cause: the Tape on **both** web and mobile is purely a render of `NavSnapshot` rows
+(`web/app/page.tsx` `todaySnaps`, `lib/feed.ts` `tape`), and on the IBKR path `reconcile()` mirrors **cash and
+positions independently**. A BUY drops IBKR's `settledcash` the instant it fills, but the positions ledger grows
+the new shares a few seconds later — a reconcile landing in that gap wrote the lower cash with **no offsetting
+position** → NAV = cash-out / no-stock-in → the dip. The same phantom NAV is a known false-daily-loss-pause trigger.
+The synchronous fast-fill path already guarded this (reconcile-retry-loop *then* snapshot); the gap was the slow-fill
+(`finalizePending`) path + the periodic 30-min reconcile catching the lag window.
+**Decision:** Fix it at the **data layer, not the chart** — one server-side change covers web + mobile + the
+guardrails, since they all read the same `NavSnapshot`/DB. Chose "defer cash in reconcile" (lowest-risk, localized,
+preserves the *mirror broker truth* philosophy) over an atomic optimistic-ledger apply or cosmetic chart smoothing.
+**Change (agent-only, one rebuild) — `lib/broker/ibkr.ts` `reconcile()`:** the cash mirror is now settlement-aware.
+If a freshly-filled BUY (a `Trade` within `CASH_SETTLE_LAG_MS` = 5 min) hasn't yet grown its position in the broker
+read (`brokerQty <= dbQty`) **and** the broker's cash for that currency has dropped below ours, **defer the cash
+write this tick** — cash + shares then land together on the next tick and NAV stays continuous. Position mirroring
+is untouched; only the cash write is gated. Verified state-by-state: steady state never false-defers (settled →
+`brokerCash == dbCash`), a sell's cash CREDIT is never deferred (broker cash ≥ ours), and it self-heals (a buy older
+than the window falls through, so a genuinely-settled debit is never frozen). Per-currency aware (CAD/USD). No web/
+chat rebuild — `reconcile()` only runs in the agent runner.
+**Verified:** `tsc --noEmit` clean; agent image rebuilt + swapped; heartbeat ticking. `/var` 75%.

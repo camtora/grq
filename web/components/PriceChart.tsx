@@ -23,7 +23,24 @@ const RANGES: { key: string; days: number | null }[] = [
   { key: "1Y", days: 366 },
 ];
 
-export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; currency?: string | null }) {
+// `daily` (default) is the stock-page chart: a month/year date axis with a range
+// picker. `intraday` is the Today NAV tape: one session, an HH:MM time axis, no
+// range picker — same crosshair/tooltip UX so a dip can be read off to the minute.
+// `bare` drops the outer card + header so a caller can embed just the plot inside
+// its own card (the Today tape keeps its "opened → now · vs XIC" header).
+export default function PriceChart({
+  data,
+  currency = "CAD",
+  mode = "daily",
+  label = "Price",
+  bare = false,
+}: {
+  data: Pt[];
+  currency?: string | null;
+  mode?: "daily" | "intraday";
+  label?: string;
+  bare?: boolean;
+}) {
   const [range, setRange] = useState("1Y");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -31,6 +48,7 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
   // Slice to the selected window; fall back to the full series if a short window
   // would leave us with fewer than two points to draw.
   const pts = useMemo(() => {
+    if (mode === "intraday") return data; // one session — never sliced by range
     const last = data[data.length - 1]?.t ?? Date.now();
     let sliced = data;
     if (range === "YTD") {
@@ -44,7 +62,7 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
       }
     }
     return sliced.length >= 2 ? sliced : data;
-  }, [data, range]);
+  }, [data, range, mode]);
 
   const n = pts.length;
   const min = Math.min(...pts.map((p) => p.c));
@@ -72,25 +90,32 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
   const hp = hi != null ? xy(hi) : null;
 
   const longSpan = pts[n - 1].t - pts[0].t > 200 * 86_400_000;
+  const hhmm = (t: number) =>
+    new Date(t).toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hour12: false });
   const fmtAxis = (t: number) =>
-    new Date(t).toLocaleDateString("en-CA", longSpan ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" });
-  const fmtFull = (t: number) => new Date(t).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    mode === "intraday"
+      ? hhmm(t)
+      : new Date(t).toLocaleDateString("en-CA", longSpan ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" });
+  const fmtFull = (t: number) =>
+    mode === "intraday"
+      ? `${hhmm(t)} ET`
+      : new Date(t).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
   // Keep the tooltip inside the plot near the edges.
   const tipAlign = hp ? (hp.x < 18 ? "left-0 translate-x-0" : hp.x > 82 ? "right-0 translate-x-0" : "-translate-x-1/2") : "";
   const tipLeft = hp ? (hp.x < 18 ? undefined : hp.x > 82 ? undefined : `${hp.x}%`) : undefined;
 
-  return (
-    <div className="mb-6 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-5">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs uppercase tracking-wider text-teal-200/50">Price</span>
-          <span className={`text-xs font-semibold tabular-nums ${changePct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-            {changePct >= 0 ? "+" : ""}
-            {(changePct * 100).toFixed(1)}%
-          </span>
-          <span className="text-[11px] text-teal-200/40">{range === "1Y" ? "past year" : range}</span>
-        </div>
+  const header = (
+    <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs uppercase tracking-wider text-teal-200/50">{label}</span>
+        <span className={`text-xs font-semibold tabular-nums ${changePct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+          {changePct >= 0 ? "+" : ""}
+          {(changePct * 100).toFixed(1)}%
+        </span>
+        <span className="text-[11px] text-teal-200/40">{mode === "intraday" ? "today" : range === "1Y" ? "past year" : range}</span>
+      </div>
+      {mode === "daily" && (
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <button
@@ -104,9 +129,12 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
             </button>
           ))}
         </div>
-      </div>
+      )}
+    </div>
+  );
 
-      <div className="text-[10px] tabular-nums text-teal-200/40">
+  const chart = (
+    <div className="text-[10px] tabular-nums text-teal-200/40">
         <div className="flex items-stretch">
           <div className="flex h-56 w-16 shrink-0 flex-col justify-between py-[3px] pr-2 text-right">
             <span>{money(max, currency)}</span>
@@ -122,7 +150,7 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
             {/* The SVG only draws the gridlines + the price line — never the dot. A
                 circle here would be stretched into an oval by preserveAspectRatio="none"
                 (non-scaling-stroke can't fix a fill), so the dot is an HTML element below. */}
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="price history">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label={mode === "intraday" ? "NAV tape" : "price history"}>
               {[0, 50, 100].map((y) => (
                 <line key={y} x1={0} y1={y} x2={100} y2={y} stroke="var(--card-border)" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
               ))}
@@ -152,6 +180,15 @@ export default function PriceChart({ data, currency = "CAD" }: { data: Pt[]; cur
           <span>{fmtAxis(pts[n - 1].t)}</span>
         </div>
       </div>
+  );
+
+  // `bare`: just the plot, for a caller that supplies its own card + header
+  // (the Today tape). Otherwise the self-contained card with the header on top.
+  if (bare) return chart;
+  return (
+    <div className="mb-6 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-5">
+      {header}
+      {chart}
     </div>
   );
 }

@@ -24,6 +24,13 @@ const GATEWAY = process.env.IBKR_GATEWAY_URL ?? "https://ibeam:5000";
 const ACCOUNT_ID = process.env.IBKR_ACCOUNT_ID ?? "";
 const BASE = `${GATEWAY}/v1/api`;
 
+// A BUY settles cash-first at IBKR — `settledcash` drops the instant it fills, but
+// the positions ledger takes a few seconds to grow the new shares. Within this
+// window reconcile() defers mirroring the lower cash so the NAV tape never prints a
+// phantom "cash-out / no-stock-in" dip (see reconcile()). Spans several 60s ticks
+// and self-heals: a BUY older than this falls through and cash mirrors normally.
+const CASH_SETTLE_LAG_MS = 5 * 60_000;
+
 // Scoped self-signed-cert trust: this agent applies ONLY to gateway calls below,
 // never globally (Yahoo quotes etc. keep full TLS verification).
 const gatewayAgent = new https.Agent({ rejectUnauthorized: false });
@@ -426,15 +433,20 @@ export class IBKRBroker implements BrokerAdapter {
     }
     const [brokerPositions, cash] = await Promise.all([this.getPositions(), this.getCashByCurrency()]);
 
+    // Mirror baselines — read once and shared by the positions mirror AND the
+    // cash-settlement guard below.
+    const [account, dbPositions] = await Promise.all([
+      prisma.account.findUnique({ where: { id: 1 } }),
+      prisma.position.findMany(),
+    ]);
+    const dbBy = new Map(dbPositions.map((p) => [p.symbol, p]));
+    const brokerBy = new Map((brokerPositions ?? []).map((p) => [p.symbol, p]));
+
     let drift = 0;
     // Only touch positions when the read was trustworthy (a real array). null =
     // failed/non-array → leave the mirror exactly as-is; NEVER delete on it. A
     // successful empty array still flows through and correctly clears a flat account.
     if (brokerPositions !== null) {
-      const dbPositions = await prisma.position.findMany();
-      const dbBy = new Map(dbPositions.map((p) => [p.symbol, p]));
-      const brokerBy = new Map(brokerPositions.map((p) => [p.symbol, p]));
-
       for (const bp of brokerPositions) {
         const cur = dbBy.get(bp.symbol);
         if (!cur || cur.qty !== bp.qty || cur.avgCostCents !== bp.avgCostCents || cur.currency !== bp.currency) {
@@ -454,14 +466,49 @@ export class IBKRBroker implements BrokerAdapter {
         }
       }
     }
+
+    // ---- Cash mirror, settlement-aware (the post-buy NAV-dip fix) -------------
+    // A BUY debits cash the instant it fills, but IBKR's positions ledger grows the
+    // new shares a few seconds later. Mirroring that lower cash while the shares are
+    // still absent prints a phantom "cash-out / no-stock-in" dip on the NAV tape —
+    // and the same false NAV can trip the daily-loss pause. (Web + mobile both render
+    // the same NavSnapshots, so this one server-side fix covers both.) So if a freshly
+    // filled BUY hasn't yet shown up as position growth in the broker read, DEFER the
+    // cash write this tick: cash + shares then land together next tick and NAV stays
+    // continuous. Self-healing — a BUY older than CASH_SETTLE_LAG_MS falls through, so
+    // a genuinely settled debit is never frozen, and a sell's cash CREDIT (broker cash
+    // ≥ ours) is never deferred.
+    let cashDeferred = false;
     if (cash.cadCents !== null) {
-      await prisma.account.update({ where: { id: 1 }, data: { cashCents: cash.cadCents, usdCashCents: cash.usdCents } }).catch(() => {});
+      const since = new Date(Date.now() - CASH_SETTLE_LAG_MS);
+      // reconcile() only runs on the ibkr broker, so every recent trade here is IBKR.
+      const recentBuys = await prisma.trade.findMany({ where: { side: "BUY", at: { gte: since } }, select: { symbol: true } });
+      for (const { symbol } of recentBuys) {
+        const brokerQty = brokerBy.get(symbol)?.qty ?? 0;
+        const dbQty = dbBy.get(symbol)?.qty ?? 0;
+        if (brokerQty > dbQty) continue; // broker grew the position → the buy has landed
+        const currency = brokerBy.get(symbol)?.currency ?? dbBy.get(symbol)?.currency ?? "CAD";
+        const brokerCash = currency === "USD" ? cash.usdCents : cash.cadCents;
+        const dbCash = currency === "USD" ? account?.usdCashCents ?? 0 : account?.cashCents ?? 0;
+        if (brokerCash < dbCash) { cashDeferred = true; break; } // debit landed ahead of the shares
+      }
+      if (cashDeferred) {
+        console.log("[reconcile] deferring cash mirror — a filled BUY hasn't settled into the positions ledger yet (avoids a phantom NAV dip)");
+      } else {
+        await prisma.account.update({ where: { id: 1 }, data: { cashCents: cash.cadCents, usdCashCents: cash.usdCents } }).catch(() => {});
+      }
     }
+
     if (drift > 0) {
+      const cashNote = cashDeferred
+        ? "cash mirror deferred (a fill is still settling)"
+        : cash.cadCents !== null
+          ? `cash $${(cash.cadCents / 100).toFixed(2)} CAD${cash.usdCents ? ` + $${(cash.usdCents / 100).toFixed(2)} USD` : ""}`
+          : "cash unknown";
       await prisma.journalEntry.create({
         data: {
           kind: "SYSTEM", title: `Reconciled ${drift} position(s) from IBKR`,
-          body: `Mirrored broker truth: ${brokerPositions?.length ?? 0} live position(s), cash ${cash.cadCents !== null ? `$${(cash.cadCents / 100).toFixed(2)} CAD` : "unknown"}${cash.usdCents ? ` + $${(cash.usdCents / 100).toFixed(2)} USD` : ""}.`,
+          body: `Mirrored broker truth: ${brokerPositions?.length ?? 0} live position(s), ${cashNote}.`,
         },
       });
     }

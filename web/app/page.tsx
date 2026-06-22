@@ -6,7 +6,7 @@ import { startOfEtDay, etDateStr, etParts, isMarketDay } from "@/agent/calendar"
 import { money, signedMoney, pct } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import Sparkline from "@/components/Sparkline";
+import PriceChart from "@/components/PriceChart";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
@@ -244,11 +244,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const dayPnl = marketDay ? pf.navCents - dayOpenNav : 0;
   const dayPnlPct = marketDay && dayOpenNav > 0 ? dayPnl / dayOpenNav : 0;
 
-  const tape = todaySnaps.map((s) => s.navCents);
-  if (dayOpenSnap) tape.unshift(dayOpenSnap.navCents);
+  // The tape as {t,c} points (ms epoch · navCents) so the interactive chart can show
+  // the time + NAV of any point on hover — the same chart the stock pages use, in its
+  // intraday mode, so a post-buy dip can be read off to the minute.
+  const tapePts = todaySnaps.map((s) => ({ t: s.at.getTime(), c: s.navCents }));
+  if (dayOpenSnap) tapePts.unshift({ t: dayOpenSnap.at.getTime(), c: dayOpenSnap.navCents });
   // Close the tape on the live NAV so a quiet day (sparse snapshots / market closed)
   // still draws open→now instead of a misleading flat line (Cam 2026-06-19).
-  if (isToday && tape.length >= 1 && tape[tape.length - 1] !== pf.navCents) tape.push(pf.navCents);
+  if (isToday && tapePts.length >= 1 && tapePts[tapePts.length - 1].c !== pf.navCents) {
+    tapePts.push({ t: Date.now(), c: pf.navCents });
+  }
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
   const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
@@ -406,8 +411,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             )}
           </span>
         </div>
-        {tape.length >= 2 ? (
-          <Sparkline values={tape} />
+        {tapePts.length >= 2 ? (
+          <PriceChart mode="intraday" label="NAV" data={tapePts} currency="CAD" bare />
         ) : pf.positions.length > 0 ? (
           <p className="py-4 text-sm text-teal-200/40">
             Quiet tape — not enough NAV snapshots yet today; it fills in as the agent ticks through the session.
