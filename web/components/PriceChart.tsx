@@ -92,14 +92,18 @@ export default function PriceChart({
   const longSpan = pts[n - 1].t - pts[0].t > 200 * 86_400_000;
   const hhmm = (t: number) =>
     new Date(t).toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hour12: false });
+  // Daily bars are stored as "ET trading day at UTC midnight" (see yahoo.ts etDayUtc),
+  // so the *UTC* calendar components hold the trading day. Format daily dates in UTC —
+  // formatting in any negative-offset zone (incl. the browser's local ET) reads
+  // 2026-06-22T00:00:00Z back as June 21 8pm and mislabels the weekday by a day.
   const fmtAxis = (t: number) =>
     mode === "intraday"
       ? hhmm(t)
-      : new Date(t).toLocaleDateString("en-CA", longSpan ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" });
+      : new Date(t).toLocaleDateString("en-CA", { timeZone: "UTC", ...(longSpan ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" }) });
   const fmtFull = (t: number) =>
     mode === "intraday"
       ? `${hhmm(t)} ET`
-      : new Date(t).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+      : new Date(t).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
   // Keep the tooltip inside the plot near the edges.
   const tipAlign = hp ? (hp.x < 18 ? "left-0 translate-x-0" : hp.x > 82 ? "right-0 translate-x-0" : "-translate-x-1/2") : "";
