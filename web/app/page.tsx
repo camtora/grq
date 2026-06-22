@@ -237,9 +237,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const stanceBy = new Map<string, string>();
   for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
 
+  // Flat on non-trading days — NAV is frozen at the last close, so "today" is $0 rather than
+  // the prior session's last-snapshot→close drift shown as a phantom move (Cam, 2026-06-21).
+  const marketDay = isMarketDay(anchor);
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
-  const dayPnl = pf.navCents - dayOpenNav;
-  const dayPnlPct = dayOpenNav > 0 ? dayPnl / dayOpenNav : 0;
+  const dayPnl = marketDay ? pf.navCents - dayOpenNav : 0;
+  const dayPnlPct = marketDay && dayOpenNav > 0 ? dayPnl / dayOpenNav : 0;
 
   const tape = todaySnaps.map((s) => s.navCents);
   if (dayOpenSnap) tape.unshift(dayOpenSnap.navCents);
@@ -332,10 +335,18 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             </div>
           </div>
           <div className="text-right text-sm">
-            <Pnl cents={dayPnl} />{" "}
-            <span className="text-teal-200/50">
-              ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
-            </span>
+            {marketDay ? (
+              <>
+                <Pnl cents={dayPnl} />{" "}
+                <span className="text-teal-200/50">
+                  ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
+                </span>
+              </>
+            ) : (
+              <span className="text-teal-200/60">
+                Flat · <span className="uppercase tracking-wide text-teal-300/70">markets closed</span>
+              </span>
+            )}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4 border-t border-teal-400/10 pt-3">

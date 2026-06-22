@@ -8,6 +8,9 @@ import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
 import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison } from "./fmp";
 import { stanceMeta } from "./stance";
+import { getCloses, refreshBars } from "./bars";
+import { computeHeat } from "./heat";
+import { fmpLogo } from "./logos";
 import {
   getPortfolios,
   getCongressLeaderboard,
@@ -301,15 +304,20 @@ export async function todayResponse() {
   const start = startOfEtDay();
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  const [pf, dayOpenSnap, todaySnaps, eod, plan, midday, latestPlan, latestResearch, xicQuote, all] = await Promise.all([
+  const [pf, dayOpenSnap, todaySnaps, latestPlan, midday, checkin, latestEod, weekly, xicQuote, all] = await Promise.all([
     getPortfolio(),
     prisma.navSnapshot.findFirst({ where: { at: { lt: start } }, orderBy: { at: "desc" } }),
     prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
-    prisma.report.findFirst({ where: { kind: "EOD", date: { gte: start, lt: end } } }),
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } } }),
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Midday brief" }, at: { gte: start, lt: end } } }),
+    // The evolving "latest briefing" slot — same sources the web Portfolio page reads
+    // (web/app/portfolio/page.tsx): newest-of-its-kind for each brief type, then pick
+    // whichever timestamp is freshest (below). NOT date-scoped, so a weekend shows the
+    // last active report.
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" } }, orderBy: { at: "desc" } }),
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH" }, orderBy: { at: "desc" } }),
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } }, orderBy: { at: "desc" } }),
+    // Intraday check-ins write a "Check-in — …" RESEARCH note; match loosely.
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" } }, orderBy: { at: "desc" } }),
+    prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
+    prisma.report.findFirst({ where: { kind: "WEEKLY" }, orderBy: { createdAt: "desc" } }),
     getQuote("XIC").catch(() => null),
     allUniverse(),
   ]);
@@ -320,9 +328,15 @@ export async function todayResponse() {
   const trackedSymbols = all.filter((u) => u.status !== "RETIRED").map((u) => u.symbol);
   const quotes = await getQuotes(trackedSymbols);
 
+  // Day P&L only means something on a trading day. On a weekend/holiday the NAV is frozen
+  // at the last close, so "today" is flat — otherwise we surface the prior session's last
+  // intraday-snapshot→close drift as a phantom move (e.g. a Sunday showing Friday's last
+  // 11 minutes; Cam, 2026-06-21). `edition` is already "weekend" here, which the app reads
+  // as "markets closed".
+  const marketDay = isMarketDay();
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
-  const dayPnl = pf.navCents - dayOpenNav;
-  const dayPnlBps = dayOpenNav > 0 ? Math.round((dayPnl / dayOpenNav) * 10_000) : 0;
+  const dayPnl = marketDay ? pf.navCents - dayOpenNav : 0;
+  const dayPnlBps = marketDay && dayOpenNav > 0 ? Math.round((dayPnl / dayOpenNav) * 10_000) : 0;
 
   // The tape: open → now, labelled HH:MM ET.
   const tapeSnaps = dayOpenSnap ? [dayOpenSnap, ...todaySnaps] : todaySnaps;
@@ -350,10 +364,21 @@ export async function todayResponse() {
         .catch(() => [] as { symbol: string; name: string; priceCents: number; changeBps: number }[])
     : [];
 
-  const lead = eod ?? midday ?? plan ?? latestPlan ?? latestResearch;
-  // Title by WHAT the lead is, mirroring the web Today page's section header —
-  // not the time of day (so the app doesn't label the morning plan "Midday").
-  const leadTitle = eod ? "The Close" : plan ? "Today's Lead" : "From the desk";
+  // One evolving "latest briefing" slot, mirroring the web Portfolio page
+  // (web/app/portfolio/page.tsx): the agent's most recent read replaces the last —
+  // morning game plan → intraday check-in → midday → EOD close → next morning, with
+  // the Saturday weekly review holding the slot all weekend. Pick whichever brief has
+  // the newest timestamp so the app tracks the same briefing the web shows, instead of
+  // freezing on the morning plan (Cam 2026-06-22). The kicker doubles as the title.
+  const briefs = [
+    latestPlan && { title: "Morning Brief · the pre-market read", body: latestPlan.body, at: latestPlan.at },
+    midday && { title: "Midday Review · the afternoon read", body: midday.body, at: midday.at },
+    checkin && { title: "Intraday Check-in · the latest read", body: checkin.body, at: checkin.at },
+    latestEod && { title: "Evening Brief · the day's close", body: latestEod.body, at: latestEod.createdAt },
+    weekly && { title: "Weekly Review · the week in receipts", body: weekly.body, at: weekly.createdAt },
+  ].filter((b): b is NonNullable<typeof b> => Boolean(b));
+  const lead = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
+  const leadTitle = lead?.title ?? "From the desk";
 
   return {
     edition: editionNow(),
@@ -405,13 +430,34 @@ export async function huntResponse() {
     })
     .slice(0, 12);
 
-  const quotes = await getQuotes(picked.map((d) => d.symbol as string));
+  const symbols = picked.map((d) => d.symbol as string);
+  const quotes = await getQuotes(symbols);
+
+  // 30-day closes power the redesign's heat ranking + sparklines (mirror of
+  // web/app/market/page.tsx). Daily bars exist only for tracked names, so backfill any
+  // find with too little history once (then it's cached); the rest renormalize.
+  const closesBySym = new Map<string, { date: Date; closeCents: number }[]>();
+  await Promise.all(symbols.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
+  const missing = symbols.filter((s) => (closesBySym.get(s)?.length ?? 0) < 8);
+  if (missing.length) {
+    await refreshBars(missing, "3mo").catch(() => 0);
+    await Promise.all(missing.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
+  }
+
   const finds = picked.map((d) => {
     const sym = d.symbol as string;
     const u = uBy.get(sym);
-    const cur = quotes.get(sym)?.midCents ?? null;
+    const q = quotes.get(sym);
+    const cur = q?.midCents ?? null;
     const nearBps = cur && d.targetNearCents != null ? Math.round(((d.targetNearCents - cur) / cur) * 10_000) : null;
     const farBps = cur && d.targetFarCents != null ? Math.round(((d.targetFarCents - cur) / cur) * 10_000) : null;
+    const spark = (closesBySym.get(sym) ?? []).slice(-30).map((c) => c.closeCents);
+    const change30d =
+      spark.length >= 2 && spark[0] > 0
+        ? (spark[spark.length - 1] - spark[0]) / spark[0]
+        : q
+          ? (q.dayChangeBps ?? 0) / 10_000
+          : null;
     let sources: string[] = [];
     try {
       sources = d.sourcesJson ? JSON.parse(d.sourcesJson) : [];
@@ -421,8 +467,8 @@ export async function huntResponse() {
     return {
       sym,
       name: u?.name ?? sym,
-      logoUrl: u?.logoUrl ?? null,
-      currency: u?.currency ?? "CAD",
+      logoUrl: u?.logoUrl || fmpLogo(sym),
+      currency: u?.currency ?? null,
       cur,
       nearBps,
       farBps,
@@ -431,10 +477,17 @@ export async function huntResponse() {
       body: d.body,
       sources,
       obscurity: d.obscurity ?? null,
+      // Heat-feed enrichment (the iOS redesign reads these; older clients ignore them).
+      change30d,
+      spark,
+      heat: computeHeat({ confidence: d.confidence, change30d, obscurity: d.obscurity }),
+      tag: [u?.exchange, u?.sector].filter(Boolean).join(" · ") || null,
       watch: watchFor(statusBy.get(sym)),
     };
   });
-  finds.sort((a, b) => (b.obscurity ?? -1) - (a.obscurity ?? -1));
+  // Heat ranks the board (the redesign's organizing metric); newest-first survives as a
+  // stable tiebreak within equal heat since `picked` was already date-ordered.
+  finds.sort((a, b) => b.heat - a.heat);
   return { brief: state?.huntBrief ?? null, finds };
 }
 

@@ -68,18 +68,38 @@ extension Theme {
     }
 }
 
-/// GRQ's call as a coloured pill (abbr or full label).
+/// GRQ's call as a compact badge: the bull / bear mascot for a buy / sell, or a
+/// neutral "=" for a hold. The mascot art is fixed teal/red, so the pill colour
+/// (emerald·teal·amber·red) carries the strength — Strong Buy vs Weak Buy — and
+/// the precise label lives on the stock page's RatingBar. `full` appends the word.
 struct StanceBadge: View {
     @Environment(\.colorScheme) private var scheme
     let rating: Rating
     var full = false
     var body: some View {
         let c = Theme.toneColor(rating.tone, scheme)
-        Text(full ? rating.label.uppercased() : rating.abbr)
-            .font(.caption2.weight(.bold))
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(Capsule().fill(c.opacity(0.16)))
-            .foregroundStyle(c)
+        HStack(spacing: 5) {
+            glyph(c)
+            if full {
+                Text(rating.label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(c)
+            }
+        }
+        .padding(.horizontal, full ? 9 : 6).padding(.vertical, 4)
+        .background(Capsule().fill(c.opacity(0.16)))
+        .overlay(Capsule().strokeBorder(c.opacity(0.28), lineWidth: 1))
+        .fixedSize()
+        .accessibilityLabel(Text(rating.label))
+    }
+    /// bull (buy) · bear (sell) · a neutral "=" at the hold midpoint.
+    @ViewBuilder private func glyph(_ c: Color) -> some View {
+        if rating.pos > 0.5 {
+            Image("bull-splash").resizable().scaledToFit().frame(height: 15)
+        } else if rating.pos < 0.5 {
+            Image("bear-splash").resizable().scaledToFit().frame(height: 15)
+        } else {
+            Image(systemName: "equal").font(.system(size: 13, weight: .black))
+                .foregroundStyle(c).frame(height: 15)
+        }
     }
 }
 

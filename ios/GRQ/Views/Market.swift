@@ -122,7 +122,7 @@ struct MarketRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(name.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
-                            if let c = name.currency, c != "CAD" { Chip(text: c, tone: .teal) }
+                                .lineLimit(1).minimumScaleFactor(0.8)
                             if let r = name.resolvedRating { StanceBadge(rating: r) }
                         }
                         Text(name.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
@@ -133,9 +133,12 @@ struct MarketRow: View {
             Spacer(minLength: 8)
             if name.lastCents > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    MoneyText(cents: name.lastCents, currency: name.currency).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    MoneyText(cents: name.lastCents, currency: name.currency)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary).lineLimit(1)
                     BpsBadge(bps: name.dayChangeBps).font(.caption)
                 }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
             if isMember {
                 if candidate {

@@ -162,9 +162,9 @@ export const Today = z.object({
   dayPnlBps: z.number().int(),
   benchmarkBps: z.number().int().nullable(), // vs-XIC for the day
   tape: z.array(NavPoint),                    // intraday NAV, open → now
-  leadStoryMarkdown: z.string().nullable(),   // EOD wrap, or the morning plan pre-close
-  // Section title for the lead, derived from WHAT the entry is (not the clock) so
-  // it matches the web Today page: "The Close" | "Today's Lead" | "From the desk".
+  leadStoryMarkdown: z.string().nullable(),   // the newest agent briefing (check-in/plan/midday/EOD/weekly)
+  // Kicker for the lead, naming WHICH briefing it is (the freshest one) so it mirrors
+  // the web Portfolio briefing slot, e.g. "Intraday Check-in · the latest read".
   leadTitle: z.string(),
   movers: z.array(Mover),                     // biggest universe moves
   topHitters: z.array(Mover),                 // holdings by day move

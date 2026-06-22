@@ -71,7 +71,7 @@ struct TodayView: View {
                 HStack {
                     TermLink(slug: "nav", label: "NAV").font(.caption.weight(.bold))
                     Spacer()
-                    if let b = t.benchmarkBps {
+                    if let b = t.benchmarkBps, t.edition != .weekend {
                         HStack(spacing: 4) {
                             TermLink(slug: "vs-xic", label: "vs XIC").font(.caption2)
                             BpsBadge(bps: b).font(.caption2)
@@ -80,9 +80,17 @@ struct TodayView: View {
                 }
                 HeroAmount(cents: t.navCents)
                 HStack(spacing: 8) {
-                    Pnl(cents: t.dayPnlCents).font(.headline.weight(.bold))
-                    BpsBadge(bps: t.dayPnlBps).font(.subheadline)
-                    Text("today").font(.caption).foregroundStyle(p.textMuted)
+                    if t.edition == .weekend {
+                        // Markets closed — NAV is frozen at the last close, so the day is flat
+                        // (the backend already sends dayPnl = 0). No phantom "today" move.
+                        Image(systemName: "moon.zzz.fill").font(.subheadline).foregroundStyle(p.textMuted)
+                        Text("Flat").font(.headline.weight(.bold)).foregroundStyle(p.textMuted)
+                        Text("· markets closed").font(.caption).foregroundStyle(p.textMuted)
+                    } else {
+                        Pnl(cents: t.dayPnlCents).font(.headline.weight(.bold))
+                        BpsBadge(bps: t.dayPnlBps).font(.subheadline)
+                        Text("today").font(.caption).foregroundStyle(p.textMuted)
+                    }
                 }
                 Text(Content.shared.dailyQuote()).font(.callout.italic())
                     .foregroundStyle(p.textMuted).padding(.top, 2)

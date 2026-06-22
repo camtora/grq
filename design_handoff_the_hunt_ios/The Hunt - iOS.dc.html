@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e7e5df;font-family:'Hanken Grotesk',system-ui,sans-serif}
+::selection{background:rgba(52,224,196,0.3)}
+.scr::-webkit-scrollbar{width:0;display:none}
+@keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(255,93,107,.55)}70%{box-shadow:0 0 0 6px rgba(255,93,107,0)}}
+@keyframes huntGlow{0%,100%{opacity:.4}50%{opacity:.85}}
+</style>
+</helmet>
+
+<div style="min-width:100%;min-height:100vh;width:max-content;box-sizing:border-box;padding:48px;background:#e7e5df">
+  <div style="display:flex;gap:48px;align-items:flex-start">
+
+    <!-- ============ FRAME 1 — HEAT FEED ============ -->
+    <div style="flex:none;width:402px">
+      <div style="font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:0.3px;color:#6b6b66;margin-bottom:14px">The Hunt — feed</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ yes }}" hint-size="402px,874px">
+        <div class="scr" style="height:100%;overflow-y:auto;background:radial-gradient(520px 380px at 80% -4%,rgba(52,224,196,0.10),transparent 62%),#07110f;color:#d6efe8;font-family:'Hanken Grotesk',system-ui,sans-serif">
+          <div style="padding:58px 16px 40px">
+
+            <!-- brand row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(150deg,#34e0c4,#1c8f7c);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:#06120f;box-shadow:0 0 18px rgba(52,224,196,0.35)">↗</div>
+                <div style="font-family:'Space Grotesk';font-weight:700;font-size:13px;letter-spacing:0.4px">
+                  <span style="color:#a9c6be">GET </span><span style="color:#34e0c4">RICH</span><span style="color:#a9c6be"> QUICK</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:16px;background:rgba(255,93,107,0.08);border:1px solid rgba(255,93,107,0.3);font-size:9.5px;font-weight:700;letter-spacing:0.5px;color:#ff8b96">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#ff5d6b;animation:pulseDot 2s infinite"></span>HALT
+                </span>
+                <span style="width:30px;height:30px;border-radius:50%;background:conic-gradient(from 140deg,#34e0c4,#9b7cff,#ff7a45,#34e0c4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#06120f;border:2px solid #0d1a18">JK</span>
+              </div>
+            </div>
+
+            <!-- big title -->
+            <div style="font-family:'Space Grotesk';font-weight:700;font-size:34px;line-height:1;letter-spacing:0.4px;color:#eafff9">The Hunt</div>
+            <div style="font-size:12.5px;color:#6c8a83;margin-top:6px;margin-bottom:16px">AI sweeps North America for names ready to pop.</div>
+
+            <!-- hunt bar -->
+            <div style="position:relative;border-radius:16px;padding:1.5px;background:linear-gradient(120deg,rgba(52,224,196,0.55),rgba(155,124,255,0.35),rgba(255,122,69,0.3));overflow:hidden;margin-bottom:12px">
+              <div style="position:absolute;inset:0;background:linear-gradient(120deg,rgba(52,224,196,0.6),transparent 60%);animation:huntGlow 4s ease-in-out infinite;pointer-events:none"></div>
+              <div style="position:relative;border-radius:15px;background:linear-gradient(150deg,#0e1f1c,#0a1614);padding:14px">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="width:38px;height:38px;flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(52,224,196,0.12);border:1px solid rgba(52,224,196,0.3);font-size:19px;color:#34e0c4">⌖</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14.5px;font-weight:500;color:#eafff9">Find me stocks ready to pop</div>
+                    <div style="font-size:11px;color:#5d7b74;margin-top:2px">Tap to brief the hunt — or leave blank to go broad</div>
+                  </div>
+                </div>
+                <button style="width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:11px;border:none;cursor:pointer;font-family:'Space Grotesk';font-weight:700;font-size:15px;letter-spacing:0.8px;color:#04110d;background:linear-gradient(180deg,#5af0d6,#22c2a8);box-shadow:0 6px 22px rgba(52,224,196,0.35),inset 0 1px 0 rgba(255,255,255,0.3)">⚡ HUNT</button>
+              </div>
+            </div>
+
+            <!-- directed banner -->
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:12px;background:linear-gradient(90deg,rgba(255,122,69,0.10),rgba(255,122,69,0.02));border:1px solid rgba(255,122,69,0.22);margin-bottom:16px">
+              <span style="width:8px;height:8px;border-radius:50%;background:#ff7a45;flex:none;box-shadow:0 0 12px rgba(255,122,69,0.8)"></span>
+              <div style="font-size:12px;color:#c8ddd6"><span style="color:#ffb18d;font-weight:600">Directed hunt:</span> <span style="font-weight:700;color:#eafff9">ready to pop</span></div>
+            </div>
+
+            <!-- toolbar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <span style="font-size:12px;color:#6c8a83"><b style="color:#eafff9;font-family:'JetBrains Mono'">6</b> hot names · sorted by <span style="color:#34e0c4;font-weight:600">HEAT ▾</span></span>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;background:rgba(52,224,196,0.06);border:1px solid rgba(52,224,196,0.22);color:#7af0da;font-size:11.5px">↻</span>
+            </div>
+
+            <!-- cards -->
+            <sc-for list="{{ cards }}" as="card" hint-placeholder-count="6">
+              <div style="position:relative;border-radius:18px;background:linear-gradient(150deg,#10211e,#0a1513);border:1px solid rgba(90,200,180,0.12);padding:15px 15px 15px 18px;margin-bottom:12px;overflow:hidden">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ card.heatColor }};box-shadow:0 0 14px {{ card.heatColor }}"></div>
+
+                <!-- top row -->
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="flex:none;text-align:center;width:30px">
+                    <div style="font-family:'Space Grotesk';font-weight:700;font-size:22px;line-height:1;color:{{ card.heatColor }};text-shadow:0 0 16px {{ card.heatColor }}">{{ card.rank2 }}</div>
+                    <div style="font-size:8px;letter-spacing:1px;color:#5d7b74;margin-top:3px">RANK</div>
+                  </div>
+                  <div style="width:36px;height:36px;flex:none;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:12px;color:#06120f;background:{{ card.heatColor }}">{{ card.init }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:7px">
+                      <span style="font-family:'Space Grotesk';font-weight:700;font-size:18px;letter-spacing:0.2px">{{ card.t }}</span>
+                      <sc-if value="{{ card.isTop }}" hint-placeholder-val="{{ false }}"><span style="font-size:8px;letter-spacing:0.8px;font-weight:700;color:#ff9a6e;background:rgba(255,122,69,0.16);border:1px solid rgba(255,122,69,0.4);padding:1px 6px;border-radius:5px">▲ HOTTEST</span></sc-if>
+                    </div>
+                    <div style="font-size:10.5px;color:#6c8a83;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.name }} · {{ card.tag }}</div>
+                  </div>
+                  <svg viewBox="0 0 52 52" width="48" height="48" style="overflow:visible;flex:none">
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(120,220,200,0.13)" stroke-width="5.5"></circle>
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="#34e0c4" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="{{ card.gaugeDash }}" transform="rotate(-90 26 26)" style="filter:drop-shadow(0 0 4px rgba(52,224,196,0.55))"></circle>
+                    <text x="26" y="24" text-anchor="middle" fill="#eafff9" font-size="14" font-weight="700" font-family="JetBrains Mono">{{ card.conf }}</text>
+                    <text x="26" y="34" text-anchor="middle" fill="#6c8a83" font-size="6.5" letter-spacing="0.5" font-family="JetBrains Mono">CONF</text>
+                  </svg>
+                </div>
+
+                <!-- price + spark -->
+                <div style="display:flex;align-items:center;gap:12px;margin-top:13px">
+                  <div style="flex:none">
+                    <div style="display:flex;align-items:baseline;gap:8px">
+                      <span style="font-family:'JetBrains Mono';font-size:16px;font-weight:600">{{ card.price }}</span>
+                      <span style="font-family:'JetBrains Mono';font-size:12px;font-weight:600;color:{{ card.chgColor }}">{{ card.chgStr }}</span>
+                    </div>
+                    <div style="font-size:8.5px;letter-spacing:1px;color:#5d7b74;margin-top:2px">30-DAY TREND</div>
+                  </div>
+                  <svg viewBox="0 0 120 34" width="100%" height="38" preserveAspectRatio="none" style="color:{{ card.chgColor }};overflow:visible;flex:1">
+                    <path d="{{ card.sparkArea }}" fill="currentColor" fill-opacity="0.13"></path>
+                    <path d="{{ card.sparkLine }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    <circle cx="{{ card.dotX }}" cy="{{ card.dotY }}" r="2.8" fill="currentColor" style="filter:drop-shadow(0 0 5px currentColor)"></circle>
+                  </svg>
+                </div>
+
+                <!-- heat meter -->
+                <div style="display:flex;align-items:center;gap:10px;margin-top:13px">
+                  <span style="font-size:9px;letter-spacing:1.5px;color:#6c8a83;flex:none">HEAT</span>
+                  <div style="flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden">
+                    <div style="height:100%;width:{{ card.heatW }};border-radius:4px;background:linear-gradient(90deg,#34e0c4,{{ card.heatColor }})"></div>
+                  </div>
+                  <span style="font-family:'JetBrains Mono';font-weight:700;font-size:15px;color:{{ card.heatColor }};flex:none">{{ card.heat }}</span>
+                </div>
+
+                <!-- thesis -->
+                <div style="font-size:12.5px;line-height:1.5;color:#b6d4cc;margin-top:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ card.why }}</div>
+
+                <!-- actions -->
+                <div style="display:flex;gap:9px;margin-top:13px">
+                  <div style="flex:1;padding:10px;border-radius:10px;text-align:center;font-family:'Space Grotesk';font-size:13px;font-weight:600;color:#04110d;background:linear-gradient(180deg,#5af0d6,#26c8ae);cursor:pointer">full dossier →</div>
+                  <div style="{{ card.watchStyleSm }}">{{ card.watchIcon }}</div>
+                </div>
+              </div>
+            </sc-for>
+
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <!-- ============ FRAME 2 — TOP PICK ============ -->
+    <div style="flex:none;width:402px">
+      <div style="font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:0.3px;color:#6b6b66;margin-bottom:14px">The Hunt — top pick</div>
+      <x-import component="IOSDevice" from="./ios-frame.jsx" dark="{{ yes }}" hint-size="402px,874px">
+        <div class="scr" style="height:100%;overflow-y:auto;background:radial-gradient(520px 380px at 80% -4%,rgba(255,122,69,0.10),transparent 62%),#07110f;color:#d6efe8;font-family:'Hanken Grotesk',system-ui,sans-serif">
+          <div style="padding:58px 16px 40px">
+
+            <!-- back row -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <span style="font-size:13px;color:#7af0da;font-weight:600">‹ Back to feed</span>
+              <span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:16px;background:rgba(52,224,196,0.07);border:1px solid rgba(52,224,196,0.28);font-size:10px;font-weight:700;letter-spacing:0.5px;color:#7af0da">IBKR-PAPER</span>
+            </div>
+
+            <!-- featured hero -->
+            <div style="position:relative;border-radius:22px;background:linear-gradient(140deg,#13251f,#0a1513);border:1px solid rgba(255,122,69,0.26);padding:20px;overflow:hidden;box-shadow:0 0 60px rgba(255,122,69,0.08)">
+              <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#34e0c4,{{ featured.heatColor }})"></div>
+
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:rgba(255,122,69,0.16);border:1px solid rgba(255,122,69,0.45);font-size:10px;letter-spacing:0.8px;font-weight:700;color:#ff9a6e">▲ HOTTEST PICK</span>
+                <span style="font-family:'JetBrains Mono';font-size:11px;color:#6c8a83">RANK 01 · HEAT {{ featured.heat }}</span>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:13px">
+                <div style="width:48px;height:48px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:16px;color:#06120f;background:{{ featured.heatColor }}">{{ featured.init }}</div>
+                <div style="min-width:0">
+                  <div style="font-family:'Space Grotesk';font-weight:700;font-size:32px;line-height:1;letter-spacing:0.4px">{{ featured.t }}</div>
+                  <div style="font-size:11.5px;color:#6c8a83;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ featured.name }} · {{ featured.tag }}</div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:baseline;gap:12px;margin:16px 0 14px">
+                <span style="font-family:'JetBrains Mono';font-size:26px;font-weight:700">{{ featured.price }}</span>
+                <span style="font-family:'JetBrains Mono';font-size:14px;font-weight:600;color:{{ featured.chgColor }}">{{ featured.chgStr }}</span>
+              </div>
+
+              <!-- big chart -->
+              <div style="position:relative;border-radius:13px;background:rgba(0,0,0,0.18);border:1px solid rgba(90,200,180,0.10);padding:12px 13px 6px">
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:#5d7b74;margin-bottom:4px"><span>30-DAY PRICE</span><span style="font-family:'JetBrains Mono';color:{{ featured.chgColor }}">{{ featured.chgStr }}</span></div>
+                <svg viewBox="0 0 460 150" width="100%" height="120" preserveAspectRatio="none" style="color:{{ featured.chgColor }};overflow:visible">
+                  <line x1="0" y1="38" x2="460" y2="38" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <line x1="0" y1="94" x2="460" y2="94" stroke="rgba(255,255,255,0.05)" stroke-width="1"></line>
+                  <path d="{{ featured.bigArea }}" fill="currentColor" fill-opacity="0.12"></path>
+                  <path d="{{ featured.bigLine }}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <circle cx="{{ featured.bigDotX }}" cy="{{ featured.bigDotY }}" r="4" fill="currentColor" style="filter:drop-shadow(0 0 7px currentColor)"></circle>
+                </svg>
+              </div>
+
+              <!-- gauge + heat -->
+              <div style="display:flex;align-items:center;gap:18px;margin-top:16px">
+                <svg viewBox="0 0 52 52" width="80" height="80" style="overflow:visible;flex:none">
+                  <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(120,220,200,0.13)" stroke-width="5.5"></circle>
+                  <circle cx="26" cy="26" r="22" fill="none" stroke="#34e0c4" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="{{ featured.gaugeDash }}" transform="rotate(-90 26 26)" style="filter:drop-shadow(0 0 6px rgba(52,224,196,0.6))"></circle>
+                  <text x="26" y="25" text-anchor="middle" fill="#eafff9" font-size="15" font-weight="700" font-family="JetBrains Mono">{{ featured.conf }}</text>
+                  <text x="26" y="34" text-anchor="middle" fill="#6c8a83" font-size="6" letter-spacing="0.5" font-family="JetBrains Mono">CONFIDENCE</text>
+                </svg>
+                <div style="flex:1">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px">
+                    <span style="font-size:10px;letter-spacing:1.5px;color:#6c8a83">HEAT SCORE</span>
+                    <span style="font-family:'JetBrains Mono';font-weight:700;font-size:22px;color:{{ featured.heatColor }}">{{ featured.heat }}</span>
+                  </div>
+                  <div style="height:9px;border-radius:5px;background:rgba(255,255,255,0.06);overflow:hidden">
+                    <div style="height:100%;width:{{ featured.heatW }};border-radius:5px;background:linear-gradient(90deg,#34e0c4,{{ featured.heatColor }})"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- thesis -->
+              <div style="font-size:13px;line-height:1.6;color:#c2ddd5;margin-top:16px">{{ featured.why }}</div>
+
+              <!-- actions -->
+              <div style="display:flex;gap:9px;margin-top:18px">
+                <div style="flex:1;padding:13px;border-radius:11px;text-align:center;font-family:'Space Grotesk';font-weight:700;font-size:14px;color:#04110d;background:linear-gradient(180deg,#5af0d6,#26c8ae);box-shadow:0 6px 18px rgba(52,224,196,0.3);cursor:pointer">full dossier →</div>
+                <div style="{{ featured.watchStyleLg }}">{{ featured.watchLabel }}</div>
+              </div>
+            </div>
+
+            <!-- next up -->
+            <div style="font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:1px;color:#6c8a83;margin:22px 4px 12px">NEXT UP</div>
+            <sc-for list="{{ rest2 }}" as="card" hint-placeholder-count="2">
+              <div style="position:relative;display:flex;align-items:center;gap:12px;border-radius:16px;background:linear-gradient(150deg,#10211e,#0a1513);border:1px solid rgba(90,200,180,0.12);padding:13px 14px 13px 16px;margin-bottom:11px;overflow:hidden">
+                <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:{{ card.heatColor }}"></div>
+                <div style="flex:none;text-align:center;width:26px">
+                  <div style="font-family:'Space Grotesk';font-weight:700;font-size:18px;line-height:1;color:{{ card.heatColor }}">{{ card.rank2 }}</div>
+                </div>
+                <div style="width:34px;height:34px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:11px;color:#06120f;background:{{ card.heatColor }}">{{ card.init }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:'Space Grotesk';font-weight:700;font-size:16px">{{ card.t }}</div>
+                  <div style="display:flex;align-items:baseline;gap:7px"><span style="font-family:'JetBrains Mono';font-size:12px;font-weight:600">{{ card.price }}</span><span style="font-family:'JetBrains Mono';font-size:11px;font-weight:600;color:{{ card.chgColor }}">{{ card.chgStr }}</span></div>
+                </div>
+                <svg viewBox="0 0 120 34" width="74" height="34" preserveAspectRatio="none" style="color:{{ card.chgColor }};overflow:visible;flex:none">
+                  <path d="{{ card.sparkArea }}" fill="currentColor" fill-opacity="0.13"></path>
+                  <path d="{{ card.sparkLine }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <div style="flex:none;text-align:right;width:42px">
+                  <div style="font-family:'JetBrains Mono';font-weight:700;font-size:16px;color:{{ card.heatColor }}">{{ card.heat }}</div>
+                  <div style="font-size:8px;letter-spacing:1px;color:#5d7b74">HEAT</div>
+                </div>
+              </div>
+            </sc-for>
+
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  data(){
+    return [
+      {t:'WELL', name:'Welltower Inc.', tag:'NYSE · Healthcare', price:'$206.65', chg:-98, conf:53, heat:88, words:289, watching:true,
+        why:"Canada's largest owner-operator of outpatient clinics plus a health-tech / AI arm is growing revenue ~50% a year toward C$1.5B+, yet the stock still sits near its lows.",
+        spark:[42,40,44,39,35,38,33,30,28,31,27,24]},
+      {t:'HPS.A', name:'Hammond Power', tag:'TSX · Industrials', price:'$339.71', chg:3, conf:44, heat:79, words:293, watching:false,
+        why:"A century-old Guelph maker of electrical transformers has become one of the purest Canadian picks-and-shovels plays on the AI data-centre buildout.",
+        spark:[20,22,21,25,28,27,32,35,33,38,41,44]},
+      {t:'SLG', name:'San Lorenzo Gold', tag:'TSXV · Gold', price:'C$0.42', chg:12, conf:28, heat:71, words:309, watching:false,
+        why:"2025's top-performing TSXV gold stock (+1,000%+) after a porphyry discovery at Cerro Blanco, Chile — long mineralized intervals keep widening with every hole.",
+        spark:[8,9,11,10,14,18,22,30,28,36,40,47]},
+      {t:'EPRX', name:'Eupraxia Pharma', tag:'TSX · Biotech', price:'$9.17', chg:5, conf:38, heat:64, words:302, watching:false,
+        why:"A Victoria, BC biotech with an injectable (EP-104GI) posting genuinely strong early data in eosinophilic esophagitis — a chronic swallowing disorder with few options.",
+        spark:[30,28,31,29,33,32,36,34,38,37,40,42]},
+      {t:'SYH', name:'Skyharbour Res.', tag:'TSXV · Uranium', price:'C$0.49', chg:8, conf:37, heat:58, words:277, watching:false,
+        why:"A C$100M uranium \"prospect generator\" — it options projects to partners who pay to drill, so shareholders get Athabasca exposure across dozens of plays.",
+        spark:[18,20,19,22,21,24,23,26,25,28,27,30]},
+      {t:'PTU', name:'Purepoint Uranium', tag:'TSXV · Uranium', price:'C$0.61', chg:9, conf:34, heat:55, words:288, watching:false,
+        why:"A C$37M uranium explorer just hit high-grade mineralization — assays up to 8.1% U₃O₈ — at its Nova discovery in Saskatchewan's Athabasca Basin.",
+        spark:[15,16,18,17,20,19,23,21,25,24,27,29]}
+    ];
+  }
+
+  spark(data,w,h){
+    const min=Math.min.apply(null,data), max=Math.max.apply(null,data), r=(max-min)||1;
+    const pts=data.map((v,i)=>[ (i/(data.length-1))*w, h-((v-min)/r)*(h-3)-1.5 ]);
+    const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const area=line+' L '+w+' '+h+' L 0 '+h+' Z';
+    const last=pts[pts.length-1];
+    return {line:line, area:area, dotX:last[0].toFixed(1), dotY:last[1].toFixed(1)};
+  }
+
+  heatColor(h){ return 'oklch(0.79 0.165 '+(175-(h/100)*150).toFixed(0)+')'; }
+
+  renderVals(){
+    const W=120,H=34, circ=2*Math.PI*22;
+    const smBase="width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:15px;cursor:pointer;";
+    const watchOn="background:rgba(52,224,196,0.14);border:1px solid rgba(52,224,196,0.45);color:#7af0da;font-weight:600;";
+    const watchOff="background:rgba(255,255,255,0.03);border:1px solid rgba(120,200,180,0.18);color:#9fc0b8;";
+    let cards=this.data().map((d)=>{
+      const sp=this.spark(d.spark,W,H);
+      const frac=d.conf/100;
+      return Object.assign({}, d, {
+        init: d.t.replace('.','').slice(0,2),
+        sparkLine: sp.line, sparkArea: sp.area, dotX: sp.dotX, dotY: sp.dotY,
+        gaugeDash: (frac*circ).toFixed(1)+' '+circ.toFixed(1),
+        heatColor: this.heatColor(d.heat), heatW: d.heat+'%',
+        chgStr: (d.chg>=0?'+':'')+d.chg+'%',
+        chgColor: d.chg>=0 ? 'oklch(0.82 0.15 162)' : 'oklch(0.68 0.2 22)',
+        watchLabel: d.watching ? '★ watching' : '☆ watch',
+        watchIcon: d.watching ? '★' : '☆',
+        watchStyleSm: smBase + (d.watching?watchOn:watchOff),
+        watchStyleLg: "padding:13px 18px;border-radius:11px;font-size:13.5px;font-weight:600;cursor:pointer;flex:none;" + (d.watching?watchOn:watchOff)
+      });
+    });
+    cards.sort((a,b)=>b.heat-a.heat);
+    cards.forEach((c,i)=>{ c.rank2=('0'+(i+1)).slice(-2); c.isTop=(i===0); });
+
+    const f=cards[0];
+    const big=this.spark(f.spark,460,150);
+    const featured=Object.assign({}, f, { bigLine:big.line, bigArea:big.area, bigDotX:big.dotX, bigDotY:big.dotY });
+
+    return {
+      yes: true,
+      cards: cards,
+      rest2: cards.slice(1,3),
+      featured: featured
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -278,7 +278,29 @@ struct HuntFind: Codable, Identifiable {
     var sources: [String]? = nil
     let obscurity: Int?       // 1–5 (5 = deepest cut)
     var watch: String? = nil  // none | watching | universe
+    // Heat-feed enrichment (the redesign — design_handoff_the_hunt_ios). All optional
+    // so the app keeps decoding older payloads; they light up once the hunt endpoint
+    // emits them (the proven "client wired, lights up when the endpoint ships" pattern).
+    var heat: Int? = nil          // 0–100 "ready to pop" score (server, computeHeat)
+    var change30d: Double? = nil  // 30-day momentum as a fraction (+0.12 = +12%)
+    var spark: [Double]? = nil    // ~30 daily closes (cents) for the sparkline
+    var tag: String? = nil        // "NYSE · Health" (exchange · sector)
     var id: String { sym }
+
+    /// Heat, preferring the server's score, else derived in-view from the inputs we
+    /// have — mirrors web/lib/heat.ts (60/25/15 confidence/momentum/obscurity, weights
+    /// renormalize as inputs drop out). Keeps the feed rankable before the field ships.
+    var resolvedHeat: Int {
+        if let heat { return heat }
+        var parts: [(w: Double, v: Double)] = []
+        if let c = confidence { parts.append((0.6, min(100, max(0, Double(c))))) }
+        if let ch = change30d { parts.append((0.25, min(100, max(0, ((ch + 0.2) / 0.5) * 100)))) }
+        if let o = obscurity { parts.append((0.15, min(100, max(0, Double(o) * 20)))) }
+        guard !parts.isEmpty else { return 50 }
+        let wsum = parts.reduce(0) { $0 + $1.w }
+        let score = parts.reduce(0) { $0 + $1.w * $1.v } / wsum
+        return Int(min(100, max(0, score)).rounded())
+    }
 
     /// 1–5 obscurity → label, matching components/IdeaCard.tsx.
     var obscurityLabel: String? {
