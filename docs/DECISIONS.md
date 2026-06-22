@@ -1229,6 +1229,17 @@ is untouched; only the cash write is gated. Verified state-by-state: steady stat
 than the window falls through, so a genuinely-settled debit is never frozen). Per-currency aware (CAD/USD). No web/
 chat rebuild — `reconcile()` only runs in the agent runner.
 **Verified:** `tsc --noEmit` clean; agent image rebuilt + swapped; heartbeat ticking. `/var` 75%.
+**Follow-on — the tape that made it findable (web):** generalized `components/PriceChart.tsx` (the stock-page chart)
+with `mode: "daily" | "intraday"`, `label`, and `bare` props; the Today page (`app/page.tsx`) now renders the day's
+NAV with `mode="intraday" bare` instead of the flat `Sparkline` — same crosshair/tooltip, but an HH:MM-ET time axis
+and no range picker, so a member can hover any point and read its NAV + minute (this is how Cam pinned the dip to
+10:11 ET). Daily (stock-page) behavior is byte-for-byte unchanged. Web-only; iOS keeps its `TapeChart` (the dip fix
+reaches iOS through the shared `NavSnapshot` data, not the chart).
+**One-time data correction:** the single pre-D54 phantom snapshot already on the books (2026-06-22 14:11:35Z, note
+"IBKR fill order #24" — the MRU 13@90.22 buy) was corrected in place from NAV $23,759.86 → $24,932.72, booking the
+13 MRU shares at the fill price so `nav = cash + positions` again and the point sits continuously between its
+neighbours. An *upward* correction, so it can't manufacture a drawdown; day-P&L is unaffected (it reads live NAV vs
+the day-open snapshot). Future fills are covered by the reconcile gate above — this was a one-off cleanup of legacy data.
 
 ### D55 — The Wire: a full-screen paged discovery feed (iOS-first prototype) (Cam, 2026-06-22)
 **Context:** "The Hunt meets Instagram" — a scrollable, mixed-media discovery surface separate from the Hunt.
