@@ -12,6 +12,8 @@ struct StockDetailView: View {
     @State private var extras: StockExtras?
     @State private var actionNote: String?
     @State private var showChat = false
+    @State private var showAlertSheet = false
+    @State private var alerts: [PriceAlert] = []
 
     private var isMember: Bool { auth.currentUser?.role == .member }
 
@@ -22,6 +24,7 @@ struct StockDetailView: View {
                     header(d)
                     if isMember { memberControls(d) }
                     if let note = actionNote { noteRow(note) }
+                    alertsCard()
                     ratingCard(d)
                     targets(d)
                     if let bl = d.bottomLine, !bl.isEmpty { bottomLine(bl) }
@@ -41,10 +44,73 @@ struct StockDetailView: View {
         .task {
             d = await APIClient.shared.dossier(symbol)
             extras = await APIClient.shared.stockExtras(symbol)
+            await loadAlerts()
         }
         .sheet(isPresented: $showChat) {
             ChatView(symbol: symbol).environmentObject(auth)
         }
+        .sheet(isPresented: $showAlertSheet, onDismiss: { Task { await loadAlerts() } }) {
+            if let d {
+                SetPriceAlertSheet(symbol: d.symbol, name: d.name, currency: d.currency, lastCents: d.lastCents)
+            }
+        }
+    }
+
+    // MARK: alerts on this stock (both members — visibility; delete stays per-owner)
+
+    @ViewBuilder private func alertsCard() -> some View {
+        if !alerts.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionTitle(text: "Price alerts")
+                    ForEach(alerts) { a in alertRow(a) }
+                }
+            }
+        }
+    }
+
+    private func alertRow(_ a: PriceAlert) -> some View {
+        let p = Theme.palette(scheme)
+        let unit = (a.currency != "CAD") ? a.currency : "$"
+        let price = "\(unit)\(String(format: "%.2f", Double(a.thresholdCents) / 100))"
+        let phrase = (a.direction == "above" ? "rises above " : "falls below ") + price
+        let isMine = a.mine ?? false
+        return HStack(spacing: 10) {
+            ownerAvatar(a.ownerKey, size: 26)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(a.owner ?? "A member")\(isMine ? " (you)" : "")")
+                    .font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary)
+                Text("when it \(phrase)").font(.caption2).foregroundStyle(p.textMuted)
+                if let n = a.note, !n.isEmpty {
+                    Text("“\(n)”").font(.caption2).italic().foregroundStyle(p.textMuted.opacity(0.8))
+                }
+            }
+            Spacer()
+            if isMine {
+                Button { Task { await deleteAlert(a) } } label: {
+                    Image(systemName: "trash").font(.caption).foregroundStyle(p.neg)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func ownerAvatar(_ key: String?, size: CGFloat) -> some View {
+        let p = Theme.palette(scheme)
+        return Group {
+            if key == "cam" || key == "graham" { Image(key!).resizable().scaledToFill() }
+            else { Image(systemName: "person.fill").font(.system(size: size * 0.5)).foregroundStyle(p.accent) }
+        }
+        .frame(width: size, height: size)
+        .background(Circle().fill(p.accent.opacity(0.14)))
+        .clipShape(Circle())
+    }
+
+    private func loadAlerts() async { alerts = await APIClient.shared.priceAlerts(symbol: symbol) }
+
+    private func deleteAlert(_ a: PriceAlert) async {
+        let res = await APIClient.shared.deletePriceAlert(id: a.id)
+        if res.ok { alerts.removeAll { $0.id == a.id } } else { actionNote = res.error }
     }
 
     // MARK: header
@@ -235,6 +301,7 @@ struct StockDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionTitle(text: "Member controls")
                 HStack(spacing: 10) {
+                    controlButton("Alert", "bell", p.accent) { showAlertSheet = true }
                     if d.watch == "none" || d.watch == nil {
                         controlButton("Watch", "heart", p.accent) { Task { await run(await APIClient.shared.watch(d.symbol, name: d.name)) } }
                     }
@@ -291,5 +358,111 @@ struct StockDetailView: View {
     private func noteRow(_ t: String) -> some View {
         Text(t).font(.caption).foregroundStyle(Theme.palette(scheme).accentText)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Set price alert (The Wire, Phase 2)
+
+// A sheet to set "ping me when SYMBOL crosses $X". The direction auto-suggests from
+// the typed target vs the current price; the server still validates it (refusing a
+// level already met) and returns the guardrail message verbatim.
+struct SetPriceAlertSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    let symbol: String
+    let name: String
+    let currency: String?
+    let lastCents: Int?
+
+    @State private var priceText = ""
+    @State private var direction = "above"
+    @State private var note = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    private var unit: String { (currency != nil && currency != "CAD") ? currency! : "$" }
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 12) {
+                        StockLogo(symbol: symbol, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(name).font(.headline).foregroundStyle(p.textPrimary).lineLimit(1)
+                            if let last = lastCents {
+                                Text("Now \(Fmt.money(last, currency))").font(.caption).foregroundStyle(p.textMuted)
+                            }
+                        }
+                        Spacer()
+                    }
+
+                    Picker("", selection: $direction) {
+                        Text("Rises above").tag("above")
+                        Text("Falls below").tag("below")
+                    }
+                    .pickerStyle(.segmented)
+
+                    Card {
+                        HStack(spacing: 6) {
+                            Text(unit).font(.title3.weight(.bold)).foregroundStyle(p.textMuted)
+                            TextField(lastCents.map { "e.g. \(String(format: "%.2f", Double($0) / 100))" } ?? "Target price", text: $priceText)
+                                .keyboardType(.decimalPad)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(p.textPrimary)
+                        }
+                    }
+
+                    Card {
+                        TextField("Note (optional) — e.g. near my entry", text: $note)
+                            .font(.subheadline).foregroundStyle(p.textPrimary)
+                    }
+
+                    if let error {
+                        Text(error).font(.caption).foregroundStyle(p.neg)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button { Task { await submit() } } label: {
+                        HStack(spacing: 8) {
+                            if busy { ProgressView().tint(Color(hex: "04110d")) }
+                            Text(busy ? "Setting…" : "Set alert")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(Color(hex: "04110d"))
+                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .background(Capsule().fill(p.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(busy)
+
+                    Text("One-shot: it fires once when the price crosses, then clears. Manage all your alerts in More → Price alerts.")
+                        .font(.caption2).foregroundStyle(p.textMuted)
+                }
+                .padding(16)
+            }
+            .background(ScreenBackground().ignoresSafeArea())
+            .navigationTitle("Alert · \(symbol)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .onChange(of: priceText) { _, new in
+            if let d = Double(new.trimmingCharacters(in: .whitespaces)), let last = lastCents {
+                direction = Int((d * 100).rounded()) >= last ? "above" : "below"
+            }
+        }
+    }
+
+    private func submit() async {
+        guard let dollars = Double(priceText.trimmingCharacters(in: .whitespaces)), dollars > 0 else {
+            error = "Enter a target price."; return
+        }
+        busy = true; error = nil
+        let cents = Int((dollars * 100).rounded())
+        let res = await APIClient.shared.createPriceAlert(
+            symbol: symbol, direction: direction, thresholdCents: cents, currency: currency ?? "CAD", note: note)
+        busy = false
+        if res.ok { dismiss() } else { error = res.error }
     }
 }

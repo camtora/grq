@@ -17,12 +17,12 @@ This is a **prototype**, **iOS-first**, **shared + read-only** for v1. Decision 
 |---|---|---|
 | 1 | A separate page, scrollable, mixing discovery streams | ✅ v1 — `The Wire`, a 4th iOS tab |
 | 2 | Surface the **hunt stocks** | ✅ `find` cards |
-| 3 | Surface the **user's watchlist** + **other users' watchlists** | ◑ v1 shows recent watchlist adds attributed to **Cam / Graham / agent** (`watch` cards). NB the watchlist is *fund-level* today — "other users' watchlists" = the Cam/Graham/agent lanes, not separate per-person lists |
+| 3 | Surface the **user's watchlist** + **other users' watchlists** | ✅ **Phase 2 (D57) — social:** the watch lane is **viewer-aware** — it HIDES your own watches and shows what the **other member** is tracking (agent watches included, member-first). Each `watch` card is now as rich as a dossier (GRQ's call, bottom line, targets, signals). The watchlist is still fund-level under the hood (attribution by `addedBy`) |
 | 4 | User sets **interested industries / hunt briefs**, or store what they've **asked to be briefed on**; show those names on a given day | ⏳ **Phase 2** — needs a per-user table (see below) |
 | 5 | **Cap to already-researched** stocks (recently) | ✅ feed pulls from recent dossiers/finds/watches only |
-| 6 | **Articles** that pertain to some stocks | ◑ v1 shows market headlines (`article` cards); **stock-tied** articles are Phase 2 |
-| 7 | **Lessons / education** on topics | ✅ `lesson` cards from the glossary |
-| 8 | **Push notifications** — set a price alert on a stock | ⏳ **Phase 2** — the D53 push stack exists; not yet wired to The Wire or to price triggers |
+| 6 | **Articles** that pertain to some stocks | ✅ **Phase 2 (D56)** — `wireResponse` attaches `fmpStockNews` to a few tracked names in the feed; those `article` cards carry `relatedTickers` (tap → the dossier). General market headlines still flow |
+| 7 | **Lessons / education** on topics | ✅ `lesson` cards from the glossary — **Phase 2 (D56)** added a "for example" line + tappable related terms; **(D57)** enriched **all 55** glossary terms so every daily rotation is rich |
+| 8 | **Push notifications** — set a price alert on a stock | ✅ **Phase 2 (D56)** — `PriceAlert` table + `GET/POST/DELETE /api/notifications/price-alerts`; the runner checks crossings each market-hours tick and pushes the owner via the D53 stack (category `priceTargets`). iOS: a bell on the stock page + a Price-alerts manager |
 | 9 | Full-screen tiles, **scroll-locked**, swipe up/down, each tile fills the area, each handled uniquely | ✅ v1 — iOS-17 paging, 5 purpose-built full-screen layouts |
 | 10 | Keep the **tab bar** + a **header with top-right avatar** (like the Hunt tab) | ✅ v1 |
 
@@ -52,11 +52,11 @@ Each is a full-screen page with a top progress rail + kicker, a single bottom CT
 
 | Kind | Hero | Shows | Tap |
 |---|---|---|---|
-| **find** | 12-mo upside + heat | logo, heat bar, giant upside, near target, area chart, "why we care", sources | → hunt dossier |
+| **find** | 12-mo upside + heat | logo, heat bar, giant upside, near + 12-mo **target prices**, area chart, the **full hunt thesis** (scrolls; D57), sources | → hunt dossier |
 | **dossier** | GRQ's call (RatingBar) | price + day move, bottom-line bullets, near/12-mo **target prices**, signals strip | → full dossier |
-| **watch** | who's watching (big avatar) | the member, the name, a mini chart, GRQ's call, "since {date}" | → dossier |
-| **article** | full-bleed photo | headline, publisher, time (related tickers = Phase 2) | → opens the article |
-| **lesson** | the idea (tinted card) | term + plain-English definition (example + related terms = future) | → glossary sheet |
+| **watch** | who's watching (avatar) | **the OTHER member** (yours are hidden; D57), the name, GRQ's call (RatingBar), bottom line, targets, signals, mini chart | → dossier |
+| **article** | full-bleed photo | headline, publisher, time, **related-ticker chips** (D56, stock-tied) | → opens the article · chip → the dossier |
+| **lesson** | the idea (tinted card) | term + plain-English definition + **"for example" line** + **tappable related terms** (D56) | → glossary sheet |
 
 Ordering: bucket per kind, then **weave round-robin** so the feed reads mixed, not clumped.
 
@@ -71,18 +71,37 @@ Ordering: bucket per kind, then **weave round-robin** so the feed reads mixed, n
 - iOS: `ios/GRQ/Views/Wire.swift` — full-screen paging + 5 layouts; new "Wire" tab; Markets moved under More.
 - Lessons present the wire-carried term/body directly (the bundled glossary is a subset of web's).
 
-### Phase 2 — next (not built)
-1. **Per-user personalization** — a `UserInterest` table (keyed by email): chosen **sectors/industries** + saved
-   **hunt briefs**; could auto-seed from each member's past `huntBrief`s. Then rank/filter the feed per member.
-   This is the unlock for requirement #4 and turns "shared feed" into "for you."
-2. **Price alerts + push** — a `UserPriceAlert` table (symbol, email, trigger cents) + a per-tick check in the
-   agent runner + fan-out through the D53 push stack. Requirement #8.
-3. **Stock-tied articles** — attach `fmpStockNews` to tracked names so articles carry related tickers (req #6).
+### Phase 2 — part 1 shipped (2026-06-22, D56)
+2. **Price alerts + push** ✅ — `PriceAlert` table (per-user, one-shot via `active`+`firedAt`); `GET/POST/DELETE
+   /api/notifications/price-alerts` (members-only; POST refuses an already-met level + auto-derives direction). The
+   runner's `checkPriceAlerts()` compares active alerts to fresh quotes each market-hours tick, one-shots atomically,
+   and pushes **the owner only** (new `pushNotify` `onlyEmail`; category `priceTargets`, the long-reserved
+   `NotificationPreference.priceTargets` now wired). iOS: a **bell** in the stock page's member controls →
+   `SetPriceAlertSheet`, and **More → Price alerts** (`PriceAlertsView`). **Shared visibility:** the stock page shows
+   **both members'** active alerts on a name (`GET …?symbol=` → `owner`/`ownerKey`/`mine`), but pings + deletes stay
+   per-owner. Requirement #8.
+3. **Stock-tied articles** ✅ — `wireResponse` pulls `fmpStockNews` for up to 4 names already in the feed and emits
+   article cards with `symbol` + `relatedTickers`; iOS renders tappable ticker chips. Requirement #6.
+6. **Lesson richness** ✅ — `GlossaryEntry.example` + `related[]` (~14 terms enriched); the wire lesson item carries
+   `lessonExample` + self-contained `lessonRelated` (`{slug,term,def}`); iOS shows an example callout + related chips.
+
+### Phase 2 — part 2 shipped (2026-06-22, D57): the Wire goes social
+- **Viewer-aware watch lane** — `wireResponse(viewerEmail?)` hides your own watches and shows the **other member's**
+  (agent watches included, member-first). The route passes `session.email`. Requirement #3.
+- **Richer watch cards** — each pulls its latest dossier (full/hunt) → GRQ's call, bottom line, targets, signals.
+- **Richer find cards** — absolute `targetNearCents`/`targetFarCents` + the **full thesis** (`thesis`, markdown-stripped
+  server-side; iOS shows it in a bounded scroll). Requirement (more hunt detail).
+- **Full lesson library** — all **55** glossary terms enriched (was ~18) so every daily rotation is rich. This was the
+  fix for "the lessons look unchanged": D56 enriched a minority, and the 3-per-day rotation kept landing on plain ones.
+
+### Phase 2 — remaining
+1. **Per-user personalization (deeper)** — the watch lane is now per-viewer (D57); the *unlock* is a `UserInterest`
+   table (sectors/industries + saved **hunt briefs**, auto-seedable from past `huntBrief`s) to rank/filter the
+   whole feed "for you" (requirement #4), beyond just the watch lane.
 4. **Web rendering** — render the same `/api/wire` on the web (the contract already supports it).
 5. **Unpriced-finds coverage** — ~4/9 hunt finds lack a live quote (pre-existing hunt coverage gap) → those
    cards degrade to heat + thesis + sources. Either improve quote/bar coverage for obscure tickers, or filter
    unpriced finds out of the feed. *(Decision pending.)*
-6. **Lesson richness** — a "for example" line + tappable related terms.
 
 ### Open questions
 - "Other users' watchlists" beyond the Cam/Graham/agent lanes — do we ever want true per-person watchlists, or is
@@ -93,14 +112,25 @@ Ordering: bucket per kind, then **weave round-robin** so the feed reads mixed, n
 ---
 
 ## Where the code lives
-- **Backend:** `web/lib/feed.ts` (`wireResponse`), `web/app/api/wire/route.ts`, `web/middleware.ts` (allowlist),
-  `shared/contract.ts` (`WireItem`/`WireResponse`), `web/scripts/verify-mobile-api.ts` (contract check).
-- **iOS:** `ios/GRQ/Views/Wire.swift` (`WireView` + `WireCardPage`), `Models.swift` (`WireItem`),
-  `Services.swift` (`APIClient.wire()`), `App/GRQApp.swift` (tab + `GlossaryPresenter.present`),
-  `Views/Settings.swift` (Markets under More).
-- **Decision record:** `docs/DECISIONS.md` D55.
+- **Backend:** `web/lib/feed.ts` (`wireResponse` — finds/dossiers/watches/articles+stock-tied/lessons),
+  `web/app/api/wire/route.ts`, `web/middleware.ts` (allowlist), `shared/contract.ts` (`WireItem`/`WireResponse`/
+  `WireRelatedTerm`/`PriceAlert`), `web/scripts/verify-mobile-api.ts` (contract check). `web/lib/glossary.ts`
+  (`example`/`related`).
+- **Price alerts (D56):** `web/prisma/schema.prisma` (`PriceAlert`), `web/app/api/notifications/price-alerts/route.ts`,
+  `web/agent/runner.ts` (`checkPriceAlerts()` in the tick), `web/lib/push/notify.ts` (`onlyEmail` + `priceTargets`),
+  `web/lib/push/categories.ts`.
+- **iOS:** `ios/GRQ/Views/Wire.swift` (`WireView` + `WireCardPage` — article chips, lesson example/related),
+  `Models.swift` (`WireItem`/`WireRelatedTerm`/`PriceAlert`/`NotificationPreferences.priceTargets`),
+  `Services.swift` (`APIClient.wire()` + `priceAlerts`/`createPriceAlert`/`deletePriceAlert`),
+  `Views/Stock.swift` (bell → `SetPriceAlertSheet`), `Views/Settings.swift` (`PriceAlertsView` under More).
+- **Decision record:** `docs/DECISIONS.md` D55 (v1) · **D56** (Phase 2 part 1).
 
 ## Known gaps / honesty
 - iOS is committed but compiles only in Xcode (no macOS SDK on the build host) — a real device validates it.
-- The watchlist is fund-level; per-user lists/preferences don't exist yet (Phase 2 #1).
+- Price alerts (D56) are the first **per-user** state, but the feed itself is still **shared** — "for you"
+  ranking/filtering by interests (Phase 2 #1) isn't built; the watchlist remains fund-level.
+- Price alerts fire only during **market hours** (the runner checks against fresh quotes in the open-market tick).
+- **Push delivery needs APNs configured** (`APNS_*` env — humans-only Apple-portal step, currently unset). Until then
+  `checkPriceAlerts()` deliberately **no-ops** (doesn't consume the one-shot), so alerts accumulate and start firing
+  the moment push goes live rather than silently vanishing. Members can still create/list/delete them now.
 - Unpriced finds degrade gracefully but look thin (Phase 2 #5).

@@ -6,9 +6,10 @@ import { allUniverse, type UniverseRow } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
-import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews } from "./fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews } from "./fmp";
 import { GLOSSARY } from "./glossary";
-import { personByName } from "./people";
+import { personByName, ownerKeyFor } from "./people";
+import { userForEmail } from "./users";
 import { stanceMeta } from "./stance";
 import { getCloses, refreshBars } from "./bars";
 import { computeHeat } from "./heat";
@@ -475,6 +476,8 @@ export async function huntResponse() {
       nearBps,
       farBps,
       nearDays: d.targetNearDays ?? null,
+      targetNearCents: d.targetNearCents ?? null,
+      targetFarCents: d.targetFarCents ?? null,
       confidence: d.confidence ?? null,
       body: d.body,
       sources,
@@ -523,8 +526,11 @@ function weaveWire(buckets: object[][], cap: number): object[] {
   return out;
 }
 
-export async function wireResponse(cap = 32) {
+export async function wireResponse(viewerEmail?: string | null, cap = 32) {
   const now = new Date();
+  // The Wire is going social: the watch lane HIDES the viewer's own watches and
+  // surfaces what everyone ELSE is tracking (the other member first, then the agent).
+  const viewerKey = viewerEmail ? ownerKeyFor(userForEmail(viewerEmail)?.name) : null;
   const [hunt, all, huntDates, dossierRows, watchRows, news] = await Promise.all([
     huntResponse(),
     allUniverse(),
@@ -541,8 +547,9 @@ export async function wireResponse(cap = 32) {
       orderBy: { at: "desc" },
       take: 24,
     }),
-    // Recently watched names — surfaced with who put them on the board.
-    prisma.universeMember.findMany({ where: { status: "CANDIDATE" }, orderBy: { addedAt: "desc" }, take: 12 }),
+    // Recently watched names — surfaced with who put them on the board. Take more
+    // than we show: the social filter drops the viewer's own before we slice.
+    prisma.universeMember.findMany({ where: { status: "CANDIDATE" }, orderBy: { addedAt: "desc" }, take: 30 }),
     fmpEnabled() ? fmpNews(10).catch(() => []) : Promise.resolve([]),
   ]);
 
@@ -565,6 +572,8 @@ export async function wireResponse(cap = 32) {
     nearBps: f.nearBps ?? null,
     nearDays: f.nearDays ?? null,
     nearHorizon: wireHorizon(f.nearDays),
+    targetNearCents: f.targetNearCents ?? null,
+    targetFarCents: f.targetFarCents ?? null,
     confidence: f.confidence ?? null,
     heat: f.heat ?? null,
     obscurity: f.obscurity ?? null,
@@ -572,6 +581,7 @@ export async function wireResponse(cap = 32) {
     spark: f.spark ?? null,
     sources: f.sources ?? null,
     blurb: firstLine(f.body),
+    thesis: cleanThesis(f.body), // the full hunt write-up (the find card shows more than the one-liner)
     tag: f.tag ?? null,
   }));
 
@@ -620,23 +630,51 @@ export async function wireResponse(cap = 32) {
     };
   });
 
-  // 3) Watches — recent watchlist adds, attributed to the member who added them.
-  // Skip any name already shown as a find/dossier so a ticker appears once and the
-  // watch lane surfaces what's genuinely new on the board.
+  // 3) Watches — the SOCIAL lane. Hide the viewer's own watches; show what everyone
+  // ELSE is tracking (the other human member first, then the agent). Each is enriched
+  // with the latest research we hold (GRQ's call, bottom line, targets, signals) so the
+  // card carries real substance, not just "X is watching." Skip names already shown as
+  // a find/dossier so a ticker appears once.
   const shownSyms = new Set([...findSyms, ...dossierPicked.map((d) => d.symbol as string)]);
-  const watchPicked = watchRows.filter((w) => uBy.has(w.symbol) && !shownSyms.has(w.symbol)).slice(0, 6);
-  const [watchStances, watchQuotes, watchCloses] = await Promise.all([
-    stanceMap(watchPicked.map((w) => w.symbol)),
-    getQuotes(watchPicked.map((w) => w.symbol)),
+  const watchCandidates = watchRows.filter(
+    (w) => uBy.has(w.symbol) && !shownSyms.has(w.symbol) && ownerKeyFor(w.addedBy) !== viewerKey,
+  );
+  // Other human member before the agent; recency preserved within each (rows are addedAt-desc).
+  watchCandidates.sort(
+    (a, b) => (ownerKeyFor(a.addedBy) === "agent" ? 1 : 0) - (ownerKeyFor(b.addedBy) === "agent" ? 1 : 0),
+  );
+  const watchPicked = watchCandidates.slice(0, 6);
+  const watchSyms = watchPicked.map((w) => w.symbol);
+  // Latest stock dossier (full or hunt) per watched name — powers the rich fields.
+  const watchDossierRows = watchSyms.length
+    ? await prisma.journalEntry.findMany({
+        where: {
+          kind: "RESEARCH",
+          symbol: { in: watchSyms },
+          OR: [{ title: { startsWith: "Dossier" } }, { title: { startsWith: "Hunt dossier" } }],
+        },
+        orderBy: { at: "desc" },
+      })
+    : [];
+  const watchDossierBy = new Map<string, (typeof watchDossierRows)[number]>();
+  for (const r of watchDossierRows) if (r.symbol && !watchDossierBy.has(r.symbol)) watchDossierBy.set(r.symbol, r);
+  const [watchStances, watchQuotes, watchCloses, watchSignals] = await Promise.all([
+    stanceMap(watchSyms),
+    getQuotes(watchSyms),
     Promise.all(watchPicked.map((w) => getCloses(w.symbol, 40).catch(() => []))),
+    Promise.all(watchPicked.map((w) => contractSignals(w.symbol).catch(() => null))),
   ]);
   const watchSparkBy = new Map(watchPicked.map((w, i) => [w.symbol, watchCloses[i].slice(-30).map((c) => c.closeCents)]));
-  const watchItems = watchPicked.map((w) => {
+  const watchItems = watchPicked.map((w, i) => {
     const u = uBy.get(w.symbol)!;
     const q = watchQuotes.get(w.symbol);
+    const cur = q?.midCents ?? null;
     const person = personByName(w.addedBy);
     const watcher = person?.name ?? (w.addedBy && w.addedBy !== "agent" ? w.addedBy : "Agent");
     const spark = watchSparkBy.get(w.symbol) ?? [];
+    const dd = watchDossierBy.get(w.symbol);
+    const farBps = cur && dd?.targetFarCents != null ? Math.round(((dd.targetFarCents - cur) / cur) * 10_000) : null;
+    const nearBps = cur && dd?.targetNearCents != null ? Math.round(((dd.targetNearCents - cur) / cur) * 10_000) : null;
     return {
       id: `watch:${w.symbol}`,
       kind: "watch",
@@ -645,9 +683,18 @@ export async function wireResponse(cap = 32) {
       name: u.name,
       currency: u.currency ?? "CAD",
       logoUrl: u.logoUrl || fmpLogo(w.symbol),
-      lastCents: q?.midCents ?? null,
+      lastCents: cur,
       dayChangeBps: q?.dayChangeBps ?? null,
-      call: stanceToCall(watchStances.get(w.symbol)),
+      call: stanceToCall(dd?.stance) ?? stanceToCall(watchStances.get(w.symbol)),
+      farBps,
+      nearBps,
+      nearDays: dd?.targetNearDays ?? null,
+      nearHorizon: wireHorizon(dd?.targetNearDays),
+      targetNearCents: dd?.targetNearCents ?? null,
+      targetFarCents: dd?.targetFarCents ?? null,
+      confidence: dd?.confidence ?? null,
+      signals: watchSignals[i],
+      blurb: dd?.bottomLine ?? (dd?.body ? firstLine(dd.body) : null),
       spark: spark.length >= 2 ? spark : null,
       tag: [u.exchange, u.sector].filter(Boolean).join(" · ") || null,
       watcher,
@@ -655,8 +702,39 @@ export async function wireResponse(cap = 32) {
     };
   });
 
-  // 4) Articles — market headlines (general; stock-tying is a Phase-2 enrichment).
-  const articleItems = news.slice(0, 6).map((n, i) => ({
+  // 4) Articles — general market headlines + stock-tied news on tracked names
+  // (Phase 2 #3). We pull fresh per-symbol news for a few names already in the feed
+  // so an article carries the ticker it's about → tap a chip straight to the dossier.
+  const articleSyms = [...new Set([...dossierPicked.map((d) => d.symbol as string), ...watchPicked.map((w) => w.symbol)])]
+    .filter((s) => uBy.has(s))
+    .slice(0, 4);
+  const stockNewsLists = fmpEnabled()
+    ? await Promise.all(articleSyms.map((s) => fmpStockNews(s, 2).catch(() => [])))
+    : [];
+  const stockArticleItems = articleSyms
+    .map((sym, i) => {
+      const n = stockNewsLists[i]?.[0];
+      if (!n) return null;
+      const u = uBy.get(sym)!;
+      return {
+        id: `stocknews:${sym}`,
+        kind: "article",
+        at: n.at || now.toISOString(),
+        title: n.title,
+        publisher: n.publisher || null,
+        imageUrl: n.image || null,
+        url: n.url || null,
+        symbol: sym,
+        name: u.name,
+        currency: u.currency ?? "CAD",
+        logoUrl: u.logoUrl || fmpLogo(sym),
+        relatedTickers: [sym],
+        tag: [u.exchange, u.sector].filter(Boolean).join(" · ") || "Market",
+      };
+    })
+    .filter(Boolean) as object[];
+
+  const generalArticleItems = news.slice(0, 6).map((n, i) => ({
     id: `article:${i}`,
     kind: "article",
     at: n.at || now.toISOString(),
@@ -666,6 +744,8 @@ export async function wireResponse(cap = 32) {
     url: n.url || null,
     tag: "Market",
   }));
+  // Stock-tied first (more relevant), then general — one lane so the weave keeps them apart.
+  const articleItems = [...stockArticleItems, ...generalArticleItems];
 
   // 5) Lessons — a few glossary explainers, rotated by day so the feed varies.
   const glossKeys = Object.keys(GLOSSARY);
@@ -673,13 +753,22 @@ export async function wireResponse(cap = 32) {
   const lessonItems = glossKeys.length
     ? [0, 1, 2].map((j) => {
         const k = glossKeys[(seed + j * 7) % glossKeys.length];
+        const g = GLOSSARY[k];
+        // Resolve related slugs to self-contained {slug,term,def} so the card can
+        // present a tapped term directly (the bundled iOS glossary is a subset).
+        const related = (g.related ?? [])
+          .filter((slug) => GLOSSARY[slug])
+          .slice(0, 4)
+          .map((slug) => ({ slug, term: GLOSSARY[slug].term, def: GLOSSARY[slug].def }));
         return {
           id: `lesson:${k}`,
           kind: "lesson",
           at: now.toISOString(),
-          lessonTerm: GLOSSARY[k].term,
-          lessonBody: GLOSSARY[k].def,
+          lessonTerm: g.term,
+          lessonBody: g.def,
           lessonSlug: k,
+          lessonExample: g.example ?? null,
+          lessonRelated: related.length ? related : null,
           tag: "Learn",
         };
       })
@@ -767,6 +856,13 @@ export async function smartMoneyResponse() {
 function firstLine(body: string): string {
   const line = body.split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
   return line.length > 160 ? line.slice(0, 160) + "…" : line;
+}
+
+/** The full hunt write-up, lightly tidied (collapse 3+ newlines) for a card body. */
+function cleanThesis(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const t = body.replace(/\n{3,}/g, "\n\n").trim();
+  return t || null;
 }
 
 export async function reportsResponse(limit = 40) {

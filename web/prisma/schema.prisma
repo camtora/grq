@@ -550,8 +550,29 @@ model NotificationPreference {
   reports      Boolean  @default(true) // morning plan / midday / EOD / weekly review
   members      Boolean  @default(true) // the OTHER member's universe/directive/kill actions
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
-  priceTargets Boolean  @default(true) // reserved — price-target hits (not yet wired)
+  priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
   updatedAt    DateTime @updatedAt
+}
+
+// Per-user price alerts (Phase 2 — The Wire). A member sets "ping me when SYMBOL
+// crosses $X" from the stock page or The Wire; the agent runner checks active
+// alerts each market-hours tick and fires a push (category "priceTargets") to the
+// OWNER ONLY, then one-shots the alert (active=false, firedAt set). Money is integer
+// cents, native to the symbol's listing currency (house rule: no floats, ever).
+model PriceAlert {
+  id             Int       @id @default(autoincrement())
+  email          String // owner (normalized lowercase) — only this member is pinged
+  symbol         String
+  direction      String // "above" | "below" — the side the price must cross
+  thresholdCents Int // trigger price, native currency
+  currency       String    @default("CAD")
+  note           String? // optional member note ("near my entry")
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  firedAt        DateTime? // set when it fires (one-shot); the alert then goes inactive
+
+  @@index([email])
+  @@index([active, symbol])
 }
 
 // Conviction tally (Cam, 2026-06-17): every agent BUY/SELL proposal, logged at

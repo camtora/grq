@@ -164,27 +164,43 @@ private struct WireCardPage: View {
 
     private var findPage: some View {
         let p = Theme.palette(scheme)
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 12) {
             rail("Find", .teal)
-            Spacer(minLength: 0)
             identity(46)
             if let heat = item.heat { heatRow(heat) }
             upsideBlock
-            if let spark = item.spark, spark.count > 1 {
-                TapeChart(points: spark).frame(height: 78)
-                if let first = spark.first, let last = spark.last {
-                    Text("30-day   \(Fmt.money(Int(first))) → \(Fmt.money(Int(last)))")
-                        .font(.caption2).foregroundStyle(p.textMuted)
+            if item.targetNearCents != nil || item.targetFarCents != nil {
+                HStack(spacing: 14) {
+                    if let n = item.targetNearCents {
+                        Text("near \(Fmt.money(n, item.currency))").font(.caption).foregroundStyle(p.textMuted)
+                    }
+                    if let f = item.targetFarCents {
+                        Text("12-mo \(Fmt.money(f, item.currency))").font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    }
                 }
             }
-            if let blurb = item.blurb, !blurb.isEmpty {
-                Text("“\(blurb)”").font(.callout).italic().foregroundStyle(p.textPrimary.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true).lineLimit(4)
+            // The full hunt write-up scrolls in the space left between the hero and the
+            // CTA (the card is fixed-height, so the thesis gets a bounded, scrollable home).
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let spark = item.spark, spark.count > 1 {
+                        TapeChart(points: spark).frame(height: 64)
+                        if let first = spark.first, let last = spark.last {
+                            Text("30-day   \(Fmt.money(Int(first))) → \(Fmt.money(Int(last)))")
+                                .font(.caption2).foregroundStyle(p.textMuted)
+                        }
+                    }
+                    if let thesis = item.thesis ?? item.blurb, !thesis.isEmpty {
+                        Text(thesis).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let sources = item.sources, !sources.isEmpty {
+                        Text("sources · " + sources.prefix(4).joined(separator: " · ")).font(.caption2).foregroundStyle(p.textMuted)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if let sources = item.sources, !sources.isEmpty {
-                Text("sources · " + sources.prefix(4).joined(separator: " · ")).font(.caption2).foregroundStyle(p.textMuted).lineLimit(1)
-            }
-            Spacer(minLength: 0)
+            .frame(maxHeight: .infinity)
             NavigationLink { StockDetailView(symbol: item.symbol ?? "") } label: { cta("Open the hunt dossier  →") }.buttonStyle(.plain)
             swipeHint
         }
@@ -292,26 +308,53 @@ private struct WireCardPage: View {
 
     private var watchPage: some View {
         let p = Theme.palette(scheme)
-        return VStack(spacing: 14) {
+        return VStack(alignment: .leading, spacing: 12) {
             rail("On the board", .dim)
-            Spacer(minLength: 0)
-            VStack(spacing: 10) {
-                watcherAvatar(item.watcherKey, size: 84)
-                Text("\(item.watcher ?? "Someone") is watching")
-                    .font(.title3.weight(.bold)).foregroundStyle(p.textPrimary)
-            }
-            identity(44)
-            if let spark = item.spark, spark.count > 1 { TapeChart(points: spark).frame(height: 64) }
-            if let r = item.resolvedRating {
-                HStack(spacing: 8) {
-                    Text("GRQ'S CALL").font(.caption2.weight(.bold)).foregroundStyle(p.textMuted)
-                    StanceBadge(rating: r, full: true)
+            // Social header — who put it on the board, and when.
+            HStack(spacing: 10) {
+                watcherAvatar(item.watcherKey, size: 46)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(item.watcher ?? "Someone") is watching").font(.headline).foregroundStyle(p.textPrimary)
+                    Text("On the board\(shortDate(item.at).map { " since \($0)" } ?? "") — not in the fund yet")
+                        .font(.caption).foregroundStyle(p.textMuted)
                 }
+                Spacer()
             }
-            Text("On the board\(shortDate(item.at).map { " since \($0)" } ?? "") — not in the fund yet, tracking it for a cleaner entry.")
-                .font(.callout).multilineTextAlignment(.center).foregroundStyle(p.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            identity(40)
+            // The same substance as a dossier card — GRQ's call, the bottom line, targets,
+            // signals — scrolling in the space between the header and the CTA.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let r = item.resolvedRating {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("GRQ'S CALL").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                            RatingBar(rating: r, note: item.confidence.map { "\($0)% CONF" })
+                        }
+                    }
+                    if let blurb = item.blurb, !blurb.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("THE BOTTOM LINE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                            MarkdownText(text: blurb)
+                        }
+                    }
+                    if item.targetNearCents != nil || item.targetFarCents != nil {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("TARGETS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                            if let near = item.targetNearCents { targetRow("near", near, item.nearBps, item.nearHorizon) }
+                            if let far = item.targetFarCents { targetRow("12-mo", far, item.farBps, nil) }
+                        }
+                    }
+                    if let s = item.signals {
+                        HStack(spacing: 8) {
+                            Text("SIGNALS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                            SignalStrip(signals: s)
+                        }
+                    }
+                    if let spark = item.spark, spark.count > 1 { TapeChart(points: spark).frame(height: 56) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: .infinity)
             NavigationLink { StockDetailView(symbol: item.symbol ?? "") } label: { cta("See the dossier  →") }.buttonStyle(.plain)
             swipeHint
         }
@@ -353,6 +396,22 @@ private struct WireCardPage: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 Spacer()
+                if let tickers = item.relatedTickers, !tickers.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(tickers, id: \.self) { t in
+                            NavigationLink { StockDetailView(symbol: t) } label: {
+                                HStack(spacing: 5) {
+                                    StockLogo(symbol: t, url: t == item.symbol ? item.logoUrl : nil, size: 18)
+                                    Text(t).font(.caption.weight(.bold)).foregroundStyle(.white)
+                                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.7))
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Capsule().fill(.white.opacity(0.18)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
                 Text(item.title ?? "—").font(.title2.weight(.black)).foregroundStyle(.white).lineLimit(5)
                     .fixedSize(horizontal: false, vertical: true)
                 if let pub = item.publisher { Text("\(pub)\(shortDate(item.at).map { " · \($0)" } ?? "")").font(.caption).foregroundStyle(.white.opacity(0.8)) }
@@ -365,7 +424,7 @@ private struct WireCardPage: View {
 
             VStack {
                 HStack {
-                    Text("MARKET").font(.caption2.weight(.black)).tracking(1).foregroundStyle(.white)
+                    Text(item.symbol ?? "MARKET").font(.caption2.weight(.black)).tracking(1).foregroundStyle(.white)
                     Spacer()
                     Text("\(index + 1) / \(total)").font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.85))
                 }
@@ -391,6 +450,36 @@ private struct WireCardPage: View {
             if let body = item.lessonBody {
                 Text(body).font(.title3).foregroundStyle(p.textPrimary.opacity(0.92))
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if let example = item.lessonExample, !example.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("FOR EXAMPLE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.accentText)
+                    Text(example).font(.callout).foregroundStyle(p.textPrimary.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 12).fill(p.accent.opacity(0.10)))
+            }
+            if let related = item.lessonRelated, !related.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("RELATED").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(related) { r in
+                                Button {
+                                    glossary.present(GlossaryEntry(slug: r.slug, term: r.term, def: r.def))
+                                } label: {
+                                    Text(r.term.components(separatedBy: " — ").first ?? r.term)
+                                        .font(.caption.weight(.semibold)).foregroundStyle(p.accentText)
+                                        .padding(.horizontal, 12).padding(.vertical, 7)
+                                        .background(Capsule().fill(p.accent.opacity(0.14)))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
             }
             Spacer(minLength: 0)
             Button {

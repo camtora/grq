@@ -3,227 +3,341 @@
 // spot. Keys are lowercase slugs the <Term> component looks up. Static seed for
 // the app's own vocabulary; agent-generated explainers for novel concepts come later.
 
-export type GlossaryEntry = { term: string; def: string };
+// `example` is a one-line "here's what that looks like" sentence; `related` is a
+// list of other glossary slugs a reader would naturally jump to. Both optional —
+// older entries (and the bundled iOS subset) decode fine without them. Surfaced on
+// The Wire's lesson cards (Phase 2: literacy richness) and the in-app explainer.
+export type GlossaryEntry = { term: string; def: string; example?: string; related?: string[] };
 
 export const GLOSSARY: Record<string, GlossaryEntry> = {
   nav: {
     term: "NAV — Net Asset Value",
     def: "The fund's total worth right now: cash plus the market value of everything it holds.",
+    example: "If GRQ holds $18,000 of stock and $7,000 of cash, its NAV is $25,000.",
+    related: ["market-value", "drawdown", "contributions"],
   },
   acb: {
     term: "ACB — Adjusted Cost Base",
     def: "Your average cost per share, commissions included. The CRA uses it to figure your capital gain when you sell.",
+    example: "Buy 10 shares at $20 plus a $5 commission and your ACB is $20.50 a share.",
+    related: ["commission", "unrealized-pnl", "superficial-loss"],
   },
   "day-pnl": {
     term: "Day P&L",
     def: "How much the fund's value moved today — in dollars and percent — versus where it opened this morning.",
+    example: "Open at $25,000, sit at $25,300 by lunch, and the day P&L is +$300 (+1.2%).",
+    related: ["the-tape", "total-pnl", "nav"],
   },
   "total-pnl": {
     term: "Total P&L",
     def: "Profit or loss since day one: current NAV minus every dollar ever contributed.",
+    example: "Contribute $25,000 over time, sit at a $28,000 NAV, and your total P&L is +$3,000.",
+    related: ["contributions", "vs-xic", "day-pnl"],
   },
   "vs-xic": {
     term: "vs XIC — the benchmark",
     def: "What your contributions would be worth if you'd just bought XIC, an ETF holding the whole TSX. Beating it is the bar GRQ has to clear to justify existing.",
+    example: "If GRQ is up 6% while XIC is up 9%, the fund is losing to the couch-potato option — by 3 points.",
+    related: ["etf", "contributions", "total-pnl"],
   },
   drawdown: {
     term: "Drawdown",
     def: "How far NAV has fallen from its highest point. Hit −15% and the kill switch trips automatically.",
+    example: "NAV peaks at $30,000 then dips to $27,600 — that's an −8% drawdown.",
+    related: ["nav", "kill-switch", "stop-loss"],
   },
   "kill-switch": {
     term: "Kill switch",
     def: "A hard stop, enforced in code, that halts all trading instantly. Either member can flip it; nothing trades while it's engaged.",
+    example: "Flip it before a volatile earnings print and no order can leave the gate until you flip it back.",
+    related: ["drawdown", "soak"],
   },
   "cash-floor": {
     term: "Cash floor",
     def: "The minimum share of NAV that must stay in cash, so the fund is never fully committed. Set by the risk dial.",
+    example: "A 20% cash floor on a $25,000 fund keeps at least $5,000 in cash — dry powder the gate won't let it spend.",
+    related: ["nav", "weight", "kill-switch"],
   },
   "superficial-loss": {
     term: "Superficial-loss rule",
     def: "A CRA rule: sell at a loss and rebuy the same name within 30 days and the loss is denied. The agent is barred from tripping it.",
+    example: "Sell XYZ at a loss Monday, rebuy it Friday, and the CRA throws the loss out — you wasted the tax break.",
+    related: ["capital-gains", "acb"],
   },
   "round-trip": {
     term: "Round-trip cost",
     def: "Commission to buy plus commission to sell. A trade has to be worth at least 3× this to be allowed — fees are the enemy of a small account.",
+    example: "Two $5 commissions = a $10 round trip, so GRQ won't take the trade unless it expects to clear at least $30.",
+    related: ["commission", "fee-budget"],
   },
   rsi: {
     term: "RSI — Relative Strength Index",
     def: "A 0–100 momentum gauge. Below 30 is 'oversold' (maybe due for a bounce), above 70 'overbought'. An input, not a verdict.",
+    example: "A name selling off to RSI 24 is 'oversold' — stretched low, but cheap-and-falling is still falling.",
+    related: ["macd", "trend", "recommendation"],
   },
   macd: {
     term: "MACD",
     def: "Moving Average Convergence Divergence — tracks whether short-term momentum is pulling ahead of, or falling behind, the longer trend.",
+    example: "When MACD crosses above its signal line, short-term momentum just turned up — a bullish nudge, not a verdict.",
+    related: ["rsi", "sma", "trend"],
   },
   sma: {
     term: "SMA — Simple Moving Average",
     def: "The average closing price over the last N days (SMA50 ≈ 10 weeks). Smooths out daily noise to show the underlying trend.",
+    example: "A stock bouncing off its rising 50-day SMA is often read as the uptrend holding.",
+    related: ["trend", "macd"],
   },
   trend: {
     term: "Trend (SMA stack)",
     def: "Up- or down-trend read from the moving averages: price above its 50-day average, and the 50-day above the 200-day, is the classic 'uptrend' stack.",
+    example: "Price > 50-day > 200-day is the textbook uptrend; flip the order and it's a downtrend.",
+    related: ["sma", "macd", "recommendation"],
   },
   volatility: {
     term: "Volatility (realized)",
     def: "How much the price swings, annualized from the last ~20 days — a regime gauge (calm / normal / spicy), not a buy/sell signal. It tells you how bumpy the ride is.",
+    example: "A biotech that swings 6% a day is high-volatility — bigger gains, bigger gut-checks — vs a utility that barely moves.",
+    related: ["stop-loss", "short-interest"],
   },
   recommendation: {
     term: "Recommendation",
     def: "A confidence-weighted consensus of the directional signals (trend, rsi, macd). The % is the share of signal-confidence behind the call — advisory, not the agent's decision.",
+    example: "A 70% recommendation means most of the signal-confidence leans one way — GRQ still makes the actual call.",
+    related: ["rsi", "macd", "trend"],
   },
   dossier: {
     term: "Dossier",
     def: "A deep research write-up the agent files on one stock: the business, recent news, signals, bull and bear case, and a verdict.",
+    example: "Before GRQ can buy a name, it files a dossier — business, catalysts, the bear case, a verdict — so the trade has receipts.",
+    related: ["price-target", "agent-call", "recommendation"],
   },
   soak: {
     term: "Soak",
     def: "The trial run: the fund must trade clean for 4+ weeks (2 of them on real broker paper) before a single real dollar is at risk.",
+    example: "Four clean weeks (two on IBKR paper) with no blown guardrails before real money — the soak is GRQ proving itself first.",
+    related: ["kill-switch", "drawdown"],
   },
   contributions: {
     term: "Contributions",
     def: "Every dollar Cam and Graham have put into the fund. Total P&L and the benchmark are both measured against this — it's the money that had to be beaten.",
+    example: "Put in $25,000 total and that's the bar both Total P&L and the XIC benchmark are measured against.",
+    related: ["total-pnl", "vs-xic", "nav"],
   },
   "fee-budget": {
     term: "Fee budget",
     def: "A hard monthly ceiling on commissions. The order gate rejects any trade that would push this month's fees over the line — fees quietly kill small accounts.",
+    example: "Hit the month's commission ceiling and the gate blocks the next trade until next month — fees can't snowball.",
+    related: ["commission", "round-trip"],
   },
   "market-value": {
     term: "Market value",
     def: "What a holding is worth right now: shares held × the latest price. Add them all up, plus cash, and you get NAV.",
+    example: "100 shares at $30 = $3,000 of market value; sum every holding plus cash and you have NAV.",
+    related: ["nav", "position", "weight"],
   },
   "unrealized-pnl": {
     term: "Unrealized P&L",
     def: "Paper profit or loss on a holding you still own — what you'd lock in if you sold at the current price. It isn't real until you sell.",
+    example: "Up $400 on a stock you still hold is unrealized — a paper gain that vanishes if the price falls before you sell.",
+    related: ["acb", "market-value", "take-profit"],
   },
   weight: {
     term: "Weight",
     def: "How much of the fund one position is, as a share of NAV. The risk dial caps it so no single name can sink the whole boat.",
+    example: "A $5,000 position in a $25,000 fund is a 20% weight — the risk dial caps how big any one name can get.",
+    related: ["position", "nav", "drawdown"],
   },
   position: {
     term: "Position",
     def: "A holding: the shares of one stock the fund currently owns, with an average cost and a current value.",
+    example: "50 shares of XIC at an average cost of $56 is a position — shares, a cost base, and a live value.",
+    related: ["acb", "weight", "market-value"],
   },
   "market-cap": {
     term: "Market cap",
     def: "A company's total stock-market value: share price × shares outstanding. Roughly what it would cost to buy the whole company.",
+    example: "A $40 stock with 50 million shares out has a $2-billion market cap — a small-cap.",
+    related: ["pe", "market-value", "free-cash-flow"],
   },
   "free-cash-flow": {
     term: "Free cash flow",
     def: "The cash a business actually generates after running costs and reinvestment — money it's free to return to owners or stockpile. Harder to fake than reported earnings.",
+    example: "A company can report a paper profit yet burn cash — negative free cash flow is the tell.",
+    related: ["pe", "dividend-yield", "moat"],
   },
   "dividend-yield": {
     term: "Dividend yield",
     def: "The annual dividend as a percent of the share price. A $2 dividend on a $50 stock yields 4%.",
+    example: "That same $2 dividend yields 5% if the stock falls to $40 — a high yield can flag a falling price.",
+    related: ["free-cash-flow", "market-cap"],
   },
   "short-interest": {
     term: "Short interest",
     def: "The share of a stock that traders have borrowed and sold, betting it falls. High short interest signals bearishness — and can fuel a sharp 'short squeeze' if the price rises instead.",
+    example: "20% of the float sold short, then good news hits — shorts scramble to buy back and the price rockets.",
+    related: ["dilution", "volatility"],
   },
   dilution: {
     term: "Dilution",
     def: "When a company issues new shares, each existing share owns a smaller slice. Common with cash-hungry small-caps — it can quietly erode your stake even as the business grows.",
+    example: "A cash-strapped miner doubles its share count to raise money — your slice of the company just halved.",
+    related: ["market-cap", "short-interest"],
   },
   "stop-loss": {
     term: "Stop-loss",
     def: "A pre-set exit: if a holding falls to this price, the agent sells to cap the damage. The level is set by the risk dial (e.g. −8% on Balanced).",
+    example: "Buy at $20 with an −8% stop and the agent auto-sells near $18.40 if it rolls over.",
+    related: ["take-profit", "drawdown", "swing-trade"],
   },
   "take-profit": {
     term: "Take-profit",
     def: "The mirror of a stop: a pre-set level where the agent banks a winner so a paper gain doesn't evaporate. Also set by the risk dial.",
+    example: "A +20% take-profit on that $20 entry banks the win near $24 instead of round-tripping it.",
+    related: ["stop-loss", "expected-return", "price-target"],
   },
   "expected-return": {
     term: "Expected return",
     def: "The upside the agent's price target implies from today's price — a hypothesis with a horizon, not a promise. The track record builds as targets resolve.",
+    example: "A $30 target on a $24 stock is a +25% expected return — if the thesis plays out.",
+    related: ["price-target", "take-profit"],
   },
   "price-target": {
     term: "Price target",
     def: "Where the agent thinks a stock could trade — a near-term swing target and a 12-month view. The basis for expected return, judged honestly when it plays out.",
+    example: "GRQ might post a near-term target of $26 and a 12-month target of $34 on the same name.",
+    related: ["expected-return", "dossier", "swing-trade"],
   },
   commission: {
     term: "Commission",
     def: "The broker's fee per trade. Small but relentless: GRQ won't take a trade unless it's worth at least 3× the round-trip commissions.",
+    example: "At ~$5 a trade, churning a $200 position to scalp 2% loses money to fees — exactly what the 3× rule blocks.",
+    related: ["round-trip", "fee-budget"],
   },
   moat: {
     term: "Economic moat",
     def: "A durable advantage that protects a company's profits from competitors — brand, network effects, low costs, switching costs. Wide moats compound for years.",
+    example: "Switching your whole company off one software suite is painful — that friction is the vendor's moat.",
+    related: ["free-cash-flow", "pe"],
   },
   pe: {
     term: "P/E — Price-to-Earnings",
     def: "Share price divided by annual earnings per share — how many years of current profit you're paying for. High P/E = the market expects growth; low = skepticism or value.",
+    example: "A $50 stock earning $2.50 a share trades at a P/E of 20 — twenty years of today's profit.",
+    related: ["market-cap", "free-cash-flow", "moat"],
   },
   etf: {
     term: "ETF — Exchange-Traded Fund",
     def: "A basket of stocks bought as one ticker. XIC, for instance, holds the whole TSX — instant diversification in a single trade.",
+    example: "One share of XIC gives you a slice of every big Canadian company at once.",
+    related: ["vs-xic", "market-cap"],
   },
   "swing-trade": {
     term: "Swing trade",
     def: "Holding for days to a few weeks to catch a price 'swing' — longer than day-trading, shorter than buy-and-hold. GRQ's core style.",
+    example: "Buy a breakout, aim to sell into strength two or three weeks later — a swing, not a day-trade or a forever-hold.",
+    related: ["the-tape", "tfsa", "price-target"],
   },
   confidence: {
     term: "Confidence",
     def: "How sure the agent (or a signal) is about a call, 0–100. A self-assessment, not a probability — and the agent needs ≥75% conviction before the gate will let it buy.",
+    example: "The agent can like a name at 60%, but the gate won't let it buy until conviction clears 75%.",
+    related: ["recommendation", "agent-call", "dossier"],
   },
   "the-tape": {
     term: "The Tape",
     def: "The fund's value through the trading day, open to now — the intraday line of NAV. (Old trading-floor slang: the ticker 'tape' that printed live prices.)",
+    example: "If the Tape is down 1.2% at noon, the fund's NAV has slipped 1.2% since this morning's open.",
+    related: ["nav", "day-pnl"],
   },
   "agent-call": {
     term: "GRQ's call",
     def: "GRQ's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
+    example: "GRQ can rate a name 'accumulate' even while the technical signal reads neutral — the 'why' explains the gap.",
+    related: ["recommendation", "dossier", "price-target"],
   },
   universe: {
     term: "The universe",
     def: "The list of stocks the agent is allowed to buy. A name joins by being promoted from the watchlist — which takes both members plus an automated liquidity screen. The agent can propose; only humans change the universe.",
+    example: "A name has to clear both members plus a liquidity screen to enter the universe — only then can the agent buy it.",
+    related: ["watchlist", "kill-switch"],
   },
   watchlist: {
     term: "Watchlist",
     def: "Names you're tracking but not yet investing in. The agent researches every watchlist name (a dossier, signals, its call), but it can't trade one until you both promote it into the universe.",
+    example: "GRQ can research and rate a watchlist name all day, but it can't trade one until you both promote it.",
+    related: ["universe", "agent-call"],
   },
   "analyst-target": {
     term: "Analyst consensus target",
     def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on GRQ's call — when GRQ and the street sharply disagree, it's worth asking who's right.",
+    example: "If the street's average target is $40 and GRQ's is $28, someone's wrong — worth knowing why before you buy.",
+    related: ["price-target", "expected-return"],
   },
   "capital-gains": {
     term: "Capital gains tax",
     def: "Tax on the profit when you sell for more than you paid. In Canada (non-registered accounts), half the gain is taxable at your marginal rate — so a 10% gain is worth less after tax. Inside a TFSA, gains are tax-free.",
+    example: "Sell for a $1,000 gain in a non-registered account and ~$500 is taxable at your rate; in a TFSA the whole $1,000 is yours.",
+    related: ["tfsa", "superficial-loss", "rrsp"],
   },
   tfsa: {
     term: "TFSA — Tax-Free Savings Account",
     def: "A registered account where investment gains are tax-free. The catch: trade too actively and the CRA can reclassify it as a business and tax everything — so a swing-trade cadence (not day-trading) matters.",
+    example: "Day-trade inside a TFSA and the CRA can call it a business and tax it all — a swing cadence keeps it tax-free.",
+    related: ["swing-trade", "capital-gains", "rrsp"],
   },
   rrsp: {
     term: "RRSP — Registered Retirement Savings Plan",
     def: "A registered account: contributions reduce this year's taxable income and growth is tax-deferred — you pay tax as income when you withdraw in retirement.",
+    example: "A $5,000 RRSP contribution lowers this year's taxable income; you pay tax later, as income, when you draw it down.",
+    related: ["tfsa", "capital-gains"],
   },
   "13f": {
     term: "13F filing",
     def: "A quarterly report big investment managers (over $100M) must file listing their U.S. stock holdings. It's a snapshot, filed up to ~45 days after quarter-end, and it shows only longs and options — never short positions.",
+    example: "Buffett's Q1 13F landing in mid-May shows what Berkshire held back in March — useful colour, stale for timing.",
+    related: ["qoq", "form-4", "put-option"],
   },
   qoq: {
     term: "QoQ — quarter over quarter",
     def: "The change from one quarter (a three-month reporting period) to the next. Here, '+24 QoQ' means 24 more institutions hold the stock than in the previous quarter's 13F filings — a measure of whether big money is building or trimming the position.",
+    example: "'+24 QoQ' means 24 more institutions hold the name than last quarter — big money building the position.",
+    related: ["13f", "insider"],
   },
   "form-4": {
     term: "Form 4 — insider trade",
     def: "The filing a company's executives, directors, and 10%+ owners must submit within two days of trading its stock. Open-market purchases are the meaningful 'insider buying' signal; option exercises and grants are noise.",
+    example: "A CEO buying $250k of her own stock on the open market files a Form 4 — that's the buy worth noticing.",
+    related: ["insider", "cluster-buying"],
   },
   insider: {
     term: "Insider",
     def: "A company's own officers, directors, or 10%+ owners. Their trades are disclosed on Form 4 — when they buy on the open market with their own money, it's often read as confidence in the business.",
+    example: "When three insiders buy with their own cash the same week, it's often read as real confidence in the business.",
+    related: ["form-4", "cluster-buying"],
   },
   "put-option": {
     term: "Put (option)",
     def: "A bet that a stock falls — it gains value as the price drops. In a 13F a put shows up as a 'holding', but it's a bearish position, not ownership of the shares.",
+    example: "A put line in a 13F isn't ownership — it's a bet the stock falls, so don't read it as a vote of confidence.",
+    related: ["call-option", "13f"],
   },
   "call-option": {
     term: "Call (option)",
     def: "A leveraged bet that a stock rises — it gains value as the price climbs. A call line in a 13F is a bullish add-on, not plain share ownership.",
+    example: "A fund adding calls on a name is leaning bullish with leverage — a louder version of buying the shares.",
+    related: ["put-option", "13f"],
   },
   "cluster-buying": {
     term: "Cluster buying",
     def: "Several different insiders at one company buying its stock around the same time — a stronger signal than any single purchase, since it's harder to dismiss as one person's hunch.",
+    example: "One director buying is a shrug; five insiders buying the same week is a cluster — much harder to dismiss.",
+    related: ["insider", "form-4"],
   },
   "congress-trade": {
     term: "Congressional disclosure",
     def: "Members of Congress must disclose their stock trades — but only as dollar ranges (e.g. $1M–$5M) and up to ~45 days late. Colour on what well-connected people are doing, not a holdings list and not a timing signal.",
+    example: "A disclosure might read '$1M–$5M, filed 40 days late' — colour on the well-connected, not a holdings list or a timing signal.",
+    related: ["13f", "insider"],
   },
 };

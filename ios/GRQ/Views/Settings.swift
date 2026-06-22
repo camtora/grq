@@ -32,6 +32,7 @@ struct MoreView: View {
                     }
                     NavigationLink { MarketsView() } label: { linkRow("Markets", "chart.bar.fill") }
                     NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
+                    NavigationLink { PriceAlertsView() } label: { linkRow("Price alerts", "bell.badge.fill") }
                     NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
                     NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }
                     themeCard
@@ -329,6 +330,86 @@ struct NotificationSettingsView: View {
                 prefs = prev
                 note = "Couldn't save — check your connection and try again."
             }
+        }
+    }
+}
+
+// MARK: - Price alerts (The Wire, Phase 2)
+
+// The member's own "ping me when SYMBOL crosses $X" alerts. List + delete here;
+// new ones are set from a stock's page (the bell). One-shot: each fires once.
+struct PriceAlertsView: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var alerts: [PriceAlert] = []
+    @State private var loaded = false
+    @State private var note: String?
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Ping me when a stock crosses a price I pick. One-shot — each fires once, then clears. Set new ones from any stock's page (the bell).")
+                    .font(.caption).foregroundStyle(p.textMuted)
+                if !loaded {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 30)
+                } else if alerts.isEmpty {
+                    EmptyState(title: "No price alerts yet",
+                               message: "Open a stock and tap the bell to get pinged when it crosses your price.")
+                        .padding(.top, 24)
+                } else {
+                    ForEach(alerts) { a in row(a) }
+                }
+                if let note { Text(note).font(.caption).foregroundStyle(p.accentText) }
+            }
+            .padding(16)
+        }
+        .background(ScreenBackground().ignoresSafeArea())
+        .navigationTitle("Price alerts")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func row(_ a: PriceAlert) -> some View {
+        let p = Theme.palette(scheme)
+        let unit = (a.currency != "CAD") ? a.currency : "$"
+        let priceStr = "\(unit)\(String(format: "%.2f", Double(a.thresholdCents) / 100))"
+        let phrase = (a.direction == "above" ? "rises above " : "falls below ") + priceStr
+        return Card {
+            HStack(spacing: 12) {
+                StockLogo(symbol: a.symbol, size: 36)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(a.symbol).font(.subheadline.weight(.bold)).foregroundStyle(p.textPrimary)
+                        if !a.active { Chip(text: "fired", tone: .dim) }
+                    }
+                    Text(a.active ? "When it \(phrase)" : "Fired when it \(phrase)")
+                        .font(.caption).foregroundStyle(p.textMuted)
+                    if let n = a.note, !n.isEmpty {
+                        Text("“\(n)”").font(.caption2).italic().foregroundStyle(p.textMuted.opacity(0.8))
+                    }
+                }
+                Spacer()
+                Button { Task { await remove(a) } } label: {
+                    Image(systemName: "trash").font(.callout).foregroundStyle(p.neg)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .opacity(a.active ? 1 : 0.6)
+    }
+
+    private func load() async {
+        alerts = await APIClient.shared.priceAlerts()
+        loaded = true
+    }
+
+    private func remove(_ a: PriceAlert) async {
+        let res = await APIClient.shared.deletePriceAlert(id: a.id)
+        if res.ok {
+            alerts.removeAll { $0.id == a.id }
+            note = nil
+        } else {
+            note = res.error
         }
     }
 }

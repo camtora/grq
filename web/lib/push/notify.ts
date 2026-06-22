@@ -18,7 +18,8 @@ export type NotifCategory =
   | "agentMoves" // the agent self-tracks or self-promotes a name
   | "reports" // morning plan / midday / EOD / weekly review
   | "members" // the OTHER member's universe/directive/kill actions
-  | "system"; // agent restarts, data-feed/broker hiccups (non-critical)
+  | "system" // agent restarts, data-feed/broker hiccups (non-critical)
+  | "priceTargets"; // a price alert the member set has crossed (Phase 2 — The Wire)
 
 type Severity = "info" | "warning" | "critical";
 
@@ -33,6 +34,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   reports: "reports",
   members: "members",
   system: "system",
+  priceTargets: "priceTargets",
 };
 
 type PrefRow = {
@@ -43,6 +45,7 @@ type PrefRow = {
   reports: boolean;
   members: boolean;
   system: boolean;
+  priceTargets: boolean;
 };
 
 // APNs reasons (or a 410) that mean the token is dead and should be pruned.
@@ -55,6 +58,8 @@ export type PushOpts = {
   body?: string;
   /** Skip this member (e.g. don't ping the member who took the action). */
   actorEmail?: string;
+  /** Restrict the fan-out to a single member (e.g. a personal price alert). */
+  onlyEmail?: string;
   /** Symbol for lock-screen grouping + a deep link in the app. */
   symbol?: string;
 };
@@ -67,6 +72,7 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
     if (devices.length === 0) return;
 
     const actor = opts.actorEmail?.trim().toLowerCase() ?? null;
+    const only = opts.onlyEmail?.trim().toLowerCase() ?? null;
     const emails = [...new Set(devices.map((d) => d.email))];
     const prefRows = (await prisma.notificationPreference.findMany({
       where: { email: { in: emails } },
@@ -77,6 +83,7 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
 
     const eligible = new Set(
       emails.filter((email) => {
+        if (only && email !== only) return false; // personal alert → owner only
         if (actor && email === actor) return false; // don't notify the actor
         if (forced) return true;
         const field = PREF_FIELD[opts.category];

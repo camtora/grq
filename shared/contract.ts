@@ -94,7 +94,29 @@ export const NotificationPreferences = z.object({
   reports: z.boolean(), // morning plan / midday / EOD / weekly review
   members: z.boolean(), // the OTHER member's universe/directive actions
   system: z.boolean(), // agent restarts, data-feed/broker hiccups (non-critical)
+  priceTargets: z.boolean(), // a price alert you set has crossed (The Wire, Phase 2)
 });
+
+/* ---------- price alerts (The Wire, Phase 2) — per-user "ping me at $X" ---------- */
+// Set on the stock page or The Wire; the agent runner pushes the owner when the
+// price crosses, then one-shots the alert. GET/POST/DELETE /api/notifications/price-alerts.
+export const PriceAlert = z.object({
+  id: z.number().int(),
+  symbol: z.string(),
+  direction: z.enum(["above", "below"]), // the side the price must cross
+  thresholdCents: z.number().int(), // trigger price, native currency
+  currency: z.string(),
+  note: z.string().nullable(),
+  active: z.boolean(), // false once it has fired (one-shot)
+  createdAt: z.string(),
+  firedAt: z.string().nullable(),
+  // attribution — present only on the symbol-scoped "alerts on this stock" view, so
+  // both members see who's watching a name. (Notifications + deletes stay per-owner.)
+  owner: z.string().nullish(), // display name ("Cam" / "Graham")
+  ownerKey: z.string().nullish(), // "cam" | "graham" → the bundled avatar
+  mine: z.boolean().nullish(), // true if the caller owns it (→ deletable)
+});
+export const PriceAlertList = z.object({ alerts: z.array(PriceAlert) });
 
 /* ---------- signals (advisory technicals consensus; see glossary) — v0 ---------- */
 export const Signals = z.object({
@@ -190,6 +212,10 @@ export const Today = z.object({
 // omitted and decode to nil (the house "graceful-decode" pattern). `at` is the recency
 // the feed is built from; the server already weaves kinds so clients render top-to-bottom.
 export const WireKind = z.enum(["find", "dossier", "watch", "article", "lesson"]);
+// A glossary term a lesson card links to. Self-contained (term+def ride along) so a
+// tapped chip can present the explainer directly — the bundled iOS glossary is only
+// a subset of web's, so we don't rely on the client having the slug.
+export const WireRelatedTerm = z.object({ slug: z.string(), term: z.string(), def: z.string() });
 export const WireItem = z.object({
   id: z.string(),        // stable client key, e.g. "find:ABC.TO" / "lesson:nav"
   kind: WireKind,
@@ -217,6 +243,7 @@ export const WireItem = z.object({
   signals: Signals.nullish(),              // technicals strip (dossier)
   sources: z.array(z.string()).nullish(),  // where the thesis came from (find)
   blurb: z.string().nullish(),             // one-liner / bottom-line bullets (markdown)
+  thesis: z.string().nullish(),            // the FULL hunt write-up (find card — more than the one-liner)
   tag: z.string().nullish(),               // "NYSE · Health" / "Market" / "Learn"
   // watch attribution (who put it on the board)
   watcher: z.string().nullish(),           // "Cam" | "Graham" | "Agent"
@@ -226,10 +253,13 @@ export const WireItem = z.object({
   publisher: z.string().nullish(),
   imageUrl: z.string().nullish(),
   url: z.string().nullish(),
+  relatedTickers: z.array(z.string()).nullish(), // tracked names the article touches → tap to the dossier
   // lesson (literacy snippet)
   lessonTerm: z.string().nullish(),
   lessonBody: z.string().nullish(),
   lessonSlug: z.string().nullish(),        // glossary slug → the in-app explainer
+  lessonExample: z.string().nullish(),     // a "here's what that looks like" line
+  lessonRelated: z.array(WireRelatedTerm).nullish(), // tappable related terms
 });
 export const WireResponse = z.object({ items: z.array(WireItem) });
 
@@ -249,6 +279,9 @@ export type Dossier = z.infer<typeof Dossier>;
 export type Mover = z.infer<typeof Mover>;
 export type Today = z.infer<typeof Today>;
 export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
+export type PriceAlert = z.infer<typeof PriceAlert>;
+export type PriceAlertList = z.infer<typeof PriceAlertList>;
 export type WireKind = z.infer<typeof WireKind>;
+export type WireRelatedTerm = z.infer<typeof WireRelatedTerm>;
 export type WireItem = z.infer<typeof WireItem>;
 export type WireResponse = z.infer<typeof WireResponse>;

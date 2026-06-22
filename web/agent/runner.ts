@@ -20,6 +20,8 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
+import { pushNotify } from "../lib/push/notify";
+import { apnsConfigured } from "../lib/push/apns";
 import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
 
 const broker = getBroker();
@@ -118,6 +120,44 @@ async function enforceExits() {
         { category: "trades", symbol: p.symbol },
       );
     }
+  }
+}
+
+// Per-user price alerts (Phase 2 — The Wire). Members set "ping me when SYMBOL
+// crosses $X" from the stock page or The Wire; each market-hours tick we compare
+// the active alerts to fresh quotes and push the OWNER ONLY on the first crossing,
+// then one-shot the alert (active=false, firedAt). Quotes are already refreshed at
+// the top of the tick. Best-effort: a missing quote just skips that alert this tick.
+async function checkPriceAlerts() {
+  // Push IS the whole point of a price alert. If APNs isn't configured yet (APNS_*
+  // unset), DON'T consume the one-shot — leave alerts active so they start firing
+  // once push goes live, instead of silently flipping to "fired" with no delivery.
+  if (!apnsConfigured()) return;
+  const alerts = await prisma.priceAlert.findMany({ where: { active: true } });
+  if (alerts.length === 0) return;
+  const quotes = await getQuotes([...new Set(alerts.map((a) => a.symbol))]);
+  for (const a of alerts) {
+    const q = quotes.get(a.symbol);
+    if (!q || q.midCents == null) continue;
+    const crossed = a.direction === "above" ? q.midCents >= a.thresholdCents : q.midCents <= a.thresholdCents;
+    if (!crossed) continue;
+    // One-shot FIRST (atomic guard): only push if this update is the one that flips
+    // the alert inactive, so a slow push can't double-fire across overlapping ticks.
+    const flipped = await prisma.priceAlert.updateMany({
+      where: { id: a.id, active: true },
+      data: { active: false, firedAt: new Date() },
+    });
+    if (flipped.count === 0) continue;
+    const money = (c: number) => (a.currency && a.currency !== "CAD" ? `${a.currency} ` : "$") + (c / 100).toFixed(2);
+    const moved = a.direction === "above" ? "rose above" : "fell below";
+    await pushNotify({
+      category: "priceTargets",
+      severity: "info",
+      title: `${a.symbol} ${moved} ${money(a.thresholdCents)}`,
+      body: `${a.symbol} is at ${money(q.midCents)}.${a.note ? ` — ${a.note}` : ""} Your price alert fired.`,
+      onlyEmail: a.email,
+      symbol: a.symbol,
+    });
   }
 }
 
@@ -475,6 +515,7 @@ async function tick() {
     const swept = await broker.sweepPendingOrders();
     if (swept > 0) await alert("info", `Resting orders filled: ${swept}`, "", { category: "trades" });
     await enforceExits();
+    await checkPriceAlerts();
     await checkDrawdown();
     await checkDailyLossPause();
     if (Date.now() - lastSnapshot > 30 * 60_000) {

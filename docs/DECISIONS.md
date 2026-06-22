@@ -1262,3 +1262,66 @@ photo · lesson: tinted flash card). New **4th tab "Wire"**; Markets re-homed un
 heat + thesis + sources, no price/upside/chart.
 **Verified:** `tsc --noEmit` clean (web); `/api/wire` validates against the contract (verify harness) and serves
 live; iOS written against the existing components but **not compiled on this Linux host** — needs an Xcode build.
+
+### D56 — The Wire Phase 2 (part 1): price alerts + push, stock-tied articles, lesson richness (Cam, 2026-06-22)
+**Context:** first push on The Wire's Phase 2 backlog (`docs/THE-WIRE.md`). Of the six items, Cam picked three:
+**price alerts + push (#2)**, **stock-tied articles (#3)**, and **lesson richness (#6)**. Deferred this round:
+per-user "for you" (#1), web rendering (#4), unpriced-finds coverage (#5).
+**Price alerts + push:** new `PriceAlert` table (per-user `email` + `symbol`/`direction`/`thresholdCents`/`currency`/
+`note`, `active`+`firedAt` for one-shot). `GET/POST/DELETE /api/notifications/price-alerts` (members-only, scoped to
+the caller). POST validates against the live quote — it **refuses a level already met** (would fire instantly) and
+auto-derives direction if omitted. The agent runner gained **`checkPriceAlerts()`** in the market-hours tick (right
+after `enforceExits()`, quotes already fresh): compares active alerts to mid, **one-shots atomically** (`updateMany`
+where `active:true` before pushing, so overlapping ticks can't double-fire), then pushes the **owner only**. New push
+category **`priceTargets`** (the long-reserved `NotificationPreference.priceTargets` is now wired) + a new
+`pushNotify` **`onlyEmail`** option so a personal alert doesn't broadcast. iOS: a **bell** in `StockDetailView`
+member controls → `SetPriceAlertSheet` (segmented above/below, auto-suggested from the typed target vs the live
+price), and a **More → Price alerts** manager (`PriceAlertsView`, list + delete). The §6 trade gate is untouched —
+alerts are notifications, not orders.
+**Shared visibility (Cam, 2026-06-22):** notifications + deletes stay strictly per-owner (only you get pinged, only
+you can delete yours), but the **stock page shows BOTH members' active alerts** on a name so the fund sees who's
+watching what. `GET …/price-alerts?symbol=XYZ` returns every member's active alerts on that symbol with attribution
+(`owner`/`ownerKey`/`mine`; resolved via `userForEmail`→`personByName`); the iOS stock page renders an attributed
+"Price alerts" card (member avatar + the rule), with a delete affordance only on your own. The personal manager
+(no-symbol GET) still lists only your own.
+**Stock-tied articles:** `wireResponse()` now pulls `fmpStockNews` for up to 4 names already in the feed (recent
+dossiers + watches) and emits article cards carrying `symbol` + `relatedTickers`; iOS renders tappable ticker chips
+(→ the dossier) on the full-bleed article card. General market news still flows; stock-tied lead the article lane.
+**Lesson richness:** `GlossaryEntry` gained optional `example` + `related[]`; ~14 common terms enriched. The wire
+lesson item carries `lessonExample` + a self-contained `lessonRelated` (`{slug,term,def}` so a tapped chip presents
+directly — the bundled iOS glossary is only a subset). iOS lesson card shows a "for example" callout + tappable
+related-term chips.
+**Verified (live):** `tsc --noEmit` clean; `prisma db push` applied; `/api/wire` + `/api/notifications/price-alerts`
++ `/preferences` validated via LAN member curl — CRUD works, the already-met guard fires, `priceTargets` is in prefs,
+wire carries `lessonRelated`/`lessonExample` and stock-tied `relatedTickers` (CCA/PEY/BDT). Deployed web + agent
+(market closed; chat not rebuilt — additive schema, no chat-logic change). **iOS not compiled on this Linux host —
+needs an Xcode build** before a device sees it.
+**Honesty:** `checkPriceAlerts()` **no-ops while APNs is unconfigured** (`APNS_*` env unset — the humans-only
+Apple-portal step) so it never consumes a one-shot it can't deliver; alerts accumulate and begin firing once push
+goes live. Alerts fire **market-hours only** (the runner checks against fresh quotes in the open tick).
+
+### D57 — The Wire goes social: viewer-aware watch lane + richer find/watch cards + full lesson library (Cam, 2026-06-22)
+**Context:** Cam: "a good segue into updating the Wire to be user-based — like a social network." First social step + a
+content/depth pass. Also caught: the D56 lessons "looked unchanged" — investigated and confirmed the cause.
+**Social watch lane:** `wireResponse(viewerEmail?)` is now **viewer-aware** (route passes `session.email`). The watch
+lane **HIDES the viewer's own watches and shows what everyone else is tracking** — the other human member first, then
+the agent (`ownerKeyFor(addedBy) !== viewerKey`; `viewerKey` via `userForEmail`→`ownerKeyFor`). Verified live: Cam's
+feed shows only Graham's watches and vice-versa. (Finds/dossiers/articles/lessons stay shared — only the watch lane
+personalizes, for now.)
+**Richer watch cards:** each watched name now pulls its latest stock dossier (full or hunt) → GRQ's call, bottom line,
+near/12-mo targets + bps, confidence, and live signals — the same substance as a dossier card, kept under the social
+"{member} is watching" header. iOS `watchPage` rebuilt: social header + a scrolling body (RatingBar · bottom line ·
+targets · signals · sparkline) with the CTA pinned.
+**Richer find cards:** hunt finds now carry absolute `targetNearCents`/`targetFarCents` and the **full thesis**
+(`thesis` on `WireItem`, server-side markdown-stripped via `cleanThesis`) instead of just the one-line `blurb`
+(firstLine). iOS `findPage` shows targets + the full write-up in a bounded, scrolling region (the card stays
+fixed-height; the CTA stays pinned). The thesis jumped from ~160 chars to ~2.3k.
+**Full lesson library (the "did we update it?" fix):** D56 enriched only ~18 of 55 glossary terms, and the feed rotates
+3 deterministically per day — so a given day often landed on un-enriched terms (and iOS renders the new fields only
+after an Xcode rebuild), making it *look* unchanged. Fix: **all 55 terms now carry `example` + `related[]`** (every
+related slug validated against existing keys), so every daily rotation is rich.
+**Verified (live):** `tsc --noEmit` clean; contract verifier green; deployed web only (feed/route/contract/glossary —
+agent + chat untouched). `/api/wire` confirmed per-viewer (Cam↔Graham watch split), watch cards rich, find thesis
+~2.3k + targets, lessons 3/3 rich today, 55/55 enriched. **iOS not compiled on this Linux host — needs an Xcode build.**
+**Open:** "user-based" is now started (watch lane); true "for you" ranking by interests/saved briefs (Phase 2 #1) and
+whether to include agent watches in the social lane (currently yes, member-first) remain.

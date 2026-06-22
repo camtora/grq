@@ -146,6 +146,7 @@ struct NotificationPreferences: Codable, Equatable {
     var reports: Bool = true
     var members: Bool = true
     var system: Bool = true
+    var priceTargets: Bool = true
 
     /// UI catalog: field key-path + its API JSON key + copy. Mirrors web/lib/push/categories.ts.
     static let catalog: [(key: WritableKeyPath<NotificationPreferences, Bool>, apiKey: String, label: String, desc: String)] = [
@@ -155,7 +156,27 @@ struct NotificationPreferences: Codable, Equatable {
         (\.reports, "reports", "Daily reports", "Morning plan, midday brief, end-of-day close, and the weekly review."),
         (\.members, "members", "Member activity", "When the other member blocks, pins, promotes, or demotes a name."),
         (\.system, "system", "System health", "Agent restarts and data-feed or broker hiccups (non-critical)."),
+        (\.priceTargets, "priceTargets", "Price alerts", "When a stock you set an alert on crosses your target price."),
     ]
+}
+
+/// A per-user price alert (The Wire, Phase 2). Set on the stock page; the agent
+/// runner pushes you when the price crosses, then one-shots it (active → false).
+struct PriceAlert: Codable, Identifiable, Equatable {
+    let id: Int
+    let symbol: String
+    let direction: String   // "above" | "below"
+    let thresholdCents: Int
+    let currency: String
+    var note: String? = nil
+    let active: Bool
+    let createdAt: String
+    var firedAt: String? = nil
+    // Attribution — set only on a stock's "alerts on this stock" view (both members'
+    // alerts). nil on the personal manager list. `mine` ⇒ the caller can delete it.
+    var owner: String? = nil
+    var ownerKey: String? = nil
+    var mine: Bool? = nil
 }
 
 // MARK: - Signals (advisory technicals consensus)
@@ -378,6 +399,7 @@ struct WireItem: Codable, Identifiable {
     var signals: Signals? = nil
     var sources: [String]? = nil
     var blurb: String? = nil
+    var thesis: String? = nil   // the full hunt write-up (find card shows more than the one-liner)
     var tag: String? = nil
     // watch attribution
     var watcher: String? = nil
@@ -387,13 +409,25 @@ struct WireItem: Codable, Identifiable {
     var publisher: String? = nil
     var imageUrl: String? = nil
     var url: String? = nil
+    var relatedTickers: [String]? = nil   // tracked names the article touches → tap to the dossier
     // lesson
     var lessonTerm: String? = nil
     var lessonBody: String? = nil
     var lessonSlug: String? = nil
+    var lessonExample: String? = nil           // a "here's what that looks like" line
+    var lessonRelated: [WireRelatedTerm]? = nil // tappable related terms
 
     /// GRQ's call as a 7-point Rating (for StanceBadge), derived from `call` (A6).
     var resolvedRating: Rating? { Stance.resolve(label: nil, call: call)?.rating }
+}
+
+/// A glossary term a lesson card links to — self-contained so a tap presents it
+/// directly (the bundled glossary is only a subset of the server's).
+struct WireRelatedTerm: Codable, Identifiable, Equatable {
+    let slug: String
+    let term: String
+    let def: String
+    var id: String { slug }
 }
 
 struct WireResponse: Codable { let items: [WireItem] }

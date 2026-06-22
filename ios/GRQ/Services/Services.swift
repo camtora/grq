@@ -271,6 +271,47 @@ final class APIClient {
         return await send(req)
     }
 
+    // MARK: - Price alerts (The Wire, Phase 2)
+
+    /// The signed-in member's alerts (active first, then fired) — newest within each.
+    func priceAlerts() async -> [PriceAlert] {
+        struct R: Decodable { let alerts: [PriceAlert] }
+        let r: R? = await get("notifications/price-alerts")
+        return r?.alerts ?? []
+    }
+
+    /// Every member's ACTIVE alerts on one symbol (the stock page's shared view) —
+    /// each carries `owner`/`ownerKey`/`mine` so we can attribute + gate delete.
+    func priceAlerts(symbol: String) async -> [PriceAlert] {
+        struct R: Decodable { let alerts: [PriceAlert] }
+        let q = symbol.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? symbol
+        let r: R? = await get("notifications/price-alerts?symbol=\(q)")
+        return r?.alerts ?? []
+    }
+
+    /// Create a "ping me when SYMBOL crosses $X" alert. The server validates the level
+    /// (it refuses one that's already met) and returns the guardrail message verbatim.
+    func createPriceAlert(symbol: String, direction: String, thresholdCents: Int, currency: String, note: String?) async -> ActionResult {
+        var body: [String: Any] = ["symbol": symbol, "direction": direction, "thresholdCents": thresholdCents, "currency": currency]
+        if let note, !note.isEmpty { body["note"] = note }
+        return await postResult("notifications/price-alerts", body)
+    }
+
+    func deletePriceAlert(id: Int) async -> ActionResult {
+        guard let url = URL(string: "\(baseURL)/notifications/price-alerts") else { return .failure("Bad URL.") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.timeoutInterval = 20
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            return (200..<300).contains(code) ? .success : .failure("Couldn't delete (\(code)).")
+        } catch { return .failure(error.localizedDescription) }
+    }
+
     // MARK: - Low-level POST + chat stream
 
     /// POST JSON, decode `{ error }` on failure so the UI can show the guardrail verbatim.
