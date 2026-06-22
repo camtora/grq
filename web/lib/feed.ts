@@ -6,7 +6,9 @@ import { allUniverse, type UniverseRow } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
-import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison } from "./fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews } from "./fmp";
+import { GLOSSARY } from "./glossary";
+import { personByName } from "./people";
 import { stanceMeta } from "./stance";
 import { getCloses, refreshBars } from "./bars";
 import { computeHeat } from "./heat";
@@ -489,6 +491,203 @@ export async function huntResponse() {
   // stable tiebreak within equal heat since `picked` was already date-ordered.
   finds.sort((a, b) => b.heat - a.heat);
   return { brief: state?.huntBrief ?? null, finds };
+}
+
+/* ---------- /api/wire — The Wire (the discovery feed; prototype, iOS-first) ---------- */
+// A single scrollable feed of heterogeneous typed cards, reusing the Hunt's feed engine
+// plus the existing dossier / watchlist / news / glossary surfaces. v1 is SHARED and
+// READ-ONLY — no schema change, no per-user state. Cards are bucketed per kind (each in
+// its own natural order) then WOVEN round-robin so the feed reads mixed, not clumped.
+
+/** Trading-days → a plain-English horizon, e.g. 40 → "~8 weeks". */
+function wireHorizon(days: number | null | undefined): string | null {
+  if (!days) return null;
+  const w = Math.max(1, Math.round(days / 5));
+  return `~${w} week${w > 1 ? "s" : ""}`;
+}
+
+/** Round-robin interleave of per-kind buckets → a mixed feed, capped. */
+function weaveWire(buckets: object[][], cap: number): object[] {
+  const out: object[] = [];
+  for (let i = 0; out.length < cap; i++) {
+    let addedThisRow = false;
+    for (const b of buckets) {
+      if (b[i]) {
+        out.push(b[i]);
+        addedThisRow = true;
+        if (out.length >= cap) break;
+      }
+    }
+    if (!addedThisRow) break;
+  }
+  return out;
+}
+
+export async function wireResponse(cap = 32) {
+  const now = new Date();
+  const [hunt, all, huntDates, dossierRows, watchRows, news] = await Promise.all([
+    huntResponse(),
+    allUniverse(),
+    // Hunt-find filing dates (huntResponse drops `at`) — for the feed's recency stamp.
+    prisma.journalEntry.findMany({
+      where: { kind: "RESEARCH", title: { startsWith: "Hunt dossier" }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      take: 24,
+      select: { symbol: true, at: true },
+    }),
+    // Recently-filed full dossiers (not hunt leads) — fresh research, with a target.
+    prisma.journalEntry.findMany({
+      where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      take: 24,
+    }),
+    // Recently watched names — surfaced with who put them on the board.
+    prisma.universeMember.findMany({ where: { status: "CANDIDATE" }, orderBy: { addedAt: "desc" }, take: 12 }),
+    fmpEnabled() ? fmpNews(10).catch(() => []) : Promise.resolve([]),
+  ]);
+
+  const uBy = new Map(all.map((u) => [u.symbol, u]));
+  const huntAtBy = new Map<string, Date>();
+  for (const r of huntDates) if (r.symbol && !huntAtBy.has(r.symbol)) huntAtBy.set(r.symbol, r.at);
+
+  // 1) Finds — reuse the heat-ranked hunt finds (already priced + sparked).
+  const findSyms = new Set(hunt.finds.map((f) => f.sym));
+  const findItems = hunt.finds.slice(0, 10).map((f) => ({
+    id: `find:${f.sym}`,
+    kind: "find",
+    at: (huntAtBy.get(f.sym) ?? now).toISOString(),
+    symbol: f.sym,
+    name: f.name,
+    currency: f.currency ?? "CAD",
+    logoUrl: f.logoUrl ?? null,
+    lastCents: f.cur ?? null,
+    farBps: f.farBps ?? null,
+    nearBps: f.nearBps ?? null,
+    nearDays: f.nearDays ?? null,
+    nearHorizon: wireHorizon(f.nearDays),
+    confidence: f.confidence ?? null,
+    heat: f.heat ?? null,
+    obscurity: f.obscurity ?? null,
+    change30d: f.change30d ?? null,
+    spark: f.spark ?? null,
+    sources: f.sources ?? null,
+    blurb: firstLine(f.body),
+    tag: f.tag ?? null,
+  }));
+
+  // 2) Dossiers — recent full research not already shown as a find.
+  const dossierSeen = new Set<string>();
+  const dossierPicked = dossierRows
+    .filter((d) => {
+      const sym = d.symbol as string;
+      if (!sym || dossierSeen.has(sym) || findSyms.has(sym)) return false;
+      dossierSeen.add(sym);
+      return true;
+    })
+    .slice(0, 8);
+  const [dossierQuotes, dossierSignals] = await Promise.all([
+    getQuotes(dossierPicked.map((d) => d.symbol as string)),
+    Promise.all(dossierPicked.map((d) => contractSignals(d.symbol as string).catch(() => null))),
+  ]);
+  const dossierItems = dossierPicked.map((d, i) => {
+    const sym = d.symbol as string;
+    const u = uBy.get(sym);
+    const q = dossierQuotes.get(sym);
+    const cur = q?.midCents ?? null;
+    const farBps = cur && d.targetFarCents != null ? Math.round(((d.targetFarCents - cur) / cur) * 10_000) : null;
+    const nearBps = cur && d.targetNearCents != null ? Math.round(((d.targetNearCents - cur) / cur) * 10_000) : null;
+    return {
+      id: `dossier:${sym}`,
+      kind: "dossier",
+      at: d.at.toISOString(),
+      symbol: sym,
+      name: u?.name ?? sym,
+      currency: u?.currency ?? "CAD",
+      logoUrl: u?.logoUrl || fmpLogo(sym),
+      lastCents: cur,
+      dayChangeBps: q?.dayChangeBps ?? null,
+      call: stanceToCall(d.stance),
+      farBps,
+      nearBps,
+      nearDays: d.targetNearDays ?? null,
+      nearHorizon: wireHorizon(d.targetNearDays),
+      targetNearCents: d.targetNearCents ?? null,
+      targetFarCents: d.targetFarCents ?? null,
+      confidence: d.confidence ?? null,
+      signals: dossierSignals[i],
+      blurb: d.bottomLine ?? firstLine(d.body),
+      tag: [u?.exchange, u?.sector].filter(Boolean).join(" · ") || null,
+    };
+  });
+
+  // 3) Watches — recent watchlist adds, attributed to the member who added them.
+  // Skip any name already shown as a find/dossier so a ticker appears once and the
+  // watch lane surfaces what's genuinely new on the board.
+  const shownSyms = new Set([...findSyms, ...dossierPicked.map((d) => d.symbol as string)]);
+  const watchPicked = watchRows.filter((w) => uBy.has(w.symbol) && !shownSyms.has(w.symbol)).slice(0, 6);
+  const [watchStances, watchQuotes, watchCloses] = await Promise.all([
+    stanceMap(watchPicked.map((w) => w.symbol)),
+    getQuotes(watchPicked.map((w) => w.symbol)),
+    Promise.all(watchPicked.map((w) => getCloses(w.symbol, 40).catch(() => []))),
+  ]);
+  const watchSparkBy = new Map(watchPicked.map((w, i) => [w.symbol, watchCloses[i].slice(-30).map((c) => c.closeCents)]));
+  const watchItems = watchPicked.map((w) => {
+    const u = uBy.get(w.symbol)!;
+    const q = watchQuotes.get(w.symbol);
+    const person = personByName(w.addedBy);
+    const watcher = person?.name ?? (w.addedBy && w.addedBy !== "agent" ? w.addedBy : "Agent");
+    const spark = watchSparkBy.get(w.symbol) ?? [];
+    return {
+      id: `watch:${w.symbol}`,
+      kind: "watch",
+      at: w.addedAt.toISOString(),
+      symbol: w.symbol,
+      name: u.name,
+      currency: u.currency ?? "CAD",
+      logoUrl: u.logoUrl || fmpLogo(w.symbol),
+      lastCents: q?.midCents ?? null,
+      dayChangeBps: q?.dayChangeBps ?? null,
+      call: stanceToCall(watchStances.get(w.symbol)),
+      spark: spark.length >= 2 ? spark : null,
+      tag: [u.exchange, u.sector].filter(Boolean).join(" · ") || null,
+      watcher,
+      watcherKey: person?.key ?? "agent",
+    };
+  });
+
+  // 4) Articles — market headlines (general; stock-tying is a Phase-2 enrichment).
+  const articleItems = news.slice(0, 6).map((n, i) => ({
+    id: `article:${i}`,
+    kind: "article",
+    at: n.at || now.toISOString(),
+    title: n.title,
+    publisher: n.publisher || null,
+    imageUrl: n.image || null,
+    url: n.url || null,
+    tag: "Market",
+  }));
+
+  // 5) Lessons — a few glossary explainers, rotated by day so the feed varies.
+  const glossKeys = Object.keys(GLOSSARY);
+  const seed = [...etDateStr()].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const lessonItems = glossKeys.length
+    ? [0, 1, 2].map((j) => {
+        const k = glossKeys[(seed + j * 7) % glossKeys.length];
+        return {
+          id: `lesson:${k}`,
+          kind: "lesson",
+          at: now.toISOString(),
+          lessonTerm: GLOSSARY[k].term,
+          lessonBody: GLOSSARY[k].def,
+          lessonSlug: k,
+          tag: "Learn",
+        };
+      })
+    : [];
+
+  // Lead with a find, then weave the rest so no two same-kind cards clump together.
+  const items = weaveWire([findItems, dossierItems, articleItems, watchItems, lessonItems], cap);
+  return { items };
 }
 
 /* ---------- /api/smart-money (A3) ---------- */

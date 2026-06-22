@@ -11,6 +11,7 @@ import {
   Idea,
   Today,
   Dossier,
+  WireResponse,
 } from "../../shared/contract";
 import { z } from "zod";
 import {
@@ -21,6 +22,7 @@ import {
   ideasResponse,
   todayResponse,
   dossierResponse,
+  wireResponse,
 } from "../lib/feed";
 import type { Session } from "../lib/session";
 
@@ -56,6 +58,7 @@ async function main() {
   await check("GET /market", MarketResponse, () => marketResponse());
   await check("GET /ideas", z.array(Idea), () => ideasResponse());
   await check("GET /today", Today, () => todayResponse());
+  await check("GET /wire", WireResponse, () => wireResponse());
 
   // Dossier: pick a real tracked symbol so the 404 path isn't what we test.
   const mkt = MarketResponse.parse(await marketResponse());

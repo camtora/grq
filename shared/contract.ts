@@ -183,6 +183,56 @@ export const Today = z.object({
   onTheRadar: z.array(Idea),                  // ideas w/ targets, unfamiliar first
 });
 
+/* ---------- The Wire — the discovery feed (prototype, iOS-first) ---------- */
+// One scrollable feed of heterogeneous typed cards. v1 is SHARED (not per-user) and
+// READ-ONLY — no schema change, all data reused from existing tables/feeds. A flat,
+// mostly-optional shape: each card sets only the fields its `kind` needs, the rest are
+// omitted and decode to nil (the house "graceful-decode" pattern). `at` is the recency
+// the feed is built from; the server already weaves kinds so clients render top-to-bottom.
+export const WireKind = z.enum(["find", "dossier", "watch", "article", "lesson"]);
+export const WireItem = z.object({
+  id: z.string(),        // stable client key, e.g. "find:ABC.TO" / "lesson:nav"
+  kind: WireKind,
+  at: z.string(),        // ISO recency the card was built from
+  // stock-bearing cards (find / dossier / watch / stock-tied article)
+  symbol: z.string().nullish(),
+  name: z.string().nullish(),
+  currency: z.string().nullish(),
+  logoUrl: z.string().nullish(),
+  lastCents: z.number().int().nullish(),
+  dayChangeBps: z.number().int().nullish(),
+  // discovery economics (find / dossier)
+  call: AgentCall.nullish(),               // GRQ's call on the name
+  farBps: z.number().int().nullish(),      // 12-month upside vs current
+  nearBps: z.number().int().nullish(),     // near-term upside vs current
+  nearDays: z.number().int().nullish(),    // near-term horizon (trading days)
+  nearHorizon: z.string().nullish(),       // e.g. "~8 weeks"
+  targetNearCents: z.number().int().nullish(), // near-term price target
+  targetFarCents: z.number().int().nullish(),  // 12-month price target
+  confidence: z.number().int().nullish(),  // 0–100 conviction
+  heat: z.number().int().nullish(),        // 0–100 "ready to pop"
+  obscurity: z.number().int().nullish(),   // 1–5 (5 = deepest cut)
+  change30d: z.number().nullish(),         // 30-day momentum, as a fraction
+  spark: z.array(z.number()).nullish(),    // ~30 daily closes (cents)
+  signals: Signals.nullish(),              // technicals strip (dossier)
+  sources: z.array(z.string()).nullish(),  // where the thesis came from (find)
+  blurb: z.string().nullish(),             // one-liner / bottom-line bullets (markdown)
+  tag: z.string().nullish(),               // "NYSE · Health" / "Market" / "Learn"
+  // watch attribution (who put it on the board)
+  watcher: z.string().nullish(),           // "Cam" | "Graham" | "Agent"
+  watcherKey: z.string().nullish(),        // "cam" | "graham" | "agent" → the bundled avatar
+  // article (market news)
+  title: z.string().nullish(),
+  publisher: z.string().nullish(),
+  imageUrl: z.string().nullish(),
+  url: z.string().nullish(),
+  // lesson (literacy snippet)
+  lessonTerm: z.string().nullish(),
+  lessonBody: z.string().nullish(),
+  lessonSlug: z.string().nullish(),        // glossary slug → the in-app explainer
+});
+export const WireResponse = z.object({ items: z.array(WireItem) });
+
 /* ---------- inferred TS types (Swift structs are generated separately) ---------- */
 export type MeResponse = z.infer<typeof MeResponse>;
 export type AuthResponse = z.infer<typeof AuthResponse>;
@@ -199,3 +249,6 @@ export type Dossier = z.infer<typeof Dossier>;
 export type Mover = z.infer<typeof Mover>;
 export type Today = z.infer<typeof Today>;
 export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
+export type WireKind = z.infer<typeof WireKind>;
+export type WireItem = z.infer<typeof WireItem>;
+export type WireResponse = z.infer<typeof WireResponse>;

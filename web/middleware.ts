@@ -31,6 +31,7 @@ const MOBILE_API = [
   "/api/dossier",
   "/api/fund-settings",
   "/api/hunt",            // GET feed (A1) + POST /api/hunt/refresh (member, A9)
+  "/api/wire",            // GET The Wire — the discovery feed (prototype)
   "/api/smart-money",     // A3
   "/api/reports",         // A10 (list + /day/[date])
   "/api/stock-extras",    // A7 (lazy earnings/grades)

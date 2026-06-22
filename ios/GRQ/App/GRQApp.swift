@@ -46,6 +46,8 @@ final class ThemeManager: ObservableObject {
 final class GlossaryPresenter: ObservableObject {
     @Published var entry: GlossaryEntry?
     func show(_ slug: String) { entry = Content.shared.glossary(slug) }
+    /// Present an entry we already hold (e.g. a Wire lesson whose slug isn't bundled).
+    func present(_ entry: GlossaryEntry) { self.entry = entry }
 }
 
 struct RootView: View {
@@ -92,6 +94,9 @@ struct RootView: View {
 // The 5-tab bar with THE HUNT dead center (the star, and the default landing tab —
 // the app is a toilet-reader centered on the feed). Chat is reachable from a top-right
 // button on every screen (ChatButton) — the sheet is presented once, here.
+// PROTOTYPE (The Wire): iOS shows max 5 tabs, so The Wire takes the 4th slot beside the
+// Hunt and Markets moves to a row under More (reachable, reversible). Revisit placement
+// once the feed proves out.
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthManager
     @StateObject private var chat = ChatLauncher()
@@ -102,7 +107,7 @@ struct MainTabView: View {
             TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }.tag(0)
             PortfolioView().tabItem { Label("Fund", systemImage: "briefcase.fill") }.tag(1)
             HuntView().tabItem { Label("Hunt", systemImage: "binoculars.fill") }.tag(2)
-            MarketsView().tabItem { Label("Markets", systemImage: "chart.bar.fill") }.tag(3)
+            WireView().tabItem { Label("Wire", systemImage: "dot.radiowaves.left.and.right") }.tag(3)
             MoreView().tabItem { Label("More", systemImage: "ellipsis.circle.fill") }.tag(4)
         }
         .environmentObject(chat)

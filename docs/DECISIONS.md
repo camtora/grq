@@ -1229,3 +1229,25 @@ is untouched; only the cash write is gated. Verified state-by-state: steady stat
 than the window falls through, so a genuinely-settled debit is never frozen). Per-currency aware (CAD/USD). No web/
 chat rebuild — `reconcile()` only runs in the agent runner.
 **Verified:** `tsc --noEmit` clean; agent image rebuilt + swapped; heartbeat ticking. `/var` 75%.
+
+### D55 — The Wire: a full-screen paged discovery feed (iOS-first prototype) (Cam, 2026-06-22)
+**Context:** "The Hunt meets Instagram" — a scrollable, mixed-media discovery surface separate from the Hunt.
+**Decisions (locked with Cam):** name **The Wire**; v1 **shared + read-only** (no per-user state, no schema change);
+**iOS-first**; push **deferred to Phase 2** (the D53 stack is left untouched); full-screen **vertically-paged**
+(Reels/Stories) with the **tab bar + a fixed header (brand + top-right `MemberAvatar`)** kept; **mixed** visual
+style (unified dark stock cards · full-bleed article photo · accent-tinted lesson card); cards **go rich**.
+**Backend (deployed):** `GET /api/wire` → `wireResponse()` in `lib/feed.ts` reuses the existing Hunt finds, recent
+`Dossier` journal entries, recent watchlist adds (attributed via `personByName`/`watcherKey` → the bundled
+`cam`/`graham` avatar), `fmpNews`, and `GLOSSARY` — five typed card kinds (`find`/`dossier`/`watch`/`article`/
+`lesson`) **woven round-robin** so the feed reads mixed. Flat, mostly-optional `WireItem` in `shared/contract.ts`
+(graceful-decode). "Go rich" added `nearBps`/`nearHorizon`/`targetNear|FarCents`/`signals`/`sources` + watch
+`spark`. Middleware allowlists `/api/wire`; verify harness covers it.
+**iOS:** `Views/Wire.swift` — iOS-17 `.scrollTargetBehavior(.paging)` + `.containerRelativeFrame(.vertical)`; each
+kind a purpose-built full-screen `WireCardPage` (find: heat + 12-mo hero + area chart + thesis + sources · dossier:
+RatingBar hero + bottom-line + target prices + signals · watch: big member avatar + mini chart · article: full-bleed
+photo · lesson: tinted flash card). New **4th tab "Wire"**; Markets re-homed under More (iOS 5-tab limit, reversible).
+**Lessons** present the wire-carried term/body directly (the app's bundled glossary is a subset of web's).
+**Known gap:** ~4/9 hunt finds lack a live quote (pre-existing hunt coverage) → those find cards degrade to
+heat + thesis + sources, no price/upside/chart.
+**Verified:** `tsc --noEmit` clean (web); `/api/wire` validates against the contract (verify harness) and serves
+live; iOS written against the existing components but **not compiled on this Linux host** — needs an Xcode build.

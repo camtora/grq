@@ -184,6 +184,10 @@ final class APIClient {
         return (r?.universe ?? [], r?.watchlist ?? [])
     }
 
+    // The Wire — the discovery feed (prototype): finds + dossiers + watchlist adds +
+    // market news + lessons, woven into one scroll.
+    func wire() async -> WireResponse? { await get("wire") }
+
     // The Hunt (A1) — the centerpiece feed + the on-demand refresh/brief.
     func hunt() async -> HuntResponse? { await get("hunt") }
     func refreshHunt(brief: String?) async -> ActionResult { await postResult("hunt/refresh", ["brief": brief ?? ""]) }

@@ -30,6 +30,7 @@ struct MoreView: View {
                     } else {
                         ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
                     }
+                    NavigationLink { MarketsView() } label: { linkRow("Markets", "chart.bar.fill") }
                     NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
                     NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
                     NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }

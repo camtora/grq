@@ -344,6 +344,60 @@ struct HuntResponse: Codable {
     let finds: [HuntFind]
 }
 
+// MARK: - The Wire (the discovery feed — prototype, iOS-first)
+
+/// One scrollable feed of heterogeneous typed cards (mirrors shared/contract.ts WireItem).
+/// Flat + mostly-optional: each card sets only the fields its `kind` needs; the server
+/// already weaves kinds so we render top-to-bottom. v1 is shared + read-only.
+enum WireKind: String, Codable { case find, dossier, watch, article, lesson }
+
+struct WireItem: Codable, Identifiable {
+    let id: String
+    let kind: WireKind
+    let at: String
+    // stock-bearing cards (find / dossier / watch / stock-tied article)
+    var symbol: String? = nil
+    var name: String? = nil
+    var currency: String? = nil
+    var logoUrl: String? = nil
+    var lastCents: Int? = nil
+    var dayChangeBps: Int? = nil
+    // discovery economics (find / dossier)
+    var call: AgentCall? = nil
+    var farBps: Int? = nil
+    var nearBps: Int? = nil
+    var nearDays: Int? = nil
+    var nearHorizon: String? = nil
+    var targetNearCents: Int? = nil
+    var targetFarCents: Int? = nil
+    var confidence: Int? = nil
+    var heat: Int? = nil
+    var obscurity: Int? = nil
+    var change30d: Double? = nil
+    var spark: [Double]? = nil
+    var signals: Signals? = nil
+    var sources: [String]? = nil
+    var blurb: String? = nil
+    var tag: String? = nil
+    // watch attribution
+    var watcher: String? = nil
+    var watcherKey: String? = nil   // "cam" | "graham" | "agent" → the bundled avatar image
+    // article
+    var title: String? = nil
+    var publisher: String? = nil
+    var imageUrl: String? = nil
+    var url: String? = nil
+    // lesson
+    var lessonTerm: String? = nil
+    var lessonBody: String? = nil
+    var lessonSlug: String? = nil
+
+    /// GRQ's call as a 7-point Rating (for StanceBadge), derived from `call` (A6).
+    var resolvedRating: Rating? { Stance.resolve(label: nil, call: call)?.rating }
+}
+
+struct WireResponse: Codable { let items: [WireItem] }
+
 // MARK: - Smart Money (A3)
 
 struct SmartHolding: Codable, Identifiable {

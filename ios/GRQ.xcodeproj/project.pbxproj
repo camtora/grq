@@ -25,6 +25,7 @@
 		BF1000000000000000000001 /* Stock.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000002 /* Stock.swift */; };
 		BF1000000000000000000003 /* Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000004 /* Chat.swift */; };
 		BF1000000000000000000005 /* SmartMoney.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000006 /* SmartMoney.swift */; };
+		BF1000000000000000000007 /* Wire.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1000000000000000000008 /* Wire.swift */; };
 		C159A609C96E1F8F9762D1D9 /* Today.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F428DA09D80E965B1098CF /* Today.swift */; };
 		F0E4F2404DC0E86EF83F5874 /* glossary.json in Resources */ = {isa = PBXBuildFile; fileRef = D46B6171477883110108E4BB /* glossary.json */; };
 		F772115B3AC886D14D606C98 /* tokens.json in Resources */ = {isa = PBXBuildFile; fileRef = 30269A0F511DCEBA9ADC0011 /* tokens.json */; };
@@ -50,6 +51,7 @@
 		BF1000000000000000000002 /* Stock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stock.swift; sourceTree = "<group>"; };
 		BF1000000000000000000004 /* Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chat.swift; sourceTree = "<group>"; };
 		BF1000000000000000000006 /* SmartMoney.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartMoney.swift; sourceTree = "<group>"; };
+		BF1000000000000000000008 /* Wire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wire.swift; sourceTree = "<group>"; };
 		D46B6171477883110108E4BB /* glossary.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = glossary.json; sourceTree = "<group>"; };
 		DA1A3BC6F95426464ECB4E52 /* Splash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Splash.swift; sourceTree = "<group>"; };
 		E78A5C786089AD88B49CF118 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 				BF1000000000000000000002 /* Stock.swift */,
 				BF1000000000000000000004 /* Chat.swift */,
 				BF1000000000000000000006 /* SmartMoney.swift */,
+				BF1000000000000000000008 /* Wire.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -277,6 +280,7 @@
 				BF1000000000000000000001 /* Stock.swift in Sources */,
 				BF1000000000000000000003 /* Chat.swift in Sources */,
 				BF1000000000000000000005 /* SmartMoney.swift in Sources */,
+				BF1000000000000000000007 /* Wire.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
