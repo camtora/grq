@@ -251,7 +251,24 @@ Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etD
   await queueDossiers(surfaced, "smart-money", 100).catch(() => {});
 }
 
+/** Push the agent's decision to members after a check-in — the "Check-in — …"
+ *  RESEARCH note the session just wrote. Closes the gap where the agent reviews
+ *  or acts on a holding's move (or a scheduled slot) but nothing notifies.
+ *  Category "reports" so it groups with the daily briefs and stays muteable. */
+async function notifyCheckinDecision(startedAt: Date): Promise<void> {
+  try {
+    const note = await prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { startsWith: "Check-in" }, at: { gte: startedAt } },
+      orderBy: { at: "desc" },
+    });
+    if (note) await alert("info", note.title, note.body.slice(0, 800), { category: "reports" });
+  } catch (e) {
+    console.error("notifyCheckinDecision failed", e);
+  }
+}
+
 export async function runMiddayCheckIn(reason: string): Promise<void> {
+  const startedAt = new Date();
   const ctx = await buildContext();
   const prompt = `${ctx}
 
@@ -263,6 +280,7 @@ The market is open. Review the trigger above against your morning game plan (get
 - If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
+  await notifyCheckinDecision(startedAt);
 }
 
 /** Scheduled / self-scheduled trading check-in — a decision-capable session that
@@ -272,6 +290,7 @@ Keep it tight: this is a check-in, not a research project.`;
  *  a one-line note. It may also re-arm its own watch via schedule_checkin. This is
  *  how the morning plan's conditional afternoon trades actually execute. */
 export async function runScheduledCheckin(reason: string): Promise<void> {
+  const startedAt = new Date();
   const ctx = await buildContext();
   const prompt = `${ctx}
 
@@ -288,6 +307,7 @@ The market is open. This is a scheduled check-in to ACT on your best read of the
 5. If — and ONLY if — this check-in surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off observation about today), ALSO record it as a separate LESSON: write_journal(kind:"LESSON") with a crisp title and the pattern + why it matters. Lessons are re-read before every future decision, so keep them rare and real — most check-ins won't earn one; don't manufacture one.
 Keep it tight.`;
   await runSession({ label: `checkin:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 20 });
+  await notifyCheckinDecision(startedAt);
 }
 
 /** Deep single-stock dossier (2.7) — research tools only, never trades.
