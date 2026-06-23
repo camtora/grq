@@ -52,9 +52,9 @@ Each is a full-screen page with a top progress rail + kicker, a single bottom CT
 
 | Kind | Hero | Shows | Tap |
 |---|---|---|---|
-| **find** | 12-mo upside + heat | logo, heat bar, giant upside, near + 12-mo **target prices**, area chart, the **full hunt thesis** (scrolls; D57), sources | → hunt dossier |
+| **find** | 12-mo upside + heat | logo, heat bar, giant upside, near + 12-mo **target prices**, a **few clean bottom-line bullets** (fixed, non-scrolling), sources | → hunt dossier |
 | **dossier** | GRQ's call (RatingBar) | price + day move, bottom-line bullets, near/12-mo **target prices**, signals strip | → full dossier |
-| **watch** | who's watching (avatar) | **the OTHER member** (yours are hidden; D57), the name, GRQ's call (RatingBar), bottom line, targets, signals, mini chart | → dossier |
+| **watch** | who's watching (compact line) | **the OTHER member** (yours are hidden; D57), the name, GRQ's call (RatingBar), bottom-line bullets, targets, signals — fixed, non-scrolling | → dossier |
 | **article** | full-bleed photo | headline, publisher, time, **related-ticker chips** (D56, stock-tied) | → opens the article · chip → the dossier |
 | **lesson** | the idea (tinted card) | term + plain-English definition + **"for example" line** + **tappable related terms** (D56) | → glossary sheet |
 

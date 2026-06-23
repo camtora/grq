@@ -193,6 +193,8 @@ struct MarkdownText: View {
         }
     }
     private func inline(_ s: String) -> Text {
+        // [[wiki-links]] aren't markdown — strip the brackets so they don't render raw.
+        let s = s.replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
         if let a = try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
             return Text(a)
         }

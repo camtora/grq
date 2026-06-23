@@ -124,6 +124,22 @@ private struct WireCardPage: View {
                                                       startPoint: .top, endPoint: .bottom)))
     }
 
+    // A fixed, non-scrolling bullet list — the server sends clean, pre-stripped strings
+    // (no markdown), so each is plain Text capped to a couple of lines. The card is
+    // designed to fit; we cap the count too.
+    private func bulletList(_ items: [String], limit: Int = 4, lineLimit: Int = 2) -> some View {
+        let p = Theme.palette(scheme)
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(items.prefix(limit).enumerated()), id: \.offset) { _, b in
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•").font(.callout.weight(.bold)).foregroundStyle(p.accent)
+                    Text(b).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true).lineLimit(lineLimit)
+                }
+            }
+        }
+    }
+
     // Logo · ticker · name · tag · live price — the shared identity row.
     private func identity(_ logoSize: CGFloat) -> some View {
         let p = Theme.palette(scheme)
@@ -164,8 +180,9 @@ private struct WireCardPage: View {
 
     private var findPage: some View {
         let p = Theme.palette(scheme)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
             rail("Find", .teal)
+            Spacer(minLength: 0)
             identity(46)
             if let heat = item.heat { heatRow(heat) }
             upsideBlock
@@ -179,28 +196,17 @@ private struct WireCardPage: View {
                     }
                 }
             }
-            // The full hunt write-up scrolls in the space left between the hero and the
-            // CTA (the card is fixed-height, so the thesis gets a bounded, scrollable home).
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let spark = item.spark, spark.count > 1 {
-                        TapeChart(points: spark).frame(height: 64)
-                        if let first = spark.first, let last = spark.last {
-                            Text("30-day   \(Fmt.money(Int(first))) → \(Fmt.money(Int(last)))")
-                                .font(.caption2).foregroundStyle(p.textMuted)
-                        }
-                    }
-                    if let thesis = item.thesis ?? item.blurb, !thesis.isEmpty {
-                        Text(thesis).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let sources = item.sources, !sources.isEmpty {
-                        Text("sources · " + sources.prefix(4).joined(separator: " · ")).font(.caption2).foregroundStyle(p.textMuted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // The thesis as a few clean bullets (the dossier's bottom line) — fixed, no scroll.
+            if let bullets = item.bullets, !bullets.isEmpty {
+                bulletList(bullets, limit: 4, lineLimit: 2)
+            } else if let blurb = item.blurb, !blurb.isEmpty {
+                Text(blurb).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true).lineLimit(3)
             }
-            .frame(maxHeight: .infinity)
+            if let sources = item.sources, !sources.isEmpty {
+                Text("sources · " + sources.prefix(4).joined(separator: " · ")).font(.caption2).foregroundStyle(p.textMuted).lineLimit(1)
+            }
+            Spacer(minLength: 0)
             NavigationLink { StockDetailView(symbol: item.symbol ?? "") } label: { cta("Open the hunt dossier  →") }.buttonStyle(.plain)
             swipeHint
         }
@@ -266,10 +272,16 @@ private struct WireCardPage: View {
                     RatingBar(rating: r, note: item.confidence.map { "\($0)% CONF" })
                 }
             }
-            if let blurb = item.blurb, !blurb.isEmpty {
+            if let bullets = item.bullets, !bullets.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("THE BOTTOM LINE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    bulletList(bullets, limit: 3, lineLimit: 2)
+                }
+            } else if let blurb = item.blurb, !blurb.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("THE BOTTOM LINE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
-                    MarkdownText(text: blurb)
+                    Text(blurb).font(.callout).foregroundStyle(p.textPrimary.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true).lineLimit(3)
                 }
             }
             if item.targetNearCents != nil || item.targetFarCents != nil {
@@ -308,53 +320,43 @@ private struct WireCardPage: View {
 
     private var watchPage: some View {
         let p = Theme.palette(scheme)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
             rail("On the board", .dim)
-            // Social header — who put it on the board, and when.
+            Spacer(minLength: 0)
+            // Compact social header — who put it on the board, one line so the card fits.
             HStack(spacing: 10) {
-                watcherAvatar(item.watcherKey, size: 46)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(item.watcher ?? "Someone") is watching").font(.headline).foregroundStyle(p.textPrimary)
-                    Text("On the board\(shortDate(item.at).map { " since \($0)" } ?? "") — not in the fund yet")
-                        .font(.caption).foregroundStyle(p.textMuted)
-                }
-                Spacer()
+                watcherAvatar(item.watcherKey, size: 36)
+                Text("\(item.watcher ?? "Someone") is watching\(shortDate(item.at).map { " · since \($0)" } ?? "")")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary).lineLimit(1)
+                Spacer(minLength: 0)
             }
-            identity(40)
-            // The same substance as a dossier card — GRQ's call, the bottom line, targets,
-            // signals — scrolling in the space between the header and the CTA.
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let r = item.resolvedRating {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("GRQ'S CALL").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
-                            RatingBar(rating: r, note: item.confidence.map { "\($0)% CONF" })
-                        }
-                    }
-                    if let blurb = item.blurb, !blurb.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("THE BOTTOM LINE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
-                            MarkdownText(text: blurb)
-                        }
-                    }
-                    if item.targetNearCents != nil || item.targetFarCents != nil {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("TARGETS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
-                            if let near = item.targetNearCents { targetRow("near", near, item.nearBps, item.nearHorizon) }
-                            if let far = item.targetFarCents { targetRow("12-mo", far, item.farBps, nil) }
-                        }
-                    }
-                    if let s = item.signals {
-                        HStack(spacing: 8) {
-                            Text("SIGNALS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
-                            SignalStrip(signals: s)
-                        }
-                    }
-                    if let spark = item.spark, spark.count > 1 { TapeChart(points: spark).frame(height: 56) }
+            identity(44)
+            if let r = item.resolvedRating {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("GRQ'S CALL").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    RatingBar(rating: r, note: item.confidence.map { "\($0)% CONF" })
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: .infinity)
+            if let bullets = item.bullets, !bullets.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("THE BOTTOM LINE").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    bulletList(bullets, limit: 3, lineLimit: 2)
+                }
+            }
+            if item.targetNearCents != nil || item.targetFarCents != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TARGETS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    if let near = item.targetNearCents { targetRow("near", near, item.nearBps, item.nearHorizon) }
+                    if let far = item.targetFarCents { targetRow("12-mo", far, item.farBps, nil) }
+                }
+            }
+            if let s = item.signals {
+                HStack(spacing: 8) {
+                    Text("SIGNALS").font(.caption2.weight(.bold)).tracking(1).foregroundStyle(p.textMuted)
+                    SignalStrip(signals: s)
+                }
+            }
+            Spacer(minLength: 0)
             NavigationLink { StockDetailView(symbol: item.symbol ?? "") } label: { cta("See the dossier  →") }.buttonStyle(.plain)
             swipeHint
         }

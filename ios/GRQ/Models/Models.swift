@@ -399,7 +399,7 @@ struct WireItem: Codable, Identifiable {
     var signals: Signals? = nil
     var sources: [String]? = nil
     var blurb: String? = nil
-    var thesis: String? = nil   // the full hunt write-up (find card shows more than the one-liner)
+    var bullets: [String]? = nil   // a few clean, pre-stripped bullets — the card body (no markdown)
     var tag: String? = nil
     // watch attribution
     var watcher: String? = nil

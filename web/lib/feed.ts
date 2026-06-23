@@ -480,6 +480,7 @@ export async function huntResponse() {
       targetFarCents: d.targetFarCents ?? null,
       confidence: d.confidence ?? null,
       body: d.body,
+      bottomLine: d.bottomLine ?? null,
       sources,
       obscurity: d.obscurity ?? null,
       // Heat-feed enrichment (the iOS redesign reads these; older clients ignore them).
@@ -581,7 +582,7 @@ export async function wireResponse(viewerEmail?: string | null, cap = 32) {
     spark: f.spark ?? null,
     sources: f.sources ?? null,
     blurb: firstLine(f.body),
-    thesis: cleanThesis(f.body), // the full hunt write-up (the find card shows more than the one-liner)
+    bullets: toBullets(f.bottomLine, f.body, 4), // a few clean bullets — the card stays fixed, no scrolling
     tag: f.tag ?? null,
   }));
 
@@ -626,6 +627,7 @@ export async function wireResponse(viewerEmail?: string | null, cap = 32) {
       confidence: d.confidence ?? null,
       signals: dossierSignals[i],
       blurb: d.bottomLine ?? firstLine(d.body),
+      bullets: toBullets(d.bottomLine, d.body, 3),
       tag: [u?.exchange, u?.sector].filter(Boolean).join(" · ") || null,
     };
   });
@@ -695,6 +697,7 @@ export async function wireResponse(viewerEmail?: string | null, cap = 32) {
       confidence: dd?.confidence ?? null,
       signals: watchSignals[i],
       blurb: dd?.bottomLine ?? (dd?.body ? firstLine(dd.body) : null),
+      bullets: toBullets(dd?.bottomLine, dd?.body, 3),
       spark: spark.length >= 2 ? spark : null,
       tag: [u.exchange, u.sector].filter(Boolean).join(" · ") || null,
       watcher,
@@ -858,11 +861,38 @@ function firstLine(body: string): string {
   return line.length > 160 ? line.slice(0, 160) + "…" : line;
 }
 
-/** The full hunt write-up, lightly tidied (collapse 3+ newlines) for a card body. */
-function cleanThesis(body: string | null | undefined): string | null {
-  if (!body) return null;
-  const t = body.replace(/\n{3,}/g, "\n\n").trim();
-  return t || null;
+// Strip markdown/wiki markup to plain text — The Wire cards render fixed, designed
+// rows (no markdown renderer), so the server hands them clean strings: no [[wiki]],
+// no **bold**, no ~~strike~~, no `code`, no links.
+function stripInline(s: string): string {
+  return s
+    .replace(/\[\[([^\]]+)\]\]/g, "$1") // [[wiki]] → wiki
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // [text](url) → text
+    .replace(/~~([^~]+)~~/g, "$1") // ~~strike~~ → strike
+    .replace(/`([^`]+)`/g, "$1") // `code` → code
+    .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1") // **bold** / *italic*
+    .replace(/[*_~`]/g, "") // stray markers
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Turn a dossier's bottom line (or body, as a fallback) into a SHORT list of clean
+// bullets for a card. Prefers existing bullet/numbered lines; otherwise splits prose
+// into a few sentences. Caps count + per-bullet length so the card never needs to scroll.
+function toBullets(primary: string | null | undefined, fallback: string | null | undefined, max = 4): string[] {
+  const src = (primary && primary.trim()) || (fallback && fallback.trim()) || "";
+  if (!src) return [];
+  const lines = src.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const bulletLines = lines.filter((l) => /^([-*•]|\d+[.)])\s+/.test(l));
+  const items =
+    bulletLines.length >= 2
+      ? bulletLines.map((l) => l.replace(/^([-*•]|\d+[.)])\s+/, ""))
+      : lines.join(" ").split(/(?<=[.!?])\s+(?=[A-Z0-9"'])/);
+  return items
+    .map(stripInline)
+    .map((s) => (s.length > 150 ? s.slice(0, 147).trimEnd() + "…" : s))
+    .filter((s) => s.length > 1)
+    .slice(0, max);
 }
 
 export async function reportsResponse(limit = 40) {

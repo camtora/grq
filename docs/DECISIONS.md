@@ -1325,3 +1325,20 @@ agent + chat untouched). `/api/wire` confirmed per-viewer (Cam↔Graham watch sp
 ~2.3k + targets, lessons 3/3 rich today, 55/55 enriched. **iOS not compiled on this Linux host — needs an Xcode build.**
 **Open:** "user-based" is now started (watch lane); true "for you" ranking by interests/saved briefs (Phase 2 #1) and
 whether to include agent watches in the social lane (currently yes, member-first) remain.
+
+**Follow-up correction (Cam, 2026-06-22) — cards, not text dumps.** The first D57 pass over-corrected the "more
+detail" ask: the find card got the FULL ~1.2k-word hunt `body` in a nested ScrollView, and the social header pushed
+the watch card into scrolling too — and raw markup (`[[wiki]]`, `~~`, `**`) leaked because the find card used plain
+`Text` and `MarkdownText` doesn't strip `[[ ]]`. Cam: the panels are **cards — fixed, non-scrolling, designed for this
+UI (like the Stocks page)**; if the dossier has bullets, show a *few* bullets, not 1200 words. Fix:
+- **Server shapes the content.** New `toBullets()` + `stripInline()` in `lib/feed.ts`: prefer the dossier's existing
+  bullet lines (hunt dossiers already store a clean bulleted `bottomLine`), else split prose into a few sentences;
+  strip ALL markup (`[[wiki]]`→text, links, `**`/`*`/`~~`/`` ` ``/`#`), cap to 3–4 bullets × ≤150 chars. Sent as a new
+  `bullets: string[]` on `WireItem`; the heavy `thesis` field was removed. Hunt finds now expose `bottomLine`.
+- **iOS renders fixed cards.** Removed the ScrollViews; find/dossier/watch use a `bulletList()` of plain Text rows
+  (no markdown renderer needed — content is pre-cleaned), with the centered Spacer layout restored so each card fits
+  one screen. The watch card's social header collapsed to a single compact line so it fits like a dossier card.
+- **`MarkdownText` hardened** (`Components.swift`): strips `[[ ]]` before parsing, so the Stocks page stops showing
+  raw wiki-links too.
+**Verified (live):** `tsc` clean, contract green, web redeployed; `/api/wire` bullets confirmed clean (find = the
+hunt bottom-line bullets, no markup, `thesis` gone). iOS still Xcode-only.

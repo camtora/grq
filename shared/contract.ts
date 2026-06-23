@@ -242,8 +242,8 @@ export const WireItem = z.object({
   spark: z.array(z.number()).nullish(),    // ~30 daily closes (cents)
   signals: Signals.nullish(),              // technicals strip (dossier)
   sources: z.array(z.string()).nullish(),  // where the thesis came from (find)
-  blurb: z.string().nullish(),             // one-liner / bottom-line bullets (markdown)
-  thesis: z.string().nullish(),            // the FULL hunt write-up (find card — more than the one-liner)
+  blurb: z.string().nullish(),             // one-liner summary (back-compat)
+  bullets: z.array(z.string()).nullish(),  // a few clean, pre-stripped bullets — the card body (no markdown)
   tag: z.string().nullish(),               // "NYSE · Health" / "Market" / "Learn"
   // watch attribution (who put it on the board)
   watcher: z.string().nullish(),           // "Cam" | "Graham" | "Agent"
