@@ -38,8 +38,8 @@ Legend: ✅ done · ◑ partial · ⏳ deferred to Phase 2
 - **Push:** deferred to Phase 2 (the D53 APNs stack is left untouched).
 - **Layout:** full-screen vertical paging (Reels/Stories). **Tab bar stays**; **fixed header** (brand + top-right
   `MemberAvatar`). Cards fill the area between header and tab bar.
-- **Style:** **mixed** — unified dark cards for stock kinds; full-bleed photo for articles; accent-tinted flash
-  card for lessons.
+- **Style:** **mixed** — unified dark cards for stock kinds; a structured panel with a **bounded hero photo** for
+  articles (was full-bleed — see the article-card fix below); accent-tinted flash card for lessons.
 - **Depth:** **go rich** — full-screen means room for more, so cards carry targets, signals, sources, sparklines.
 
 ---
@@ -55,7 +55,7 @@ Each is a full-screen page with a top progress rail + kicker, a single bottom CT
 | **find** | 12-mo upside + heat | logo, heat bar, giant upside, near + 12-mo **target prices**, a **few clean bottom-line bullets** (fixed, non-scrolling), sources | → hunt dossier |
 | **dossier** | GRQ's call (RatingBar) | price + day move, bottom-line bullets, near/12-mo **target prices**, signals strip | → full dossier |
 | **watch** | who's watching (compact line) | **the OTHER member** (yours are hidden; D57), the name, GRQ's call (RatingBar), bottom-line bullets, targets, signals — fixed, non-scrolling | → dossier |
-| **article** | full-bleed photo | headline, publisher, time, **related-ticker chips** (D56, stock-tied) | → opens the article · chip → the dossier |
+| **article** | bounded hero photo (panel) | headline (wraps, ≤5 lines), publisher · time, **related-ticker chips** (D56, stock-tied) | → opens the article · chip → the dossier |
 | **lesson** | the idea (tinted card) | term + plain-English definition + **"for example" line** + **tappable related terms** (D56) | → glossary sheet |
 
 Ordering: bucket per kind, then **weave round-robin** so the feed reads mixed, not clumped.
@@ -93,6 +93,17 @@ Ordering: bucket per kind, then **weave round-robin** so the feed reads mixed, n
   server-side; iOS shows it in a bounded scroll). Requirement (more hunt detail).
 - **Full lesson library** — all **55** glossary terms enriched (was ~18) so every daily rotation is rich. This was the
   fix for "the lessons look unchanged": D56 enriched a minority, and the 3-per-day rotation kept landing on plain ones.
+
+### Follow-up fix — article card rebuilt (2026-06-22)
+The article card was the lone full-bleed `ZStack` layout, and its headline rendered on one over-wide line
+(first words off-screen, then trailing off the right once left-aligned). Root cause: in a `ZStack` the stack
+sizes to its widest child, and the `scaledToFill` photo reported an over-wide size, so the headline's
+`maxWidth: .infinity` only ever resolved to that over-wide proposal — it never got a real width to wrap into.
+Rebuilt `articlePage` as a **purpose-built panel** matching the other (correctly-wrapping) card kinds: a shared
+`rail` kicker, a **bounded rounded hero image** (`frame(height: 188)` + `maxWidth: .infinity` + `.clipped()`, so
+`scaledToFill` overflow is clipped, never propagated into layout; loading spinner + `newspaper.fill` fallback),
+then headline / byline / related-ticker chips in a normal leading `VStack`. Pure iOS layout — no contract/API/agent
+change. (`ios/GRQ/Views/Wire.swift`.)
 
 ### Phase 2 — remaining
 1. **Per-user personalization (deeper)** — the watch lane is now per-viewer (D57); the *unlock* is a `UserInterest`

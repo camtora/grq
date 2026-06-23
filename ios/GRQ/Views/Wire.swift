@@ -377,65 +377,79 @@ private struct WireCardPage: View {
         .overlay(Circle().strokeBorder(p.accent.opacity(0.3), lineWidth: 2))
     }
 
-    // MARK: article — market news (full-bleed)
+    // MARK: article — market news (purpose-built panel: bounded hero + structured text)
 
     private var articlePage: some View {
         let p = Theme.palette(scheme)
-        return ZStack(alignment: .bottom) {
-            Group {
-                if let img = item.imageUrl, let u = URL(string: img) {
-                    AsyncImage(url: u) { phase in
-                        if case .success(let i) = phase { i.resizable().scaledToFill() }
-                        else { LinearGradient(colors: [p.accent.opacity(0.25), p.cardBg], startPoint: .top, endPoint: .bottom) }
-                    }
-                } else {
-                    LinearGradient(colors: [p.accent.opacity(0.25), p.cardBg], startPoint: .top, endPoint: .bottom)
-                }
+        return VStack(alignment: .leading, spacing: 14) {
+            rail("Market news", .dim)
+            articleHero
+            // Headline wraps cleanly because it lives in a normal vertical flow with a
+            // bounded width — the old full-bleed ZStack let the scaled photo dictate width.
+            Text(item.title ?? "—").font(.title2.weight(.black)).foregroundStyle(p.textPrimary)
+                .multilineTextAlignment(.leading).lineLimit(5)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let pub = item.publisher {
+                Text("\(pub.uppercased())\(shortDate(item.at).map { "  ·  \($0)" } ?? "")")
+                    .font(.caption.weight(.semibold)).tracking(0.5).foregroundStyle(p.textMuted)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
-
-            LinearGradient(colors: [.clear, .black.opacity(0.45), .black.opacity(0.88)], startPoint: .center, endPoint: .bottom)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Spacer()
-                if let tickers = item.relatedTickers, !tickers.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(tickers, id: \.self) { t in
-                            NavigationLink { StockDetailView(symbol: t) } label: {
-                                HStack(spacing: 5) {
-                                    StockLogo(symbol: t, url: t == item.symbol ? item.logoUrl : nil, size: 18)
-                                    Text(t).font(.caption.weight(.bold)).foregroundStyle(.white)
-                                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.7))
-                                }
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Capsule().fill(.white.opacity(0.18)))
+            if let tickers = item.relatedTickers, !tickers.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(tickers, id: \.self) { t in
+                        NavigationLink { StockDetailView(symbol: t) } label: {
+                            HStack(spacing: 5) {
+                                StockLogo(symbol: t, url: t == item.symbol ? item.logoUrl : nil, size: 18)
+                                Text(t).font(.caption.weight(.bold)).foregroundStyle(p.accentText)
+                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(p.accentText.opacity(0.7))
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(Capsule().fill(p.accent.opacity(0.14)))
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-                Text(item.title ?? "—").font(.title2.weight(.black)).foregroundStyle(.white).lineLimit(5)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let pub = item.publisher { Text("\(pub)\(shortDate(item.at).map { " · \($0)" } ?? "")").font(.caption).foregroundStyle(.white.opacity(0.8)) }
-                if let url = item.url, let u = URL(string: url) {
-                    Link(destination: u) { cta("Read on \(item.publisher ?? "the web")  ↗") }.buttonStyle(.plain)
-                }
-                swipeHint.foregroundStyle(.white.opacity(0.7))
             }
-            .padding(.horizontal, 22).padding(.bottom, 14)
+            Spacer(minLength: 0)
+            if let url = item.url, let u = URL(string: url) {
+                Link(destination: u) { cta("Read on \(item.publisher ?? "the web")  ↗") }.buttonStyle(.plain)
+            }
+            swipeHint
+        }
+        .padding(.horizontal, 22).padding(.top, 10).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
 
-            VStack {
-                HStack {
-                    Text(item.symbol ?? "MARKET").font(.caption2.weight(.black)).tracking(1).foregroundStyle(.white)
-                    Spacer()
-                    Text("\(index + 1) / \(total)").font(.caption2.weight(.bold)).foregroundStyle(.white.opacity(0.85))
+    // A bounded, rounded hero image. Definite height + maxWidth:.infinity resolves against
+    // the card's width, so scaledToFill overflow is clipped instead of inflating the layout.
+    private var articleHero: some View {
+        let p = Theme.palette(scheme)
+        return Group {
+            if let img = item.imageUrl, let u = URL(string: img) {
+                AsyncImage(url: u) { phase in
+                    switch phase {
+                    case .success(let i): i.resizable().scaledToFill()
+                    case .empty: ZStack { heroFallback; ProgressView().tint(p.accent) }
+                    default: heroFallback
+                    }
                 }
-                .padding(.horizontal, 22).padding(.top, 10)
-                Spacer()
+            } else {
+                heroFallback
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(height: 188)
         .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(p.textMuted.opacity(0.12), lineWidth: 1))
+    }
+
+    private var heroFallback: some View {
+        let p = Theme.palette(scheme)
+        return ZStack {
+            LinearGradient(colors: [p.accent.opacity(0.22), p.cardBg], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Image(systemName: "newspaper.fill").font(.system(size: 40)).foregroundStyle(p.accent.opacity(0.5))
+        }
     }
 
     // MARK: lesson — a literacy flash card (calm, accent-tinted)
