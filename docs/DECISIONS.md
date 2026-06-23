@@ -1342,3 +1342,29 @@ UI (like the Stocks page)**; if the dossier has bullets, show a *few* bullets, n
   raw wiki-links too.
 **Verified (live):** `tsc` clean, contract green, web redeployed; `/api/wire` bullets confirmed clean (find = the
 hunt bottom-line bullets, no markup, `thesis` gone). iOS still Xcode-only.
+
+### D58 — Owner tier + admin usage dashboard (Cam, 2026-06-22)
+**Context:** Cam wanted an admin view at `/admin`, visible to him alone, to see site traffic by person and section —
+which parts of GRQ actually get used. GRQ's auth had only two tiers (`roleForEmail` → **member** | **viewer**); the
+`GrqUser.role:"admin"` field is a cosmetic label that gates nothing. And nothing logged usage.
+**Decision — a third tier ABOVE member, plus server-side usage logging:**
+- **Owner tier.** `isOwner()` in `web/lib/users.ts` (default `cameron.tora@gmail.com`, extend via `OWNER_EMAILS`
+  env). `/admin` (`app/admin/page.tsx`) calls `getSession()` → `isOwner` → `notFound()` for everyone else (Graham and
+  viewers get a real 404, not just a hidden link); the NavBar link is owner-only. Same defense-in-depth as the member
+  write-lock — the route guard is the lock, the hidden link is cosmetic.
+- **Traffic logging — page/section views.** New `PageView` model (at/email/role/path/section). A client beacon
+  (`web/components/Tracker.tsx`, mounted once in the layout) fires `navigator.sendBeacon('/api/track', {path})` on
+  every client navigation. **Only the path is sent — `/api/track` (Node runtime) resolves WHO from the session
+  (`sessionFromRequest`), so identity can't be spoofed.** Edge middleware can't reach Postgres, which is why it's a
+  beacon-to-route, not middleware logging. Path stored raw (drill into which stocks); `section` is the friendly label
+  (`web/lib/sections.ts`, mirrors the nav). ~9 SSO humans → no bot noise to filter.
+- **Dashboard.** `web/lib/admin.ts` aggregates (groupBy + JS pivot): 24h/7d/30d/90d window, most-used sections, a
+  by-person table (views · role · top section · last seen), a person×section matrix, and a recent feed.
+**Scope decisions (Cam):** the new account `cameron@camerontora.ca` stays a **read-only viewer** (it was already in
+the infra oauth2-proxy allowlist and isn't a member → already a viewer, no code change needed) so Cam can see the
+non-member experience; logging is **page/section level** (not every API call); viewers ARE tracked (the point is
+seeing what everyone uses); it is deliberately NOT an owner, so it can't see `/admin`.
+**Verified (live):** `tsc --noEmit` clean; deployed web only (agent + chat untouched); Cam→`/admin` 200, Graham &
+viewer→404; viewer/owner beacons logged with the correct role + derived section; junk `/api/track` paths rejected
+(204, no row); synthetic test rows cleaned out. Committed on its own, isolated from the parallel stock-sharing WIP in
+the working tree.

@@ -575,6 +575,27 @@ model PriceAlert {
   @@index([active, symbol])
 }
 
+// --- Traffic / usage logging (admin dashboard) -------------------------------
+// One row per page navigation, written by a client beacon (components/Tracker.tsx)
+// → POST /api/track. Identity is resolved SERVER-SIDE from the session (never the
+// client), so `email`/`role` are trustworthy. Everyone here is behind SSO (~9
+// allowlisted humans), so there's no bot noise to filter. `section` is the
+// friendly label (lib/sections.ts); `path` is the raw pathname for drill-down
+// (e.g. which stock pages). Owner-only /admin aggregates this. No money, no PII
+// beyond the email we already authenticate.
+model PageView {
+  id      Int      @id @default(autoincrement())
+  at      DateTime @default(now())
+  email   String // viewer/member email (normalized lowercase)
+  role    String // "owner" | "member" | "viewer" — snapshot at view time
+  path    String // raw pathname ("/stocks/AAPL")
+  section String // friendly label ("Stock", "Watchlist", "Today")
+
+  @@index([at])
+  @@index([email])
+  @@index([section])
+}
+
 // Conviction tally (Cam, 2026-06-17): every agent BUY/SELL proposal, logged at
 // the propose_order boundary — including conviction-gate REJECTIONS, which
 // refuse() before the DECISION journal is ever written. Lets us track the

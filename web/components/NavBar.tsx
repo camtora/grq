@@ -32,6 +32,7 @@ export default function NavBar({
   broker,
   theme,
   isMember = true,
+  isOwner = false,
 }: {
   name: string;
   photo?: string | null;
@@ -40,6 +41,7 @@ export default function NavBar({
   broker: string;
   theme: "light" | "dark";
   isMember?: boolean;
+  isOwner?: boolean;
 }) {
   const pathname = usePathname();
   const renderLink = (l: NavLink) => {
@@ -72,7 +74,12 @@ export default function NavBar({
         </Link>
         <div className="flex flex-wrap items-center gap-1">{PRIMARY.map(renderLink)}</div>
         <div className="ml-auto flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1">{SECONDARY.map(renderLink)}</div>
+          <div className="flex items-center gap-1">
+            {SECONDARY.map(renderLink)}
+            {/* Owner-only — usage/admin dashboard (Cam). Hidden for everyone else;
+                the page itself enforces the owner gate, this is just the link. */}
+            {isOwner && renderLink({ href: "/admin", label: "Admin" })}
+          </div>
           {isMember && (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("grq:chat"))}
