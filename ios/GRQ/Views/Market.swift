@@ -19,22 +19,21 @@ struct MarketsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Markets", subtitle: "what GRQ tracks")
-                        ChatButton()
+            VStack(spacing: 0) {
+                BrandHeader(title: "MARKETS")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        selector
+                        if let actionNote { Text(actionNote).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
+                        switch tab {
+                        case .watchlist:  rows(watchlist, candidates: true)
+                        case .universe:   rows(universe, candidates: false)
+                        case .browse:     BrowseSection(isMember: isMember) { note in actionNote = note }
+                        case .smartMoney: SmartMoneySection()
+                        }
                     }
-                    selector
-                    if let actionNote { Text(actionNote).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
-                    switch tab {
-                    case .watchlist:  rows(watchlist, candidates: true)
-                    case .universe:   rows(universe, candidates: false)
-                    case .browse:     BrowseSection(isMember: isMember) { note in actionNote = note }
-                    case .smartMoney: SmartMoneySection()
-                    }
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
                 }
-                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
             }
             .background(ScreenBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
@@ -85,7 +84,10 @@ struct MarketsView: View {
 
     private func load() async {
         let m = await APIClient.shared.market()
-        universe = m.universe; watchlist = m.watchlist; loaded = true
+        // Sorted alphabetically by ticker (both list tabs).
+        universe = m.universe.sorted { $0.symbol < $1.symbol }
+        watchlist = m.watchlist.sorted { $0.symbol < $1.symbol }
+        loaded = true
     }
 
     private func promote(_ n: MarketName) async {
@@ -224,7 +226,7 @@ struct BrowseSection: View {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         searching = true
-        results = await APIClient.shared.search(q)
+        results = (await APIClient.shared.search(q)).sorted { $0.symbol < $1.symbol }
         searching = false
     }
 

@@ -5,6 +5,8 @@ import SwiftUI
 struct MoreView: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var chat: ChatLauncher
+    @EnvironmentObject private var inbox: MessagesInbox
     @Environment(\.colorScheme) private var scheme
     @State private var settings: FundSettings?
     @State private var killOn = false
@@ -16,30 +18,29 @@ struct MoreView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "More", subtitle: "controls & the fund")
-                        ChatButton()
+            VStack(spacing: 0) {
+                BrandHeader(title: "MORE")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        memberCard
+                        if isMember { messagesRow }
+                        if let s = settings {
+                            riskCard(s)
+                            if isMember { killCard }
+                            soakCard(s)
+                        } else {
+                            ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
+                        }
+                        NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
+                        NavigationLink { PriceAlertsView() } label: { linkRow("Price alerts", "bell.badge.fill") }
+                        NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
+                        NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }
+                        themeCard
+                        if let note { Text(note).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
+                        signOutButton
                     }
-                    memberCard
-                    if let s = settings {
-                        riskCard(s)
-                        if isMember { killCard }
-                        soakCard(s)
-                    } else {
-                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
-                    }
-                    NavigationLink { MarketsView() } label: { linkRow("Markets", "chart.bar.fill") }
-                    NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
-                    NavigationLink { PriceAlertsView() } label: { linkRow("Price alerts", "bell.badge.fill") }
-                    NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
-                    NavigationLink { AboutView() } label: { linkRow("About GRQ", "info.circle.fill") }
-                    themeCard
-                    if let note { Text(note).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
-                    signOutButton
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
                 }
-                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
             }
             .background(ScreenBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
@@ -55,6 +56,28 @@ struct MoreView: View {
         } message: {
             Text(killOn ? "The order gate opens again." : "Nothing trades until a member turns it back on.")
         }
+    }
+
+    // Member-to-member chat (D61) — a Button (sheet launcher) styled like the link rows,
+    // with an unread count. Mirrors the More-tab badge.
+    private var messagesRow: some View {
+        let p = Theme.palette(scheme)
+        return Button { chat.show = true } label: {
+            Card {
+                HStack {
+                    Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(p.accent)
+                    Text("Messages").foregroundStyle(p.textPrimary)
+                    Spacer()
+                    if inbox.unread > 0 {
+                        Text("\(inbox.unread)").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(Capsule().fill(p.accent))
+                    }
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted.opacity(0.5))
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func linkRow(_ title: String, _ icon: String) -> some View {

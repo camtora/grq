@@ -352,6 +352,27 @@ model ChatMessage {
   @@index([at])
 }
 
+// Member-to-member direct messages — the two-person fund's own thread (Cam ↔
+// Graham), distinct from the read-only agent chat above (ChatMessage). A bare DM
+// is just `body`; a "share" carries `symbol` (+ optional `panel`) so tapping its
+// push deep-links the recipient straight to that dossier panel. Each message is
+// pushed to the recipient (category "messages") and the open thread polls for new
+// rows; `readAt` (null = unread) drives the inbox badge. Both members read the one
+// shared thread, so direction is just (fromEmail → toEmail).
+model DirectMessage {
+  id        Int       @id @default(autoincrement())
+  at        DateTime  @default(now())
+  fromEmail String // author (normalized lowercase)
+  toEmail   String // recipient — the other member (normalized lowercase)
+  body      String    @default("") // the comment / chat text (empty for a bare share)
+  symbol    String? // attached dossier, if this is a share
+  panel     String? // attached panel key (e.g. "analyst"), if a specific panel was shared
+  readAt    DateTime? // when the recipient opened the thread; null = unread
+
+  @@index([at])
+  @@index([toEmail, readAt])
+}
+
 // Cached agent explanations of finance/investing concepts (the literacy pillar's
 // "explain this" — docs/LITERACY.md). Keyed by the normalized term so the second
 // reader to click "shell company" pays $0 and gets it instantly.
@@ -549,6 +570,7 @@ model NotificationPreference {
   agentMoves   Boolean  @default(true) // the agent self-tracks or self-promotes a name
   reports      Boolean  @default(true) // morning plan / midday / EOD / weekly review
   members      Boolean  @default(true) // the OTHER member's universe/directive/kill actions
+  messages     Boolean  @default(true) // the OTHER member messages you or shares a stock (D61)
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
   updatedAt    DateTime @updatedAt

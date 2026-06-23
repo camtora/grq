@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The rich stock dossier — full parity with web app/stocks/[symbol]/page.tsx, same
 // section order: hero → the bottom line (call + why) → your position → analyst
@@ -8,53 +9,76 @@ import SwiftUI
 // payload (lib/feed.ts dossierResponse) and degrade gracefully when a feed is dark.
 struct StockDetailView: View {
     let symbol: String
+    /// A panel key to scroll to + briefly highlight on open — set when a deep-linked
+    /// per-panel share routes here (D61).
+    var scrollTo: String? = nil
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var d: Dossier?
     @State private var actionNote: String?
     @State private var showChat = false
     @State private var showAlertSheet = false
-    @State private var showShareSheet = false
+    @State private var shareTarget: ShareTarget?    // nil = closed; .panel == nil = whole page
+    @State private var flash: String?               // panel key to outline (deep-link landing)
+    @State private var didScroll = false
     @State private var alerts: [PriceAlert] = []
 
     private var isMember: Bool { auth.currentUser?.role == .member }
+    /// The OTHER member — the share recipient in this two-person fund.
+    private var otherKey: String? { otherMemberKey(for: auth.currentUser?.email) }
+    private var otherName: String { otherKey == "cam" ? "Cam" : otherKey == "graham" ? "Graham" : "the other member" }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if let d {
-                    Group {
-                        header(d)
-                        if isMember { memberControls(d) }
-                        if let note = actionNote { noteRow(note) }
-                        bottomLineCard(d)
-                        if let pos = d.position { positionCard(d, pos) }
-                        if let n = d.agentNote, !n.isEmpty { agentNoteCard(n) }
-                        alertsCard()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let d {
+                        // Long-press any of these panels to share THAT section with the
+                        // other member (with a comment). Header/controls/alerts aren't
+                        // shareable — they're personal/transient, not a "look at this".
+                        Group {
+                            header(d)
+                            if isMember { memberControls(d) }
+                            if let note = actionNote { noteRow(note) }
+                            shareable(.bottomLine, bottomLineCard(d))
+                            if let pos = d.position { shareable(.position, positionCard(d, pos)) }
+                            if let n = d.agentNote, !n.isEmpty { shareable(.agentNote, agentNoteCard(n)) }
+                            alertsCard()
+                        }
+                        Group {
+                            shareable(.analyst, analystRatingsCard(d))
+                            shareable(.priceTarget, priceTargetCard(d))
+                            shareable(.institutional, institutionalCard(d))
+                            shareable(.signals, signalFamiliesCard(d))
+                            shareable(.earnings, earningsCard(d))
+                            shareable(.peers, peersCard(d))
+                            shareable(.scoreboard, scoreboardCard(d))
+                            shareable(.chart, chartCard(d))
+                            shareable(.smartMoney, smartMoneyCard(d))
+                        }
+                        Group {
+                            shareable(.fundamentals, fundamentals(d))
+                            shareable(.dossier, dossierCard(d))
+                            shareable(.trades, tradesCard(d))
+                            shareable(.news, newsCard(d))
+                            shareable(.coverage, coverageCard(d))
+                        }
+                    } else {
+                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
                     }
-                    Group {
-                        analystRatingsCard(d)
-                        priceTargetCard(d)
-                        institutionalCard(d)
-                        signalFamiliesCard(d)
-                        earningsCard(d)
-                        peersCard(d)
-                        scoreboardCard(d)
-                        chartCard(d)
-                        smartMoneyCard(d)
-                    }
-                    Group {
-                        fundamentals(d)
-                        dossierCard(d)
-                        tradesCard(d)
-                        newsCard(d)
-                        coverageCard(d)
-                    }
-                } else {
-                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+            }
+            // Once the dossier lands, jump to the shared panel and pulse its outline.
+            .onChange(of: d?.symbol) { _, sym in
+                guard sym != nil, let target = scrollTo, !didScroll else { return }
+                didScroll = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    withAnimation { proxy.scrollTo(target, anchor: .top) }
+                    flash = target
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { withAnimation { flash = nil } }
                 }
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
         }
         .background(ScreenBackground().ignoresSafeArea())
         .navigationTitle(symbol)
@@ -71,18 +95,29 @@ struct StockDetailView: View {
                 SetPriceAlertSheet(symbol: d.symbol, name: d.name, currency: d.currency, lastCents: d.lastCents)
             }
         }
-        .sheet(isPresented: $showShareSheet) {
-            ShareStockSheet(symbol: symbol, name: d?.name).environmentObject(auth)
+        .sheet(item: $shareTarget) { t in
+            ShareComposerSheet(symbol: symbol, name: d?.name, panel: t.panel).environmentObject(auth)
         }
         .toolbar {
-            if isMember {
+            if isMember, let key = otherKey {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showShareSheet = true } label: {
-                        Image(systemName: "square.and.arrow.up")
+                    Button { shareTarget = ShareTarget(panel: nil) } label: {
+                        ShareAvatarBadge(memberKey: key)
                     }
-                    .tint(Theme.brandAccent)
+                    .accessibilityLabel("Share with \(otherName)")
                 }
             }
+        }
+    }
+
+    /// Wraps a panel so a long-press grows it + taps a haptic (the old context-menu
+    /// feel) and opens the share composer for THAT section directly. Also a scroll
+    /// anchor for deep-linked shares; `flash` briefly outlines the panel one landed on.
+    @ViewBuilder
+    private func shareable<V: View>(_ panel: PanelKind, _ content: V) -> some View {
+        ShareablePanel(panel: panel, enabled: isMember, flashing: flash == panel.rawValue,
+                       onShare: { shareTarget = ShareTarget(panel: panel) }) {
+            content
         }
     }
 
@@ -752,7 +787,6 @@ struct StockDetailView: View {
 
     @ViewBuilder private func newsCard(_ d: Dossier) -> some View {
         if let news = d.news, !news.isEmpty {
-            let p = Theme.palette(scheme)
             Card {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionTitle(text: "Recent news")
@@ -1023,125 +1057,85 @@ struct SetPriceAlertSheet: View {
     }
 }
 
-// MARK: - Share a stock with the other member
+// MARK: - Long-press-to-share (D61) — shared by the stock panels AND the Wire cards
 
-// The two members, keyed to match lib/people.ts (Person.key) + the bundled avatar
-// assets ("cam"/"graham"). The share button shows the OTHER member with a send icon;
-// tapping it fires a push to their phone that deep-links back to this dossier.
-struct GrqMember: Identifiable {
-    let key: String // "cam" | "graham"
-    let name: String
-    var id: String { key }
+/// Light haptics for the share gesture (recreates the old context-menu lift feel).
+private enum Haptics {
+    static func soft()  { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+    static func rigid() { UIImpactFeedbackGenerator(style: .rigid).impactOccurred() }
 }
 
-private let grqMembers = [
-    GrqMember(key: "cam", name: "Cam"),
-    GrqMember(key: "graham", name: "Graham"),
-]
-
-/// The signed-in member's key, from their email (same heuristic as MemberAvatar).
-private func memberKey(for email: String?) -> String? {
-    guard let email = email?.lowercased() else { return nil }
-    if email.hasPrefix("cameron") { return "cam" }
-    if email.hasPrefix("g.j.appleby") { return "graham" }
-    return nil
+extension View {
+    /// Long-press to share: the view grows + taps a haptic on press (the old
+    /// context-menu lift), then fires `onShare` when held. The tight `maximumDistance`
+    /// lets a drag cancel the press at once, so it never fights a scroll or page swipe.
+    /// Inert when `enabled` is false. Used by the stock panels and the Wire feed.
+    func shareLongPress(enabled: Bool, onShare: @escaping () -> Void) -> some View {
+        ShareLongPressBox(enabled: enabled, onShare: onShare) { self }
+    }
 }
 
-struct ShareStockSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
-    @EnvironmentObject private var auth: AuthManager
-    let symbol: String
-    let name: String?
+/// A plain View wrapper (NOT a ViewModifier — the app's own `Content` type, the content
+/// layer, shadows SwiftUI's `ViewModifier.Content` associated type) that adds the grow
+/// + haptic + long-press-to-share behaviour.
+private struct ShareLongPressBox<Wrapped: View>: View {
+    let enabled: Bool
+    let onShare: () -> Void
+    let wrapped: Wrapped
+    @State private var pressing = false
 
-    @State private var sendingKey: String?
-    @State private var sentKey: String?
-    @State private var error: String?
-
-    // Everyone but me — with two members, that's the other person.
-    private var recipients: [GrqMember] {
-        let me = memberKey(for: auth.currentUser?.email)
-        return grqMembers.filter { $0.key != me }
+    init(enabled: Bool, onShare: @escaping () -> Void, @ViewBuilder content: () -> Wrapped) {
+        self.enabled = enabled
+        self.onShare = onShare
+        self.wrapped = content()
     }
 
     var body: some View {
-        let p = Theme.palette(scheme)
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 12) {
-                        StockLogo(symbol: symbol, size: 40)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name ?? symbol).font(.headline).foregroundStyle(p.textPrimary).lineLimit(1)
-                            Text(symbol).font(.caption).foregroundStyle(p.textMuted)
-                        }
-                        Spacer()
-                    }
+        wrapped
+            .scaleEffect(pressing ? 1.03 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.72), value: pressing)
+            .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10, pressing: { p in
+                guard enabled else { return }
+                pressing = p
+                if p { Haptics.soft() }
+            }, perform: {
+                guard enabled else { return }
+                pressing = false
+                Haptics.rigid()
+                onShare()
+            })
+    }
+}
 
-                    Text("SHARE WITH").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
+/// Wraps a dossier panel: a long-press makes it grow + fires a haptic (like the old
+/// context-menu lift), then opens the share composer directly — no menu tap. `.id()`
+/// doubles as the scroll anchor for deep-linked shares; `flashing` briefly outlines it
+/// on arrival.
+private struct ShareablePanel<Content: View>: View {
+    let panel: PanelKind
+    let enabled: Bool
+    let flashing: Bool
+    let onShare: () -> Void
+    let content: Content
 
-                    if recipients.isEmpty {
-                        Card { Text("No one to share with.").font(.subheadline).foregroundStyle(p.textMuted) }
-                    } else {
-                        ForEach(recipients) { m in memberRow(m) }
-                    }
-
-                    if let error {
-                        Text(error).font(.caption).foregroundStyle(p.neg)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Text("Sends a push to their phone with a link straight to this stock.")
-                        .font(.caption2).foregroundStyle(p.textMuted)
-                }
-                .padding(16)
-            }
-            .background(ScreenBackground().ignoresSafeArea())
-            .navigationTitle("Share \(symbol)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-        }
+    init(panel: PanelKind, enabled: Bool, flashing: Bool,
+         onShare: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+        self.panel = panel
+        self.enabled = enabled
+        self.flashing = flashing
+        self.onShare = onShare
+        self.content = content()
     }
 
-    private func memberRow(_ m: GrqMember) -> some View {
-        let p = Theme.palette(scheme)
-        let isSent = sentKey == m.key
-        let isSending = sendingKey == m.key
-        return Card {
-            HStack(spacing: 12) {
-                Image(m.key).resizable().scaledToFill()
-                    .frame(width: 44, height: 44).clipShape(Circle())
-                    .overlay(Circle().strokeBorder(p.accent.opacity(0.25), lineWidth: 1))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(m.name).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                    Text(isSent ? "Shared ✓" : "Tap to send").font(.caption2)
-                        .foregroundStyle(isSent ? p.pos : p.textMuted)
-                }
-                Spacer()
-                Button { Task { await send(m) } } label: {
-                    if isSending {
-                        ProgressView().tint(p.accent)
-                    } else {
-                        Image(systemName: isSent ? "checkmark.circle.fill" : "paperplane.fill")
-                            .font(.title3).foregroundStyle(isSent ? p.pos : p.accent)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isSending || isSent)
-            }
-        }
-    }
-
-    private func send(_ m: GrqMember) async {
-        sendingKey = m.key; error = nil
-        let res = await APIClient.shared.shareStock(symbol, to: m.key)
-        sendingKey = nil
-        if res.ok {
-            sentKey = m.key
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            dismiss()
-        } else {
-            error = res.error
-        }
+    var body: some View {
+        content
+            .id(panel.rawValue)
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Theme.brandAccent, lineWidth: flashing ? 2 : 0)
+                    .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.3), value: flashing)
+            )
+            .shareLongPress(enabled: enabled, onShare: onShare)
     }
 }

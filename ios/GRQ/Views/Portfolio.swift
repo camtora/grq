@@ -3,32 +3,32 @@ import SwiftUI
 // THE FUND — the portfolio: NAV, total P&L vs the benchmark, the risk/cash/fees grid,
 // and holdings with logos, day moves and weights.
 struct PortfolioView: View {
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var pf: Portfolio?
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "The Fund", subtitle: "net asset value")
-                        ChatButton()
+            VStack(spacing: 0) {
+                BrandHeader(title: "THE FUND")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let pf {
+                            heroCard(pf)
+                            statRow(pf)
+                            holdings(pf)
+                            Text("Tap a term like ACB or weight for a plain-English definition.")
+                                .font(.caption).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
+                        } else {
+                            ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
+                        }
                     }
-                    if let pf {
-                        heroCard(pf)
-                        statRow(pf)
-                        holdings(pf)
-                        Text("Tap a term like ACB or weight for a plain-English definition.")
-                            .font(.caption).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
-                    } else {
-                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
-                    }
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
                 }
-                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
+                .refreshable { pf = await APIClient.shared.portfolio() }
             }
             .background(ScreenBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .refreshable { pf = await APIClient.shared.portfolio() }
         }
         .task { pf = await APIClient.shared.portfolio() }
     }

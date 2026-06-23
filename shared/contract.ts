@@ -93,6 +93,7 @@ export const NotificationPreferences = z.object({
   agentMoves: z.boolean(), // the agent self-tracks or self-promotes a name
   reports: z.boolean(), // morning plan / midday / EOD / weekly review
   members: z.boolean(), // the OTHER member's universe/directive actions
+  messages: z.boolean(), // the OTHER member messaged you or shared a stock (D61)
   system: z.boolean(), // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets: z.boolean(), // a price alert you set has crossed (The Wire, Phase 2)
 });
@@ -454,6 +455,27 @@ export const WireItem = z.object({
 });
 export const WireResponse = z.object({ items: z.array(WireItem) });
 
+/* ---------- member-to-member messages (D61) ---------- */
+// The two-person fund's own thread (Cam↔Graham), distinct from the read-only agent
+// chat. A bare DM is just `body`; a "share" also carries `symbol` (+ optional `panel`)
+// so the recipient deep-links straight to that dossier panel. GET/POST /api/messages.
+export const DirectMessage = z.object({
+  id: z.number().int(),
+  at: z.string(), // ISO-8601
+  fromKey: z.enum(["cam", "graham"]).nullable(), // stable member key of the author
+  fromName: z.string(),
+  mine: z.boolean(), // authored by the viewer
+  body: z.string(), // may be empty for a bare share
+  symbol: z.string().nullable(), // attached dossier, if a share
+  panel: z.string().nullable(), // attached panel key, if a specific panel was shared
+  panelLabel: z.string().nullable(), // human label for `panel` (lib/panels.ts)
+  readAt: z.string().nullable(), // when the recipient read it; null = unread
+});
+export const DirectThread = z.object({
+  messages: z.array(DirectMessage),
+  unread: z.number().int(), // messages addressed to the viewer, not yet read
+});
+
 /* ---------- inferred TS types (Swift structs are generated separately) ---------- */
 export type MeResponse = z.infer<typeof MeResponse>;
 export type AuthResponse = z.infer<typeof AuthResponse>;
@@ -476,3 +498,5 @@ export type WireKind = z.infer<typeof WireKind>;
 export type WireRelatedTerm = z.infer<typeof WireRelatedTerm>;
 export type WireItem = z.infer<typeof WireItem>;
 export type WireResponse = z.infer<typeof WireResponse>;
+export type DirectMessage = z.infer<typeof DirectMessage>;
+export type DirectThread = z.infer<typeof DirectThread>;

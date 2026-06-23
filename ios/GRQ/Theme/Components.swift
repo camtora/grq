@@ -266,6 +266,28 @@ struct BrandLogo: View {
     }
 }
 
+/// The one consistent top header on every screen: the GRQ logo + a screen title, then
+/// the chat button and the signed-in member's photo on the right. Fixed (non-scrolling)
+/// — place it above the screen's ScrollView. Members-only controls (ChatButton) hide
+/// themselves for viewers.
+struct BrandHeader: View {
+    @EnvironmentObject private var auth: AuthManager
+    @Environment(\.colorScheme) private var scheme
+    var title: String
+    var body: some View {
+        let p = Theme.palette(scheme)
+        HStack(spacing: 10) {
+            BrandLogo(height: 24)
+            Text(title).font(.system(size: 13, weight: .black, design: .rounded)).tracking(1)
+                .foregroundStyle(p.textMuted)
+            Spacer()
+            ChatButton()
+            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
+        }
+        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+    }
+}
+
 // MARK: - Screen scaffold (one flashy header per screen, ambient background, no system bar)
 
 /// Ambient brand-glow background behind every screen.

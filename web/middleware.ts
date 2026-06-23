@@ -38,6 +38,7 @@ const MOBILE_API = [
   "/api/symbol-search",   // A7 (Browse; member-guarded in-route)
   // Member writes (self-guard via memberFromRequest; the order gate still disposes).
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
+  "/api/messages",        // D61 member-to-member DMs/shares (GET thread/unread, POST send/read)
   "/api/killswitch",
   "/api/universe",
   "/api/stocks/directive",

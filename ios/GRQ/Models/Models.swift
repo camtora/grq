@@ -145,6 +145,7 @@ struct NotificationPreferences: Codable, Equatable {
     var agentMoves: Bool = true
     var reports: Bool = true
     var members: Bool = true
+    var messages: Bool = true
     var system: Bool = true
     var priceTargets: Bool = true
 
@@ -155,6 +156,7 @@ struct NotificationPreferences: Codable, Equatable {
         (\.agentMoves, "agentMoves", "Agent universe moves", "When the agent tracks or self-promotes a name into its tradeable universe."),
         (\.reports, "reports", "Daily reports", "Morning plan, midday brief, end-of-day close, and the weekly review."),
         (\.members, "members", "Member activity", "When the other member blocks, pins, promotes, or demotes a name."),
+        (\.messages, "messages", "Messages", "When the other member sends you a message or shares a stock."),
         (\.system, "system", "System health", "Agent restarts and data-feed or broker hiccups (non-critical)."),
         (\.priceTargets, "priceTargets", "Price alerts", "When a stock you set an alert on crosses your target price."),
     ]
@@ -773,6 +775,59 @@ enum ChatID: Codable, Hashable {
 struct ChatThread: Codable {
     let owner: String
     let messages: [ChatMessage]
+}
+
+// MARK: - Direct messages (member ↔ member — D61)
+
+/// A message in the two-person Cam↔Graham thread (mirrors shared/contract.ts
+/// DirectMessage). A bare DM is just `body`; a "share" also carries `symbol`
+/// (+ optional `panel`) so tapping it deep-links to that dossier panel.
+struct DirectMessage: Codable, Identifiable {
+    let id: Int
+    let at: String
+    let fromKey: String?    // "cam" | "graham"
+    let fromName: String
+    let mine: Bool
+    let body: String
+    let symbol: String?
+    let panel: String?
+    let panelLabel: String?
+    let readAt: String?
+}
+
+struct DirectThread: Codable {
+    let messages: [DirectMessage]
+    let unread: Int
+}
+
+/// The shareable panels on the stock page — rawValue matches web/lib/panels.ts keys
+/// (the share's `panel`) AND the `.id()` SwiftUI scroll anchors in StockDetailView.
+enum PanelKind: String, CaseIterable {
+    case bottomLine, position, agentNote, analyst, priceTarget, institutional, signals,
+         earnings, peers, scoreboard, chart, smartMoney, fundamentals, dossier,
+         trades, news, coverage
+
+    var label: String {
+        switch self {
+        case .bottomLine:    return "The bottom line"
+        case .position:      return "Your position"
+        case .agentNote:     return "The agent's note"
+        case .analyst:       return "Analyst ratings"
+        case .priceTarget:   return "Price target"
+        case .institutional: return "Institutional · 13F"
+        case .signals:       return "Signals"
+        case .earnings:      return "Earnings"
+        case .peers:         return "Valuation vs peers"
+        case .scoreboard:    return "Scoreboard"
+        case .chart:         return "Price chart"
+        case .smartMoney:    return "Smart money"
+        case .fundamentals:  return "Fundamentals"
+        case .dossier:       return "Dossier"
+        case .trades:        return "Trades"
+        case .news:          return "Recent news"
+        case .coverage:      return "Data coverage"
+        }
+    }
 }
 
 // MARK: - Reports (A10)

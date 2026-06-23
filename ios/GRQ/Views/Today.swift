@@ -3,6 +3,7 @@ import SwiftUI
 // THE DAILY — Today as a newspaper (docs/NEWSPAPER.md): masthead, NAV hero, the live
 // indices strip, The Tape, the lead story, movers, top hitters, on the radar.
 struct TodayView: View {
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var today: Today?
 
@@ -41,6 +42,7 @@ struct TodayView: View {
             Text("\(t.edition.label) · \(t.dateISO)")
                 .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
             ChatButton()
+            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
         }
         .padding(.top, 4)
     }

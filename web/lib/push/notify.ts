@@ -18,6 +18,7 @@ export type NotifCategory =
   | "agentMoves" // the agent self-tracks or self-promotes a name
   | "reports" // morning plan / midday / EOD / weekly review
   | "members" // the OTHER member's universe/directive/kill actions
+  | "messages" // the OTHER member messaged you or shared a stock (D61)
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
   | "priceTargets"; // a price alert the member set has crossed (Phase 2 — The Wire)
 
@@ -33,6 +34,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   agentMoves: "agentMoves",
   reports: "reports",
   members: "members",
+  messages: "messages",
   system: "system",
   priceTargets: "priceTargets",
 };
@@ -44,6 +46,7 @@ type PrefRow = {
   agentMoves: boolean;
   reports: boolean;
   members: boolean;
+  messages: boolean;
   system: boolean;
   priceTargets: boolean;
 };
@@ -62,6 +65,8 @@ export type PushOpts = {
   onlyEmail?: string;
   /** Symbol for lock-screen grouping + a deep link in the app. */
   symbol?: string;
+  /** Panel key (e.g. "analyst") — deep-links to that section of the dossier (D61). */
+  panel?: string;
 };
 
 /** Fan an alert out to every eligible member's devices. Best-effort. */
@@ -103,7 +108,11 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
         title: opts.title,
         body: (opts.body || opts.title).slice(0, 300),
         threadId: opts.symbol ?? opts.category,
-        data: { category: opts.category, ...(opts.symbol ? { symbol: opts.symbol } : {}) },
+        data: {
+          category: opts.category,
+          ...(opts.symbol ? { symbol: opts.symbol } : {}),
+          ...(opts.panel ? { panel: opts.panel } : {}),
+        },
       },
     );
 

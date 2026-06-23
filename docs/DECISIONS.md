@@ -1419,3 +1419,33 @@ surfaced on the native page (the data still rides the wire — trim later if pay
 **Verified:** `tsc --noEmit` clean; `verify-mobile-api.ts` passes (live dossier matches the new zod contract); web
 deployed; live `GET /api/dossier/AC` carries all panels with real data (4 signal families, 5 peers, 180 closes, 10
 coverage tiers). iOS compiles in Xcode only (no macOS SDK here) — written against the existing patterns.
+
+### D61 — Member-to-member messaging: a shared Cam↔Graham thread that backs chat + per-panel sharing (Cam, 2026-06-23)
+**The insight:** the three asks — (1) the share button = the other person's avatar + a share glyph, (2) long-press
+ANY stock panel to share *that section* with a comment, (3) build out Cam↔Graham chat — are ONE system, not three. A
+"share a panel with a comment that links to the dossier" is structurally **a direct message with an attachment**. So
+instead of bolting a comment onto D59's ephemeral push, everything lands on one messaging spine. (Decisions, with Cam:
+unify shares into the chat thread · iOS-only · the full-page avatar opens the composer with an optional note.)
+- **Data model — `DirectMessage` (NOT overloaded onto agent-chat `ChatMessage`).** `fromEmail → toEmail`, `body`
+  (may be empty for a bare share), optional `symbol` + `panel`, `readAt` (null = unread). One shared two-person
+  thread; a bare DM has no attachment, a full-page share carries `symbol`, a panel share carries `symbol`+`panel`.
+- **Spine (`web/lib/messages.ts`).** `createDirectMessage()` persists the row and fires ONE push to the recipient
+  (new toggleable category **`messages`**, gated by `NotificationPreference.messages`); `serializeMessage()` is the
+  wire shape (per-viewer `mine`, author `fromKey`/`fromName`, server-resolved `panelLabel` from `lib/panels.ts`).
+  `PushOpts` gained `panel` → the APNs payload carries it for the deep-link.
+- **Routes.** `GET /api/messages` (thread + unread; `?since=<id>` for the poll delta) · `POST /api/messages`
+  (`{body?,symbol?,panel?}` → the other member, resolved by `otherMemberEmail()`) · `POST /api/messages/read` ·
+  `GET /api/messages/unread`. Members-only; added to `middleware.ts` MOBILE_API. **D59's `/api/stocks/share` was
+  refactored onto the spine** (a share now lands in the thread, not just a ping) so older app builds keep working.
+- **iOS.** Toolbar share button → the other member's avatar + share glyph (`ShareAvatarBadge`); a `.shareable()`
+  wrapper puts a "Share with <them>" context menu on every dossier panel AND tags it as a `.id()` scroll anchor.
+  `ShareComposerSheet` (recipient + what's attached + a comment box) is the one composer for both entry points. A
+  tapped share deep-links into the dossier scrolled to + briefly outlining the panel (`SymbolRoute.panel`). New
+  `MessagesView` (poll-based thread; attachment cards → dossier+panel), `MessagesInbox` unread badge on the More tab,
+  `MessagesLauncher` + a More row + header button; a no-symbol message push opens the thread (`PushManager.openMessages`).
+- **No real-time infra added** — matches the app's polling convention (thread polls every 4s while open; badge every
+  30s; push when backgrounded). No new container; DMs are plain CRUD in the web app (the `chat` container stays
+  agent-only). Web-parity DMs deferred (iOS-only, per Cam).
+**Verified:** `tsc --noEmit` clean; web deployed (fresh image confirmed); live curl proved the full loop —
+send→thread→read→unread, per-viewer `mine`, `panelLabel` resolution, and the refactored `/api/stocks/share`; test
+rows wiped. iOS compiles in Xcode only (written to the existing patterns) — needs Cam's build + TestFlight.

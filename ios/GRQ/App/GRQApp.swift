@@ -61,11 +61,14 @@ struct RootView: View {
     var body: some View {
         Group {
             if showSplash {
-                SplashView(done: { showSplash = false })
+                SplashView(done: { withAnimation(.easeInOut(duration: 0.5)) { showSplash = false } })
+                    .transition(.opacity)
             } else if auth.isAuthenticated {
                 MainTabView()
+                    .transition(.opacity)
             } else {
                 SignInView()
+                    .transition(.opacity)
             }
         }
         .onAppear { if let t = auth.currentUser?.theme { theme.apply(t) } }
@@ -82,35 +85,119 @@ struct RootView: View {
                 await push.uploadTokenIfPossible()
             }
         }
-        // A tapped notification carrying a symbol opens that stock's dossier.
+        // A tapped notification carrying a symbol opens that stock's dossier (scrolled
+        // to a panel if the share named one — D61).
         .sheet(item: $push.route) { r in
-            NavigationStack { StockDetailView(symbol: r.id) }
+            NavigationStack { StockDetailView(symbol: r.symbol, scrollTo: r.panel) }
                 .environmentObject(auth)
                 .environmentObject(glossary)
         }
     }
 }
 
-// The 5-tab bar with THE HUNT dead center (the star, and the default landing tab —
-// the app is a toilet-reader centered on the feed). Chat is reachable from a top-right
-// button on every screen (ChatButton) — the sheet is presented once, here.
-// PROTOTYPE (The Wire): iOS shows max 5 tabs, so The Wire takes the 4th slot beside the
-// Hunt and Markets moves to a row under More (reachable, reversible). Revisit placement
-// once the feed proves out.
+// The 6-button bar: Today · Fund · Hunt · Markets · Wire · More (Today is the default
+// landing — the splash fades into it). The system TabView shows only 5 on iPhone (it
+// collapses the rest into a "More" tab), and Markets being buried made it hard to reach
+// — so we drive a CUSTOM bar. Visited tabs stay alive (state + nav stacks + pollers
+// preserved, like the system bar) and load lazily on first tap. Chat is a top-right
+// button on every screen → the unified chat sheet, presented here.
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var glossary: GlossaryPresenter
+    @EnvironmentObject private var push: PushManager
+    @Environment(\.colorScheme) private var scheme
     @StateObject private var chat = ChatLauncher()
-    @State private var selection = 2     // The Hunt
+    @StateObject private var inbox = MessagesInbox()
+    @State private var selection = 0     // Today (the splash fades into it)
+    @State private var visited: Set<Int> = [0]
+
+    private let tabs: [(title: String, icon: String)] = [
+        ("Today", "newspaper.fill"),
+        ("Fund", "briefcase.fill"),
+        ("Hunt", "binoculars.fill"),
+        ("Markets", "chart.bar.fill"),
+        ("Wire", "dot.radiowaves.left.and.right"),
+        ("More", "ellipsis.circle.fill"),
+    ]
 
     var body: some View {
-        TabView(selection: $selection) {
-            TodayView().tabItem { Label("Today", systemImage: "newspaper.fill") }.tag(0)
-            PortfolioView().tabItem { Label("Fund", systemImage: "briefcase.fill") }.tag(1)
-            HuntView().tabItem { Label("Hunt", systemImage: "binoculars.fill") }.tag(2)
-            WireView().tabItem { Label("Wire", systemImage: "dot.radiowaves.left.and.right") }.tag(3)
-            MoreView().tabItem { Label("More", systemImage: "ellipsis.circle.fill") }.tag(4)
+        ZStack {
+            ForEach(0..<tabs.count, id: \.self) { i in
+                if visited.contains(i) {
+                    screen(i)
+                        .opacity(i == selection ? 1 : 0)
+                        .allowsHitTesting(i == selection)
+                        .zIndex(i == selection ? 1 : 0)
+                }
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .environmentObject(chat)
-        .sheet(isPresented: $chat.show) { ChatView().environmentObject(auth) }
+        .environmentObject(inbox)
+        // The unified chat (member thread + GRQ agent). Pushed StockDetailViews (from
+        // shared-stock cards) need auth + glossary.
+        .sheet(isPresented: $chat.show) {
+            UnifiedChatView()
+                .environmentObject(auth)
+                .environmentObject(inbox)
+                .environmentObject(glossary)
+        }
+        .task { inbox.start() }
+        // A tapped message push (no symbol) opens the unified chat (member thread).
+        .onChange(of: push.openMessages) { _, open in
+            if open { chat.show = true; push.openMessages = false }
+        }
+    }
+
+    @ViewBuilder private func screen(_ i: Int) -> some View {
+        switch i {
+        case 0: TodayView()
+        case 1: PortfolioView()
+        case 2: HuntView()
+        case 3: MarketsView()
+        case 4: WireView()
+        default: MoreView()
+        }
+    }
+
+    private var tabBar: some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 0) {
+            ForEach(0..<tabs.count, id: \.self) { tabButton($0) }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
+        .background(.bar, ignoresSafeAreaEdges: .bottom)
+        .overlay(alignment: .top) { Rectangle().fill(p.cardBorder).frame(height: 0.5) }
+    }
+
+    private func tabButton(_ i: Int) -> some View {
+        let p = Theme.palette(scheme)
+        let on = selection == i
+        return Button {
+            selection = i
+            visited.insert(i)
+        } label: {
+            VStack(spacing: 3) {
+                ZStack {
+                    Image(systemName: tabs[i].icon).font(.system(size: 18))
+                    if i == 5 && inbox.unread > 0 {
+                        Text("\(min(inbox.unread, 9))")
+                            .font(.system(size: 9, weight: .black)).foregroundStyle(.white)
+                            .frame(width: 15, height: 15)
+                            .background(Circle().fill(p.neg))
+                            .offset(x: 11, y: -9)
+                    }
+                }
+                Text(tabs[i].title).font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(on ? p.accent : p.textMuted)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

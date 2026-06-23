@@ -5,69 +5,119 @@ struct SplashView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
-    @State private var showWelcome = false
+    @State private var phase: Phase = .intro
     @State private var hintPulse = false
+    @State private var dismissed = false
+
+    private enum Phase { case intro, welcome }
 
     var body: some View {
         let p = Theme.palette(scheme)
         ZStack {
             p.bodyBg.ignoresSafeArea()
 
-            // Full-page money rain — keeps falling until tapped.
+            // Full-page money rain — keeps falling through both phases.
             if reduceMotion {
                 Text("💵").font(.system(size: 96)).opacity(0.25)
             } else {
                 MoneyRainView().ignoresSafeArea()
             }
 
-            // Soft scrim so the wordmark + greeting stay legible over the rain.
+            // Soft scrim so the greeting stays legible over the rain (welcome phase).
             RadialGradient(colors: [p.bodyBg.opacity(0.88), p.bodyBg.opacity(0.0)],
                            center: .center, startRadius: 6, endRadius: 280)
                 .ignoresSafeArea()
-                .opacity(showWelcome ? 1 : 0)
-                .animation(.easeOut(duration: 0.6), value: showWelcome)
+                .opacity(phase == .welcome ? 1 : 0)
+                .animation(.easeOut(duration: 0.6), value: phase)
 
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 BrandLogo(height: 60)
                     .shadow(color: .black.opacity(0.3), radius: 10, y: 2)
-                if showWelcome {
-                    Text(welcomeLine)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(p.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .transition(.opacity)
-                    Text(Strings.shared.s("splash.subtitle", "Rich quick, slowly."))
-                        .font(.subheadline)
-                        .foregroundStyle(p.textMuted)
-                        .transition(.opacity)
+                if phase == .intro {
+                    introContent.transition(.opacity)
+                } else {
+                    welcomeContent.transition(.opacity)
                 }
             }
             .padding(32)
 
-            // Tap hint — pulses to show the splash is dismissed by tapping.
+            // Our faces + credit — pinned to the bottom during the intro.
             VStack {
                 Spacer()
-                if showWelcome {
-                    Text("Tap to continue")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(p.textMuted)
-                        .opacity(hintPulse ? 1 : 0.35)
-                        .padding(.bottom, 44)
-                        .transition(.opacity)
+                if phase == .intro {
+                    VStack(spacing: 8) {
+                        HStack(spacing: -12) {
+                            memberAvatar("cam")
+                            memberAvatar("graham")
+                        }
+                        Text("Created by\nCam & Graham")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(p.textMuted)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.bottom, 44)
+                    .transition(.opacity)
                 }
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { done() }       // stays up until tapped
-        .task {
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            withAnimation(.easeOut(duration: 0.5)) { showWelcome = true }
+        .onTapGesture {
+            // Intro → cross-fade to the welcome (money keeps falling), then auto-advance
+            // into the app after a beat. A tap during the welcome skips the wait.
+            if phase == .intro {
+                withAnimation(.easeInOut(duration: 0.5)) { phase = .welcome }
+                Task {
+                    try? await Task.sleep(nanoseconds: 1_400_000_000)
+                    finish()
+                }
+            } else {
+                finish()
+            }
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 hintPulse = true
             }
         }
+    }
+
+    private func finish() {
+        guard !dismissed else { return }
+        dismissed = true
+        done()
+    }
+
+    // Intro: under the GRQ logo, just the pulsing "Tap to continue" hint (the faces +
+    // credit sit at the bottom).
+    private var introContent: some View {
+        let p = Theme.palette(scheme)
+        return Text("Tap to continue")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(p.textMuted)
+            .opacity(hintPulse ? 1 : 0.35)
+    }
+
+    // Welcome: the wealth-aware greeting + the slogan.
+    private var welcomeContent: some View {
+        let p = Theme.palette(scheme)
+        return VStack(spacing: 8) {
+            Text(welcomeLine)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(p.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(Strings.shared.s("splash.subtitle", "Rich quick, slowly."))
+                .font(.subheadline)
+                .foregroundStyle(p.textMuted)
+        }
+    }
+
+    private func memberAvatar(_ key: String) -> some View {
+        let p = Theme.palette(scheme)
+        return Image(key).resizable().scaledToFill()
+            .frame(width: 46, height: 46)
+            .clipShape(Circle())
+            .overlay(Circle().strokeBorder(p.bodyBg, lineWidth: 2.5))
+            .overlay(Circle().strokeBorder(p.accent.opacity(0.45), lineWidth: 1))
     }
 
     private var welcomeLine: String {

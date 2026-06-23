@@ -5,11 +5,17 @@ import SwiftUI
 // the tab bar; swipe up/down moves between them. Every kind has a purpose-built full-screen
 // layout (mocked 2026-06-22): find · dossier · watch · article · lesson. Shared + read-only;
 // the richer fields (targets, signals, sources, sparklines) ride on the wire.
+/// A pending Wire share — the symbol-bearing card a member long-pressed.
+private struct WireShare: Identifiable { let symbol: String; let name: String?; var id: String { symbol } }
+
 struct WireView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var items: [WireItem] = []
     @State private var loaded = false
+    @State private var share: WireShare?
+
+    private var isMember: Bool { auth.currentUser?.role == .member }
 
     var body: some View {
         NavigationStack {
@@ -19,6 +25,11 @@ struct WireView: View {
             }
             .background(ScreenBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            // Long-press a stock-bearing card → share it with the other member (same as
+            // the dossier panels). Lands in the chat thread + deep-links to the dossier.
+            .sheet(item: $share) { s in
+                ShareComposerSheet(symbol: s.symbol, name: s.name, panel: nil).environmentObject(auth)
+            }
         }
         .task { if !loaded { await load() } }
     }
@@ -28,18 +39,8 @@ struct WireView: View {
         loaded = true
     }
 
-    // Fixed header — brand + the member avatar top-right (matching the Hunt tab).
-    private var header: some View {
-        let p = Theme.palette(scheme)
-        return HStack(spacing: 10) {
-            BrandLogo(height: 24)
-            Text("THE WIRE").font(.system(size: 13, weight: .black, design: .rounded)).tracking(1)
-                .foregroundStyle(p.textMuted)
-            Spacer()
-            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
-        }
-        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
-    }
+    // The consistent brand header (logo · title · chat · member photo).
+    private var header: some View { BrandHeader(title: "THE WIRE") }
 
     @ViewBuilder private var content: some View {
         if !loaded {
@@ -51,9 +52,14 @@ struct WireView: View {
         } else {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                    // Key by position, not item.id — wire ids (find:/dossier:/watch:/lesson:)
+                    // can collide for one symbol, which dropped a page (the 10→11→12 skip).
+                    ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                         WireCardPage(item: item, index: idx, total: items.count)
                             .containerRelativeFrame(.vertical)
+                            .shareLongPress(enabled: isMember && item.symbol != nil) {
+                                if let sym = item.symbol { share = WireShare(symbol: sym, name: item.name) }
+                            }
                     }
                 }
                 .scrollTargetLayout()

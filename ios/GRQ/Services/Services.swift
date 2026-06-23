@@ -239,6 +239,34 @@ final class APIClient {
         await postResult("stocks/share", ["symbol": symbol, "to": key])
     }
 
+    // MARK: - Direct messages (member ↔ member — D61)
+
+    /// The Cam↔Graham thread. Pass `since` (last seen id) to fetch only newer rows.
+    func directMessages(since: Int? = nil) async -> DirectThread? {
+        await get(since.map { "messages?since=\($0)" } ?? "messages")
+    }
+
+    /// Send a message or a share to the other member. A bare chat message has just
+    /// `body`; a share carries `symbol` (+ optional `panel` key). The server routes it
+    /// to the other member and pushes them.
+    func sendMessage(body: String?, symbol: String? = nil, panel: String? = nil) async -> ActionResult {
+        var payload: [String: Any] = [:]
+        if let body, !body.isEmpty { payload["body"] = body }
+        if let symbol { payload["symbol"] = symbol }
+        if let panel { payload["panel"] = panel }
+        return await postResult("messages", payload)
+    }
+
+    /// Mark the thread read (clears the inbox badge). Best-effort.
+    func markMessagesRead() async { _ = await postResult("messages/read", [:]) }
+
+    /// Cheap unread count for the inbox badge.
+    func unreadMessageCount() async -> Int {
+        struct R: Decodable { let unread: Int }
+        let r: R? = await get("messages/unread")
+        return r?.unread ?? 0
+    }
+
     // MARK: - Push notifications (D53)
 
     /// Register this device's APNs token under the signed-in member. `apnsEnv` is
@@ -444,8 +472,14 @@ enum GoogleAuth {
 
 // MARK: - Push notifications (APNs — D53)
 
-/// A tapped notification's deep-link target (a stock to open).
-struct SymbolRoute: Identifiable, Equatable { let id: String }
+/// A tapped notification's deep-link target (a stock to open, optionally scrolled to
+/// a specific panel — D61). `id` folds in the panel so two pushes for the same symbol
+/// but different panels each re-present the sheet.
+struct SymbolRoute: Identifiable, Equatable {
+    let symbol: String
+    var panel: String? = nil
+    var id: String { symbol + "#" + (panel ?? "") }
+}
 
 /// Owns the push lifecycle: ask permission, register with APNs, upload the device
 /// token under the signed-in member, surface a tapped notification as a deep link.
@@ -457,6 +491,10 @@ final class PushManager: ObservableObject {
 
     /// Set when the member taps a notification carrying a `symbol` — the UI opens it.
     @Published var route: SymbolRoute?
+
+    /// Set when the member taps a message push with no symbol — the UI opens the
+    /// Cam↔Graham thread (D61).
+    @Published var openMessages = false
 
     /// The current device token (hex). Kept so sign-out can unregister it.
     private(set) var deviceTokenHex: String?
@@ -536,12 +574,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         completionHandler([.banner, .sound, .list])
     }
 
-    // Tap → deep-link to the stock if the payload named one.
+    // Tap → deep-link to the stock if the payload named one (scrolled to a panel if
+    // the share named one); otherwise a message push opens the Cam↔Graham thread.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let symbol = response.notification.request.content.userInfo["symbol"] as? String, !symbol.isEmpty {
-            Task { @MainActor in PushManager.shared.route = SymbolRoute(id: symbol) }
+        let info = response.notification.request.content.userInfo
+        if let symbol = info["symbol"] as? String, !symbol.isEmpty {
+            let panel = (info["panel"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            Task { @MainActor in PushManager.shared.route = SymbolRoute(symbol: symbol, panel: panel) }
+        } else if (info["category"] as? String) == "messages" {
+            Task { @MainActor in PushManager.shared.openMessages = true }
         }
         completionHandler()
     }

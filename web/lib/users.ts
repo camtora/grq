@@ -74,3 +74,20 @@ export function emailForMemberKey(key: string | null | undefined): string | null
   if (key === "cam" || key === "graham") return MEMBER_KEY_EMAILS[key];
   return null;
 }
+
+/** The stable member key ("cam"|"graham") for an email, or null if not a named member. */
+export function memberKeyForEmail(email: string | null | undefined): "cam" | "graham" | null {
+  const e = email?.trim().toLowerCase();
+  if (e === MEMBER_KEY_EMAILS.cam) return "cam";
+  if (e === MEMBER_KEY_EMAILS.graham) return "graham";
+  return null;
+}
+
+/** In the two-person fund, the OTHER named member's email (Cam↔Graham), or null.
+ *  Used to route a direct message / share to "the other person" without a picker. */
+export function otherMemberEmail(email: string | null | undefined): string | null {
+  const key = memberKeyForEmail(email);
+  if (key === "cam") return MEMBER_KEY_EMAILS.graham;
+  if (key === "graham") return MEMBER_KEY_EMAILS.cam;
+  return null;
+}

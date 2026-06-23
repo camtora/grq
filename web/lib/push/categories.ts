@@ -12,6 +12,7 @@ export const TOGGLEABLE_CATEGORIES = [
   { key: "agentMoves", label: "Agent universe moves", desc: "When the agent tracks or self-promotes a name into its tradeable universe." },
   { key: "reports", label: "Daily reports", desc: "Morning plan, midday brief, end-of-day close, and the weekly review." },
   { key: "members", label: "Member activity", desc: "When the other member blocks, pins, promotes, or demotes a name." },
+  { key: "messages", label: "Messages", desc: "When the other member sends you a message or shares a stock." },
   { key: "system", label: "System health", desc: "Agent restarts and data-feed or broker hiccups (non-critical)." },
   { key: "priceTargets", label: "Price alerts", desc: "When a stock you set an alert on crosses your target price." },
 ] as const;
@@ -29,7 +30,7 @@ export type NotificationPrefs = Record<ToggleKey, boolean>;
 
 /** All-on — the default when a member has never touched their settings. */
 export function defaultPrefs(): NotificationPrefs {
-  return { dossiers: true, hunt: true, agentMoves: true, reports: true, members: true, system: true, priceTargets: true };
+  return { dossiers: true, hunt: true, agentMoves: true, reports: true, members: true, messages: true, system: true, priceTargets: true };
 }
 
 /** Normalize a DB row (or null) into the flat toggle object the API returns. */

@@ -21,6 +21,7 @@ struct HuntView: View {
     @State private var loaded = false
     @State private var briefDraft = ""
     @State private var queuedNote: String?
+    @State private var share: HuntShare?
     @State private var sortKey: HuntSort = .heat
     @State private var killed = false
     @State private var glow = false      // hunt-bar living glow (huntGlow)
@@ -59,98 +60,89 @@ struct HuntView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    brandRow
-                    titleBlock
-                    if isMember { huntBar }
-                    if let brief, !brief.isEmpty {
-                        DirectedBanner(brief: brief, onClear: isMember ? { Task { await refresh(nil) } } : nil)
-                    }
-                    if let queuedNote { noteView(queuedNote) }
-
-                    if !loaded {
-                        ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 60)
-                    } else if finds.isEmpty {
-                        EmptyState(title: "The hunt is quiet",
-                                   message: "No leads on the board yet. Pull to refresh, or brief the agent on what to look for.")
-                    } else {
-                        sortToolbar
-                        ForEach(shown) { f in
-                            HeatCard(find: f, rank: rank(of: f), isTop: rank(of: f) == 1,
-                                     isMember: isMember, ranked: ranked,
-                                     onWatch: { Task { await watch(f) } },
-                                     onDismiss: { Task { await dismiss(f) } })
+            VStack(spacing: 0) {
+                BrandHeader(title: "THE HUNT")
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        titleBlock
+                        if isMember { huntBar }
+                        if let brief, !brief.isEmpty {
+                            DirectedBanner(brief: brief, onClear: isMember ? { Task { await refresh(nil) } } : nil)
                         }
-                    }
+                        if let queuedNote { noteView(queuedNote) }
 
-                    Text("The agent can't trade these itself — nothing trades outside the guardrailed universe. Targets are hypotheses, not promises.")
-                        .font(.caption2).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
-                        .padding(.top, 6)
+                        if !loaded {
+                            ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 60)
+                        } else if finds.isEmpty {
+                            EmptyState(title: "The hunt is quiet",
+                                       message: "No leads on the board yet. Pull to refresh, or brief the agent on what to look for.")
+                        } else {
+                            sortToolbar
+                            ForEach(shown) { f in
+                                HeatCard(find: f, rank: rank(of: f), isTop: rank(of: f) == 1,
+                                         isMember: isMember, ranked: ranked,
+                                         onWatch: { Task { await watch(f) } },
+                                         onDismiss: { Task { await dismiss(f) } },
+                                         onShare: { share = HuntShare(symbol: f.sym, name: f.name) })
+                            }
+                        }
+
+                        Text("The agent can't trade these itself — nothing trades outside the guardrailed universe. Targets are hypotheses, not promises.")
+                            .font(.caption2).foregroundStyle(Theme.palette(scheme).textMuted.opacity(0.7))
+                            .padding(.top, 6)
+                    }
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
                 }
-                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
+                .refreshable { await load() }
+                .scrollDismissesKeyboard(.interactively)
             }
             .background(ScreenBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .refreshable { await load() }
-            .scrollDismissesKeyboard(.interactively)
+            // Share a find with the other member (from the card's watch/dismiss popup).
+            .sheet(item: $share) { s in
+                ShareComposerSheet(symbol: s.symbol, name: s.name, panel: nil).environmentObject(auth)
+            }
         }
         .task { if !loaded { await load() } }
     }
 
-    // MARK: brand row + title
+    // MARK: title + HALT status
 
-    private var brandRow: some View {
-        let p = Theme.palette(scheme)
-        return HStack(spacing: 10) {
-            Text("↗")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Color(hex: "06120f"))
-                .frame(width: 30, height: 30)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "34e0c4"), Color(hex: "1c8f7c")],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing)))
-                .shadow(color: Color(hex: "34e0c4").opacity(0.35), radius: 8)
-            (Text("GET ").foregroundStyle(p.textMuted)
-             + Text("RICH").foregroundStyle(p.accentText)
-             + Text(" QUICK").foregroundStyle(p.textMuted))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .tracking(0.5)
-            Spacer()
-            if killed {
-                HStack(spacing: 5) {
-                    ZStack {
-                        // pulseDot — an expanding ring radiating off the live HALT dot.
-                        Circle().stroke(p.neg, lineWidth: 1.5).frame(width: 6, height: 6)
-                            .scaleEffect(reduceMotion ? 1 : (pulse ? 2.6 : 1))
-                            .opacity(reduceMotion ? 0 : (pulse ? 0 : 0.7))
-                        Circle().fill(p.neg).frame(width: 6, height: 6)
-                    }
-                    Text("HALT").font(.caption2.weight(.bold)).foregroundStyle(p.neg)
-                }
-                .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(Capsule().fill(p.neg.opacity(0.14)))
-                .overlay(Capsule().strokeBorder(p.neg.opacity(0.4), lineWidth: 1))
-                .onAppear {
-                    if !reduceMotion {
-                        withAnimation(.easeOut(duration: 2).repeatForever(autoreverses: false)) { pulse = true }
-                    }
-                }
-            }
-            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
-        }
-    }
-
+    // The "THE HUNT" wordmark now lives in the shared BrandHeader, so this is just the
+    // tagline + the HALT status (no duplicate title).
     private var titleBlock: some View {
         let p = Theme.palette(scheme)
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("The Hunt")
-                .font(.system(size: 34, weight: .black, design: .rounded))
-                .foregroundStyle(p.textPrimary)
+        return HStack(alignment: .center) {
             Text("AI sweeps North America for names ready to pop.")
                 .font(.system(size: 12.5)).foregroundStyle(p.textMuted)
+            Spacer()
+            if killed { haltBadge }
         }
         .padding(.top, 2)
+    }
+
+    // The kill-switch HALT indicator (pulsing dot) — kept on the feed so a halt is
+    // visible without opening More (the brand row moved to the shared BrandHeader).
+    private var haltBadge: some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 5) {
+            ZStack {
+                // pulseDot — an expanding ring radiating off the live HALT dot.
+                Circle().stroke(p.neg, lineWidth: 1.5).frame(width: 6, height: 6)
+                    .scaleEffect(reduceMotion ? 1 : (pulse ? 2.6 : 1))
+                    .opacity(reduceMotion ? 0 : (pulse ? 0 : 0.7))
+                Circle().fill(p.neg).frame(width: 6, height: 6)
+            }
+            Text("HALT").font(.caption2.weight(.bold)).foregroundStyle(p.neg)
+        }
+        .padding(.horizontal, 9).padding(.vertical, 5)
+        .background(Capsule().fill(p.neg.opacity(0.14)))
+        .overlay(Capsule().strokeBorder(p.neg.opacity(0.4), lineWidth: 1))
+        .onAppear {
+            if !reduceMotion {
+                withAnimation(.easeOut(duration: 2).repeatForever(autoreverses: false)) { pulse = true }
+            }
+        }
     }
 
     // MARK: hunt bar (focal element)
@@ -279,7 +271,11 @@ struct HuntView: View {
 
 // MARK: - Heat card (the repeating feed unit)
 
+/// A find a member chose to share with the other member, from the card's popup.
+private struct HuntShare: Identifiable { let symbol: String; let name: String?; var id: String { symbol } }
+
 struct HeatCard: View {
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     let find: HuntFind
     let rank: Int
@@ -288,6 +284,7 @@ struct HeatCard: View {
     let ranked: [HuntFind]
     let onWatch: () -> Void
     let onDismiss: () -> Void
+    let onShare: () -> Void
 
     var body: some View {
         let p = Theme.palette(scheme)
@@ -329,6 +326,9 @@ struct HeatCard: View {
             if isMember {
                 if find.watch != "watching" && find.watch != "universe" {
                     Button { onWatch() } label: { Label("Watch", systemImage: "star") }
+                }
+                Button { onShare() } label: {
+                    Label("Share with \(memberName(otherMemberKey(for: auth.currentUser?.email)))", systemImage: "paperplane")
                 }
                 Button(role: .destructive) { onDismiss() } label: { Label("Dismiss", systemImage: "xmark.circle") }
             }
