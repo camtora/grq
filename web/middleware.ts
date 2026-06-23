@@ -41,6 +41,7 @@ const MOBILE_API = [
   "/api/killswitch",
   "/api/universe",
   "/api/stocks/directive",
+  "/api/stocks/share",    // member shares a stock with the other member (push)
   "/api/note",
   "/api/notes",
   "/api/notifications",   // device-token register + per-user push prefs (D53)

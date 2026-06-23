@@ -5,9 +5,11 @@ each member's iOS devices via APNs, gated by per-user preferences. This is the
 operational guide: the architecture, the categories, the Apple-portal steps (the only
 part a human must do), config, deploy, and verification.
 
-**Status:** Code complete + typechecks clean. Push is a **silent no-op** until the
-`APNS_*` env is set — Discord alerting is unchanged in the meantime. Live end-to-end
-delivery needs the Apple-portal steps below (humans-only) + a real device/TestFlight.
+**Status (2026-06-23): LIVE.** The Apple-portal steps are done and the `APNS_*` env is
+set in `.env` + both containers — `apnsConfigured()` is true and APNs delivers to
+registered devices. Cam's device is registered (sandbox/Xcode build); a member only
+no-ops if they have no `DeviceToken` row yet (e.g. Graham hasn't opened the app). The
+config/runbook below is kept for reference (key rotation, a fresh device, redeploy).
 
 ---
 
@@ -101,7 +103,8 @@ column + a contract field exist as placeholders; no event is wired to it yet.
 
 ## Server config (`.env`, then rebuild)
 
-Uncomment + fill the block already stubbed in `.env` (env_file rule: **no quotes**):
+**Done (2026-06-23) — kept for reference / key rotation.** The block is set in `.env`
+(env_file rule: **no quotes**):
 
 ```bash
 APNS_KEY_ID=XXXXXXXXXX

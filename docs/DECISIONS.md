@@ -1204,9 +1204,13 @@ admitted to the mobile API in `middleware.ts`); web `NotificationSettings.tsx` o
 tap→stock deep-link), `NotificationSettingsView`, and sign-out unregister (so the next member on the same phone
 doesn't inherit tokens). pbxproj wired `CODE_SIGN_ENTITLEMENTS` + `GRQ.entitlements` (`aps-environment`).
 **Humans-only remainder:** create the .p8 Auth Key + enable Push on the App ID + add the Xcode capability + set
-`APNS_KEY_ID/TEAM_ID/BUNDLE_ID/KEY_B64` in `.env` (stubbed, commented). Full runbook: `docs/PUSH-NOTIFICATIONS.md`.
+`APNS_KEY_ID/TEAM_ID/BUNDLE_ID/KEY_B64` in `.env`. Full runbook: `docs/PUSH-NOTIFICATIONS.md`.
 **Verified:** `tsc --noEmit` clean (web+agent). iOS can't compile on this host (no macOS SDK) — written against the
-existing patterns; needs an Xcode build + a real-device token to light up end-to-end. Not yet deployed.
+existing patterns; needs an Xcode build + a real-device token to light up end-to-end.
+**UPDATE 2026-06-23 — LIVE.** All four `APNS_*` are set in `.env` + both the `web` and `agent` containers;
+`apnsConfigured()` is true and APNs delivers. Cam's device is registered (sandbox/Xcode build, `DeviceToken`).
+A member only no-ops when they have no `DeviceToken` row yet (e.g. Graham hasn't opened the app). The earlier
+CLAUDE.md "stubbed/commented" note was stale.
 
 ### D54 — Settlement-aware cash mirror: kill the phantom post-buy NAV-tape dip (Cam, 2026-06-22)
 **Context:** The Daily Tape (and the live NAV header) showed a small dip *every* time the agent bought, then
@@ -1368,3 +1372,50 @@ seeing what everyone uses); it is deliberately NOT an owner, so it can't see `/a
 viewer→404; viewer/owner beacons logged with the correct role + derived section; junk `/api/track` paths rejected
 (204, no row); synthetic test rows cleaned out. Committed on its own, isolated from the parallel stock-sharing WIP in
 the working tree.
+
+### D59 — Member-to-member stock sharing (one-tap iOS push) + APNs goes live (Cam, 2026-06-23)
+**Context:** From any stock page, a member should be able to share the name with the other member and have it land as
+a push on their phone. Separately: the D53 push stack was documented as "stubbed/commented" — but the `APNS_*` keys
+are in fact set in `.env` + both containers, so `apnsConfigured()` is true and APNs delivers. That note was stale and
+is corrected (here, CLAUDE.md, PUSH-NOTIFICATIONS.md).
+**Decision — a tiny share path, recipient-only push, deep-links to the dossier:**
+- **Route.** `POST /api/stocks/share` (`web/app/api/stocks/share/route.ts`) — `memberFromRequest` guard, body
+  `{ symbol, to }` where `to` is a member key ("cam"|"graham") or an email; resolves the recipient
+  (`emailForMemberKey` in `web/lib/users.ts`), rejects self-shares, and calls `pushNotify({ category:"members",
+  onlyEmail: recipient, symbol })`. The push carries `symbol`, so a tap deep-links straight to the dossier (the iOS
+  AppDelegate already routes on `userInfo.symbol`). Works on ANY symbol, not just the tracked universe. Added to
+  `middleware.ts` MOBILE_API so the app's Bearer path is admitted.
+- **iOS.** A share button (top-right toolbar, members-only) on `StockDetailView` opens `ShareStockSheet` — the OTHER
+  member's avatar + a send icon; tap → `APIClient.shareStock(symbol:to:)` → push. `Services.swift` gains `shareStock`.
+**Honest:** shares ride the `members` category (default-on, recipient-mutable) — not their own always-on category
+(deferred; would need a NotificationPreference column). A share to a member with NO registered device (e.g. Graham
+hasn't opened the app) returns ok but lands nowhere — that's the gating factor, not config.
+**Verified (live):** `tsc --noEmit` clean; web deployed; route smoke-tested via the LAN header — member share → ok,
+self-share → 400, missing symbol → 400, no identity → 403; a live test push (as Graham→Cam) delivered to Cam's device
+(token survived, not pruned). iOS needs an Xcode build to surface the button (no macOS SDK on the host).
+
+### D60 — iOS stock page rebuilt to full web parity (the dossier endpoint grows up) (Cam, 2026-06-23)
+**Context:** The native stock page was a thin slice of the web `app/stocks/[symbol]/page.tsx` — call, targets,
+fundamentals, a compact signal strip, the dossier body, lazy earnings/grades. Most web panels were missing, and the
+limiting factor was DATA: `/api/dossier/[symbol]` didn't emit them. Cam asked for full parity + the same section order
+(a full rebuild).
+**Decision — expand the mobile dossier to carry every panel, then mirror the web layout:**
+- **Contract (`shared/contract.ts`).** `Dossier` gains 19 optional/defaulted fields + sub-schemas: `position` (held +
+  the deterministic stop/take bracket), `analystBand` (low/now/consensus/high, re-anchored for CDRs + trend), `grades`
+  (+ recent analyst actions + trend), `earnings` (next/last beat-miss), `signalFamilies` (per-family rationale),
+  `peers`, `institutional` (13F + holders), `scoreboard`, `closes` (the price tape), `news`, `coverage` (the 10-tier
+  map), `trades`, `smartMoney` (compact), `currentRead`, plus `tier`/`agentWatching`/`agentNote`/`lastResearchedAt`.
+  All defaulted so older payloads keep parsing.
+- **Builder (`web/lib/feed.ts` `dossierResponse`).** Lifts the exact computations the web page already does (same
+  FMP/Prisma/scoreboard/smart-money sources), so the app sees identical numbers — including the CDR re-anchor.
+- **iOS (`Models.swift` + `Stock.swift`).** Mirrored the contract (new structs, all optional) and rebuilt
+  `StockDetailView` in the web's order: hero (tier/watching chips + "researched X ago") → the bottom line (call + why)
+  → your position → analyst ratings · price-target band · institutional · signals · earnings → peers + scoreboard →
+  price chart (`TapeChart`) → smart money → fundamentals → dossier → trades → news → coverage map. "Ask GRQ" moved
+  into Member controls; the controls row is now horizontally scrollable.
+**Web-parity corrections (Cam, same day):** the technical-lean rating bar shows ONLY as a fallback when there's no GRQ
+call (never a second "Buy/Sell technicals" bar beside the call), matching web; and "The record" (journal) is NOT
+surfaced on the native page (the data still rides the wire — trim later if payload matters).
+**Verified:** `tsc --noEmit` clean; `verify-mobile-api.ts` passes (live dossier matches the new zod contract); web
+deployed; live `GET /api/dossier/AC` carries all panels with real data (4 signal families, 5 peers, 180 closes, 10
+coverage tiers). iOS compiles in Xcode only (no macOS SDK here) — written against the existing patterns.

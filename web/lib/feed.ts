@@ -2,11 +2,15 @@ import { prisma } from "./db";
 import type { Session } from "./session";
 import { getPortfolio } from "./portfolio";
 import { getQuotes, getQuote } from "./broker/quotes";
-import { allUniverse, type UniverseRow } from "./universe";
+import { allUniverse, type UniverseRow, bareTicker } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
-import { fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews } from "./fmp";
+import {
+  fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews,
+  fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpEarningsReport, fmpInstitutional, fmpTopHolders,
+} from "./fmp";
+import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
 import { personByName, ownerKeyFor } from "./people";
 import { userForEmail } from "./users";
@@ -21,6 +25,7 @@ import {
   getInsiderTopBuys,
   getInsiderClusters,
   getSmartMoneyFreshness,
+  getSmartMoneyForSymbol,
 } from "./smart-money/queries";
 import { fmtUsd } from "./smart-money/types";
 
@@ -917,24 +922,64 @@ export async function reportDayResponse(date: string) {
 }
 
 /* ---------- /api/dossier/[symbol] ---------- */
+
+// Parse a journal entry's sourcesJson ("the receipts") into a clean string[].
+function parseSources(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr.filter((s): s is string => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// The rich, web-parity dossier (2026-06-23): every panel app/stocks/[symbol]/page.tsx
+// renders — position + bracket, analyst band, ratings + actions, earnings, signal
+// families, peers, institutional, scoreboard, the price tape, smart money, the full
+// record + trades, news, and the data-coverage map. Same Prisma/FMP source as the web
+// page, so the app sees identical numbers.
 export async function dossierResponse(symbol: string) {
   const sym = symbol.toUpperCase();
   const all = await allUniverse();
   const entry = all.find((u) => u.symbol === sym);
   if (!entry) return null;
 
-  const [quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peers] = await Promise.all([
+  const y = entry.yahoo;
+  const cadListing = /\.(TO|V|NE|CN)$/i.test(y);
+  const fmp = fmpEnabled();
+
+  const [
+    quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peersRaw,
+    position, tradesRaw, watch, settings, grades, gradeActionsRaw, gradesTrend, targetTrend,
+    earnings, newsRaw, institutional, holdersRaw, scoreboardRaw, closesRaw, smart,
+  ] = await Promise.all([
     getQuote(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }),
     contractSignals(sym).catch(() => null),
     computeSignals(sym).catch(() => null),
-    fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpAnalystTarget(y).catch(() => null) : Promise.resolve(null),
     prisma.symbolDirective.findUnique({ where: { symbol: sym } }).catch(() => null),
     prisma.researchRequest.count({ where: { symbol: sym, status: { in: ["QUEUED", "RUNNING"] } } }).catch(() => 0),
-    fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
+    fmp ? fmpPeerComparison(y).catch(() => []) : Promise.resolve([]),
+    prisma.position.findUnique({ where: { symbol: sym } }).catch(() => null),
+    prisma.trade.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }).catch(() => []),
+    prisma.agentFocus.findUnique({ where: { symbol: sym } }).catch(() => null),
+    prisma.settings.findUnique({ where: { id: 1 } }).catch(() => null),
+    fmp ? fmpGrades(y).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpGradeActions(y).catch(() => []) : Promise.resolve([]),
+    fmp ? fmpGradesTrend(y).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpTargetTrend(y).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpEarningsReport(y).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpStockNews(y, 5).catch(() => []) : Promise.resolve([]),
+    fmp ? fmpInstitutional(y).catch(() => null) : Promise.resolve(null),
+    fmp ? fmpTopHolders(y).catch(() => []) : Promise.resolve([]),
+    getScoreboard(sym).catch(() => []),
+    getCloses(sym, 180).catch(() => []),
+    getSmartMoneyForSymbol(bareTicker(sym)).catch(() => null),
   ]);
 
-  const currentRead = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
+  const currentReadEntry = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
   const stanceEntry = journal.find((j) => j.stance);
   const targetEntry = journal.find((j) => j.targetFarCents != null || j.targetNearCents != null);
   const bottomLineEntry = journal.find((j) => j.bottomLine);
@@ -942,16 +987,136 @@ export async function dossierResponse(symbol: string) {
   const farBps = cur && targetEntry?.targetFarCents ? Math.round(((targetEntry.targetFarCents - cur) / cur) * 10_000) : null;
   const nearWeeks = targetEntry?.targetNearDays ? Math.max(1, Math.round(targetEntry.targetNearDays / 5)) : null;
 
-  // The technical-lean fallback rating (the deterministic signal consensus), tagged
-  // as such so the app's RatingBar always has an axis even before GRQ files a call.
   const rec = sigFull ? overallSignal(sigFull) : null;
   const recMeta = rec ? stanceMeta(rec.label) : null;
-  const selfPeer = (peers as Array<{ self?: boolean; peTtm?: number | null }>).find((p) => p.self);
+  const peers = peersRaw as Array<{ symbol: string; name: string; self: boolean; peTtm: number | null; pbTtm: number | null; marketCapM: number | null }>;
+  const selfPeer = peers.find((p) => p.self);
+  const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
+
+  // Held position + the deterministic bracket (stop / take-profit off the risk dial).
+  const positionOut =
+    position && cur != null
+      ? {
+          qty: position.qty,
+          avgCostCents: position.avgCostCents,
+          openedAt: position.openedAt.toISOString(),
+          marketValueCents: position.qty * cur,
+          unrealizedPnlCents: position.qty * (cur - position.avgCostCents),
+          stopPct: dial.stopPct,
+          takeProfitPct: dial.takeProfitPct,
+          autoStopCents: Math.round(position.avgCostCents * (1 - dial.stopPct / 100)),
+          takeProfitCents: Math.round(position.avgCostCents * (1 + dial.takeProfitPct / 100)),
+        }
+      : null;
+
+  // Analyst price-target band, re-anchored to this listing's currency for CDRs/cross-
+  // listings (same scale-invariant rescale the web page uses).
+  let analystBand: {
+    nowCents: number; consensusCents: number; lowCents: number; highCents: number;
+    currency: string; upsidePct: number; reanchored: boolean;
+    trendChangePct: number | null; trendRecentCount: number | null;
+  } | null = null;
+  if (analyst) {
+    const pageCur = entry.currency ?? (cadListing ? "CAD" : "USD");
+    const reanchor = cur != null && analyst.currency.toUpperCase() !== pageCur.toUpperCase();
+    const usNow = analyst.upsidePct !== -1 ? analyst.consensusCents / (1 + analyst.upsidePct) : analyst.consensusCents;
+    const anchor = reanchor ? (cur as number) : usNow;
+    const sc = (v: number) => (usNow > 0 ? Math.round((anchor * v) / usNow) : v);
+    analystBand = {
+      nowCents: Math.round(anchor),
+      consensusCents: sc(analyst.consensusCents),
+      lowCents: sc(analyst.lowCents),
+      highCents: sc(analyst.highCents),
+      currency: reanchor ? pageCur : analyst.currency,
+      upsidePct: analyst.upsidePct,
+      reanchored: reanchor,
+      trendChangePct: targetTrend?.changePct ?? null,
+      trendRecentCount: targetTrend?.recentCount ?? null,
+    };
+  }
+
+  const gradeActions = gradeActionsRaw as Array<{ company: string; action: string; fromGrade: string; toGrade: string; date: string }>;
+  const gradesOut = grades
+    ? {
+        consensus: grades.consensus,
+        total: grades.total,
+        strongBuy: grades.strongBuy,
+        buy: grades.buy,
+        hold: grades.hold,
+        sell: grades.sell,
+        strongSell: grades.strongSell,
+        trendDirection: gradesTrend?.direction ?? null,
+        buyDelta: gradesTrend?.buyDelta ?? null,
+        sellDelta: gradesTrend?.sellDelta ?? null,
+        trendMonths: gradesTrend?.months ?? null,
+        actions: gradeActions.slice(0, 6).map((a) => ({ company: a.company, action: a.action, fromGrade: a.fromGrade, toGrade: a.toGrade, date: a.date })),
+      }
+    : null;
+
+  const earningsOut =
+    earnings && (earnings.next || earnings.last)
+      ? {
+          next: earnings.next
+            ? { date: earnings.next.date, epsEstimated: earnings.next.epsEstimated, epsActual: earnings.next.epsActual, revenueEstimated: earnings.next.revenueEstimated, revenueActual: earnings.next.revenueActual }
+            : null,
+          last: earnings.last
+            ? { date: earnings.last.date, epsEstimated: earnings.last.epsEstimated, epsActual: earnings.last.epsActual, revenueEstimated: earnings.last.revenueEstimated, revenueActual: earnings.last.revenueActual }
+            : null,
+        }
+      : null;
+
+  const holders = holdersRaw as Array<{ name: string; isNew: boolean; ownershipPct: number; sharesChangePct: number }>;
+  const institutionalOut = institutional
+    ? {
+        investorsHolding: institutional.investorsHolding,
+        investorsHoldingChange: institutional.investorsHoldingChange,
+        date: institutional.date,
+        holders: holders.slice(0, 6).map((h) => ({ name: h.name, isNew: h.isNew, ownershipPct: h.ownershipPct, sharesChangePct: h.sharesChangePct })),
+      }
+    : null;
+
+  const news = newsRaw as Array<{ title: string; url: string; publisher: string; at: string }>;
+  const insiderBuys = smart?.insiderBuyers ?? 0;
+  const coverage: Array<{ tier: number; name: string; status: string; detail: string }> = [
+    { tier: 1, name: "Price/vol", status: closesRaw.length > 1 ? "live" : "partial", detail: `${closesRaw.length} sessions of OHLCV → signals` },
+    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
+    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : "no FMP coverage for this name" },
+    { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
+    { tier: 9, name: "Macro", status: "live", detail: "BoC + FRED structured feed — rates/CPI/FX" },
+    { tier: 4, name: "Insider", status: insiderBuys > 0 ? "live" : "partial", detail: insiderBuys > 0 ? `${insiderBuys} insider buy(s), 90d` : cadListing ? "CA insider via agent web-research" : "US Form 4 + OpenInsider wired — no recent buys" },
+    { tier: 5, name: "Institutional", status: institutional ? "live" : "none", detail: institutional ? `${institutional.investorsHolding.toLocaleString()} institutions` : "13F is US-listed — empty for pure-TSX" },
+    { tier: 3, name: "Options flow", status: "none", detail: "never traded; US-centric — later" },
+    { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
+    { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
+  ].sort((a, b) => a.tier - b.tier);
+
+  const smartOut =
+    smart && smart.hasAny
+      ? {
+          hasAny: smart.hasAny,
+          congressBuyers: smart.congressBuyers,
+          congressSellers: smart.congressSellers,
+          insiderBuyers: smart.insiderBuyers,
+          insiderBuyValueUsd: smart.insiderBuyValueUsd,
+          fundHolders: smart.fundHolders.slice(0, 6).map((f) => ({ name: f.name, firm: f.firm, asOf: f.asOf, pctOfPort: f.pctOfPort, action: f.action, putCall: f.putCall })),
+          people: smart.people.slice(0, 6).map((pp) => ({
+            name: pp.name,
+            role: pp.role,
+            lastSide: pp.trades[0]?.side ?? null,
+            lastAmountRange: pp.trades[0]?.amountRange ?? null,
+            lastTxnDate: pp.trades[0]?.txnDate ?? null,
+          })),
+        }
+      : null;
+
+  const trades = tradesRaw as Array<{ id: number; side: string; qty: number; priceCents: number; realizedPnlCents: number | null; at: Date }>;
+  const scoreboard = scoreboardRaw as Array<{ source: string; grades: number; hits: number; misses: number; neutral: number; hitRate: number | null }>;
 
   const body =
-    currentRead?.body ??
+    currentReadEntry?.body ??
     bottomLineEntry?.bottomLine ??
     "No dossier filed yet — the agent writes the business, the bull and bear case, and a verdict here once it researches this name.";
+  const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
 
   return {
     symbol: sym,
@@ -973,7 +1138,7 @@ export async function dossierResponse(symbol: string) {
     peRatio: selfPeer?.peTtm ?? null,
     freeCashFlowCents: null,
     dividendYieldBps: null,
-    filedAt: iso((currentRead ?? stanceEntry ?? targetEntry)?.at ?? null),
+    filedAt: iso((currentReadEntry ?? stanceEntry ?? targetEntry)?.at ?? null),
     // A5 enrichment — the app's rich dossier (rating bar, status, bottom line, controls).
     logoUrl: entry.logoUrl ?? null,
     status: entry.status,
@@ -984,5 +1149,35 @@ export async function dossierResponse(symbol: string) {
     bottomLine: bottomLineEntry?.bottomLine ?? null,
     researching: pendingResearch > 0,
     directive: directiveToContract(directiveRow?.directive),
+    // --- stock-page parity (2026-06-23) ---
+    tier: entry.tier ?? null,
+    agentWatching: !!watch,
+    agentNote: watch?.note ?? null,
+    lastResearchedAt: iso(lastResearched),
+    position: positionOut,
+    analystBand,
+    grades: gradesOut,
+    earnings: earningsOut,
+    signalFamilies: sigFull ? sigFull.families.map((f) => ({ family: f.family, signal: f.signal, confidence: f.confidence, rationale: f.rationale })) : [],
+    peers: peers.map((p) => ({ symbol: p.symbol, name: p.name, self: p.self, peTtm: p.peTtm, pbTtm: p.pbTtm, marketCapM: p.marketCapM })),
+    institutional: institutionalOut,
+    scoreboard: scoreboard.map((s) => ({ source: s.source, grades: s.grades, hits: s.hits, misses: s.misses, neutral: s.neutral, hitRate: s.hitRate })),
+    closes: closesRaw.map((c) => ({ t: c.date.getTime(), c: c.closeCents })),
+    news: news.map((n) => ({ title: n.title, url: n.url, publisher: n.publisher, at: n.at })),
+    coverage,
+    record: journal.map((j) => ({
+      id: j.id,
+      kind: j.kind,
+      title: j.title,
+      body: j.body,
+      at: j.at.toISOString(),
+      agentVersion: j.agentVersion ?? null,
+      sources: parseSources(j.sourcesJson),
+    })),
+    trades: trades.map((t) => ({ id: t.id, side: t.side, qty: t.qty, priceCents: t.priceCents, realizedPnlCents: t.realizedPnlCents ?? null, at: t.at.toISOString() })),
+    smartMoney: smartOut,
+    currentRead: currentReadEntry
+      ? { title: currentReadEntry.title, body: currentReadEntry.body, at: currentReadEntry.at.toISOString(), sources: parseSources(currentReadEntry.sourcesJson) }
+      : null,
   };
 }

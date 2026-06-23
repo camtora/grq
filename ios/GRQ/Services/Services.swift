@@ -233,6 +233,12 @@ final class APIClient {
         return await universeAction(symbol, "add", extra: extra)
     }
 
+    /// Share a stock with the other member — fires an iOS push to them that
+    /// deep-links to this dossier. `to` is the recipient's member key ("cam"|"graham").
+    func shareStock(_ symbol: String, to key: String) async -> ActionResult {
+        await postResult("stocks/share", ["symbol": symbol, "to": key])
+    }
+
     // MARK: - Push notifications (D53)
 
     /// Register this device's APNs token under the signed-in member. `apnsEnv` is

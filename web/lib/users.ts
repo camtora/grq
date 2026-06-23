@@ -60,3 +60,17 @@ export function isOwner(email: string | null | undefined): boolean {
   if (!email) return false;
   return ownerEmails().includes(email.trim().toLowerCase());
 }
+
+// Stable member keys — match lib/people.ts (Person.key) and the iOS avatar assets
+// ("cam"/"graham"). The mobile app addresses the other member by key, not email;
+// this resolves the key the server actually pushes to.
+export const MEMBER_KEY_EMAILS: Record<"cam" | "graham", string> = {
+  cam: "cameron.tora@gmail.com",
+  graham: "g.j.appleby@gmail.com",
+};
+
+/** Resolve a stable member key ("cam"|"graham") to that member's email, or null. */
+export function emailForMemberKey(key: string | null | undefined): string | null {
+  if (key === "cam" || key === "graham") return MEMBER_KEY_EMAILS[key];
+  return null;
+}

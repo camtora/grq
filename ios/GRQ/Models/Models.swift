@@ -259,9 +259,215 @@ struct Dossier: Codable, Identifiable {
     var bottomLine: String? = nil
     var researching: Bool? = nil
     var directive: Directive? = nil
+    // Stock-page parity (2026-06-23) — every panel the web page shows. All optional so
+    // the app keeps decoding older payloads and lights up as the endpoint emits them.
+    var tier: String? = nil
+    var agentWatching: Bool? = nil
+    var agentNote: String? = nil
+    var lastResearchedAt: String? = nil
+    var position: DossierPosition? = nil
+    var analystBand: AnalystBand? = nil
+    var grades: DossierGrades? = nil
+    var earnings: DossierEarnings? = nil
+    var signalFamilies: [SignalFamily]? = nil
+    var peers: [PeerRow]? = nil
+    var institutional: Institutional? = nil
+    var scoreboard: [ScoreRow]? = nil
+    var closes: [ClosePoint]? = nil
+    var news: [NewsItem]? = nil
+    var coverage: [CoverageRow]? = nil
+    var record: [RecordEntry]? = nil
+    var trades: [TradeRow]? = nil
+    var smartMoney: DossierSmartMoney? = nil
+    var currentRead: CurrentRead? = nil
 
     var resolvedRating: Rating? { rating ?? Stance.resolve(label: ratingLabel, call: call)?.rating }
     var id: String { symbol }
+}
+
+// MARK: - Dossier panels (stock-page parity — mirror shared/contract.ts)
+
+/// Held position + the deterministic bracket (stop/take-profit off the risk dial).
+struct DossierPosition: Codable {
+    let qty: Int
+    let avgCostCents: Int
+    let openedAt: String
+    let marketValueCents: Int
+    let unrealizedPnlCents: Int
+    let stopPct: Double
+    let takeProfitPct: Double
+    let autoStopCents: Int
+    let takeProfitCents: Int
+}
+
+/// Analyst price-target band, re-anchored to this listing's currency where needed.
+struct AnalystBand: Codable {
+    let nowCents: Int
+    let consensusCents: Int
+    let lowCents: Int
+    let highCents: Int
+    let currency: String
+    let upsidePct: Double
+    let reanchored: Bool
+    var trendChangePct: Double? = nil
+    var trendRecentCount: Int? = nil
+}
+
+struct GradeAction: Codable, Identifiable {
+    let company: String
+    let action: String      // upgrade | downgrade | maintain | initiate
+    let fromGrade: String
+    let toGrade: String
+    let date: String
+    var id: String { company + date + toGrade }
+}
+
+struct DossierGrades: Codable {
+    let consensus: String
+    let total: Int
+    let strongBuy: Int
+    let buy: Int
+    let hold: Int
+    let sell: Int
+    let strongSell: Int
+    var trendDirection: String? = nil
+    var buyDelta: Int? = nil
+    var sellDelta: Int? = nil
+    var trendMonths: Int? = nil
+    var actions: [GradeAction] = []
+}
+
+struct EarningsRow: Codable {
+    let date: String
+    var epsEstimated: Double? = nil
+    var epsActual: Double? = nil
+    var revenueEstimated: Double? = nil
+    var revenueActual: Double? = nil
+}
+struct DossierEarnings: Codable {
+    var next: EarningsRow? = nil
+    var last: EarningsRow? = nil
+}
+
+struct SignalFamily: Codable, Identifiable {
+    let family: String      // trend | rsi | macd | volatility
+    let signal: String      // BUY | SELL | HOLD
+    let confidence: Int
+    let rationale: String
+    var id: String { family }
+}
+
+struct PeerRow: Codable, Identifiable {
+    let symbol: String
+    let name: String
+    let isSelf: Bool
+    var peTtm: Double? = nil
+    var pbTtm: Double? = nil
+    var marketCapM: Double? = nil
+    var id: String { symbol }
+    enum CodingKeys: String, CodingKey {
+        case symbol, name, peTtm, pbTtm, marketCapM
+        case isSelf = "self"
+    }
+}
+
+struct Holder: Codable, Identifiable {
+    let name: String
+    let isNew: Bool
+    let ownershipPct: Double
+    let sharesChangePct: Double
+    var id: String { name }
+}
+struct Institutional: Codable {
+    let investorsHolding: Int
+    let investorsHoldingChange: Int
+    let date: String
+    var holders: [Holder] = []
+}
+
+struct ScoreRow: Codable, Identifiable {
+    let source: String
+    let grades: Int
+    let hits: Int
+    let misses: Int
+    let neutral: Int
+    var hitRate: Double? = nil
+    var id: String { source }
+}
+
+struct ClosePoint: Codable, Identifiable {
+    let t: Double   // epoch ms
+    let c: Int      // close cents
+    var id: Double { t }
+}
+
+struct NewsItem: Codable, Identifiable {
+    let title: String
+    let url: String
+    let publisher: String
+    let at: String
+    var id: String { url }
+}
+
+struct CoverageRow: Codable, Identifiable {
+    let tier: Int
+    let name: String
+    let status: String   // live | partial | none
+    let detail: String
+    var id: Int { tier }
+}
+
+struct RecordEntry: Codable, Identifiable {
+    let id: Int
+    let kind: String     // RESEARCH | DECISION | TRADE | NOTE | LESSON | SYSTEM
+    let title: String
+    let body: String
+    let at: String
+    var agentVersion: String? = nil
+    var sources: [String] = []
+}
+
+struct TradeRow: Codable, Identifiable {
+    let id: Int
+    let side: String     // BUY | SELL
+    let qty: Int
+    let priceCents: Int
+    var realizedPnlCents: Int? = nil
+    let at: String
+}
+
+struct SmartFundHolder: Codable, Identifiable {
+    let name: String
+    let firm: String
+    let asOf: String
+    let pctOfPort: Double
+    let action: String       // NEW | ADD | TRIM | HOLD | EXIT
+    var putCall: String? = nil
+    var id: String { name + firm }
+}
+struct SmartPerson: Codable, Identifiable {
+    let name: String
+    let role: String
+    var lastSide: String? = nil
+    var lastAmountRange: String? = nil
+    var lastTxnDate: String? = nil
+    var id: String { name }
+}
+struct DossierSmartMoney: Codable {
+    let hasAny: Bool
+    let congressBuyers: Int
+    let congressSellers: Int
+    let insiderBuyers: Int
+    let insiderBuyValueUsd: Double
+    var fundHolders: [SmartFundHolder] = []
+    var people: [SmartPerson] = []
+}
+
+struct CurrentRead: Codable {
+    let title: String
+    let body: String
+    let at: String
+    var sources: [String] = []
 }
 
 // MARK: - Today / The Daily

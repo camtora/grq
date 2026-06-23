@@ -1,18 +1,20 @@
 import SwiftUI
 
-// The rich stock dossier — parity with web app/stocks/[symbol]/page.tsx: logo + price,
-// the RatingBar (GRQ's call + technical lean, with mascots), targets, analyst consensus,
-// the bottom line, fundamentals, the dossier narrative, lazily-loaded earnings + analyst
-// grades, member directives, watch/promote, and "Ask GRQ" (chat scoped to the symbol).
+// The rich stock dossier — full parity with web app/stocks/[symbol]/page.tsx, same
+// section order: hero → the bottom line (call + why) → your position → analyst
+// ratings · price-target band · institutional · signals · earnings → peers +
+// scoreboard → price chart → smart money → fundamentals → dossier → the record →
+// trades → news → data-coverage map. All panels render off the one /api/dossier
+// payload (lib/feed.ts dossierResponse) and degrade gracefully when a feed is dark.
 struct StockDetailView: View {
     let symbol: String
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var d: Dossier?
-    @State private var extras: StockExtras?
     @State private var actionNote: String?
     @State private var showChat = false
     @State private var showAlertSheet = false
+    @State private var showShareSheet = false
     @State private var alerts: [PriceAlert] = []
 
     private var isMember: Bool { auth.currentUser?.role == .member }
@@ -21,17 +23,33 @@ struct StockDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let d {
-                    header(d)
-                    if isMember { memberControls(d) }
-                    if let note = actionNote { noteRow(note) }
-                    alertsCard()
-                    ratingCard(d)
-                    targets(d)
-                    if let bl = d.bottomLine, !bl.isEmpty { bottomLine(bl) }
-                    fundamentals(d)
-                    if let s = d.signals { signalsCard(s) }
-                    dossierBody(d)
-                    extrasCard()
+                    Group {
+                        header(d)
+                        if isMember { memberControls(d) }
+                        if let note = actionNote { noteRow(note) }
+                        bottomLineCard(d)
+                        if let pos = d.position { positionCard(d, pos) }
+                        if let n = d.agentNote, !n.isEmpty { agentNoteCard(n) }
+                        alertsCard()
+                    }
+                    Group {
+                        analystRatingsCard(d)
+                        priceTargetCard(d)
+                        institutionalCard(d)
+                        signalFamiliesCard(d)
+                        earningsCard(d)
+                        peersCard(d)
+                        scoreboardCard(d)
+                        chartCard(d)
+                        smartMoneyCard(d)
+                    }
+                    Group {
+                        fundamentals(d)
+                        dossierCard(d)
+                        tradesCard(d)
+                        newsCard(d)
+                        coverageCard(d)
+                    }
                 } else {
                     ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(40)
                 }
@@ -43,7 +61,6 @@ struct StockDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             d = await APIClient.shared.dossier(symbol)
-            extras = await APIClient.shared.stockExtras(symbol)
             await loadAlerts()
         }
         .sheet(isPresented: $showChat) {
@@ -54,9 +71,736 @@ struct StockDetailView: View {
                 SetPriceAlertSheet(symbol: d.symbol, name: d.name, currency: d.currency, lastCents: d.lastCents)
             }
         }
+        .sheet(isPresented: $showShareSheet) {
+            ShareStockSheet(symbol: symbol, name: d?.name).environmentObject(auth)
+        }
+        .toolbar {
+            if isMember {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showShareSheet = true } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .tint(Theme.brandAccent)
+                }
+            }
+        }
     }
 
-    // MARK: alerts on this stock (both members — visibility; delete stays per-owner)
+    // MARK: header (hero)
+
+    private func header(_ d: Dossier) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    StockLogo(symbol: d.symbol, url: d.logoUrl, size: 44)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(d.name).font(.system(.title3, design: .rounded).weight(.bold)).foregroundStyle(p.textPrimary)
+                        Text(d.symbol).font(.caption).foregroundStyle(p.textMuted)
+                    }
+                    Spacer()
+                }
+                if let last = d.lastCents {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(Fmt.money(last, d.currency))
+                            .font(.system(.title, design: .rounded).weight(.black)).monospacedDigit()
+                            .foregroundStyle(Theme.brandGradient)
+                        Text("per share").font(.caption2).foregroundStyle(p.textMuted)
+                    }
+                }
+                Text(d.lastResearchedAt != nil ? "researched \(relAgo(d.lastResearchedAt) ?? "")" : "not yet researched")
+                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.8))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        if let t = d.tier, !t.isEmpty { Chip(text: t, tone: .dim) }
+                        if let c = d.currency, c != "CAD" { Chip(text: c, tone: .teal) }
+                        if d.status == "CANDIDATE" { Chip(text: "candidate", tone: .red) }
+                        if d.status == "RETIRED" { Chip(text: "retired", tone: .dim) }
+                        if d.watch == "universe" { Chip(text: "in universe", tone: .green) }
+                        if d.agentWatching == true { Chip(text: "agent watching", tone: .teal) }
+                        if d.researching == true { Chip(text: "researching…", tone: .teal) }
+                        if let dir = d.directive { Chip(text: dir.label, tone: dir == .pin ? .teal : .red) }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: member controls
+
+    @ViewBuilder private func memberControls(_ d: Dossier) -> some View {
+        let p = Theme.palette(scheme)
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Member controls")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        controlButton("Ask GRQ", "bubble.left.and.bubble.right.fill", p.accent) { showChat = true }
+                        controlButton("Alert", "bell", p.accent) { showAlertSheet = true }
+                        if d.watch == "none" || d.watch == nil {
+                            controlButton("Watch", "heart", p.accent) { Task { await run(await APIClient.shared.watch(d.symbol, name: d.name)) } }
+                        }
+                        if d.status == "ACTIVE" {
+                            controlButton(d.directive == .pin ? "Unpin" : "Pin", "star",
+                                          d.directive == .pin ? p.accent : p.textMuted) {
+                                Task { await directive(d, .pin) }
+                            }
+                            controlButton(d.directive == .noFly ? "Allow" : "No-fly", "nosign",
+                                          d.directive == .noFly ? p.neg : p.textMuted) {
+                                Task { await directive(d, .noFly) }
+                            }
+                        }
+                        if d.status == "CANDIDATE" {
+                            controlButton("Promote", "arrow.up.circle", p.accent) { Task { await promote(d) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func controlButton(_ label: String, _ icon: String, _ color: Color, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon).font(.caption.weight(.bold))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Capsule().fill(color.opacity(0.14))).foregroundStyle(color)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: the bottom line (GRQ's call + why) — the prominent verdict, mirrors web
+
+    private func bottomLineCard(_ d: Dossier) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionTitle(text: "The bottom line")
+                // Web parity: GRQ's call OR — only when there's no call — the technical
+                // lean as a fallback. Never both (no second "Buy/Sell technicals" bar).
+                if let r = d.resolvedRating {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("GRQ'S CALL").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
+                        RatingBar(rating: r, mascots: true)
+                    }
+                } else if let rl = d.recLabel, let rp = d.recPos {
+                    VStack(alignment: .leading, spacing: 6) {
+                        RatingBar(rating: Rating(label: rl, abbr: "", tone: toneForPos(rp), pos: rp, blurb: "technical signal only — an input, not a verdict"), mascots: true)
+                        Text("No GRQ call yet — technical signal only (an input, not a verdict).")
+                            .font(.caption).foregroundStyle(p.textMuted)
+                    }
+                } else {
+                    Text("Not yet rated — GRQ hasn't filed a call on this name.").font(.subheadline).foregroundStyle(p.textMuted)
+                }
+                if let s = d.signals {
+                    HStack(spacing: 8) {
+                        SignalStrip(signals: s)
+                        Text("technical indicators").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+                    }
+                }
+                targetLine(d)
+                if let bl = d.bottomLine, !bl.isEmpty {
+                    Divider().overlay(p.cardBorder.opacity(0.5))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("WHY").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
+                        MarkdownText(text: bl)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func targetLine(_ d: Dossier) -> some View {
+        let p = Theme.palette(scheme)
+        if let last = d.lastCents, last > 0 {
+            let nearPct = d.target.nearCents.map { Double($0 - last) / Double(last) }
+            let farPct = d.target.farCents.map { Double($0 - last) / Double(last) }
+                ?? d.target.expectedReturnBps.map { Double($0) / 10_000 }
+            if nearPct != nil || farPct != nil {
+                HStack(spacing: 6) {
+                    TermLink(slug: "price-target", label: "Target")
+                    if let n = nearPct { Text("near").foregroundStyle(p.textMuted); pctText(n) }
+                    if nearPct != nil && farPct != nil { Text("·").foregroundStyle(p.textMuted) }
+                    if let f = farPct { Text("12-mo").foregroundStyle(p.textMuted); pctText(f) }
+                    Spacer()
+                }
+                .font(.subheadline)
+            }
+        }
+        if let band = d.analystBand {
+            HStack(spacing: 6) {
+                TermLink(slug: "analyst-target", label: "Analyst consensus")
+                pctText(band.upsidePct)
+                Text("upside").foregroundStyle(p.textMuted)
+                Spacer()
+            }
+            .font(.subheadline)
+        }
+    }
+
+    private func pctText(_ frac: Double) -> some View {
+        let p = Theme.palette(scheme)
+        return Text("\(frac > 0 ? "+" : "")\(Int((frac * 100).rounded()))%")
+            .fontWeight(.semibold).foregroundStyle(frac > 0 ? p.pos : p.neg)
+    }
+    private func toneForPos(_ pos: Double) -> String {
+        if pos >= 0.75 { return "emerald" }; if pos >= 0.58 { return "teal" }
+        if pos >= 0.42 { return "amber" }; return "red"
+    }
+
+    // MARK: your position + the deterministic bracket
+
+    private func positionCard(_ d: Dossier, _ pos: DossierPosition) -> some View {
+        let p = Theme.palette(scheme)
+        let pnlStr = (pos.unrealizedPnlCents < 0 ? "−" : "+") + Fmt.money(abs(pos.unrealizedPnlCents), d.currency)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Your position")
+                KeyValueRow(label: "Held", value: "\(pos.qty) sh")
+                KeyValueRow(label: "Avg cost (ACB)", value: Fmt.money(pos.avgCostCents, d.currency))
+                KeyValueRow(label: "Market value", value: Fmt.money(pos.marketValueCents, d.currency))
+                KeyValueRow(label: "Unrealized P&L", value: pnlStr, valueColor: pos.unrealizedPnlCents >= 0 ? p.pos : p.neg)
+                KeyValueRow(label: "Auto-stop (−\(Int(pos.stopPct))%)", value: Fmt.money(pos.autoStopCents, d.currency), valueColor: p.neg)
+                KeyValueRow(label: "Take-profit (+\(Int(pos.takeProfitPct))%)", value: Fmt.money(pos.takeProfitCents, d.currency), valueColor: p.pos)
+            }
+        }
+    }
+
+    private func agentNoteCard(_ n: String) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionTitle(text: "The agent's note")
+                Text(n).font(.subheadline).foregroundStyle(p.textPrimary)
+            }
+        }
+    }
+
+    // MARK: analyst ratings (grades + trend + recent moves)
+
+    @ViewBuilder private func analystRatingsCard(_ d: Dossier) -> some View {
+        if let g = d.grades {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionTitle(text: "Analyst ratings")
+                        Spacer()
+                        Text("\(g.total) analysts").font(.caption2).foregroundStyle(p.textMuted)
+                    }
+                    Text(g.consensus).font(.subheadline.weight(.bold)).foregroundStyle(p.accentText)
+                    gradeBar(g)
+                    HStack(spacing: 16) {
+                        tally("Sell", g.sell + g.strongSell, p.neg)
+                        tally("Hold", g.hold, p.textMuted)
+                        tally("Buy", g.buy + g.strongBuy, p.pos)
+                    }
+                    if let dir = g.trendDirection, (g.buyDelta ?? 0) != 0 || (g.sellDelta ?? 0) != 0 {
+                        let tone = dir == "more bullish" ? p.pos : dir == "more bearish" ? p.neg : p.textMuted
+                        let arrow = dir == "more bullish" ? "▲" : dir == "more bearish" ? "▼" : "→"
+                        HStack {
+                            Text("\(arrow) \(dir)").foregroundStyle(tone)
+                            Spacer()
+                            Text(trendDeltas(g)).foregroundStyle(p.textMuted)
+                        }
+                        .font(.caption2)
+                    }
+                    if !g.actions.isEmpty {
+                        Divider().overlay(p.cardBorder.opacity(0.5))
+                        Text("RECENT MOVES").font(.caption2.weight(.bold)).tracking(0.6).foregroundStyle(p.textMuted)
+                        ForEach(g.actions) { a in actionRow(a) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func gradeBar(_ g: DossierGrades) -> some View {
+        let p = Theme.palette(scheme)
+        let total = max(1, g.total)
+        let segs: [(Int, Color)] = [
+            (g.strongSell, p.neg), (g.sell, p.neg.opacity(0.6)),
+            (g.hold, p.textMuted.opacity(0.45)),
+            (g.buy, p.pos.opacity(0.7)), (g.strongBuy, p.pos),
+        ]
+        return GeometryReader { geo in
+            HStack(spacing: 1) {
+                ForEach(Array(segs.enumerated()), id: \.offset) { _, s in
+                    if s.0 > 0 {
+                        Rectangle().fill(s.1).frame(width: max(0, geo.size.width * CGFloat(s.0) / CGFloat(total)))
+                    }
+                }
+            }
+        }
+        .frame(height: 8)
+        .background(Capsule().fill(p.accent.opacity(0.1)))
+        .clipShape(Capsule())
+    }
+
+    private func tally(_ label: String, _ n: Int, _ color: Color) -> some View {
+        VStack(spacing: 1) {
+            Text("\(n)").font(.subheadline.weight(.bold)).foregroundStyle(color)
+            Text(label).font(.caption2).foregroundStyle(Theme.palette(scheme).textMuted)
+        }
+    }
+
+    private func trendDeltas(_ g: DossierGrades) -> String {
+        var parts: [String] = []
+        if let b = g.buyDelta, b != 0 { parts.append("\(b > 0 ? "+" : "−")\(abs(b)) buy") }
+        if let s = g.sellDelta, s != 0 { parts.append("\(s > 0 ? "+" : "−")\(abs(s)) sell") }
+        if let m = g.trendMonths { parts.append("vs \(m)mo ago") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func actionRow(_ a: GradeAction) -> some View {
+        let p = Theme.palette(scheme)
+        let tone = a.action == "upgrade" ? p.pos : a.action == "downgrade" ? p.neg : p.textMuted
+        let mark = a.action == "upgrade" ? "↑" : a.action == "downgrade" ? "↓" : a.action == "initiate" ? "✦" : "·"
+        return HStack(spacing: 6) {
+            Text(a.company).foregroundStyle(p.textPrimary).lineLimit(1)
+            Spacer()
+            Text("\(mark) \(a.toGrade)").fontWeight(.semibold).foregroundStyle(tone)
+            Text(relAgo(a.date) ?? a.date).foregroundStyle(p.textMuted).monospacedDigit()
+        }
+        .font(.caption2)
+    }
+
+    // MARK: price-target band
+
+    @ViewBuilder private func priceTargetCard(_ d: Dossier) -> some View {
+        if let b = d.analystBand {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionTitle(text: "Price target")
+                        Spacer()
+                        Text(b.reanchored ? "US analysts (rescaled)" : b.currency != "CAD" ? "US listing" : "Wall St.")
+                            .font(.caption2).foregroundStyle(p.textMuted)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Fmt.money(b.consensusCents, b.currency)).font(.title3.weight(.bold)).monospacedDigit().foregroundStyle(p.textPrimary)
+                        pctText(b.upsidePct)
+                    }
+                    targetBand(b)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("LOW").font(.caption2).foregroundStyle(p.textMuted)
+                            Text(Fmt.money(b.lowCents, b.currency)).font(.caption.weight(.semibold)).foregroundStyle(p.neg)
+                        }
+                        Spacer()
+                        VStack(spacing: 1) {
+                            Text("NOW").font(.caption2).foregroundStyle(p.textMuted)
+                            Text(Fmt.money(b.nowCents, b.currency)).font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("HIGH").font(.caption2).foregroundStyle(p.textMuted)
+                            Text(Fmt.money(b.highCents, b.currency)).font(.caption.weight(.semibold)).foregroundStyle(p.pos)
+                        }
+                    }
+                    .monospacedDigit()
+                    if let chg = b.trendChangePct, chg != 0 {
+                        HStack {
+                            Text("\(chg > 0 ? "▲ targets rising" : "▼ targets falling") \(Int((chg * 100).rounded()))%")
+                                .foregroundStyle(chg > 0 ? p.pos : p.neg)
+                            Spacer()
+                            if let n = b.trendRecentCount { Text("\(n) analysts · 3mo").foregroundStyle(p.textMuted) }
+                        }
+                        .font(.caption2)
+                    }
+                }
+            }
+        }
+    }
+
+    private func targetBand(_ b: AnalystBand) -> some View {
+        let p = Theme.palette(scheme)
+        let lo = Double(min(b.lowCents, b.nowCents))
+        let hi = Double(max(b.highCents, b.nowCents))
+        let pad = max(1, (hi - lo) * 0.06)
+        let dMin = lo - pad, dMax = max(dMin + 1, hi + pad)
+        func at(_ v: Int) -> Double { (Double(v) - dMin) / (dMax - dMin) }
+        return GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(p.accent.opacity(0.12)).frame(height: 6)
+                Capsule().fill(p.accent.opacity(0.35))
+                    .frame(width: max(2, w * (at(b.highCents) - at(b.lowCents))), height: 6)
+                    .offset(x: w * at(b.lowCents))
+                Rectangle().fill(p.accent).frame(width: 9, height: 9).rotationEffect(.degrees(45))
+                    .offset(x: max(0, w * at(b.consensusCents) - 4.5))
+                Circle().fill(.white).frame(width: 13, height: 13)
+                    .overlay(Circle().stroke(p.accent, lineWidth: 2))
+                    .offset(x: max(0, w * at(b.nowCents) - 6.5))
+            }
+            .frame(height: 14)
+        }
+        .frame(height: 14)
+    }
+
+    // MARK: institutional (13F)
+
+    @ViewBuilder private func institutionalCard(_ d: Dossier) -> some View {
+        if let inst = d.institutional {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        SectionTitle(text: "Institutional · 13F")
+                        Spacer()
+                        Text("\(inst.investorsHoldingChange >= 0 ? "+" : "")\(inst.investorsHoldingChange) QoQ")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(inst.investorsHoldingChange >= 0 ? p.pos : p.neg)
+                    }
+                    Text("\(inst.investorsHolding) institutions hold").font(.subheadline).foregroundStyle(p.textPrimary)
+                    ForEach(inst.holders) { h in holderRow(h) }
+                    Text("13F filings (as of \(inst.date)) — US-listed; ~45-day lag, not timing.")
+                        .font(.caption2).foregroundStyle(p.textMuted)
+                }
+            }
+        }
+    }
+
+    private func holderRow(_ h: Holder) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 6) {
+            Text(h.name).foregroundStyle(p.textPrimary).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            if h.isNew { Text("NEW").font(.system(size: 9, weight: .bold)).foregroundStyle(p.pos) }
+            Text(String(format: "%.1f%% own", h.ownershipPct)).foregroundStyle(p.textMuted)
+            if abs(h.sharesChangePct) >= 0.05 {
+                Text("\(h.sharesChangePct > 0 ? "▲" : "▼") \(String(format: "%.1f%%", abs(h.sharesChangePct)))")
+                    .foregroundStyle(h.sharesChangePct > 0 ? p.pos : p.neg)
+            }
+        }
+        .font(.caption2).monospacedDigit()
+    }
+
+    // MARK: signals (per-family rationale)
+
+    @ViewBuilder private func signalFamiliesCard(_ d: Dossier) -> some View {
+        if let fams = d.signalFamilies, !fams.isEmpty {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionTitle(text: "Signals")
+                        Spacer()
+                        if let s = d.signals { TermLink(slug: "recommendation", label: "rec \(s.recommendationPct)%").font(.caption2) }
+                    }
+                    ForEach(fams) { f in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Text(f.family.uppercased()).font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                Chip(text: f.signal, tone: f.signal == "BUY" ? .green : f.signal == "SELL" ? .red : .dim)
+                                Spacer()
+                                Text("\(f.confidence)%").font(.caption2).foregroundStyle(p.textMuted).monospacedDigit()
+                            }
+                            Text(f.rationale).font(.caption2).foregroundStyle(p.textMuted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: earnings
+
+    @ViewBuilder private func earningsCard(_ d: Dossier) -> some View {
+        if let e = d.earnings, e.next != nil || e.last != nil {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Earnings")
+                    if let n = e.next {
+                        HStack { Text("Next report").foregroundStyle(p.textMuted); Spacer(); Text(n.date).fontWeight(.semibold).foregroundStyle(p.textPrimary) }
+                            .font(.subheadline)
+                        if n.epsEstimated != nil || n.revenueEstimated != nil {
+                            HStack(spacing: 12) {
+                                if let est = n.epsEstimated { Text("est EPS \(fmt2(est))") }
+                                if let r = n.revenueEstimated { Text("est Rev \(fmtRev(r))") }
+                            }
+                            .font(.caption2).foregroundStyle(p.textMuted)
+                        }
+                    }
+                    if let l = e.last {
+                        if e.next != nil { Divider().overlay(p.cardBorder.opacity(0.5)) }
+                        HStack { Text("Last report").foregroundStyle(p.textMuted); Spacer(); Text(l.date).foregroundStyle(p.textMuted) }
+                            .font(.subheadline)
+                        if let act = l.epsActual {
+                            earningsLine("EPS", fmt2(act), l.epsEstimated.map { fmt2($0) }, beat: l.epsEstimated.map { act > $0 })
+                        }
+                        if let act = l.revenueActual {
+                            earningsLine("Rev", fmtRev(act), l.revenueEstimated.map { fmtRev($0) }, beat: l.revenueEstimated.map { act > $0 })
+                        }
+                    }
+                    Text("Stocks often move more on guidance than the number itself.").font(.caption2).foregroundStyle(p.textMuted)
+                }
+            }
+        }
+    }
+
+    private func earningsLine(_ label: String, _ actual: String, _ est: String?, beat: Bool?) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 6) {
+            Text(label).foregroundStyle(p.textMuted)
+            Text(actual).fontWeight(.semibold).foregroundStyle(p.textPrimary)
+            if let est { Text("vs \(est) est").foregroundStyle(p.textMuted) }
+            Spacer()
+            if let beat { Text(beat ? "▲ beat" : "▼ miss").foregroundStyle(beat ? p.pos : p.neg) }
+        }
+        .font(.caption2)
+    }
+
+    // MARK: valuation vs peers
+
+    @ViewBuilder private func peersCard(_ d: Dossier) -> some View {
+        if let peers = d.peers, peers.count > 1 {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionTitle(text: "Valuation vs peers")
+                    HStack {
+                        Text("Company").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("P/E").frame(width: 52, alignment: .trailing)
+                        Text("P/B").frame(width: 52, alignment: .trailing)
+                        Text("Cap").frame(width: 56, alignment: .trailing)
+                    }
+                    .font(.caption2.weight(.bold)).foregroundStyle(p.textMuted)
+                    ForEach(peers) { pr in peerRow(d, pr) }
+                }
+            }
+        }
+    }
+
+    private func peerRow(_ d: Dossier, _ pr: PeerRow) -> some View {
+        let p = Theme.palette(scheme)
+        return HStack {
+            Text(pr.isSelf ? "\(pr.symbol) · this stock" : pr.symbol)
+                .fontWeight(pr.isSelf ? .bold : .regular)
+                .foregroundStyle(pr.isSelf ? p.accentText : p.textPrimary)
+                .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            Text(pr.peTtm.map { String(format: "%.1f×", $0) } ?? "—").frame(width: 52, alignment: .trailing).foregroundStyle(p.textPrimary)
+            Text(pr.pbTtm.map { String(format: "%.1f×", $0) } ?? "—").frame(width: 52, alignment: .trailing).foregroundStyle(p.textMuted)
+            Text(capStr(pr.marketCapM)).frame(width: 56, alignment: .trailing).foregroundStyle(p.textMuted)
+        }
+        .font(.caption).monospacedDigit()
+        .padding(.vertical, 2)
+    }
+
+    private func capStr(_ m: Double?) -> String {
+        guard let m else { return "—" }
+        return m >= 1000 ? "$\(Int((m / 1000).rounded()))B" : "$\(Int(m))M"
+    }
+
+    // MARK: scoreboard (graded calls)
+
+    @ViewBuilder private func scoreboardCard(_ d: Dossier) -> some View {
+        if let rows = d.scoreboard, !rows.isEmpty {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionTitle(text: "Scoreboard")
+                    ForEach(rows) { s in
+                        HStack {
+                            Text(s.source).foregroundStyle(p.textPrimary).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                            if let hr = s.hitRate {
+                                Text("\(Int((hr * 100).rounded()))%").foregroundStyle(hr >= 0.5 ? p.pos : p.neg)
+                            } else {
+                                Text("—").foregroundStyle(p.textMuted)
+                            }
+                            Text("\(s.hits)/\(s.misses)").foregroundStyle(p.textMuted).frame(width: 56, alignment: .trailing)
+                        }
+                        .font(.caption).monospacedDigit()
+                    }
+                    Text("Hit rate on graded calls — retros fill this in.").font(.caption2).foregroundStyle(p.textMuted)
+                }
+            }
+        }
+    }
+
+    // MARK: price chart
+
+    @ViewBuilder private func chartCard(_ d: Dossier) -> some View {
+        if let closes = d.closes, closes.count > 1 {
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Price · last \(closes.count) sessions")
+                    TapeChart(points: closes.map { Double($0.c) }).frame(height: 140)
+                }
+            }
+        }
+    }
+
+    // MARK: smart money on this name
+
+    @ViewBuilder private func smartMoneyCard(_ d: Dossier) -> some View {
+        if let sm = d.smartMoney, sm.hasAny {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionTitle(text: "Smart money")
+                    if sm.insiderBuyers > 0 || sm.congressBuyers > 0 {
+                        HStack(spacing: 12) {
+                            if sm.insiderBuyers > 0 { Text("\(sm.insiderBuyers) insider buys · \(Fmt.usd(sm.insiderBuyValueUsd))").foregroundStyle(p.pos) }
+                            if sm.congressBuyers > 0 { Text("\(sm.congressBuyers) congress buys").foregroundStyle(p.textMuted) }
+                        }
+                        .font(.caption2)
+                    }
+                    ForEach(sm.fundHolders) { f in
+                        HStack(spacing: 6) {
+                            Text(f.name).font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary).lineLimit(1)
+                            if let pc = f.putCall { Text(pc).font(.system(size: 9, weight: .bold)).foregroundStyle(pc == "CALL" ? p.pos : p.neg) }
+                            Spacer()
+                            Text(f.action).font(.caption2).foregroundStyle(actionTone(f.action))
+                            Text(String(format: "%.1f%%", f.pctOfPort)).font(.caption2).foregroundStyle(p.textMuted).monospacedDigit()
+                        }
+                    }
+                    ForEach(sm.people) { person in
+                        HStack(spacing: 6) {
+                            Text(person.name).font(.caption).foregroundStyle(p.textPrimary).lineLimit(1)
+                            Spacer()
+                            if let side = person.lastSide { Text(side).font(.caption2).foregroundStyle(side == "BUY" ? p.pos : p.neg) }
+                            if let amt = person.lastAmountRange { Text(amt).font(.caption2).foregroundStyle(p.textMuted).lineLimit(1) }
+                        }
+                    }
+                    Text("13F lags ~45d · most names US-listed → leads, not trades.").font(.caption2).foregroundStyle(p.textMuted)
+                }
+            }
+        }
+    }
+
+    private func actionTone(_ a: String) -> Color {
+        let p = Theme.palette(scheme)
+        switch a { case "NEW", "ADD": return p.pos; case "TRIM", "EXIT": return p.neg; default: return p.textMuted }
+    }
+
+    // MARK: fundamentals
+
+    private func fundamentals(_ d: Dossier) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Fundamentals")
+                if let mc = d.marketCapCents { KeyValueRow(label: "Market cap", value: Fmt.money(mc, d.currency), term: "market-cap") }
+                if let pe = d.peRatio { KeyValueRow(label: "P/E", value: String(format: "%.1f", pe), term: "pe") }
+                if let fcf = d.freeCashFlowCents { KeyValueRow(label: "Free cash flow", value: Fmt.money(fcf, d.currency), term: "free-cash-flow") }
+                if let dy = d.dividendYieldBps { KeyValueRow(label: "Dividend yield", value: Fmt.pctBps(dy), term: "dividend-yield") }
+                if d.marketCapCents == nil && d.peRatio == nil && d.freeCashFlowCents == nil && d.dividendYieldBps == nil {
+                    Text("Fundamentals not loaded for this name yet.").font(.caption).foregroundStyle(Theme.palette(scheme).textMuted)
+                }
+            }
+        }
+    }
+
+    // MARK: dossier (current read / narrative)
+
+    private func dossierCard(_ d: Dossier) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                if let cr = d.currentRead {
+                    HStack(spacing: 8) {
+                        Chip(text: "current read", tone: .teal)
+                        Text(cr.title).font(.subheadline.weight(.medium)).foregroundStyle(p.textPrimary).lineLimit(2)
+                        Spacer()
+                    }
+                    MarkdownText(text: cr.body)
+                    if !cr.sources.isEmpty { sourceChips(cr.sources) }
+                } else {
+                    SectionTitle(text: "Dossier")
+                    MarkdownText(text: d.bodyMarkdown)
+                }
+            }
+        }
+    }
+
+    private func sourceChips(_ sources: [String]) -> some View {
+        let p = Theme.palette(scheme)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(Array(sources.enumerated()), id: \.offset) { _, s in
+                    Text(s).font(.caption2).foregroundStyle(p.textMuted)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(p.accent.opacity(0.08)))
+                }
+            }
+        }
+    }
+
+    // MARK: trades
+
+    @ViewBuilder private func tradesCard(_ d: Dossier) -> some View {
+        if let trades = d.trades, !trades.isEmpty {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Trades")
+                    ForEach(trades) { t in
+                        HStack(spacing: 8) {
+                            Text(t.side).font(.caption.weight(.bold)).foregroundStyle(t.side == "BUY" ? p.accent : Color(hex: "fbbf24"))
+                            Text("\(t.qty) @ \(Fmt.money(t.priceCents, d.currency))").font(.caption).foregroundStyle(p.textPrimary).monospacedDigit()
+                            if let pnl = t.realizedPnlCents { Pnl(cents: pnl).font(.caption2) }
+                            Spacer()
+                            Text(relAgo(t.at) ?? "").font(.caption2).foregroundStyle(p.textMuted)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: recent news
+
+    @ViewBuilder private func newsCard(_ d: Dossier) -> some View {
+        if let news = d.news, !news.isEmpty {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionTitle(text: "Recent news")
+                    ForEach(news) { n in
+                        if let url = URL(string: n.url) {
+                            Link(destination: url) { newsRow(n) }.buttonStyle(.plain)
+                        } else {
+                            newsRow(n)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func newsRow(_ n: NewsItem) -> some View {
+        let p = Theme.palette(scheme)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(n.title).font(.caption).foregroundStyle(p.textPrimary)
+            Text("\(n.publisher) · \(n.at)").font(.caption2).foregroundStyle(p.textMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: data coverage (10-tier map)
+
+    @ViewBuilder private func coverageCard(_ d: Dossier) -> some View {
+        if let cov = d.coverage, !cov.isEmpty {
+            let p = Theme.palette(scheme)
+            Card {
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionTitle(text: "Data coverage")
+                    ForEach(cov) { c in
+                        HStack(alignment: .top, spacing: 8) {
+                            Circle()
+                                .fill(c.status == "live" ? p.pos : c.status == "partial" ? Color(hex: "f59e0b") : p.textMuted.opacity(0.3))
+                                .frame(width: 8, height: 8).padding(.top, 4)
+                            Text("T\(c.tier) \(c.name)").font(.caption).foregroundStyle(p.textPrimary).frame(width: 110, alignment: .leading)
+                            Text(c.detail).font(.caption2).foregroundStyle(p.textMuted).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    Text("Green = live · amber = partial · grey = not yet wired.").font(.caption2).foregroundStyle(p.textMuted)
+                }
+            }
+        }
+    }
+
+    // MARK: price alerts on this stock (both members)
 
     @ViewBuilder private func alertsCard() -> some View {
         if !alerts.isEmpty {
@@ -113,225 +857,6 @@ struct StockDetailView: View {
         if res.ok { alerts.removeAll { $0.id == a.id } } else { actionNote = res.error }
     }
 
-    // MARK: header
-
-    private func header(_ d: Dossier) -> some View {
-        let p = Theme.palette(scheme)
-        return Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    StockLogo(symbol: d.symbol, url: d.logoUrl, size: 44)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(d.name).font(.system(.title3, design: .rounded).weight(.bold)).foregroundStyle(p.textPrimary)
-                        Text(d.symbol).font(.caption).foregroundStyle(p.textMuted)
-                    }
-                    Spacer()
-                }
-                if let last = d.lastCents {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(Fmt.money(last, d.currency))
-                            .font(.system(.title, design: .rounded).weight(.black)).monospacedDigit()
-                            .foregroundStyle(Theme.brandGradient)
-                        Text("per share").font(.caption2).foregroundStyle(p.textMuted)
-                    }
-                }
-                HStack(spacing: 8) {
-                    if let st = d.status, st != "ACTIVE" { Chip(text: st.lowercased(), tone: st == "CANDIDATE" ? .red : .dim) }
-                    if let c = d.currency, c != "CAD" { Chip(text: c, tone: .teal) }
-                    if d.watch == "universe" { Chip(text: "in universe", tone: .green) }
-                    if d.researching == true { Chip(text: "researching…", tone: .teal) }
-                    if let dir = d.directive { Chip(text: dir.label, tone: dir == .pin ? .teal : .red) }
-                }
-            }
-        }
-    }
-
-    // MARK: rating
-
-    private func ratingCard(_ d: Dossier) -> some View {
-        let p = Theme.palette(scheme)
-        return Card {
-            VStack(alignment: .leading, spacing: 16) {
-                if let r = d.resolvedRating {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("GRQ'S CALL").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
-                        RatingBar(rating: r, mascots: true)
-                    }
-                } else {
-                    Text("Not yet rated by GRQ.").font(.subheadline).foregroundStyle(p.textMuted)
-                }
-                if let rl = d.recLabel, let rp = d.recPos {
-                    Divider().overlay(p.cardBorder.opacity(0.5))
-                    RatingBar(rating: Rating(label: rl, abbr: "", tone: toneForPos(rp), pos: rp, blurb: "technical lean — an input, not the call"), note: "TECHNICALS")
-                }
-                Button { showChat = true } label: {
-                    Label("Ask GRQ about \(d.symbol)", systemImage: "bubble.left.and.bubble.right.fill")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(p.accent)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-    private func toneForPos(_ pos: Double) -> String {
-        if pos >= 0.75 { return "emerald" }; if pos >= 0.58 { return "teal" }
-        if pos >= 0.42 { return "amber" }; return "red"
-    }
-
-    // MARK: targets / bottom line / fundamentals
-
-    private func targets(_ d: Dossier) -> some View {
-        let pos = Theme.palette(scheme).pos
-        return Card {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Targets")
-                if let near = d.target.nearCents {
-                    KeyValueRow(label: "Near-term" + (d.target.nearHorizon.map { " (\($0))" } ?? ""),
-                                value: Fmt.money(near, d.currency), term: "price-target")
-                }
-                if let far = d.target.farCents {
-                    KeyValueRow(label: "12-month", value: Fmt.money(far, d.currency), term: "price-target")
-                }
-                if let er = d.target.expectedReturnBps {
-                    KeyValueRow(label: "Expected return", value: Fmt.bps(er), term: "expected-return", valueColor: pos)
-                }
-                if let a = d.analystTargetCents {
-                    KeyValueRow(label: "Analyst consensus", value: Fmt.money(a, d.currency), term: "analyst-target")
-                }
-                if d.target.nearCents == nil && d.target.farCents == nil && d.analystTargetCents == nil {
-                    Text("No price target yet — an earlier-stage read.").font(.caption).foregroundStyle(Theme.palette(scheme).textMuted)
-                }
-            }
-        }
-    }
-
-    private func bottomLine(_ bl: String) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "The bottom line")
-                MarkdownText(text: bl)
-            }
-        }
-    }
-
-    private func fundamentals(_ d: Dossier) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Fundamentals")
-                if let mc = d.marketCapCents { KeyValueRow(label: "Market cap", value: Fmt.money(mc, d.currency), term: "market-cap") }
-                if let pe = d.peRatio { KeyValueRow(label: "P/E", value: String(format: "%.1f", pe), term: "pe") }
-                if let fcf = d.freeCashFlowCents { KeyValueRow(label: "Free cash flow", value: Fmt.money(fcf, d.currency), term: "free-cash-flow") }
-                if let dy = d.dividendYieldBps { KeyValueRow(label: "Dividend yield", value: Fmt.pctBps(dy), term: "dividend-yield") }
-                if d.marketCapCents == nil && d.peRatio == nil && d.freeCashFlowCents == nil && d.dividendYieldBps == nil {
-                    Text("Fundamentals not loaded for this name yet.").font(.caption).foregroundStyle(Theme.palette(scheme).textMuted)
-                }
-            }
-        }
-    }
-
-    private func signalsCard(_ s: Signals) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    SectionTitle(text: "Signals")
-                    Spacer()
-                    TermLink(slug: "recommendation", label: "rec \(s.recommendationPct)%").font(.caption)
-                }
-                SignalStrip(signals: s)
-            }
-        }
-    }
-
-    private func dossierBody(_ d: Dossier) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Dossier")
-                MarkdownText(text: d.bodyMarkdown)
-            }
-        }
-    }
-
-    // MARK: lazy extras (earnings + analyst grades)
-
-    @ViewBuilder private func extrasCard() -> some View {
-        let p = Theme.palette(scheme)
-        if let e = extras, (e.earnings != nil || (e.grades?.total ?? 0) > 0) {
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let ev = e.earnings {
-                        SectionTitle(text: ev.upcoming == true ? "Next earnings" : "Last earnings")
-                        HStack {
-                            Text(ev.date).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                            Spacer()
-                            if let est = ev.epsEstimated { Text("EPS est \(String(format: "%.2f", est))").font(.caption).foregroundStyle(p.textMuted) }
-                            if let act = ev.epsActual { Text("act \(String(format: "%.2f", act))").font(.caption.weight(.semibold)).foregroundStyle(p.textPrimary) }
-                        }
-                    }
-                    if let g = e.grades, let total = g.total, total > 0 {
-                        Divider().overlay(p.cardBorder.opacity(0.5))
-                        HStack {
-                            SectionTitle(text: "Analyst ratings")
-                            Spacer()
-                            if let c = g.consensus, !c.isEmpty { Text(c).font(.caption.weight(.bold)).foregroundStyle(p.accentText) }
-                        }
-                        HStack(spacing: 16) {
-                            tally("Buy", (g.strongBuy ?? 0) + (g.buy ?? 0), p.pos)
-                            tally("Hold", g.hold ?? 0, p.textMuted)
-                            tally("Sell", (g.sell ?? 0) + (g.strongSell ?? 0), p.neg)
-                            Spacer()
-                            Text("\(total) analysts").font(.caption2).foregroundStyle(p.textMuted)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func tally(_ label: String, _ n: Int, _ color: Color) -> some View {
-        VStack(spacing: 1) {
-            Text("\(n)").font(.subheadline.weight(.bold)).foregroundStyle(color)
-            Text(label).font(.caption2).foregroundStyle(Theme.palette(scheme).textMuted)
-        }
-    }
-
-    // MARK: member controls
-
-    @ViewBuilder private func memberControls(_ d: Dossier) -> some View {
-        let p = Theme.palette(scheme)
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(text: "Member controls")
-                HStack(spacing: 10) {
-                    controlButton("Alert", "bell", p.accent) { showAlertSheet = true }
-                    if d.watch == "none" || d.watch == nil {
-                        controlButton("Watch", "heart", p.accent) { Task { await run(await APIClient.shared.watch(d.symbol, name: d.name)) } }
-                    }
-                    if d.status == "ACTIVE" {
-                        controlButton(d.directive == .pin ? "Unpin" : "Pin", "star",
-                                      d.directive == .pin ? p.accent : p.textMuted) {
-                            Task { await directive(d, .pin) }
-                        }
-                        controlButton(d.directive == .noFly ? "Allow" : "No-fly", "nosign",
-                                      d.directive == .noFly ? p.neg : p.textMuted) {
-                            Task { await directive(d, .noFly) }
-                        }
-                    }
-                    if d.status == "CANDIDATE" {
-                        controlButton("Promote", "arrow.up.circle", p.accent) { Task { await promote(d) } }
-                    }
-                }
-            }
-        }
-    }
-
-    private func controlButton(_ label: String, _ icon: String, _ color: Color, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(label, systemImage: icon).font(.caption.weight(.bold))
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Capsule().fill(color.opacity(0.14))).foregroundStyle(color)
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: actions
 
     private func directive(_ d: Dossier, _ dir: Directive) async {
@@ -358,6 +883,37 @@ struct StockDetailView: View {
     private func noteRow(_ t: String) -> some View {
         Text(t).font(.caption).foregroundStyle(Theme.palette(scheme).accentText)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: small formatters
+
+    private func fmt2(_ v: Double) -> String { String(format: "%.2f", v) }
+    private func fmtRev(_ v: Double) -> String {
+        if v >= 1e9 { return String(format: "$%.1fB", v / 1e9) }
+        if v >= 1e6 { return String(format: "$%.0fM", v / 1e6) }
+        return "$\(Int(v))"
+    }
+
+    private static let isoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+    private static let ymd: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "America/Toronto"); return f
+    }()
+    private func parseDate(_ s: String?) -> Date? {
+        guard let s, !s.isEmpty else { return nil }
+        return Self.isoFrac.date(from: s) ?? Self.isoPlain.date(from: s) ?? Self.ymd.date(from: s)
+    }
+    /// "today" / "3d ago" / "2w ago" / "4mo ago" — mirrors the web's agoShort.
+    private func relAgo(_ s: String?) -> String? {
+        guard let date = parseDate(s) else { return nil }
+        let days = max(0, Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0)
+        if days < 1 { return "today" }
+        if days < 14 { return "\(days)d ago" }
+        if days < 60 { return "\(Int((Double(days) / 7).rounded()))w ago" }
+        return "\(Int((Double(days) / 30).rounded()))mo ago"
     }
 }
 
@@ -464,5 +1020,128 @@ struct SetPriceAlertSheet: View {
             symbol: symbol, direction: direction, thresholdCents: cents, currency: currency ?? "CAD", note: note)
         busy = false
         if res.ok { dismiss() } else { error = res.error }
+    }
+}
+
+// MARK: - Share a stock with the other member
+
+// The two members, keyed to match lib/people.ts (Person.key) + the bundled avatar
+// assets ("cam"/"graham"). The share button shows the OTHER member with a send icon;
+// tapping it fires a push to their phone that deep-links back to this dossier.
+struct GrqMember: Identifiable {
+    let key: String // "cam" | "graham"
+    let name: String
+    var id: String { key }
+}
+
+private let grqMembers = [
+    GrqMember(key: "cam", name: "Cam"),
+    GrqMember(key: "graham", name: "Graham"),
+]
+
+/// The signed-in member's key, from their email (same heuristic as MemberAvatar).
+private func memberKey(for email: String?) -> String? {
+    guard let email = email?.lowercased() else { return nil }
+    if email.hasPrefix("cameron") { return "cam" }
+    if email.hasPrefix("g.j.appleby") { return "graham" }
+    return nil
+}
+
+struct ShareStockSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+    @EnvironmentObject private var auth: AuthManager
+    let symbol: String
+    let name: String?
+
+    @State private var sendingKey: String?
+    @State private var sentKey: String?
+    @State private var error: String?
+
+    // Everyone but me — with two members, that's the other person.
+    private var recipients: [GrqMember] {
+        let me = memberKey(for: auth.currentUser?.email)
+        return grqMembers.filter { $0.key != me }
+    }
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 12) {
+                        StockLogo(symbol: symbol, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(name ?? symbol).font(.headline).foregroundStyle(p.textPrimary).lineLimit(1)
+                            Text(symbol).font(.caption).foregroundStyle(p.textMuted)
+                        }
+                        Spacer()
+                    }
+
+                    Text("SHARE WITH").font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
+
+                    if recipients.isEmpty {
+                        Card { Text("No one to share with.").font(.subheadline).foregroundStyle(p.textMuted) }
+                    } else {
+                        ForEach(recipients) { m in memberRow(m) }
+                    }
+
+                    if let error {
+                        Text(error).font(.caption).foregroundStyle(p.neg)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text("Sends a push to their phone with a link straight to this stock.")
+                        .font(.caption2).foregroundStyle(p.textMuted)
+                }
+                .padding(16)
+            }
+            .background(ScreenBackground().ignoresSafeArea())
+            .navigationTitle("Share \(symbol)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func memberRow(_ m: GrqMember) -> some View {
+        let p = Theme.palette(scheme)
+        let isSent = sentKey == m.key
+        let isSending = sendingKey == m.key
+        return Card {
+            HStack(spacing: 12) {
+                Image(m.key).resizable().scaledToFill()
+                    .frame(width: 44, height: 44).clipShape(Circle())
+                    .overlay(Circle().strokeBorder(p.accent.opacity(0.25), lineWidth: 1))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.name).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    Text(isSent ? "Shared ✓" : "Tap to send").font(.caption2)
+                        .foregroundStyle(isSent ? p.pos : p.textMuted)
+                }
+                Spacer()
+                Button { Task { await send(m) } } label: {
+                    if isSending {
+                        ProgressView().tint(p.accent)
+                    } else {
+                        Image(systemName: isSent ? "checkmark.circle.fill" : "paperplane.fill")
+                            .font(.title3).foregroundStyle(isSent ? p.pos : p.accent)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isSending || isSent)
+            }
+        }
+    }
+
+    private func send(_ m: GrqMember) async {
+        sendingKey = m.key; error = nil
+        let res = await APIClient.shared.shareStock(symbol, to: m.key)
+        sendingKey = nil
+        if res.ok {
+            sentKey = m.key
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            dismiss()
+        } else {
+            error = res.error
+        }
     }
 }

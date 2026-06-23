@@ -161,6 +161,167 @@ export const Idea = z.object({
   target: PriceTarget,
   unfamiliar: z.boolean(), // On the Radar surfaces unfamiliar names first
 });
+/* ---- stock-page parity panels (2026-06-23): the rich dossier the iOS page
+   rebuilds to match web app/stocks/[symbol]/page.tsx. All optional/defaulted so
+   older payloads keep parsing and the app degrades gracefully. ---- */
+
+// Held position + the deterministic bracket (risk dial) — mirrors the web stat row.
+export const DossierPosition = z.object({
+  qty: z.number().int(),
+  avgCostCents: z.number().int(),
+  openedAt: z.string(),
+  marketValueCents: z.number().int(),
+  unrealizedPnlCents: z.number().int(),
+  stopPct: z.number(),
+  takeProfitPct: z.number(),
+  autoStopCents: z.number().int(),
+  takeProfitCents: z.number().int(),
+});
+
+// Analyst price-target band, re-anchored to this listing's currency when needed
+// (a CDR's US targets rescaled to the CAD shares — same logic as the web page).
+export const AnalystBand = z.object({
+  nowCents: z.number().int(),
+  consensusCents: z.number().int(),
+  lowCents: z.number().int(),
+  highCents: z.number().int(),
+  currency: z.string(),
+  upsidePct: z.number(),
+  reanchored: z.boolean(),
+  trendChangePct: z.number().nullable(),
+  trendRecentCount: z.number().int().nullable(),
+});
+
+export const GradeAction = z.object({
+  company: z.string(),
+  action: z.string(), // upgrade | downgrade | maintain | initiate
+  fromGrade: z.string(),
+  toGrade: z.string(),
+  date: z.string(),
+});
+export const DossierGrades = z.object({
+  consensus: z.string(),
+  total: z.number().int(),
+  strongBuy: z.number().int(),
+  buy: z.number().int(),
+  hold: z.number().int(),
+  sell: z.number().int(),
+  strongSell: z.number().int(),
+  trendDirection: z.string().nullable(), // "more bullish" | "more bearish" | "steady"
+  buyDelta: z.number().int().nullable(),
+  sellDelta: z.number().int().nullable(),
+  trendMonths: z.number().int().nullable(),
+  actions: z.array(GradeAction),
+});
+
+export const EarningsRow = z.object({
+  date: z.string(),
+  epsEstimated: z.number().nullable(),
+  epsActual: z.number().nullable(),
+  revenueEstimated: z.number().nullable(),
+  revenueActual: z.number().nullable(),
+});
+export const DossierEarnings = z.object({
+  next: EarningsRow.nullable(),
+  last: EarningsRow.nullable(),
+});
+
+export const SignalFamily = z.object({
+  family: z.string(),       // trend | rsi | macd | volatility
+  signal: z.string(),       // BUY | SELL | HOLD
+  confidence: z.number().int(),
+  rationale: z.string(),
+});
+
+export const PeerRow = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  self: z.boolean(),
+  peTtm: z.number().nullable(),
+  pbTtm: z.number().nullable(),
+  marketCapM: z.number().nullable(),
+});
+
+export const Holder = z.object({
+  name: z.string(),
+  isNew: z.boolean(),
+  ownershipPct: z.number(),
+  sharesChangePct: z.number(),
+});
+export const Institutional = z.object({
+  investorsHolding: z.number().int(),
+  investorsHoldingChange: z.number().int(),
+  date: z.string(),
+  holders: z.array(Holder),
+});
+
+export const ScoreRow = z.object({
+  source: z.string(),
+  grades: z.number().int(),
+  hits: z.number().int(),
+  misses: z.number().int(),
+  neutral: z.number().int(),
+  hitRate: z.number().nullable(),
+});
+
+export const ClosePoint = z.object({ t: z.number(), c: z.number().int() }); // t = epoch ms, c = close cents
+export const NewsItem = z.object({ title: z.string(), url: z.string(), publisher: z.string(), at: z.string() });
+export const CoverageRow = z.object({
+  tier: z.number().int(),
+  name: z.string(),
+  status: z.string(), // live | partial | none
+  detail: z.string(),
+});
+export const RecordEntry = z.object({
+  id: z.number().int(),
+  kind: z.string(),
+  title: z.string(),
+  body: z.string(),
+  at: z.string(),
+  agentVersion: z.string().nullable(),
+  sources: z.array(z.string()),
+});
+export const TradeRow = z.object({
+  id: z.number().int(),
+  side: z.string(),
+  qty: z.number().int(),
+  priceCents: z.number().int(),
+  realizedPnlCents: z.number().int().nullable(),
+  at: z.string(),
+});
+export const DossierSmartMoney = z.object({
+  hasAny: z.boolean(),
+  congressBuyers: z.number().int(),
+  congressSellers: z.number().int(),
+  insiderBuyers: z.number().int(),
+  insiderBuyValueUsd: z.number(),
+  fundHolders: z.array(
+    z.object({
+      name: z.string(),
+      firm: z.string(),
+      asOf: z.string(),
+      pctOfPort: z.number(),
+      action: z.string(),
+      putCall: z.string().nullable(),
+    }),
+  ),
+  people: z.array(
+    z.object({
+      name: z.string(),
+      role: z.string(),
+      lastSide: z.string().nullable(),
+      lastAmountRange: z.string().nullable(),
+      lastTxnDate: z.string().nullable(),
+    }),
+  ),
+});
+export const CurrentRead = z.object({
+  title: z.string(),
+  body: z.string(),
+  at: z.string(),
+  sources: z.array(z.string()),
+});
+
 export const Dossier = z.object({
   symbol: z.string(),
   name: z.string(),
@@ -176,6 +337,36 @@ export const Dossier = z.object({
   freeCashFlowCents: z.number().int().nullable(),
   dividendYieldBps: z.number().int().nullable(),
   filedAt: z.string().nullable(),
+  // --- A5 enrichment (already emitted) ---
+  logoUrl: z.string().nullable().default(null),
+  status: z.string().nullable().default(null), // ACTIVE | CANDIDATE | RETIRED
+  watch: z.string().nullable().default(null), // none | watching | universe
+  rating: z.object({ label: z.string(), abbr: z.string(), tone: z.string(), pos: z.number(), blurb: z.string() }).nullable().default(null),
+  recLabel: z.string().nullable().default(null),
+  recPos: z.number().nullable().default(null),
+  bottomLine: z.string().nullable().default(null),
+  researching: z.boolean().default(false),
+  directive: Directive.nullable().default(null),
+  // --- stock-page parity (2026-06-23) ---
+  tier: z.string().nullable().default(null),
+  agentWatching: z.boolean().default(false),
+  agentNote: z.string().nullable().default(null),
+  lastResearchedAt: z.string().nullable().default(null),
+  position: DossierPosition.nullable().default(null),
+  analystBand: AnalystBand.nullable().default(null),
+  grades: DossierGrades.nullable().default(null),
+  earnings: DossierEarnings.nullable().default(null),
+  signalFamilies: z.array(SignalFamily).default([]),
+  peers: z.array(PeerRow).default([]),
+  institutional: Institutional.nullable().default(null),
+  scoreboard: z.array(ScoreRow).default([]),
+  closes: z.array(ClosePoint).default([]),
+  news: z.array(NewsItem).default([]),
+  coverage: z.array(CoverageRow).default([]),
+  record: z.array(RecordEntry).default([]),
+  trades: z.array(TradeRow).default([]),
+  smartMoney: DossierSmartMoney.nullable().default(null),
+  currentRead: CurrentRead.nullable().default(null),
 });
 
 /* ---------- today / The Daily — v0 (sections per docs/NEWSPAPER.md) ---------- */
