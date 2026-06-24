@@ -253,19 +253,21 @@ Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etD
 }
 
 /** Push the agent's decision to members after a check-in — the "Check-in — …"
- *  RESEARCH note the session just wrote. Closes the gap where the agent reviews
- *  or acts on a holding's move (or a scheduled slot) but nothing notifies.
- *  Category "checkins" — its own toggle, so members can mute the per-holding
- *  "hold / no trade" reads (noisy as the portfolio grows) without losing the daily
- *  briefs (those stay "reports"). Cam 2026-06-24. */
-async function notifyCheckinDecision(startedAt: Date): Promise<{ id: number; symbol: string | null } | null> {
+ *  RESEARCH note the session just wrote. Two muteable categories so members can
+ *  tune the noise separately (Cam 2026-06-24): a SCHEDULED fund-level check-in
+ *  (the hourly clock review — note.symbol null) pushes as "checkins"; a per-HOLDING
+ *  check-in (a position's move or revisit — note.symbol set, "ATD — no trade")
+ *  pushes as "holdingChecks". `knownSymbol` lets a held-position trigger classify
+ *  correctly even if the agent left the note's symbol off (it's set just after). */
+async function notifyCheckinDecision(startedAt: Date, knownSymbol?: string | null): Promise<{ id: number; symbol: string | null } | null> {
   try {
     const note = await prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Check-in" }, at: { gte: startedAt } },
       orderBy: { at: "desc" },
     });
     if (!note) return null;
-    await alert("info", note.title, note.body.slice(0, 800), { category: "checkins" });
+    const perHolding = !!(knownSymbol ?? note.symbol);
+    await alert("info", note.title, note.body.slice(0, 800), { category: perHolding ? "holdingChecks" : "checkins" });
     return { id: note.id, symbol: note.symbol };
   } catch (e) {
     console.error("notifyCheckinDecision failed", e);
@@ -290,7 +292,10 @@ The market is open. Review the trigger above against your morning game plan (get
 - If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
-  const note = await notifyCheckinDecision(startedAt);
+  // A held-position trigger is always about ONE name → push under "holdingChecks"
+  // (pass the trigger's symbol so it classifies right even before the note's symbol
+  // is backfilled below).
+  const note = await notifyCheckinDecision(startedAt, symbol);
   // Belt-and-suspenders: guarantee the note carries its holding so the fund-level brief
   // skips it even if the agent left `symbol` off (the agent reliably sets it today).
   if (note && symbol && !note.symbol) {

@@ -19,7 +19,8 @@ export type NotifCategory =
   | "hunt" // new hunt names / directed-hunt / smart-money scan
   | "agentMoves" // the agent self-tracks or self-promotes a name
   | "reports" // morning plan / midday / EOD / weekly review
-  | "checkins" // per-holding agent check-in reads (holds / "no trade") — distinct from the daily briefs
+  | "checkins" // SCHEDULED fund-level check-ins (the hourly clock review — note.symbol null)
+  | "holdingChecks" // per-HOLDING check-ins (a position's move / revisit — note.symbol set: "ATD — no trade")
   | "members" // the OTHER member's universe/directive/kill actions
   | "messages" // the OTHER member messaged you or shared a stock (D61)
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
@@ -37,6 +38,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   agentMoves: "agentMoves",
   reports: "reports",
   checkins: "checkins",
+  holdingChecks: "holdingChecks",
   members: "members",
   messages: "messages",
   system: "system",
@@ -50,6 +52,7 @@ type PrefRow = {
   agentMoves: boolean;
   reports: boolean;
   checkins: boolean;
+  holdingChecks: boolean;
   members: boolean;
   messages: boolean;
   system: boolean;
