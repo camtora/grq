@@ -253,22 +253,43 @@ Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etD
 }
 
 /** Push the agent's decision to members after a check-in — the "Check-in — …"
- *  RESEARCH note the session just wrote. Two muteable categories so members can
- *  tune the noise separately (Cam 2026-06-24): a SCHEDULED fund-level check-in
- *  (the hourly clock review — note.symbol null) pushes as "checkins"; a per-HOLDING
- *  check-in (a position's move or revisit — note.symbol set, "ATD — no trade")
- *  pushes as "holdingChecks". `knownSymbol` lets a held-position trigger classify
- *  correctly even if the agent left the note's symbol off (it's set just after). */
-async function notifyCheckinDecision(startedAt: Date, knownSymbol?: string | null): Promise<{ id: number; symbol: string | null } | null> {
+ *  RESEARCH note the session just wrote. The note's `symbol` is THE discriminator
+ *  for both where it shows (fund-level Portfolio brief requires symbol:null; a
+ *  single-name note files on that stock's page) and how it pushes. The agent can't
+ *  be trusted to set it right every time, so we ENFORCE it by the session kind
+ *  (Cam 2026-06-24):
+ *   - "scheduled" → fund-level: CLEAR any symbol the agent set, so the note always
+ *     lands on the Portfolio home brief; push under "checkins" (Scheduled check-ins).
+ *   - "holding"  → single-name: SET the triggering symbol if missing, so it files on
+ *     the stock page; push under "holdingChecks" (Held-position check-ins). */
+async function notifyCheckinDecision(
+  startedAt: Date,
+  kind: "scheduled" | "holding",
+  knownSymbol?: string | null,
+): Promise<{ id: number; symbol: string | null } | null> {
   try {
     const note = await prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Check-in" }, at: { gte: startedAt } },
       orderBy: { at: "desc" },
     });
     if (!note) return null;
-    const perHolding = !!(knownSymbol ?? note.symbol);
-    await alert("info", note.title, note.body.slice(0, 800), { category: perHolding ? "holdingChecks" : "checkins" });
-    return { id: note.id, symbol: note.symbol };
+
+    let symbol = note.symbol;
+    if (kind === "scheduled" && symbol) {
+      // A scheduled check-in is a fund-level read — a stray symbol would hide it from
+      // the home brief. Null it so it always shows there.
+      await prisma.journalEntry.update({ where: { id: note.id }, data: { symbol: null } });
+      symbol = null;
+    } else if (kind === "holding") {
+      const want = (knownSymbol ?? note.symbol)?.toUpperCase() ?? null;
+      if (want && want !== note.symbol) {
+        await prisma.journalEntry.update({ where: { id: note.id }, data: { symbol: want } });
+      }
+      symbol = want;
+    }
+
+    await alert("info", note.title, note.body.slice(0, 800), { category: kind === "holding" ? "holdingChecks" : "checkins" });
+    return { id: note.id, symbol };
   } catch (e) {
     console.error("notifyCheckinDecision failed", e);
     return null;
@@ -288,19 +309,13 @@ export async function runMiddayCheckIn(reason: string, symbol?: string | null): 
 
 The market is open. Review the trigger above against your morning game plan (get_journal kind=RESEARCH limit=1) and current quotes. The plan is a hypothesis, not a contract: if this development has changed the picture, you're free to revise or scrap the plan and act on a fresh read — changing your mind on new evidence is the job, not a failure.
 - If action is warranted and within policy, use propose_order (full thesis + sources required) — whether that's a planned trade or a new idea this development surfaced. Rejections are final — if rejected, journal why and adapt.
-- Either way, write a short DECISION-grade RESEARCH note via write_journal titled "Check-in — <one-line summary>" (it becomes the live brief on the Portfolio page) — what you did or why you passed; "no trade" is a decision and gets receipts too.
+- Either way, write a short DECISION-grade RESEARCH note via write_journal titled "Check-in — <one-line summary>" and SET its \`symbol\` to ${symbol ? symbol.toUpperCase() : "this holding"} — this check-in is about that ONE name, so the note files on its stock page (not the fund-level brief). What you did or why you passed; "no trade" is a decision and gets receipts too.
 - If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
-  // A held-position trigger is always about ONE name → push under "holdingChecks"
-  // (pass the trigger's symbol so it classifies right even before the note's symbol
-  // is backfilled below).
-  const note = await notifyCheckinDecision(startedAt, symbol);
-  // Belt-and-suspenders: guarantee the note carries its holding so the fund-level brief
-  // skips it even if the agent left `symbol` off (the agent reliably sets it today).
-  if (note && symbol && !note.symbol) {
-    await prisma.journalEntry.update({ where: { id: note.id }, data: { symbol: symbol.toUpperCase() } });
-  }
+  // A held-position trigger is always about ONE name → "holdingChecks", and the note
+  // carries that holding (notifyCheckinDecision sets it if the agent left it off).
+  await notifyCheckinDecision(startedAt, "holding", symbol);
 }
 
 /** Scheduled / self-scheduled trading check-in — a decision-capable session that
@@ -323,11 +338,11 @@ The market is open. This is a scheduled check-in to ACT on your best read of the
    - TAPE HAS CHANGED: if new information has overtaken the morning plan — a name broke out, a catalyst hit, the macro turned, a thesis is invalidated — you are EXPECTED to change course, not cling to a stale plan. Drop focus names that no longer make sense (set_focus), hunt a fresh idea (WebSearch → research entry → promote_to_universe if needed), exit a position whose thesis broke, or enter a new one — then say so in your note. Changing your mind on new evidence is good judgment, not inconsistency.
    Rejections are final: journal why and adapt. Don't force a junk trade — but if NONE of your ideas are live and the fund is sitting on cash, that is NOT an automatic "stand down": it means your pipeline is thin. Either act on a genuine setup you can defend right now, or state plainly that the next hunt has to go WIDER. Cash is a verdict you earn after looking, not a reflex.
 3. If you want to be woken again later today for a specific event or price level, schedule_checkin(at, reason) (same-day, market hours). Tidy up stale ones with list_scheduled / cancel_checkin.
-4. Write ONE short DECISION-grade RESEARCH note (write_journal) titled "Check-in — <a one-line summary of your read>" — what you did, or why you stood down. This note becomes the live brief on the Portfolio page, so lead with a clean at-a-glance read. "No trade" is a decision and gets receipts too.
+4. Write ONE short DECISION-grade RESEARCH note (write_journal) titled "Check-in — <a one-line summary of your read>" — what you did, or why you stood down. This is a FUND-LEVEL read, so do NOT set \`symbol\` on it (leave it blank) even if you focused on one holding — a symbol here hides it from the Portfolio home brief and the scheduled-check-in notifications. (If a single name earned its own write-up, file that as a SEPARATE symbol-tagged RESEARCH entry.) Lead with a clean at-a-glance read; "No trade" is a decision and gets receipts too.
 5. If — and ONLY if — this check-in surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off observation about today), ALSO record it as a separate LESSON: write_journal(kind:"LESSON") with a crisp title and the pattern + why it matters. Lessons are re-read before every future decision, so keep them rare and real — most check-ins won't earn one; don't manufacture one.
 Keep it tight.`;
   await runSession({ label: `checkin:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 20 });
-  await notifyCheckinDecision(startedAt);
+  await notifyCheckinDecision(startedAt, "scheduled");
 }
 
 /** Deep single-stock dossier (2.7) — research tools only, never trades.
