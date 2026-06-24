@@ -731,3 +731,30 @@ model TradeProposal {
   @@index([at])
   @@index([symbol])
 }
+
+// Per-session LLM token accounting (Cam 2026-06-24). Every runSession() writes one row from
+// the Agent-SDK result message so we can inventory token/cost burn by session type. The agent
+// shares Cam's Claude Max token (CLAUDE_CODE_OAUTH_TOKEN), so this is ALSO how we see how much
+// of that shared quota the autonomous agent eats (the thing that drains Cam's interactive
+// quota by late morning). Token counts are exact integers from the SDK; cost is stored as
+// integer micro-USD (no floats — house rule), and may be 0 on a Max/OAuth token that doesn't
+// meter cost — token counts are the source of truth for the rate-limit diagnosis.
+model AgentUsage {
+  id                  String   @id @default(cuid())
+  at                  DateTime @default(now())
+  label               String // session label, e.g. "checkin:11:00", "dossier:ATD", "startup-universe-review"
+  model               String // primary model id, e.g. "claude-opus-4-8"
+  status              String // "success" | the SDK result subtype on failure (error_max_turns, …)
+  numTurns            Int      @default(0)
+  durationMs          Int      @default(0)
+  inputTokens         Int      @default(0) // fresh (uncached) input
+  outputTokens        Int      @default(0)
+  cacheCreationTokens Int      @default(0)
+  cacheReadTokens     Int      @default(0)
+  costMicroUsd        Int      @default(0) // SDK total_cost_usd × 1e6, rounded (0 if unmetered)
+  modelUsageJson      String? // raw per-model breakdown (incl. subagent models)
+  agentVersion        String?
+
+  @@index([at])
+  @@index([label])
+}

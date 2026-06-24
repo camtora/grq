@@ -128,6 +128,20 @@ Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), no
   `image prune -f`, no data loss). So: **BATCH changes into ONE build**, and rebuild ONE service at a
   time — `build` → `up -d` → `image prune -f` → re-check `df -h /var` BEFORE the next build; never two
   builds against a tight `/var`. My changes that only touch `agent/` don't need a `chat` rebuild.
+- **Restarting the agent triggers a full library scan — it eats Cam's Claude Max quota.** Every
+  `grq-agent` boot (a `build`+`up -d`, a crash-restart, or the nightly recreate) runs
+  `runStartupUniverseReview()`: a BIG Opus 4.8 session that fans out to ~12 subagents and burns
+  **multiple MILLION tokens in one go** (one scan measured ~3.8M). The agent runs on
+  `CLAUDE_CODE_OAUTH_TOKEN` = Cam's shared Max token, the SAME quota Cam's interactive Claude Code
+  draws from — so a morning of agent dev (many rebuilds → many boot scans) drains the day's quota
+  by ~11am (bit Cam 2026-06-23/24). It is NOT on a clock — it fires on process boot. **Guarded once
+  per ET day** (runner.ts ~L367; was a 6h window): a "started" marker is written *before* the scan,
+  so even a restart that kills it mid-run can't re-trigger it later that day; the universe persists
+  in the DB, so a skipped boot just reuses today's. Force a fresh scan by deleting today's
+  `JournalEntry` rows titled `Startup universe review%`. **Per-session token burn is now logged**
+  (`AgentUsage` table, written by `runSession()`) → owner-only dashboard at **`/admin/usage`** + CLI
+  `cd web && npx tsx scripts/token-report.ts`. To cut burn during dev, batch agent changes into ONE
+  rebuild (also the `/var` disk rule) and avoid restart-looping the agent mid-session.
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

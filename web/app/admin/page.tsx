@@ -53,20 +53,33 @@ export default async function AdminPage({
         title="Admin · Usage"
         sub="Who's using GRQ, and which sections get the traffic."
         right={
-          <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
-            {WINDOWS.map((w) => (
-              <Link
-                key={w.days}
-                href={`/admin?days=${w.days}`}
-                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
-                  w.days === days
-                    ? "bg-teal-400/15 text-teal-200"
-                    : "text-teal-200/50 hover:bg-teal-400/10 hover:text-teal-100"
-                }`}
-              >
-                {w.label}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
+              <Link href="/admin" className="rounded-lg bg-teal-400/15 px-3 py-1 text-xs font-semibold text-teal-200">
+                Traffic
               </Link>
-            ))}
+              <Link
+                href="/admin/usage"
+                className="rounded-lg px-3 py-1 text-xs font-semibold text-teal-200/50 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+              >
+                Tokens
+              </Link>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
+              {WINDOWS.map((w) => (
+                <Link
+                  key={w.days}
+                  href={`/admin?days=${w.days}`}
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+                    w.days === days
+                      ? "bg-teal-400/15 text-teal-200"
+                      : "text-teal-200/50 hover:bg-teal-400/10 hover:text-teal-100"
+                  }`}
+                >
+                  {w.label}
+                </Link>
+              ))}
+            </div>
           </div>
         }
       />

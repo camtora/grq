@@ -48,6 +48,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
   console.log(`[session] ${opts.label} starting (model=${opts.model})`);
   try {
     let result: string | null = null;
+    let resultMsg: any = null;
     const q = query({
       prompt: opts.prompt,
       options: {
@@ -71,6 +72,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
     });
     for await (const message of q) {
       if (message.type === "result") {
+        resultMsg = message;
         result = message.subtype === "success" ? message.result : null;
         if (message.subtype !== "success") {
           await alert("warning", `Agent session "${opts.label}" ended: ${message.subtype}`, "", { category: "system" });
@@ -78,11 +80,64 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
       }
     }
     await heartbeat({ lastSessionAt: new Date() });
-    console.log(`[session] ${opts.label} done (${result ? result.length : 0} chars)`);
+    await recordUsage(opts, resultMsg, result);
     return result;
   } catch (e) {
     await alert("warning", `Agent session "${opts.label}" failed`, e instanceof Error ? e.message : String(e), { category: "system" });
     return null;
+  }
+}
+
+// Persist per-session token/cost from the Agent-SDK result message (AgentUsage row), and log a
+// rich one-liner to stdout. Tokens are SUMMED across modelUsage so subagent fan-out + any triage
+// model the session spawned are all counted (a startup scan fans out to ~12 subagents — the
+// single biggest token sink); falls back to the aggregate `usage` shape. Cost may be 0 on a
+// Max/OAuth token that doesn't meter cost, so token counts are the real signal. Never throws
+// into the session — logging must not break a trading session.
+async function recordUsage(opts: SessionOpts, rm: any, result: string | null): Promise<void> {
+  let inT = 0, outT = 0, ccT = 0, crT = 0, cost = 0;
+  const mu = rm?.modelUsage && typeof rm.modelUsage === "object" ? rm.modelUsage : null;
+  if (mu && Object.keys(mu).length) {
+    for (const k of Object.keys(mu)) {
+      const e = mu[k] || {};
+      inT += e.inputTokens || 0;
+      outT += e.outputTokens || 0;
+      ccT += e.cacheCreationInputTokens || 0;
+      crT += e.cacheReadInputTokens || 0;
+      cost += e.costUSD || 0;
+    }
+  } else if (rm?.usage) {
+    const u = rm.usage;
+    inT = u.input_tokens || u.inputTokens || 0;
+    outT = u.output_tokens || u.outputTokens || 0;
+    ccT = u.cache_creation_input_tokens || u.cacheCreationInputTokens || 0;
+    crT = u.cache_read_input_tokens || u.cacheReadInputTokens || 0;
+  }
+  if (!cost && typeof rm?.total_cost_usd === "number") cost = rm.total_cost_usd;
+  const turns = rm?.num_turns || 0;
+  console.log(
+    `[session] ${opts.label} done — ${result ? result.length : 0} chars · ${turns} turns · ` +
+      `in ${inT} out ${outT} cacheW ${ccT} cacheR ${crT} (total ${inT + outT + ccT + crT}) · ~$${cost.toFixed(2)}`,
+  );
+  try {
+    await prisma.agentUsage.create({
+      data: {
+        label: opts.label,
+        model: opts.model,
+        status: rm?.subtype || (result ? "success" : "unknown"),
+        numTurns: turns,
+        durationMs: rm?.duration_ms || 0,
+        inputTokens: inT,
+        outputTokens: outT,
+        cacheCreationTokens: ccT,
+        cacheReadTokens: crT,
+        costMicroUsd: Math.round(cost * 1e6),
+        modelUsageJson: mu ? JSON.stringify(mu) : null,
+        agentVersion: AGENT_VERSION,
+      },
+    });
+  } catch (e) {
+    console.error(`[usage-log] failed for ${opts.label}:`, e instanceof Error ? e.message : e);
   }
 }
 

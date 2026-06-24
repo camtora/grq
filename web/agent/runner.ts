@@ -364,20 +364,30 @@ async function maybeScheduledSessions() {
   const m = p.minutesSinceMidnight;
   const dayStart = (await import("./calendar")).startOfEtDay();
 
-  // Startup universe review (D30, Cam 2026-06-17): once per process boot, the agent
-  // reviews the watchlist and self-promotes the names it would invest in, then plans
-  // entries. Guarded 6h so a deploy/restart doesn't re-run the (big) review session.
+  // Startup universe review (D30, Cam 2026-06-17): on process boot the agent reviews the
+  // watchlist, self-promotes the names it would invest in, then plans entries. This is a BIG
+  // session — it fans out to ~12 subagents and burns multiple MILLION tokens of Cam's shared
+  // Claude Max quota in one go. Because it runs on EVERY boot, a morning of agent dev (each
+  // rebuild → restart firing a fresh scan) used to drain the day's quota by ~11am (Cam, ack
+  // 2026-06-24). Guard: run it at most ONCE PER ET DAY (was 6h). We write a "started" marker
+  // BEFORE running, so even a restart that kills the scan mid-flight can't re-trigger it later
+  // the same day — the universe persists in the DB, so a skipped boot just reuses today's
+  // already-built universe. (Force a fresh scan: delete today's "Startup universe review"
+  // JournalEntry rows, or use the hunt/on-demand research paths intraday.)
   if (!startupReviewChecked) {
     startupReviewChecked = true;
-    const [recent, candidates] = await Promise.all([
-      prisma.journalEntry.count({ where: { title: { startsWith: "Startup universe review" }, at: { gte: new Date(Date.now() - 6 * 60 * 60_000) } } }),
+    const [todayReviews, candidates] = await Promise.all([
+      prisma.journalEntry.count({ where: { title: { startsWith: "Startup universe review" }, at: { gte: dayStart } } }),
       prisma.universeMember.count({ where: { status: "CANDIDATE" } }),
     ]);
-    if (recent === 0 && candidates > 0) {
+    if (todayReviews === 0 && candidates > 0) {
+      // Mark STARTED before running — this is the durable per-day guard against re-runs.
+      await prisma.journalEntry.create({
+        data: { kind: "SYSTEM", title: "Startup universe review — started", body: "Boot review of the watchlist began; re-runs are guarded for the rest of the ET day.", agentVersion: AGENT_VERSION },
+      });
       sessionRunning = true;
       try {
         await runStartupUniverseReview();
-        // Reliable 6h-guard marker (independent of what the agent journaled).
         await prisma.journalEntry.create({
           data: { kind: "SYSTEM", title: "Startup universe review — completed", body: "Boot review of the watchlist completed; the agent built its universe.", agentVersion: AGENT_VERSION },
         });

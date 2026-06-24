@@ -1577,3 +1577,34 @@ a known production token with each `.p8` on both gateways; and verify the **expo
 individual cert identifier, NOT a wrong team — a red herring. Full runbook + error-code cheat sheet in
 `docs/PUSH-NOTIFICATIONS.md` (Troubleshooting). Graham still gets nothing until he installs + opens the app (no
 `DeviceToken` row yet).
+
+### D67 — Token accounting + a once-per-day boot-scan guard: stop the agent from draining Cam's Max quota (Cam, 2026-06-24)
+**Context:** Cam's Claude Max 20× quota ran dry by ~11am three days running (2026-06-19/23/24), resetting only at 3pm —
+but not before. The agent runs on `CLAUDE_CODE_OAUTH_TOKEN` = **Cam's Max token**, the *same* quota his interactive
+Claude Code draws from, and we had **zero token accounting** — `runSession()` discarded the Agent-SDK `usage`/`cost` on
+every call, the SDK transcripts live only inside the (volume-less) agent container and die on each recreate, so there
+was no durable record to inventory. Reconstructing from the DB localized it: every `grq-agent` **boot** runs
+`runStartupUniverseReview()` — a big Opus 4.8 session that fans out to ~12 subagents; one live scan measured **~3.8M
+tokens**. Cam was iterating the agent those mornings (8 restarts on 06-24 alone: 10:42…19:29), and each restart that
+cleared the old **6h** guard fired a fresh multi-million-token scan — stacked on the day's ~24 daily-refresh dossiers +
+9 movers + 5 hourly check-ins + the morning hunt, **and** Cam's own interactive dev usage on the same token. Quota
+died mid-morning. **Decision (Cam):** (1) **log every Claude call** so we can inventory burn by session type; (2) tighten
+the boot scan to **once per ET day**; (3) document that restarting the agent triggers the scan. The §6 gate, conviction
+bar, and model tiers are UNCHANGED — this is observability + a cadence guard, not a capability change.
+**What shipped:** **(a)** New **`AgentUsage`** table (int token counts; cost as integer micro-USD per the no-floats
+rule — and cost *is* populated even on the Max OAuth token). `runSession()` now sums `modelUsage` across the subagent
+fan-out (falls back to the aggregate `usage` shape), writes one row per session, and logs a rich stdout one-liner;
+wrapped so logging can never break a trading session (`web/agent/sessions.ts` `recordUsage`). **(b)** Owner-only
+dashboard **`/admin/usage`** (`web/lib/usage.ts` + `web/app/admin/usage/page.tsx`, a "Tokens" tab beside Admin·Traffic):
+today's totals, a **rolling-5h-window** burn bar (the thing that trips the Max limit — "remaining" is *our* measured
+burn vs a configurable `GRQ_MAX_5H_TOKENS` estimate, since Anthropic exposes no true remaining for a subscription),
+by-session-type breakdown, and a per-call table. CLI twin: `cd web && npx tsx scripts/token-report.ts [24h|7d]`.
+**(c)** Boot-scan guard moved from a **6h window to once per ET day**, and the marker is written **"started" BEFORE the
+scan** (not just "completed" after), so even a restart that kills a scan mid-flight can't re-trigger it that day; the
+universe persists in the DB, so a skipped boot reuses today's (`web/agent/runner.ts` ~L367). Force a fresh scan by
+deleting today's `JournalEntry` rows titled `Startup universe review%`. **(d)** CLAUDE.md gotcha documents the
+restart→scan→quota link + the batch-one-rebuild discipline. **Verified:** schema pushed to live DB; web + agent rebuilt
+(fresh-image grep confirmed, not stale); the redeploy boot **did not** re-scan (per-day guard saw today's markers — 0
+new); a cheap in-container Haiku session wrote a real `AgentUsage` row (`in 517 / out 54 / $0.0388`) end-to-end, then
+was deleted. **Bigger lever still open (not done):** give the agent its *own* `ANTHROPIC_API_KEY` so its burn stops
+competing with Cam's interactive Max quota (a real-cost decision — deferred to Cam).
