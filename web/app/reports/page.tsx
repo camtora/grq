@@ -337,22 +337,30 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map((t) => {
-          const active = t.key === tab;
-          return (
-            <Link
-              key={t.key}
-              href={t.key === "daily" ? "/reports" : `/reports?tab=${t.key}`}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                active ? "bg-teal-400/20 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10"
-              }`}
-            >
-              {t.label}
-              <span className={`ml-1.5 tabular-nums ${active ? "text-teal-300/70" : "text-teal-200/30"}`}>{countByTab[t.key]}</span>
-            </Link>
-          );
-        })}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((t) => {
+            const active = t.key === tab;
+            return (
+              <Link
+                key={t.key}
+                href={t.key === "daily" ? "/reports" : `/reports?tab=${t.key}`}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                  active ? "bg-teal-400/20 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10"
+                }`}
+              >
+                {t.label}
+                <span className={`ml-1.5 tabular-nums ${active ? "text-teal-300/70" : "text-teal-200/30"}`}>{countByTab[t.key]}</span>
+              </Link>
+            );
+          })}
+        </div>
+        <Link
+          href="/journal"
+          className="rounded-lg border border-teal-400/30 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-teal-300 transition-colors hover:bg-teal-400/10"
+        >
+          The journal →
+        </Link>
       </div>
 
       {content}

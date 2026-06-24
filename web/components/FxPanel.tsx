@@ -161,7 +161,7 @@ export default function FxPanel({ cadCashCents, usdCashCents, usdPct, fxUsdCad, 
 
       {/* Member controls: manual convert + dials */}
       {!readOnly && (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="mt-5 space-y-4">
           {(() => {
             const fromCcy = dir === "USD→CAD" ? "USD" : "CAD";
             const toCcy = dir === "USD→CAD" ? "CAD" : "USD";

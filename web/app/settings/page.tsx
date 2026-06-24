@@ -5,11 +5,11 @@ import { getSession } from "@/lib/session";
 import { ACCOUNT_TYPE } from "@/agent/policy";
 import { getBroker } from "@/lib/broker";
 import { Card, PageHeader, Chip } from "@/components/ui";
-import SettingsForm from "@/components/SettingsForm";
+import RiskDial from "@/components/RiskDial";
+import FeeBudget from "@/components/FeeBudget";
 import KillSwitch from "@/components/KillSwitch";
 import ThemeToggle from "@/components/ThemeToggle";
 import OrderTicket from "@/components/OrderTicket";
-import JournalSection from "@/components/JournalSection";
 import NotificationSettings from "@/components/NotificationSettings";
 import FxPanel, { type FxRequestRow } from "@/components/FxPanel";
 import { prefsFromRow } from "@/lib/push/categories";
@@ -24,9 +24,8 @@ const ROADMAP = [
   { n: 4, label: "Live — real money, Cautious dial for week 1", done: false },
 ];
 
-export default async function Settings({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
-  const [sp, settings, symbols, session, cookieStore, pf, fxReqs] = await Promise.all([
-    searchParams,
+export default async function Settings() {
+  const [settings, symbols, session, cookieStore, pf, fxReqs] = await Promise.all([
     prisma.settings.findUnique({ where: { id: 1 } }),
     getBroker().listSymbols(),
     getSession(),
@@ -74,50 +73,40 @@ export default async function Settings({ searchParams }: { searchParams: Promise
       />
 
       <div className="space-y-8">
-        <SettingsForm
-          riskLevel={settings?.riskLevel ?? "BALANCED"}
-          feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
-          readOnly={!isMember}
-        />
+        {/* Quick controls — kill switch · fee budget · appearance, three across. */}
+        <div className="grid items-stretch gap-6 md:grid-cols-3">
+          <KillSwitch
+            engaged={settings?.killSwitch ?? false}
+            engagedBy={settings?.killSwitchBy ?? null}
+            canToggle={isMember}
+          />
 
-        <KillSwitch
-          engaged={settings?.killSwitch ?? false}
-          engagedBy={settings?.killSwitchBy ?? null}
-          canToggle={isMember}
-        />
+          <Card className="p-5">
+            <FeeBudget
+              riskLevel={settings?.riskLevel ?? "BALANCED"}
+              feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
+              readOnly={!isMember}
+            />
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex h-full flex-col justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Appearance</div>
+                <p className="mt-1 text-sm text-teal-200/50">Light or dark — remembered on this device.</p>
+              </div>
+              <ThemeToggle current={theme} />
+            </div>
+          </Card>
+        </div>
 
         <Card className="p-5">
-          <FxPanel
-            cadCashCents={pf.cadCashCents}
-            usdCashCents={pf.usdCashCents}
-            usdPct={usdPct}
-            fxUsdCad={pf.fxUsdCad}
-            dials={{
-              fxMaxPerRequestCents: settings?.fxMaxPerRequestCents ?? 0,
-              fxMaxPerWeekCents: settings?.fxMaxPerWeekCents ?? 0,
-              usdAllocationCapPct: settings?.usdAllocationCapPct ?? 100,
-            }}
-            pending={fxReqs.pending.map(toFxRow)}
-            recent={fxReqs.recent.map(toFxRow)}
+          <RiskDial
+            riskLevel={settings?.riskLevel ?? "BALANCED"}
+            feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
             readOnly={!isMember}
           />
         </Card>
-
-        <Card className="p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Appearance</div>
-              <p className="mt-1 text-sm text-teal-200/50">Light or dark — remembered on this device.</p>
-            </div>
-            <ThemeToggle current={theme} />
-          </div>
-        </Card>
-
-        <div id="notifications" className="scroll-mt-24">
-          <Card className="p-5">
-            <NotificationSettings initial={notifPrefs} readOnly={!isMember} />
-          </Card>
-        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="p-5">
@@ -178,6 +167,32 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           </Card>
         </div>
 
+        {/* Currency & FX beside Notifications (notifications half-width). */}
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <Card className="p-5">
+            <FxPanel
+              cadCashCents={pf.cadCashCents}
+              usdCashCents={pf.usdCashCents}
+              usdPct={usdPct}
+              fxUsdCad={pf.fxUsdCad}
+              dials={{
+                fxMaxPerRequestCents: settings?.fxMaxPerRequestCents ?? 0,
+                fxMaxPerWeekCents: settings?.fxMaxPerWeekCents ?? 0,
+                usdAllocationCapPct: settings?.usdAllocationCapPct ?? 100,
+              }}
+              pending={fxReqs.pending.map(toFxRow)}
+              recent={fxReqs.recent.map(toFxRow)}
+              readOnly={!isMember}
+            />
+          </Card>
+
+          <div id="notifications" className="scroll-mt-24">
+            <Card className="p-5">
+              <NotificationSettings initial={notifPrefs} readOnly={!isMember} />
+            </Card>
+          </div>
+        </div>
+
         {isMember && <OrderTicket symbols={symbols} />}
 
         <Card className="p-5">
@@ -203,8 +218,6 @@ export default async function Settings({ searchParams }: { searchParams: Promise
             ))}
           </ol>
         </Card>
-
-        <JournalSection kind={sp.kind} />
       </div>
     </main>
   );

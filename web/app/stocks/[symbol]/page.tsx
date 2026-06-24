@@ -19,6 +19,8 @@ import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
+import WatchedBy from "@/components/hunt/WatchedBy";
+import { personByName } from "@/lib/people";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpStockNews, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
@@ -220,6 +222,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
+  // Who's watching: the member who put this name on the watchlist (UniverseMember.addedBy),
+  // resolved to a real person so agent/seed/migration adds don't surface a pill. Only while
+  // it's actually on the watchlist (tracked & not retired) — same rule as the Watchlist page.
+  const watcher =
+    tracked && entry.status !== "RETIRED" ? personByName(entry.addedBy) : null;
   // When the agent last researched this name (latest dossier / research entry) — shown
   // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
@@ -238,6 +245,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // The agent's OWN call (judgment), distinct from the signal formula (rec).
   const stanceEntry = journal.find((j) => j.stance);
   const stance = stanceMeta(stanceEntry?.stance);
+  // The confidence GRQ filed WITH that call (0–100) and when — shown under the
+  // bull/bear bar in the bottom line. Pulled off the same entry the bar reflects.
+  const stanceConfidence = stanceEntry?.confidence ?? null;
+  const stanceConfidenceAt = stanceEntry?.at ?? null;
   // Fallback rating when GRQ hasn't filed a call: the technical signal lean (tagged
   // as such), so the header always shows the buy→sell slider like the watchlist.
   const recMeta = rec ? stanceMeta(rec.label) : null;
@@ -311,6 +322,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               {tracked && entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
               {tracked && entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
               {watch && <Chip tone="teal">agent watching</Chip>}
+              {watcher && <WatchedBy name={watcher.name} />}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isMember && tracked && (
@@ -383,7 +395,27 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   <div className="mt-3 w-full max-w-xs">
                     <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />
                   </div>
-                  <p className="mt-3 text-sm text-teal-200/60">{stance.blurb}</p>
+                  {/* Under the bar: GRQ's confidence in this call (with an explainer), and when
+                      it was rated. No score on file → say so plainly rather than imply certainty. */}
+                  <div className="mt-3">
+                    {stanceConfidence != null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-black tabular-nums text-teal-100">{stanceConfidence}%</span>
+                          <Term k="confidence" className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">
+                            confidence
+                          </Term>
+                        </div>
+                        {stanceConfidenceAt && (
+                          <p className="mt-0.5 text-[11px] text-teal-200/40">rated {fmtWhen(stanceConfidenceAt)}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-teal-200/50">
+                        No <Term k="confidence" className="font-semibold">confidence</Term> score on this call yet.
+                      </p>
+                    )}
+                  </div>
                 </>
               ) : recMeta ? (
                 <>
@@ -989,19 +1021,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       <section className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
 
-      {currentRead && (
-        <Card className="border-teal-400/30 p-5">
-          <div className="mb-2 flex items-center gap-3">
-            <Chip tone="teal">current read</Chip>
-            <span className="text-sm font-medium text-teal-50">{currentRead.title}</span>
-            <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(currentRead.at)}</span>
-          </div>
-          <CollapsibleMd text={currentRead.body}>
-            <SourceChips sourcesJson={currentRead.sourcesJson} />
-          </CollapsibleMd>
-        </Card>
-      )}
-
       <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
@@ -1020,8 +1039,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 id: j.id,
                 kind: j.kind,
                 node: (
-                  <Card className="p-4">
+                  <Card className={j.id === currentRead?.id ? "border-teal-400/30 p-4" : "p-4"}>
                     <div className="flex flex-wrap items-center gap-2">
+                      {j.id === currentRead?.id && <Chip tone="teal">current read</Chip>}
                       <Chip tone={j.kind === "TRADE" ? "green" : j.kind === "NOTE" || j.kind === "LESSON" ? "teal" : "dim"}>{j.kind}</Chip>
                       <span className="text-sm font-medium text-teal-50">{j.title}</span>
                       <span className="ml-auto text-xs text-teal-200/40">
