@@ -3,6 +3,7 @@ import { allUniverse, yahooForListing } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
 import { getSession } from "@/lib/session";
+import { otherMemberEmail, userForEmail } from "@/lib/users";
 import { computeHeat } from "@/lib/heat";
 import { fmpLogo } from "@/lib/logos";
 import { PageHeader } from "@/components/ui";
@@ -17,6 +18,8 @@ export const dynamic = "force-dynamic";
 export default async function Market() {
   const session = await getSession();
   const isMember = session?.role === "member";
+  const otherEmail = session ? otherMemberEmail(session.email) : null;
+  const otherName = otherEmail ? (userForEmail(otherEmail)?.name ?? null) : null;
   const state = await prisma.agentState.findUnique({ where: { id: 1 } });
 
   const universe = await allUniverse();
@@ -128,7 +131,7 @@ export default async function Market() {
 
       <HuntStatus pending={pendingHunt} brief={state?.huntBrief ?? null} latestFindAt={latestFindAt} hasResults={finds.length > 0}>
         {finds.length > 0 ? (
-          <HuntResults finds={finds} isMember={isMember} />
+          <HuntResults finds={finds} isMember={isMember} toName={otherName} />
         ) : (
           <p className="rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] px-5 py-8 text-center text-sm text-teal-200/50">
             No hunt finds yet.{" "}

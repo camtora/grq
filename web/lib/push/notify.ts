@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { memberEmails } from "../users";
 import { apnsConfigured, sendApns } from "./apns";
 
 // The push fan-out. Sits beside the Discord chokepoint (web/agent/alerts.ts): the
@@ -13,6 +14,7 @@ import { apnsConfigured, sendApns } from "./apns";
 export type NotifCategory =
   | "trades" // order fills, stops, take-profits — FORCED ON
   | "risk" // kill switch, drawdown halt, daily-loss pause — FORCED ON
+  | "fx" // an FX (CAD→USD) conversion needs a member's approval — FORCED ON (actionable, D62)
   | "dossiers" // a requested research dossier is ready
   | "hunt" // new hunt names / directed-hunt / smart-money scan
   | "agentMoves" // the agent self-tracks or self-promotes a name
@@ -24,7 +26,7 @@ export type NotifCategory =
 
 type Severity = "info" | "warning" | "critical";
 
-const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk"]);
+const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk", "fx"]);
 
 // Map a category → the NotificationPreference column that gates it. trades/risk
 // are absent on purpose (forced on); the rest line up with the schema booleans.
@@ -69,36 +71,66 @@ export type PushOpts = {
   panel?: string;
 };
 
-/** Fan an alert out to every eligible member's devices. Best-effort. */
-export async function pushNotify(opts: PushOpts): Promise<void> {
-  if (!apnsConfigured()) return;
+/** Which members should receive this alert — resolved from the member list (NOT
+ *  device tokens), so the web feed reaches a phone-less member. Applies the same
+ *  actor/onlyEmail/forced/per-preference gating the push fan-out used to do. */
+async function eligibleRecipients(opts: PushOpts): Promise<string[]> {
+  const actor = opts.actorEmail?.trim().toLowerCase() ?? null;
+  const only = opts.onlyEmail?.trim().toLowerCase() ?? null;
+  const forced = FORCED.has(opts.category) || opts.severity === "critical";
+  const field = PREF_FIELD[opts.category];
+
+  let candidates = memberEmails();
+  if (only) candidates = candidates.filter((e) => e === only); // personal alert → owner only
+  if (actor) candidates = candidates.filter((e) => e !== actor); // don't notify the actor
+  if (forced || !field) return candidates; // forced / unknown category → everyone left
+
+  const prefRows = (await prisma.notificationPreference.findMany({
+    where: { email: { in: candidates } },
+  })) as PrefRow[];
+  const prefBy = new Map(prefRows.map((p) => [p.email, p]));
+  return candidates.filter((email) => {
+    const pref = prefBy.get(email);
+    return pref ? pref[field] !== false : true; // no row → all-on default
+  });
+}
+
+/** Store the alert in the web notification center (the header bell) — one row per
+ *  recipient. The `messages` category is excluded: the envelope/unread badge
+ *  (DirectMessage) owns member conversations. Best-effort; never throws upward. */
+async function persistNotifications(opts: PushOpts, recipients: string[]): Promise<void> {
+  if (opts.category === "messages" || recipients.length === 0) return;
   try {
+    await prisma.notification.createMany({
+      data: recipients.map((email) => ({
+        email,
+        category: opts.category,
+        severity: opts.severity,
+        title: opts.title.slice(0, 300),
+        body: (opts.body ?? "").slice(0, 1000),
+        symbol: opts.symbol ?? null,
+        panel: opts.panel ?? null,
+      })),
+    });
+  } catch (e) {
+    console.error("persistNotifications failed", e);
+  }
+}
+
+/** Fan an alert out: persist it to each eligible member's bell feed, then push to
+ *  their iOS devices. Best-effort — the feed write happens even with APNs unset. */
+export async function pushNotify(opts: PushOpts): Promise<void> {
+  const recipients = await eligibleRecipients(opts);
+
+  // 1) The web notification center — independent of APNs config / device tokens.
+  await persistNotifications(opts, recipients);
+
+  // 2) The iOS push fan-out — no-op if APNs isn't configured or no one's on a phone.
+  if (!apnsConfigured() || recipients.length === 0) return;
+  try {
+    const recipientSet = new Set(recipients);
     const devices = await prisma.deviceToken.findMany();
-    if (devices.length === 0) return;
-
-    const actor = opts.actorEmail?.trim().toLowerCase() ?? null;
-    const only = opts.onlyEmail?.trim().toLowerCase() ?? null;
-    const emails = [...new Set(devices.map((d) => d.email))];
-    const prefRows = (await prisma.notificationPreference.findMany({
-      where: { email: { in: emails } },
-    })) as PrefRow[];
-    const prefBy = new Map(prefRows.map((p) => [p.email, p]));
-
-    const forced = FORCED.has(opts.category) || opts.severity === "critical";
-
-    const eligible = new Set(
-      emails.filter((email) => {
-        if (only && email !== only) return false; // personal alert → owner only
-        if (actor && email === actor) return false; // don't notify the actor
-        if (forced) return true;
-        const field = PREF_FIELD[opts.category];
-        if (!field) return true; // unknown category → fail open (still informs)
-        const pref = prefBy.get(email);
-        return pref ? pref[field] !== false : true; // no row → all-on default
-      }),
-    );
-
-    const targets = devices.filter((d) => eligible.has(d.email));
+    const targets = devices.filter((d) => recipientSet.has(d.email));
     if (targets.length === 0) return;
 
     const envBy = new Map(targets.map((d) => [d.token, d.apnsEnv]));

@@ -5,6 +5,7 @@ import { getPortfolio } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
+import { soakStatus } from "@/lib/soak";
 import ActivityFeed from "@/components/ActivityFeed";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -73,6 +74,22 @@ export default async function Portfolio() {
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
   const feeFrac = pf.feeBudgetCentsMonth > 0 ? pf.feeSpentMonthCents / pf.feeBudgetCentsMonth : 0;
 
+  // Currency split (D62 — the fund now holds CAD + USD). cashCents is the CAD total;
+  // usdCashCents×fx is folded in, so the USD-in-CAD value = cashCents − cadCashCents.
+  const cad = (c: number) => `CA$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const usdCashCadCents = pf.cashCents - pf.cadCashCents;
+  const usdPositionsCadCents = pf.positions.filter((p) => p.currency === "USD").reduce((s, p) => s + p.marketValueCadCents, 0);
+  const usdExposureCadCents = usdCashCadCents + usdPositionsCadCents;
+  const usdPct = pf.navCents > 0 ? (usdExposureCadCents / pf.navCents) * 100 : 0;
+  const holdsUsd = pf.usdCashCents > 0 || usdPositionsCadCents > 0;
+
+  // Soak gate countdown (PROJECT_PLAN §9) — surfaced in the header so the road to
+  // real money is visible. Paper is the binding constraint right now.
+  const soak = soakStatus();
+  const paperFrac = soak.paperRequired > 0 ? Math.min(1, soak.paperDays / soak.paperRequired) : 0;
+  const totalFrac = soak.totalRequired > 0 ? Math.min(1, soak.totalDays / soak.totalRequired) : 0;
+
   return (
     <main>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -84,19 +101,41 @@ export default async function Portfolio() {
             Live-fire sim on real delayed quotes
           </p>
         </div>
-        <Chip tone={pf.killSwitch ? "red" : "teal"}>
-          {pf.killSwitch ? "Trading halted" : "Agent on duty"}
-        </Chip>
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip tone={pf.killSwitch ? "red" : "teal"}>
+            {pf.killSwitch ? "Trading halted" : "Agent on duty"}
+          </Chip>
+          <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">IBKR paper soak</div>
+            <div className="text-sm font-semibold tabular-nums text-teal-50">
+              {soak.paperDays} / {soak.paperRequired}
+              <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
+            </div>
+            <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-teal-400/10">
+              <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${paperFrac * 100}%` }} />
+            </div>
+          </div>
+          <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">Total soak</div>
+            <div className="text-sm font-semibold tabular-nums text-teal-50">
+              {soak.totalDays} / {soak.totalRequired}
+              <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
+            </div>
+            <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-teal-400/10">
+              <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${totalFrac * 100}%` }} />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard
           label="Net asset value"
           term="nav"
           value={money(pf.navCents)}
           note={
             <>
-              cash <Money cents={pf.cashCents} /> · invested <Money cents={pf.positionsCents} />
+              invested <Money cents={pf.positionsCents} /> · {pf.positions.length} position{pf.positions.length === 1 ? "" : "s"}
             </>
           }
         />
@@ -132,6 +171,16 @@ export default async function Portfolio() {
             </span>
           }
         />
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash</div>
+          <div className="mt-2 space-y-0.5">
+            <div className="text-xl font-semibold tabular-nums text-teal-50">{cad(pf.cadCashCents)}</div>
+            <div className="text-xl font-semibold tabular-nums text-teal-50">{usd(pf.usdCashCents)}</div>
+          </div>
+          {holdsUsd ? (
+            <div className="mt-1 text-xs text-teal-200/40">{usdPct.toFixed(1)}% of NAV in USD</div>
+          ) : null}
+        </Card>
       </section>
 
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
@@ -190,14 +239,28 @@ export default async function Portfolio() {
                     </tr>
                   ))}
                   <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
-                    <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash</td>
+                    <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
                     <td className="px-5 py-2.5" colSpan={3} />
-                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cashCents)}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
                     <td className="px-5 py-2.5" />
                     <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                      {pf.navCents > 0 ? pct(pf.cashCents / pf.navCents) : "—"}
+                      {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
                     </td>
                   </tr>
+                  {pf.usdCashCents > 0 && (
+                    <tr className="bg-teal-400/[0.03]">
+                      <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
+                      <td className="px-5 py-2.5" colSpan={3} />
+                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                        {usd(pf.usdCashCents)}
+                        <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
+                      </td>
+                      <td className="px-5 py-2.5" />
+                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                        {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             )}

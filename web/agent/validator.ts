@@ -201,6 +201,20 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     if (cashAfter < (pf.navCents * dial.cashFloorPct) / 100) {
       return refuse(`Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial).`);
     }
+    // USD funding: a USD buy must be covered by actual USD cash — never CAD on margin
+    // (guardrail #3). The combined CAD-equiv cash floor above can't catch this. The agent
+    // can't move money between currencies itself; when short it must raise an FX request
+    // (request_fx) for a member to approve (D62).
+    if (posCcy === "USD") {
+      const usdCost = order.qty * estPrice + commIn; // native USD cents
+      if (usdCost > pf.usdCashCents) {
+        const shortUsd = usdCost - pf.usdCashCents;
+        return refuse(
+          `Insufficient USD: ${symbol} needs US$${(usdCost / 100).toFixed(2)}, the fund holds US$${(pf.usdCashCents / 100).toFixed(2)}. ` +
+            `Use request_fx to ask a member to convert ~US$${(shortUsd / 100).toFixed(2)} CAD→USD — the agent can't move money between currencies itself (no auto-FX, no USD margin).`,
+        );
+      }
+    }
     if (thesis.targetCents && thesis.targetCents > estPrice) {
       const commOut = ibkrFixedCommissionCents(order.qty, thesis.targetCents);
       const edge = (thesis.targetCents - estPrice) * order.qty;

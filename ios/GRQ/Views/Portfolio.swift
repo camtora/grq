@@ -64,8 +64,23 @@ struct PortfolioView: View {
     }
 
     private func statRow(_ pf: Portfolio) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatCard(label: "Cash", value: Fmt.money(pf.cashCents), term: "cash-floor", note: weight(pf.cashCents, pf.navCents))
+        // Currency split (D62): the fund now holds CAD + USD. cashCents is the CAD total;
+        // cadCashCents is the raw CAD, so USD-in-CAD = cashCents − cadCashCents.
+        let cadCash = pf.cadCashCents ?? pf.cashCents
+        let usdCash = pf.usdCashCents ?? 0
+        let fx = pf.fxUsdCad ?? 0
+        let usdCashInCad = pf.cashCents - cadCash
+        let usdPosInCad = pf.positions
+            .filter { ($0.currency ?? "CAD") == "USD" }
+            .reduce(0) { $0 + Int(Double($1.marketValueCents) * (fx > 0 ? fx : 1)) }
+        let usdPct = pf.navCents > 0 ? Double(usdCashInCad + usdPosInCad) / Double(pf.navCents) * 100 : 0
+        let holdsUsd = usdCash > 0 || usdPosInCad > 0
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatCard(label: "Cash",
+                     value: holdsUsd ? Fmt.money(cadCash) : Fmt.money(pf.cashCents),
+                     term: "cash-floor",
+                     note: holdsUsd ? "US\(Fmt.money(usdCash)) · \(String(format: "%.0f%% in USD", usdPct))"
+                                    : weight(pf.cashCents, pf.navCents))
             StatCard(label: "Risk", value: pf.riskLevel.label)
             StatCard(label: "Fees (mo)", value: Fmt.money(pf.feeSpentMonthCents), term: "fee-budget", note: "of \(Fmt.money(pf.feeBudgetCentsMonth))")
             StatCard(label: "Invested", value: Fmt.money(pf.positionsCents), note: weight(pf.positionsCents, pf.navCents))

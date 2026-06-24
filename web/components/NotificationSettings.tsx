@@ -4,8 +4,9 @@ import { useState } from "react";
 import { TOGGLEABLE_CATEGORIES, ALWAYS_ON, type NotificationPrefs, type ToggleKey } from "@/lib/push/categories";
 
 // Per-user push toggles. Saves each switch immediately (optimistic, reverts on
-// error). These control iOS push only — the dashboard itself has no push. trades +
-// risk + critical outages are always-on and shown read-only.
+// error). These gate BOTH iOS push and the web notification bell (same chokepoint,
+// lib/push/notify.ts). trades + risk + critical outages are always-on and shown
+// read-only.
 export default function NotificationSettings({
   initial,
   readOnly = false,

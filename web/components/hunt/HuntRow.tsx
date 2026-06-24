@@ -3,6 +3,7 @@ import { money, pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
 import StockLogo from "@/components/StockLogo";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
+import ShareStockButton from "@/components/ShareStockButton";
 import DismissButton from "@/components/DismissButton";
 import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
@@ -31,7 +32,7 @@ export type HuntFind = {
   body: string;
 };
 
-export default function HuntRow({ find, isMember }: { find: HuntFind; isMember: boolean }) {
+export default function HuntRow({ find, isMember, toName }: { find: HuntFind; isMember: boolean; toName: string | null }) {
   const color = heatColor(find.heat);
   const isTop = find.rank === 1;
   const rank2 = String(find.rank).padStart(2, "0");
@@ -145,6 +146,7 @@ export default function HuntRow({ find, isMember }: { find: HuntFind; isMember: 
         ) : isMember ? (
           <WatchButton symbol={find.sym} state={find.watch} />
         ) : null}
+        {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
       </div>
 
       {/* dismiss */}

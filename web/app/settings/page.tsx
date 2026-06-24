@@ -11,7 +11,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 import OrderTicket from "@/components/OrderTicket";
 import JournalSection from "@/components/JournalSection";
 import NotificationSettings from "@/components/NotificationSettings";
+import FxPanel, { type FxRequestRow } from "@/components/FxPanel";
 import { prefsFromRow } from "@/lib/push/categories";
+import { getPortfolio } from "@/lib/portfolio";
+import { listFxRequests } from "@/lib/fx-requests";
 
 const ROADMAP = [
   { n: 0, label: "Skeleton — site live behind SSO", done: true },
@@ -22,14 +25,37 @@ const ROADMAP = [
 ];
 
 export default async function Settings({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
-  const [sp, settings, symbols, session, cookieStore] = await Promise.all([
+  const [sp, settings, symbols, session, cookieStore, pf, fxReqs] = await Promise.all([
     searchParams,
     prisma.settings.findUnique({ where: { id: 1 } }),
     getBroker().listSymbols(),
     getSession(),
     cookies(),
+    getPortfolio(),
+    listFxRequests(),
   ]);
   const isMember = session?.role === "member";
+
+  // USD exposure = USD cash (in CAD) + USD positions (in CAD), as a % of NAV.
+  const usdCashCadCents = pf.cashCents - pf.cadCashCents;
+  const usdPositionsCadCents = pf.positions.filter((p) => p.currency === "USD").reduce((s, p) => s + p.marketValueCadCents, 0);
+  const usdPct = pf.navCents > 0 ? ((usdCashCadCents + usdPositionsCadCents) / pf.navCents) * 100 : 0;
+  const toFxRow = (r: (typeof fxReqs.pending)[number]): FxRequestRow => ({
+    id: r.id,
+    createdAt: r.createdAt.toISOString(),
+    amountUsdCents: r.amountUsdCents,
+    estCadCents: r.estCadCents,
+    reason: r.reason,
+    symbol: r.symbol,
+    status: r.status,
+    requestedBy: r.requestedBy,
+    decidedBy: r.decidedBy,
+    note: r.note,
+    executedRate: r.executedRate,
+    executedCadCents: r.executedCadCents,
+    executedUsdCents: r.executedUsdCents,
+    failReason: r.failReason,
+  });
   const notifPrefs = prefsFromRow(
     session?.email ? await prisma.notificationPreference.findUnique({ where: { email: session.email } }) : null,
   );
@@ -61,6 +87,23 @@ export default async function Settings({ searchParams }: { searchParams: Promise
         />
 
         <Card className="p-5">
+          <FxPanel
+            cadCashCents={pf.cadCashCents}
+            usdCashCents={pf.usdCashCents}
+            usdPct={usdPct}
+            fxUsdCad={pf.fxUsdCad}
+            dials={{
+              fxMaxPerRequestCents: settings?.fxMaxPerRequestCents ?? 0,
+              fxMaxPerWeekCents: settings?.fxMaxPerWeekCents ?? 0,
+              usdAllocationCapPct: settings?.usdAllocationCapPct ?? 100,
+            }}
+            pending={fxReqs.pending.map(toFxRow)}
+            recent={fxReqs.recent.map(toFxRow)}
+            readOnly={!isMember}
+          />
+        </Card>
+
+        <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Appearance</div>
@@ -70,9 +113,11 @@ export default async function Settings({ searchParams }: { searchParams: Promise
           </div>
         </Card>
 
-        <Card className="p-5">
-          <NotificationSettings initial={notifPrefs} readOnly={!isMember} />
-        </Card>
+        <div id="notifications" className="scroll-mt-24">
+          <Card className="p-5">
+            <NotificationSettings initial={notifPrefs} readOnly={!isMember} />
+          </Card>
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="p-5">

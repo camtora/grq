@@ -3,6 +3,7 @@ import { money, pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
+import ShareStockButton from "@/components/ShareStockButton";
 import DismissButton from "@/components/DismissButton";
 import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
@@ -12,7 +13,7 @@ import type { HuntFind } from "@/components/hunt/HuntRow";
 
 // Direction B — the "hottest pick" hero: the #1 find blown up with a big 30-day chart,
 // the 92px confidence gauge, a large heat score + meter, and the full (unclamped) thesis.
-export default function HuntHero({ find, isMember }: { find: HuntFind; isMember: boolean }) {
+export default function HuntHero({ find, isMember, toName }: { find: HuntFind; isMember: boolean; toName: string | null }) {
   const color = heatColor(find.heat);
   const up = (find.change30d ?? 0) >= 0;
 
@@ -61,6 +62,7 @@ export default function HuntHero({ find, isMember }: { find: HuntFind; isMember:
               full dossier →
             </Link>
             {isMember && (find.watch === "universe" ? <WatchButton symbol={find.sym} state="universe" /> : <WatchButton symbol={find.sym} state={find.watch} />)}
+            {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
             {isMember && <DismissButton symbol={find.sym} name={find.name} />}
           </div>
         </div>

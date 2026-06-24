@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest, displayName } from "@/lib/session";
-import { otherMemberEmail } from "@/lib/users";
+import { otherMemberEmail, userForEmail } from "@/lib/users";
 import { createDirectMessage, serializeMessage, unreadCountFor } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,9 @@ export async function GET(req: Request) {
     : (await prisma.directMessage.findMany({ where, orderBy: { id: "desc" }, take: 100 })).reverse();
 
   const unread = await unreadCountFor(email);
-  return NextResponse.json({ messages: rows.map((m) => serializeMessage(m, email)), unread });
+  const otherEmail = otherMemberEmail(email);
+  const otherName = (otherEmail && userForEmail(otherEmail)?.name) || "your partner";
+  return NextResponse.json({ messages: rows.map((m) => serializeMessage(m, email)), unread, otherName });
 }
 
 export async function POST(req: Request) {

@@ -31,6 +31,7 @@ struct MoreView: View {
                         } else {
                             ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 20)
                         }
+                        if isMember { NavigationLink { FxView() } label: { linkRow("Currency & FX", "dollarsign.circle.fill") } }
                         NavigationLink { NotificationSettingsView() } label: { linkRow("Notifications", "bell.fill") }
                         NavigationLink { PriceAlertsView() } label: { linkRow("Price alerts", "bell.badge.fill") }
                         NavigationLink { ReportsView() } label: { linkRow("Reports", "doc.text.fill") }
@@ -190,6 +191,159 @@ struct MoreView: View {
         let res = await APIClient.shared.setKillSwitch(target)
         if res.ok { killOn = target; note = target ? "Trading halted." : "Trading resumed." }
         else { note = res.error }
+        busy = false
+    }
+}
+
+// MARK: - Currency & FX (D62 — the fund holds CAD + USD)
+
+// Members convert CAD→USD and approve/reject the conversions the agent requests to
+// fund US buys. Every money-moving action confirms with Face ID. Mirrors the web FxPanel.
+struct FxView: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var state: FxState?
+    @State private var loaded = false
+    @State private var busy = false
+    @State private var note: String?
+    @State private var convertText = ""
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("US stocks settle in USD, so the fund holds both. Convert CAD→USD, or approve a conversion the agent asked for. Confirms with Face ID — it moves money.")
+                    .font(.caption).foregroundStyle(p.textMuted)
+                if let s = state {
+                    balancesCard(s)
+                    if !s.pending.isEmpty { pendingCard(s) }
+                    convertCard()
+                    if !s.recent.isEmpty { recentCard(s) }
+                } else if !loaded {
+                    ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 30)
+                } else {
+                    EmptyState(title: "Couldn't load FX", message: "Check your connection and pull to retry.")
+                }
+                if let note { Text(note).font(.caption).foregroundStyle(p.accentText) }
+            }
+            .padding(16)
+        }
+        .background(ScreenBackground().ignoresSafeArea())
+        .navigationTitle("Currency & FX")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await load() }
+        .task { await load() }
+    }
+
+    private func load() async {
+        state = await APIClient.shared.fxState()
+        loaded = true
+    }
+
+    private func cad(_ c: Int) -> String { "CA" + Fmt.money(c) }
+    private func usd(_ c: Int) -> String { "US" + Fmt.money(c) }
+
+    private func balancesCard(_ s: FxState) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Balances")
+                KeyValueRow(label: "CAD cash", value: cad(s.cadCashCents))
+                KeyValueRow(label: "USD cash", value: usd(s.usdCashCents))
+                KeyValueRow(label: "USD allocation", value: "\(String(format: "%.1f", s.usdPct))% / \(s.usdAllocationCapPct)% cap")
+                if let fx = s.fxUsdCad {
+                    Text("1 USD = \(String(format: "%.4f", fx)) CAD (BoC)").font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+                }
+            }
+        }
+    }
+
+    private func pendingCard(_ s: FxState) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Awaiting approval (\(s.pending.count))")
+                ForEach(s.pending) { r in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Text("\(cad(r.estCadCents)) → \(usd(r.amountUsdCents))")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                            if let sym = r.symbol { Chip(text: sym, tone: .teal) }
+                            Spacer()
+                            Text(r.requestedBy == "agent" ? "the agent" : r.requestedBy)
+                                .font(.caption2).foregroundStyle(p.textMuted)
+                        }
+                        Text(r.reason).font(.caption).foregroundStyle(p.textMuted)
+                        HStack(spacing: 10) {
+                            Button { Task { await decide(r, approve: true) } } label: {
+                                Text("Approve & convert").font(.caption.weight(.bold))
+                            }.buttonStyle(.borderedProminent).tint(p.accent).disabled(busy)
+                            Button { Task { await decide(r, approve: false) } } label: {
+                                Text("Reject").font(.caption.weight(.bold)).foregroundStyle(p.neg)
+                            }.buttonStyle(.bordered).disabled(busy)
+                        }
+                    }
+                    if r.id != s.pending.last?.id { Divider().overlay(p.cardBorder.opacity(0.5)) }
+                }
+            }
+        }
+    }
+
+    private func convertCard() -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Convert CAD → USD")
+                HStack(spacing: 8) {
+                    Text("US$").foregroundStyle(p.textMuted)
+                    TextField("amount", text: $convertText).keyboardType(.decimalPad).textFieldStyle(.roundedBorder)
+                    Button { Task { await convert() } } label: {
+                        Text("Convert").font(.subheadline.weight(.bold))
+                    }.buttonStyle(.borderedProminent).tint(p.accent).disabled(busy || (Double(convertText) ?? 0) <= 0)
+                }
+                Text("Buys USD with CAD at the BoC rate (odd-lot under US$25k). Same caps + kill switch as an approval.")
+                    .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
+            }
+        }
+    }
+
+    private func recentCard(_ s: FxState) -> some View {
+        let p = Theme.palette(scheme)
+        return Card {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionTitle(text: "Recent")
+                ForEach(s.recent) { r in
+                    HStack(spacing: 8) {
+                        Text(r.status).font(.caption2.weight(.bold))
+                            .foregroundStyle(r.status == "EXECUTED" ? p.accent : (r.status == "FAILED" ? p.neg : p.textMuted))
+                        Text(r.status == "EXECUTED" && r.executedCadCents != nil
+                             ? "\(cad(r.executedCadCents ?? 0)) → \(usd(r.executedUsdCents ?? 0))"
+                             : "\(cad(r.estCadCents)) → \(usd(r.amountUsdCents))")
+                            .font(.caption).foregroundStyle(p.textMuted)
+                        Spacer()
+                        if let by = r.decidedBy { Text(by).font(.caption2).foregroundStyle(p.textMuted.opacity(0.6)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func convert() async {
+        guard !busy, let dollars = Double(convertText), dollars > 0 else { return }
+        let cents = Int((dollars * 100).rounded())
+        guard await BiometricGate.confirm("Confirm it's you to convert \(usd(cents)) CAD→USD.") else { return }
+        busy = true; note = nil
+        let res = await APIClient.shared.fxConvert(amountUsdCents: cents)
+        if res.ok { note = "Converted."; convertText = ""; await load() } else { note = res.error }
+        busy = false
+    }
+
+    private func decide(_ r: FxRequest, approve: Bool) async {
+        guard !busy else { return }
+        let verb = approve ? "approve & convert" : "reject"
+        guard await BiometricGate.confirm("Confirm it's you to \(verb) \(usd(r.amountUsdCents)).") else { return }
+        busy = true; note = nil
+        let res = approve ? await APIClient.shared.fxApprove(id: r.id) : await APIClient.shared.fxReject(id: r.id)
+        if res.ok { note = approve ? "Converted." : "Rejected."; await load() } else { note = res.error }
         busy = false
     }
 }

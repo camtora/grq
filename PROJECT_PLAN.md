@@ -230,6 +230,7 @@ configurable in Settings, defaults below:
 | Order types | limit orders; native stop-loss resting at IBKR on every position; market only for kill-switch liquidation |
 | Rate limits | ≤ 10 orders/day, ≤ 4/hour |
 | Manual kill switch | UI button + DB flag checked before every order — instant |
+| USD funding (D62) | a USD buy must be covered by **USD cash** — no auto-FX, no USD margin. The agent can only *request* a CAD→USD conversion; a **member approves each one** (the FX-approval guardrail). Member-set dials: max/request · max/rolling-week · max % of NAV in USD (defaults: no limit / no limit / 100%). |
 
 **Shorting is a config toggle, OFF for v1** (Cam, 2026-06-11) — a candidate to enable once
 the paper soak proves the model out. Keeping the margin account is what preserves this

@@ -98,12 +98,16 @@ struct Position: Codable, Identifiable {
     let unrealizedPnlCents: Int
     let dayChangeBps: Int
     let openedAt: String
+    var currency: String? = nil // native currency of this holding ("CAD" | "USD")
     var logoUrl: String? = nil
     var id: String { symbol }
 }
 
 struct Portfolio: Codable {
-    let cashCents: Int
+    let cashCents: Int // CAD total (CAD cash + USD cash × fx)
+    var cadCashCents: Int? = nil
+    var usdCashCents: Int? = nil
+    var fxUsdCad: Double? = nil
     let positions: [Position]
     let positionsCents: Int
     let navCents: Int
@@ -132,6 +136,36 @@ struct FundSettings: Codable {
     let soakDaysRequired: Int
     let soakPaperDaysClean: Int
     let soakPaperDaysRequired: Int
+}
+
+// FX-approval guardrail (D62): a CAD→USD conversion the agent requested or a member ran.
+struct FxRequest: Codable, Identifiable {
+    let id: Int
+    let createdAt: String
+    let amountUsdCents: Int
+    let estCadCents: Int
+    let reason: String
+    let symbol: String?
+    let status: String // PENDING|APPROVED|REJECTED|EXECUTED|FAILED
+    let requestedBy: String
+    let decidedBy: String?
+    let note: String?
+    let executedRate: Double?
+    let executedCadCents: Int?
+    let executedUsdCents: Int?
+    let failReason: String?
+}
+
+struct FxState: Codable {
+    let cadCashCents: Int
+    let usdCashCents: Int
+    let fxUsdCad: Double?
+    let usdPct: Double
+    let fxMaxPerRequestCents: Int
+    let fxMaxPerWeekCents: Int
+    let usdAllocationCapPct: Int
+    let pending: [FxRequest]
+    let recent: [FxRequest]
 }
 
 // MARK: - Notification preferences (per-user push toggles — D53)

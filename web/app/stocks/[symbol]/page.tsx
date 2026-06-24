@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { universeEntry, bareTicker } from "@/lib/universe";
+import { universeEntry, bareTicker, yahooForListing } from "@/lib/universe";
+import { fmpLogo } from "@/lib/logos";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses } from "@/lib/bars";
 import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
+import { otherMemberEmail, userForEmail } from "@/lib/users";
 import UniverseActions from "@/components/UniverseActions";
 import AddNote from "@/components/AddNote";
 import AskGrq from "@/components/AskGrq";
+import ShareStockButton from "@/components/ShareStockButton";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
@@ -29,6 +32,11 @@ import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import SignalStrip from "@/components/SignalStrip";
 import Term from "@/components/Term";
+
+// Always render fresh on the server — never a prefetch-cached copy. A find researched
+// AFTER it was first opened (e.g. its full dossier landed) must show the NEW dossier when
+// navigated to from the hunt page, not a stale "hunt dossier" snapshot (2026-06-23).
+export const dynamic = "force-dynamic";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
 
@@ -104,112 +112,64 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const session = await getSession();
   const me = displayName(session);
   const isMember = session?.role === "member";
-  const entry = await universeEntry(symbol);
+  const otherEmail = session ? otherMemberEmail(session.email) : null;
+  const otherName = otherEmail ? (userForEmail(otherEmail)?.name ?? null) : null;
+  const realEntry = await universeEntry(symbol);
+  let entry = realEntry;
+  // Whether the name is actually in the universe. An untracked-but-researched find gets a
+  // SYNTHESISED row below so it renders the SAME rich page as a tracked name — the
+  // universe-lifecycle controls (promote/demote/retire) are gated on `tracked`.
+  const tracked = !!realEntry;
 
-  // Not in the universe yet — but if the agent has researched it (e.g. flagged it in
-  // the discovery hunt), show that dossier with a "Watch to add" CTA instead of a
-  // 404. A genuinely unknown symbol (no journal at all) still 404s.
+  // Not in the universe — synthesise a row from the dossier's listing so a researched find
+  // (e.g. a discovery-hunt name) renders the FULL rich page, not a stripped text view. A
+  // genuinely unknown symbol (no journal, no quote, no research in flight) still 404s.
   if (!entry) {
-    const [pquote, pjournal, psignals, pendingReq] = await Promise.all([
+    const [pquote, pjournal, pendingReq] = await Promise.all([
       getQuote(symbol).catch(() => null),
       prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 30 }),
-      computeSignals(symbol).catch(() => null),
       prisma.researchRequest.findFirst({ where: { symbol, status: { in: ["QUEUED", "RUNNING"] } } }),
     ]);
-    // 404 only when there's genuinely nothing to show — no dossier, no live quote,
-    // no research in flight. A biggest-mover the agent is researching (queued from
-    // Today) reaches us with a quote + a pending request: render it, don't 404.
     if (pjournal.length === 0 && !pquote && !pendingReq) notFound();
-    const lead = pjournal.find((j) => j.kind === "RESEARCH") ?? pjournal[0];
-    // On-demand dossier (Cam 2026-06-19): the hunt now writes only LEADS, so opening a
+
+    // On-demand full dossier (Cam 2026-06-19, D46): the hunt writes only LEADS, so opening a
     // find's page is what kicks off its FULL dossier — idempotent (skipped once a full
-    // "Dossier —" exists or research is already in flight). Members only; viewers just
-    // read what's there. Mirrors the precedent of Today auto-queuing mover dossiers.
+    // "Dossier —" exists or research is already in flight). Members only.
+    const hasResearch = pjournal.some((j) => j.kind === "RESEARCH");
     const hasFullDossier = pjournal.some((j) => j.kind === "RESEARCH" && j.title.startsWith("Dossier"));
-    let pending = !!pendingReq;
-    if (isMember && lead && !hasFullDossier && !pending) {
+    if (isMember && hasResearch && !hasFullDossier && !pendingReq) {
       try {
         await prisma.researchRequest.create({ data: { symbol: bareTicker(symbol), requestedBy: me } });
-        pending = true;
       } catch {
         /* best-effort — a race just means it's already queued */
       }
     }
-    const researching = !lead && pending;
-    const fullDossierPending = !!lead && !hasFullDossier && pending;
-    return (
-      <main>
-        <Link href="/market" className="text-xs text-teal-300 hover:underline">
-          ← the hunt
-        </Link>
-        <div className="mt-3 mb-6 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-          <StockLogo symbol={symbol} logoUrl={null} className="h-10 w-10 self-center text-sm" />
-          <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
-          <Chip tone="dim">not tracked</Chip>
-          {researching ? <Chip tone="teal">researching…</Chip> : lead ? <Chip tone="teal">agent-flagged</Chip> : null}
-          {fullDossierPending && <Chip tone="teal">full dossier researching…</Chip>}
-          {pquote && (
-            <span className="ml-auto flex flex-col items-end gap-0.5">
-              <LiveQuote
-                symbol={symbol}
-                initialCents={pquote.midCents}
-                initialChangePct={(pquote.dayChangeBps ?? 0) / 10_000}
-                className="text-2xl font-semibold text-teal-50"
-              />
-              {lead && (
-                <span className="text-[11px] text-teal-200/40" title="When the agent last researched this name">
-                  researched {fmtWhen(lead.at)}
-                </span>
-              )}
-            </span>
-          )}
-        </div>
-        <Card className="mb-6 border-teal-400/30 p-5">
-          <p className="text-sm text-teal-100/80">
-            {researching ? (
-              <>
-                GRQ is <b className="text-teal-200">researching {symbol}</b> right now — one of today&apos;s biggest
-                movers. Its dossier will appear here shortly; check back in a few minutes.
-              </>
-            ) : (
-              <>
-                The agent flagged <b className="text-teal-200">{symbol}</b> — an early-stage lead it can&apos;t add to
-                the universe itself.
-                {fullDossierPending
-                  ? " A full dossier is being written now — check back in a few minutes."
-                  : hasFullDossier
-                    ? " Its full dossier is ready below."
-                    : ""}
-                {isMember ? " Watch it to put it on your watchlist." : ""}
-              </>
-            )}
-          </p>
-          {isMember && (
-            <div className="mt-3">
-              <WatchButton symbol={symbol} state="none" />
-            </div>
-          )}
-        </Card>
-        {lead && (
-          <Card className="mb-6 p-5">
-            <div className="mb-2 flex flex-wrap items-center gap-3">
-              <Chip tone="teal">hunt dossier</Chip>
-              <span className="text-sm font-medium text-teal-50">{lead.title}</span>
-              <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(lead.at)}</span>
-            </div>
-            <CollapsibleMd text={lead.body} defaultOpen>
-              <SourceChips sourcesJson={lead.sourcesJson} />
-            </CollapsibleMd>
-          </Card>
-        )}
-        {psignals && (
-          <Card className="p-5">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Technical signals</div>
-            <SignalStrip signals={psignals} />
-          </Card>
-        )}
-      </main>
-    );
+
+    // The synthesised row: resolve the listing from the dossier's exchange (so FMP/quotes/
+    // logo key correctly), derive currency from the suffix. The "researching…" state still
+    // surfaces via researchInFlight below; the action row offers Watch + Share (not the
+    // universe lifecycle) since the name isn't tracked.
+    const listingEntry = pjournal.find((j) => j.kind === "RESEARCH" && j.exchange) ?? null;
+    const yahoo = yahooForListing(symbol, listingEntry?.exchange);
+    const cadListing = /\.(TO|V|NE|CN)$/i.test(yahoo);
+    entry = {
+      symbol,
+      yahoo,
+      name: pjournal.find((j) => j.companyName)?.companyName ?? symbol,
+      tier: null,
+      status: "CANDIDATE",
+      addedBy: null,
+      promotionRequestedBy: null,
+      proposedTier: null,
+      note: null,
+      logoUrl: fmpLogo(yahoo),
+      sector: null,
+      industry: null,
+      country: cadListing ? "CA" : "US",
+      currency: cadListing ? "CAD" : "USD",
+      exchange: listingEntry?.exchange ?? null,
+      marketCapM: null,
+    };
   }
 
   const researchInFlight =
@@ -307,8 +267,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
   return (
     <main>
-      <Link href="/universe" className="text-xs text-teal-300 hover:underline">
-        ← universe
+      <Link href={tracked ? "/universe" : "/market"} className="text-xs text-teal-300 hover:underline">
+        {tracked ? "← universe" : "← the hunt"}
       </Link>
 
       {/* Hero band: the ticker/quote/actions ride the stock's own price tape — the
@@ -330,8 +290,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <span className="text-teal-200/60">{entry.name}</span>
         <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
         {entry.currency && entry.currency !== "CAD" && <Chip tone="teal">{entry.currency}</Chip>}
-        {entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
-        {entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
+        {!tracked && <Chip tone="dim">not tracked</Chip>}
+        {tracked && entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
+        {tracked && entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
         {watch && <Chip tone="teal">agent watching</Chip>}
         {quote && (
           <span className="ml-auto flex flex-col items-end gap-0.5">
@@ -351,7 +312,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       </div>
 
           <div className="flex flex-wrap items-center gap-2">
-        {isMember && (
+        {isMember && tracked && (
           <UniverseActions
             symbol={symbol}
             status={entry.status}
@@ -361,11 +322,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             researchInFlight={researchInFlight}
           />
         )}
+        {isMember && !tracked && <WatchButton symbol={symbol} state="none" />}
         <DirectiveButtons
           symbol={symbol}
           current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
           canEdit={isMember}
         />
+        {isMember && otherName && <ShareStockButton symbol={symbol} toName={otherName} />}
         {isMember && <AskGrq symbol={symbol} />}
           </div>
         </div>

@@ -3,7 +3,8 @@ import { prisma } from "../db";
 import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
 import { activeSymbols, universeEntry } from "../universe";
 import { ibkrFixedCommissionCents, writeNavSnapshot } from "./sim";
-import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
+import { usdCadRate } from "../fx";
+import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 // IBKRBroker — Phase 3 paper (then Phase 4 live) behind the same BrokerAdapter
 // seam. Orders, positions and cash go to IBKR via the Client Portal Web API (the
@@ -94,6 +95,7 @@ export class IBKRBroker implements BrokerAdapter {
   readonly kind = "ibkr";
   private conidBySymbol = new Map<string, number>();
   private symbolByConid = new Map<number, string>();
+  private fxConidCache: number | null = null;
 
   // ---- session / health ----------------------------------------------------
 
@@ -517,5 +519,107 @@ export class IBKRBroker implements BrokerAdapter {
   /** No-op for IBKR: resting limits live at the broker (GTC), not our sweeper. */
   async sweepPendingOrders(): Promise<number> {
     return 0;
+  }
+
+  // ---- FX conversion (CAD↔USD via IDEALPRO) --------------------------------
+  // Proven against the live paper gateway 2026-06-23: the order SHAPE is correct
+  // (IBKR previewed "BUY <qty> USD.CAD Forex" — quantity in base USD, side BUY/SELL,
+  // MKT). We size the USD leg, place the order on the USD.CAD pair (conid from
+  // currency/pairs), clear the reply cascade, then reconcile and report the REALIZED
+  // rate/fee from the broker ledger delta (broker truth — not our estimate).
+  // ⚠️ REQUIRES the account to have **Forex trading permission** — without it IBKR
+  // rejects with "No Trading Permission, Regulatory Restriction" (same class as the
+  // stock-perms activation, D33). We surface that error verbatim; nothing converts.
+  // Money-moving: only the member-approved FX path (lib/fx-requests.ts) calls this.
+
+  /** Resolve the USD.CAD IDEALPRO conid via the canonical currency-pairs endpoint
+   *  (cached). NB: `secdef/search?symbol=USD&secType=CASH` returns pairs in an arbitrary
+   *  order and a blind `hits[0]` grabbed **USD.BGN** (Bulgarian lev) → a regulatory
+   *  reject (2026-06-23). We now match `ccyPair === "CAD"` exactly and NEVER fall back to
+   *  a wrong pair — a missing pair returns null → a clean error, not a stray conversion. */
+  private async fxConid(): Promise<number | null> {
+    if (this.fxConidCache) return this.fxConidCache;
+    try {
+      const res = await cp<{ USD?: { symbol?: string; conid?: number; ccyPair?: string }[] }>(`/iserver/currency/pairs?currency=USD`);
+      const pair = (res?.USD ?? []).find((p) => (p.ccyPair ?? "").toUpperCase() === "CAD" && (p.symbol ?? "").toUpperCase() === "USD.CAD");
+      const conid = pair?.conid == null ? null : Number(pair.conid);
+      if (conid && Number.isFinite(conid)) {
+        this.fxConidCache = conid;
+        return conid;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async convertCurrency(input: FxConvertInput): Promise<FxConvertResult> {
+    const { fromCurrency, toCurrency, amountToCents } = input;
+    if (fromCurrency === toCurrency) return { ok: false, error: "From and to currencies are the same." };
+    if ((fromCurrency !== "CAD" && fromCurrency !== "USD") || (toCurrency !== "CAD" && toCurrency !== "USD"))
+      return { ok: false, error: "Only CAD↔USD is supported." };
+    if (!ACCOUNT_ID) return { ok: false, error: "IBKR_ACCOUNT_ID not configured." };
+    if (!Number.isInteger(amountToCents) || amountToCents <= 0) return { ok: false, error: "Amount must be a positive whole number of cents." };
+    const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+    if (settings?.killSwitch) return { ok: false, error: "Kill switch is engaged — no conversions while halted." };
+
+    const rate = await usdCadRate(); // USD→CAD, to size the USD leg + estimate
+    if (!rate || rate <= 0) return { ok: false, error: "No USD/CAD rate available — refusing to convert blind." };
+    const conid = await this.fxConid();
+    if (!conid) return { ok: false, error: "Could not resolve the USD.CAD (IDEALPRO) contract — VERIFY-LIVE." };
+
+    // Pair is USD.CAD (base USD): acquire USD → BUY; acquire CAD → SELL. Quantity is
+    // always in the BASE currency (USD).
+    const side: "BUY" | "SELL" = toCurrency === "USD" ? "BUY" : "SELL";
+    const usdQty = toCurrency === "USD" ? amountToCents / 100 : amountToCents / 100 / rate;
+
+    const before = await this.getCashByCurrency();
+    try {
+      const order = { conid, orderType: "MKT", side, quantity: Number(usdQty.toFixed(2)), tif: "DAY" };
+      let resp = await cp<unknown>(`/iserver/account/${ACCOUNT_ID}/orders`, "POST", { orders: [order] });
+      let orderId: string | undefined;
+      for (let i = 0; i < 6; i++) {
+        if (resp && typeof resp === "object" && !Array.isArray(resp) && (resp as { error?: string }).error) {
+          return { ok: false, error: `IBKR: ${(resp as { error: string }).error}` };
+        }
+        const first = Array.isArray(resp) ? (resp[0] as OrderReply) : undefined;
+        if (!first) break;
+        if (first.error) return { ok: false, error: `IBKR rejected: ${first.error}` };
+        orderId = first.order_id ?? first.orderId;
+        if (orderId) break;
+        if (first.id) {
+          resp = await cp<unknown>(`/iserver/reply/${first.id}`, "POST", { confirmed: true });
+          continue;
+        }
+        break;
+      }
+      if (!orderId) return { ok: false, error: "IBKR accepted no order id for the FX conversion (reply cascade unresolved) — VERIFY-LIVE." };
+
+      for (let i = 0; i < 6; i++) {
+        await sleep(1500);
+        const st = await cp<OrderStatus>(`/iserver/account/order/status/${orderId}`).catch(() => ({}) as OrderStatus);
+        const status = (st.order_status ?? "").toLowerCase();
+        if (status === "filled") break;
+        if (status === "cancelled" || status === "rejected") return { ok: false, error: `IBKR FX order ${orderId} ${status}.` };
+      }
+      await this.reconcile().catch(() => {});
+      const after = await this.getCashByCurrency();
+
+      // Realized deltas from broker truth (the FX commission is folded into the ledger).
+      const usdDelta = after.usdCents - before.usdCents;
+      const cadDelta = (after.cadCents ?? 0) - (before.cadCents ?? 0);
+      const toCreditedCents = toCurrency === "USD" ? usdDelta : cadDelta;
+      const fromDebitedCents = fromCurrency === "USD" ? -usdDelta : -cadDelta;
+      const realized = usdDelta !== 0 && cadDelta !== 0 ? Math.abs(cadDelta / usdDelta) : rate;
+      return {
+        ok: true,
+        rate: realized || rate,
+        fromDebitedCents: Math.max(0, Math.round(fromDebitedCents)),
+        toCreditedCents: Math.max(0, Math.round(toCreditedCents)),
+        commissionCents: 0,
+      };
+    } catch (e) {
+      return { ok: false, error: `IBKR FX error: ${e instanceof Error ? e.message : String(e)}` };
+    }
   }
 }

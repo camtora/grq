@@ -65,8 +65,42 @@ model Settings {
   killSwitchBy        String?
   killSwitchAt        DateTime?
   agentVersion        String    @default("v1.0-phase2")
+  // FX-approval guardrail (D62): member-set dials bounding CAD→USD conversions.
+  // The agent may REQUEST any amount (request_fx); a member must approve each one,
+  // and these caps bite at APPROVAL. 0 = no limit; usdAllocationCapPct 100 = all-USD ok.
+  fxMaxPerRequestCents Int      @default(0)
+  fxMaxPerWeekCents    Int      @default(0)
+  usdAllocationCapPct  Int      @default(100)
   updatedBy           String?
   updatedAt           DateTime  @updatedAt
+}
+
+// A CAD→USD (or USD→CAD) conversion the agent REQUESTS and a member APPROVES —
+// the FX-approval guardrail (D62). The agent can ask for any amount; money only
+// moves when a member approves, bounded by the Settings fx* dials + the kill switch.
+// A member can also create one already-approved (the manual "Convert" escape hatch).
+model FxRequest {
+  id               Int       @id @default(autoincrement())
+  createdAt        DateTime  @default(now())
+  fromCurrency     String    @default("CAD")
+  toCurrency       String    @default("USD")
+  amountUsdCents   Int       // USD the agent wants to end up with
+  estCadCents      Int       // est. CAD cost at request time (BoC rate)
+  reason           String
+  symbol           String?   // the name it's trying to fund (deep link), if any
+  status           String    @default("PENDING") // PENDING|APPROVED|REJECTED|EXECUTED|FAILED
+  requestedBy      String    @default("agent")   // "agent" | a member email (manual convert)
+  decidedBy        String?   // member email who approved/rejected
+  decidedAt        DateTime?
+  note             String?   // member's note on approve/reject
+  executedRate     Float?    // realized USD/CAD
+  executedCadCents Int?      // CAD actually debited
+  executedUsdCents Int?      // USD actually credited
+  commissionCents  Int?
+  failReason       String?
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Contribution {
@@ -574,6 +608,29 @@ model NotificationPreference {
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
   updatedAt    DateTime @updatedAt
+}
+
+// The web notification center — the bell in the header. One row per recipient
+// member per notifiable event, written at the SAME chokepoint as the iOS push
+// fan-out (lib/push/notify.ts → pushNotify), so the in-app feed mirrors exactly
+// what got pushed. Persisted independently of DeviceToken: a member with no phone
+// still has a feed. The `messages` category is intentionally NOT stored here — the
+// envelope/unread badge (DirectMessage) owns member conversations; the bell owns
+// fund + agent activity (trades, risk, reports, hunt, dossiers, agent moves, …).
+model Notification {
+  id       Int       @id @default(autoincrement())
+  at       DateTime  @default(now())
+  email    String // recipient member (normalized lowercase)
+  category String // NotifCategory (trades|risk|fx|dossiers|hunt|agentMoves|reports|members|system|priceTargets)
+  severity String    @default("info") // "info" | "warning" | "critical"
+  title    String
+  body     String    @default("")
+  symbol   String? // deep-link target (opens the dossier)
+  panel    String? // deep-link panel within the dossier (e.g. "analyst")
+  readAt   DateTime? // when the member opened the bell; null = unread
+
+  @@index([email, readAt])
+  @@index([email, id])
 }
 
 // Per-user price alerts (Phase 2 — The Wire). A member sets "ping me when SYMBOL

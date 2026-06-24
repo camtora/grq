@@ -6,6 +6,8 @@ import { getPortfolio } from "../lib/portfolio";
 import { universeEntry, activeSymbols, yahooForListing } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
+import { createFxRequest } from "../lib/fx-requests";
+import { notifyOut } from "./alerts";
 import { computeSignals, overallSignal } from "./signals";
 import { fmpProfile } from "../lib/fmp";
 import { AGENT_VERSION, MAX_PENDING_WAKEUPS } from "./policy";
@@ -327,6 +329,30 @@ const promoteToUniverseTool = tool(
   },
 );
 
+const requestFxTool = tool(
+  "request_fx",
+  "Ask a member to convert CAD→USD so the fund can buy a US-listed name it can't currently fund. The fund holds CAD and USD as SEPARATE cash, mirroring the broker; a USD buy must be covered by USD cash (no auto-FX, no margin). You CANNOT convert currency yourself — this raises a request a member approves (or rejects) on the Settings page, and money only moves on their OK. Use this when propose_order rejected a US buy for 'Insufficient USD'. Ask for the USD you need (amountUsdCents) plus a one-line reason and the symbol you're funding. Treat a US name like a Canadian one — request whatever you'd genuinely deploy; the member is the gate. One pending request per symbol; you can't buy the name until a member approves and the USD lands.",
+  {
+    amountUsdCents: z.number().int().min(100),
+    reason: z.string().min(10).max(500),
+    symbol: z.string().optional(),
+  },
+  async (args) => {
+    const r = await createFxRequest({ amountUsdCents: args.amountUsdCents, reason: args.reason, symbol: args.symbol });
+    if (!r.ok) return text(`SKIP: ${r.reason}`);
+    const sym = args.symbol?.toUpperCase();
+    await notifyOut(
+      "warning",
+      `FX approval needed: ~$${(r.estCadCents / 100).toFixed(2)} CAD → US$${(args.amountUsdCents / 100).toFixed(2)}${sym ? ` to fund ${sym}` : ""}`,
+      `${args.reason}\n\nApprove or reject on the Settings page.`,
+      { category: "fx", symbol: sym },
+    ).catch(() => {});
+    return text(
+      `REQUESTED FX #${r.id}: ~$${(r.estCadCents / 100).toFixed(2)} CAD → US$${(args.amountUsdCents / 100).toFixed(2)}${sym ? ` for ${sym}` : ""}. A member must approve it on Settings before the USD lands — you can't buy ${sym ?? "the US name"} until then.`,
+    );
+  },
+);
+
 const scheduleCheckinTool = tool(
   "schedule_checkin",
   'Schedule your own future trading check-in LATER TODAY — e.g. "wake me at 14:05 for the Fed dot plot, then I deploy the XIC core". `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now; it must be in the future, same-day, and within market hours (9:30–16:00 ET). At that time you get a decision-capable session pre-loaded with your standing plan. Use this in your morning plan and revise it at midday. Capped at a few pending at once; these draw on your ad-hoc decision budget when they fire.',
@@ -377,6 +403,7 @@ export const grqServer = createSdkMcpServer({
     addCandidateTool,
     promoteToUniverseTool,
     proposeOrderTool,
+    requestFxTool,
     scheduleCheckinTool,
     listScheduledTool,
     cancelCheckinTool,
@@ -395,6 +422,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__add_candidate",
   "mcp__grq__promote_to_universe",
   "mcp__grq__propose_order",
+  "mcp__grq__request_fx",
   "mcp__grq__schedule_checkin",
   "mcp__grq__list_scheduled",
   "mcp__grq__cancel_checkin",

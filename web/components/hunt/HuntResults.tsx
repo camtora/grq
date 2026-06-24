@@ -22,7 +22,7 @@ const TABS: { id: View; label: string }[] = [
   { id: "C", label: "▤ Scanner" },
 ];
 
-export default function HuntResults({ finds, isMember }: { finds: HuntFind[]; isMember: boolean }) {
+export default function HuntResults({ finds, isMember, toName }: { finds: HuntFind[]; isMember: boolean; toName: string | null }) {
   const [view, setView] = useState<View>("A");
 
   // Restore the saved view after mount (avoids an SSR/CSR mismatch — SSR is always A).
@@ -76,25 +76,25 @@ export default function HuntResults({ finds, isMember }: { finds: HuntFind[]; is
       {view === "A" && (
         <section className="flex flex-col gap-3.5">
           {finds.map((f) => (
-            <HuntRow key={f.sym} find={f} isMember={isMember} />
+            <HuntRow key={f.sym} find={f} isMember={isMember} toName={toName} />
           ))}
         </section>
       )}
 
       {view === "B" && (
         <section>
-          <HuntHero find={finds[0]} isMember={isMember} />
+          <HuntHero find={finds[0]} isMember={isMember} toName={toName} />
           {finds.length > 1 && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {finds.slice(1).map((f) => (
-                <HuntGridCard key={f.sym} find={f} isMember={isMember} />
+                <HuntGridCard key={f.sym} find={f} isMember={isMember} toName={toName} />
               ))}
             </div>
           )}
         </section>
       )}
 
-      {view === "C" && <ScannerTable finds={finds} isMember={isMember} />}
+      {view === "C" && <ScannerTable finds={finds} isMember={isMember} toName={toName} />}
     </div>
   );
 }

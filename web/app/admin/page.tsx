@@ -51,7 +51,7 @@ export default async function AdminPage({
     <main>
       <PageHeader
         title="Admin · Usage"
-        sub="Who's using GRQ, and which sections get the traffic. Visible to the owner only — server-side gated."
+        sub="Who's using GRQ, and which sections get the traffic."
         right={
           <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
             {WINDOWS.map((w) => (

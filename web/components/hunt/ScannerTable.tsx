@@ -3,6 +3,7 @@ import { money, pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
+import ShareStockButton from "@/components/ShareStockButton";
 import Sparkline from "@/components/Sparkline";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import { previewText } from "@/components/hunt/shared";
@@ -12,7 +13,7 @@ import type { HuntFind } from "@/components/hunt/HuntRow";
 // Columns: HEAT · TICKER · LAST · CHG · 30-DAY · CONF · THESIS · actions.
 const COLS = "92px minmax(150px,1.4fr) 92px 64px 108px 56px minmax(160px,2.2fr) 96px";
 
-export default function ScannerTable({ finds, isMember }: { finds: HuntFind[]; isMember: boolean }) {
+export default function ScannerTable({ finds, isMember, toName }: { finds: HuntFind[]; isMember: boolean; toName: string | null }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]">
       <div className="min-w-[940px]">
@@ -30,14 +31,14 @@ export default function ScannerTable({ finds, isMember }: { finds: HuntFind[]; i
           <span />
         </div>
         {finds.map((find) => (
-          <ScannerRow key={find.sym} find={find} isMember={isMember} />
+          <ScannerRow key={find.sym} find={find} isMember={isMember} toName={toName} />
         ))}
       </div>
     </div>
   );
 }
 
-function ScannerRow({ find, isMember }: { find: HuntFind; isMember: boolean }) {
+function ScannerRow({ find, isMember, toName }: { find: HuntFind; isMember: boolean; toName: string | null }) {
   const color = heatColor(find.heat);
   const up = (find.change30d ?? 0) >= 0;
   const rank2 = String(find.rank).padStart(2, "0");
@@ -108,6 +109,7 @@ function ScannerRow({ find, isMember }: { find: HuntFind; isMember: boolean }) {
           dossier
         </Link>
         {isMember && <WatchButton symbol={find.sym} state={find.watch} iconOnly />}
+        {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} iconOnly />}
       </div>
     </div>
   );

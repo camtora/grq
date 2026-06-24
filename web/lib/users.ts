@@ -23,6 +23,13 @@ export function isMember(email: string | null | undefined): boolean {
   return normalized in USERS || envEmails().includes(normalized);
 }
 
+// Every member email (named members + GRQ_ALLOWED_EMAILS), normalized + deduped.
+// The notification fan-out resolves recipients from THIS list (not device tokens),
+// so the web feed reaches a member who has never opened the phone app.
+export function memberEmails(): string[] {
+  return [...new Set([...Object.keys(USERS), ...envEmails()].map((e) => e.toLowerCase()))];
+}
+
 // Back-compat alias (kept for any caller that means "is a member").
 export const isAllowed = isMember;
 

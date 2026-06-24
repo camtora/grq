@@ -50,9 +50,15 @@ export const Position = z.object({
   unrealizedPnlCents: z.number().int(),
   dayChangeBps: z.number().int(),
   openedAt: z.string(),
+  currency: z.string().default("CAD"), // native currency of this holding (US$ vs C$)
 });
 export const Portfolio = z.object({
+  // cashCents is the CAD TOTAL (CAD cash + USD cash × fx). The raw per-currency
+  // balances + rate are below it (D62, multi-currency).
   cashCents: z.number().int(),
+  cadCashCents: z.number().int(),
+  usdCashCents: z.number().int(),
+  fxUsdCad: z.number().nullable(),
   positions: z.array(Position),
   positionsCents: z.number().int(),
   navCents: z.number().int(),
@@ -65,6 +71,36 @@ export const Portfolio = z.object({
   killSwitch: z.boolean(),
   killSwitchBy: z.string().nullable(),
   quotesAsOf: z.string().nullable(),
+});
+
+// FX-approval guardrail (D62): a CAD→USD conversion the agent requested or a member
+// ran manually. Mobile mirrors the web FxPanel — see/approve/reject + manual convert.
+export const FxRequest = z.object({
+  id: z.number().int(),
+  createdAt: z.string(),
+  amountUsdCents: z.number().int(),
+  estCadCents: z.number().int(),
+  reason: z.string(),
+  symbol: z.string().nullable(),
+  status: z.string(), // PENDING|APPROVED|REJECTED|EXECUTED|FAILED
+  requestedBy: z.string(),
+  decidedBy: z.string().nullable(),
+  note: z.string().nullable(),
+  executedRate: z.number().nullable(),
+  executedCadCents: z.number().int().nullable(),
+  executedUsdCents: z.number().int().nullable(),
+  failReason: z.string().nullable(),
+});
+export const FxState = z.object({
+  cadCashCents: z.number().int(),
+  usdCashCents: z.number().int(),
+  fxUsdCad: z.number().nullable(),
+  usdPct: z.number(), // USD exposure (cash + positions) as % of NAV
+  fxMaxPerRequestCents: z.number().int(), // member dials (0 = no limit)
+  fxMaxPerWeekCents: z.number().int(),
+  usdAllocationCapPct: z.number().int(), // 100 = all-USD allowed
+  pending: z.array(FxRequest),
+  recent: z.array(FxRequest),
 });
 
 /* ---------- fund settings / risk dial (v0; mirrors web Settings + soak gate) ---------- */

@@ -1449,3 +1449,66 @@ unify shares into the chat thread · iOS-only · the full-page avatar opens the 
 **Verified:** `tsc --noEmit` clean; web deployed (fresh image confirmed); live curl proved the full loop —
 send→thread→read→unread, per-viewer `mine`, `panelLabel` resolution, and the refactored `/api/stocks/share`; test
 rows wiped. iOS compiles in Xcode only (written to the existing patterns) — needs Cam's build + TestFlight.
+
+### D62 — Funding US trades: the FX-approval guardrail (agent requests CAD→USD, a member approves) (Cam, 2026-06-23)
+**Context:** D34 enabled US trading and made the fund *value* in CAD+USD, but nothing ever **acquired** USD — the
+paper account holds `usdCashCents = 0`, so the agent's promoted US names (GOOG/NVDA/TSM ACTIVE; ~20 USD candidates)
+were eligible-but-unbuyable. A US stock settles in USD: the only ways to fund one are hold USD (convert first) or let
+the USD balance go negative (a margin loan — banned by guardrail #3). And a latent hole: the validator's cash-floor
+check used *combined* CAD-equiv cash, so a USD buy with $0 USD would have passed the gate and silently gone on USD
+margin. Full primer in `docs/US-TRADING.md`. **Decision (Cam):** wire a **guarded CAD→USD conversion** — the agent
+may **request** any amount (treat a US name like a Canadian one), but a **member approves each conversion** before
+money moves (the "FX-approval guardrail" D23 foreshadowed). Limits are **member-set dials**, not hard-coded constants
+(every conversion already needs human approval, so the human is the real gate); defaults open, up to 100% USD allowed.
+**What shipped:** (1) **broker seam** — `convertCurrency(from,to,amountToCents)` on `BrokerAdapter`: IBKR places a
+MKT order on the **USD.CAD IDEALPRO** pair then reconciles + reports the REALIZED rate/fee from the ledger delta
+(⚠️ **VERIFY-LIVE** — the CASH secdef search, FX order params, and reply-cascade only shake out on the live gateway);
+sim moves the ledger at the BoC rate minus a ~$2 fee. (2) **margin-hole plug** — `validator.ts` now requires a USD buy
+be covered by actual `usdCashCents` (native), refusing with a "use request_fx" hint when short; sim `fillNow` is
+currency-aware (right cash bucket, `Position.currency`, native P&L label — closes a D34 follow-up). (3) **`FxRequest`
+table + `lib/fx-requests.ts`** — create (uncapped, deduped per symbol, ≤8 pending) / approve / reject / manual-convert,
+with the cap gate (per-request · per-week · USD-allocation %) biting at APPROVAL; the ONLY caller of
+`convertCurrency` — the agent never touches it. (4) **agent tool `request_fx`** (decision/trading server only; not
+chat/research) + a persona line: US names are first-class, but a USD buy needs USD cash; ask, don't convert. (5)
+**`POST /api/fx`** (approve|reject|convert|dials, members-only, kill-switch-respecting) + the **Settings `FxPanel`**
+(CAD/USD balances, USD-allocation %, pending approvals with Approve/Reject, manual convert, the three dials; viewers
+read-only). (6) **push** — new always-on `fx` category so an approval request always reaches both members. (7)
+Settings gains `fxMaxPerRequestCents` / `fxMaxPerWeekCents` / `usdAllocationCapPct` (additive, defaults 0/0/100). The
+**§6 gate + kill switch are unchanged and humans-only** — this adds a human-approved funding path, it does not loosen
+any limit. **Soak note:** the first real FX + US fills materially change the soaked system; per D34 the clean-soak
+clock may restart — Cam's call. **Verified:** `tsc --noEmit` clean; `prisma db push` applied; web+agent deployed
+(fresh images confirmed); non-money paths smoke-tested (auth 403/200, dials, panel, request→reject lifecycle).
+**Live-gateway follow-up (2026-06-23):** Cam ran a manual convert → IBKR rejected "BUY 1K **USD.BGN** Forex — No
+Trading Permission, Regulatory Restriction" (clean FAIL, $0 moved). Root cause = a **wrong-pair bug**, NOT a permission
+wall: `fxConid()` did `secdef/search?symbol=USD&secType=CASH` and `hits[0]` grabbed **USD.BGN** (Bulgarian lev, regulatory-
+restricted). **Fixed** to use `/iserver/currency/pairs?currency=USD` matching `ccyPair==="CAD"` → **USD.CAD conid 15016062**,
+no wrong-pair fallback (redeployed web). A `whatif` preview of USD.CAD x20 then returned `200 error:null` (28.43 CAD +
+2.84 commission) → **Forex permission EXISTS** on DUQ779121, order SHAPE is correct. Caveat: the fund (~$25k CAD) is below
+the **USD 25k IDEALPRO minimum → every convert routes as an ODD LOT** (fills slightly off the interbank mid; reply
+cascade auto-confirms). Still pending: one actual end-to-end FILL (whatif proves acceptance, not a fill).
+
+### D63 — Web parity for notifications + chat: a header bell (notification center) and an envelope (unified chat) (Cam, 2026-06-23)
+**Context:** iOS shipped a notifications experience + a unified member/agent chat (D61), but the web header only had a
+plain "Chat" text button → an **agent-only** drawer. The member↔member DM backend (`/api/messages`, `DirectMessage`,
+unread badge) existed but had **no web UI**, and there was **no notification feed anywhere** — push (APNs/Discord) was
+fire-and-forget, persisted nowhere. Cam: add a **bell** and a **message** icon to the header, between the broker badge
+and the avatar, members-only. **Decision (Cam):** (1) a **real notification center** — persist what gets pushed — and
+(2) bring the **unified chat** (member DMs + agent) to web. **What shipped:** (1) **`Notification` model** (recipient
+email, category, severity, title, body, symbol/panel deep-link, readAt) — one row per recipient member per notifiable
+event. (2) **`pushNotify` now persists at the chokepoint** (`lib/push/notify.ts`): recipient eligibility was refactored
+to resolve from the **member list** (`memberEmails()`), NOT device tokens, so a phone-less member still gets a web feed;
+rows are written *before* the APNs early-return, gated by the same per-user `NotificationPreference`. The **`messages`
+category is excluded** from the feed — the envelope/unread badge owns member conversations, the bell owns fund + agent
+activity (trades, risk, reports, hunt, dossiers, agent moves, members, fx, system, priceTargets). (3) **Routes** `GET
+/api/notifications` (recent + unread) + `POST /api/notifications/read` (members-only, cookie/Bearer via
+`memberFromRequest`); `lib/notifications.ts` is the read side. (4) **`NotificationBell`** — bell + unread badge, polls
+every 30s, opening marks-read, rows deep-link to the dossier, footer → `/settings#notifications`. (5) **`MessageButton`**
+— envelope + unread badge (`/api/messages/unread`), opens the drawer on the Messages tab; clears instantly on the
+`grq:messages-read`/`grq:messages-changed` events. (6) **`ChatDrawer` reworked** into a two-tab drawer — **Messages**
+(new `MemberChat`: loads/polls `/api/messages`, sends, marks read, renders shared-symbol cards) + **Ask GRQ** (the
+existing agent `ChatClient`, with the whose-thread owner toggle preserved); a `grq:chat` with a `symbol` still opens the
+Agent tab to discuss that stock (AskGrq unchanged). (7) NavBar drops the "Chat" text button; bell + envelope sit between
+the broker badge and the avatar, members-only. The settings notification card gained an `#notifications` anchor.
+**Unchanged:** the §6 gate, kill switch, and notification *preferences* (same toggles now gate both push and the bell).
+**Verified:** `tsc --noEmit` clean; `prisma db push` applied (table + indexes confirmed). Web-only feature — no
+`shared/contract.ts` change yet (iOS already has its own push + chat).

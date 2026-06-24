@@ -3,6 +3,7 @@ import { money, pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
+import ShareStockButton from "@/components/ShareStockButton";
 import Sparkline from "@/components/Sparkline";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import HeatMeter from "@/components/hunt/HeatMeter";
@@ -11,7 +12,7 @@ import type { HuntFind } from "@/components/hunt/HuntRow";
 
 // Direction B grid tile — the non-#1 finds below the hero. Logo+ticker+name, price/change,
 // a full-width sparkline, gauge + heat meter, a 2-line thesis, then dossier + icon-watch.
-export default function HuntGridCard({ find, isMember }: { find: HuntFind; isMember: boolean }) {
+export default function HuntGridCard({ find, isMember, toName }: { find: HuntFind; isMember: boolean; toName: string | null }) {
   const color = heatColor(find.heat);
   const up = (find.change30d ?? 0) >= 0;
 
@@ -66,6 +67,7 @@ export default function HuntGridCard({ find, isMember }: { find: HuntFind; isMem
           full dossier →
         </Link>
         {isMember && <WatchButton symbol={find.sym} state={find.watch} iconOnly />}
+        {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} iconOnly />}
       </div>
     </div>
   );

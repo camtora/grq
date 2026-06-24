@@ -215,6 +215,22 @@ final class APIClient {
 
     func setKillSwitch(_ engaged: Bool) async -> ActionResult { await postResult("killswitch", ["engaged": engaged]) }
 
+    // FX (D62) — read the panel state; convert CAD→USD; approve/reject the agent's requests.
+    func fxState() async -> FxState? { await get("fx") }
+    func fxConvert(amountUsdCents: Int) async -> ActionResult {
+        await postResult("fx", ["action": "convert", "amountCents": amountUsdCents])
+    }
+    func fxApprove(id: Int, note: String? = nil) async -> ActionResult {
+        var body: [String: Any] = ["action": "approve", "id": id]
+        if let note, !note.isEmpty { body["note"] = note }
+        return await postResult("fx", body)
+    }
+    func fxReject(id: Int, note: String? = nil) async -> ActionResult {
+        var body: [String: Any] = ["action": "reject", "id": id]
+        if let note, !note.isEmpty { body["note"] = note }
+        return await postResult("fx", body)
+    }
+
     func setDirective(_ symbol: String, _ directive: String?) async -> ActionResult {
         await postResult("stocks/directive", ["symbol": symbol, "directive": directive ?? NSNull()])
     }

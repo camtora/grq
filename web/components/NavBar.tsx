@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import KillSwitch from "./KillSwitch";
 import Avatar from "./Avatar";
+import NotificationBell from "./NotificationBell";
+import MessageButton from "./MessageButton";
 
 // The market destinations sit directly in the header — no sub-navigation
 // (Cam 2026-06-16). `exact` pins The Hunt to exactly /market so it doesn't light
@@ -80,14 +82,6 @@ export default function NavBar({
                 the page itself enforces the owner gate, this is just the link. */}
             {isOwner && renderLink({ href: "/admin", label: "Admin" })}
           </div>
-          {isMember && (
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent("grq:chat"))}
-              className="rounded-lg px-2.5 py-1 text-sm font-semibold text-teal-300 transition-colors hover:bg-teal-400/10"
-            >
-              Chat
-            </button>
-          )}
           {!isMember && (
             <span
               className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-amber-300/80"
@@ -96,11 +90,19 @@ export default function NavBar({
               read-only
             </span>
           )}
-          {/* Halt-trading control sits between Chat and the broker badge (Cam 2026-06-18). */}
+          {/* Halt-trading control sits before the broker badge (Cam 2026-06-18). */}
           <KillSwitch compact engaged={killSwitch} engagedBy={killSwitchBy} canToggle={isMember} />
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>
+          {/* Notification bell + messages sit between the broker badge and the
+              avatar — members only (the drawer + feed routes are members-only). */}
+          {isMember && (
+            <div className="flex items-center gap-0.5">
+              <NotificationBell />
+              <MessageButton />
+            </div>
+          )}
           <Avatar src={photo} name={name} size="h-7 w-7" />
         </div>
       </div>

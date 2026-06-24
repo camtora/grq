@@ -23,6 +23,7 @@ export type ToggleKey = (typeof TOGGLEABLE_CATEGORIES)[number]["key"];
 export const ALWAYS_ON = [
   { label: "Trades", desc: "Every buy, sell, stop, and take-profit fill." },
   { label: "Risk & safety", desc: "Kill switch, drawdown halt, and daily-loss pause." },
+  { label: "FX approvals", desc: "When the agent asks to convert CAD→USD to fund a US name — needs your OK." },
   { label: "Critical outages", desc: "Agent crashes and total data-feed failures." },
 ] as const;
 

@@ -1,6 +1,8 @@
 import { prisma } from "./db";
 import type { Session } from "./session";
 import { getPortfolio } from "./portfolio";
+import { soakStatus } from "./soak";
+import { listFxRequests } from "./fx-requests";
 import { getQuotes, getQuote } from "./broker/quotes";
 import { allUniverse, type UniverseRow, bareTicker } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
@@ -121,6 +123,9 @@ export async function portfolioResponse() {
   const logoBy = new Map(all.map((u) => [u.symbol, u.logoUrl]));
   return {
     cashCents: pf.cashCents,
+    cadCashCents: pf.cadCashCents,
+    usdCashCents: pf.usdCashCents,
+    fxUsdCad: pf.fxUsdCad,
     positions: pf.positions.map((p) => ({
       symbol: p.symbol,
       qty: p.qty,
@@ -130,6 +135,7 @@ export async function portfolioResponse() {
       unrealizedPnlCents: p.unrealizedPnlCents,
       dayChangeBps: p.dayChangeBps,
       openedAt: p.openedAt.toISOString(),
+      currency: p.currency,
       logoUrl: logoBy.get(p.symbol) ?? null,
     })),
     positionsCents: pf.positionsCents,
@@ -169,24 +175,58 @@ export async function settingsResponse() {
     feeSpentMonthCents: fees._sum.commissionCents ?? 0,
     killSwitch: settings?.killSwitch ?? false,
     killSwitchBy: settings?.killSwitchBy ?? null,
-    // Soak gate (PROJECT_PLAN §9): ≥4 clean weeks total (28d), ≥2 on IBKR paper
-    // (14d). v0 — paper hasn't started, so the clean counts are best-effort and
-    // the app frames them as "in progress". Wire to a real soak tracker later.
-    soakDaysClean: await soakDaysClean(),
-    soakDaysRequired: 28,
-    soakPaperDaysClean: 0,
-    soakPaperDaysRequired: 14,
+    // Soak gate (PROJECT_PLAN §9): ≥4 clean weeks total (28d) + ≥2 on IBKR paper (14d).
+    // Elapsed calendar days from each inception (lib/soak.ts). Was a v0 placeholder that
+    // returned 0 (env unset + hardcoded 0) → the iOS counter "never started".
+    ...(() => {
+      const s = soakStatus();
+      return {
+        soakDaysClean: s.totalDays,
+        soakDaysRequired: s.totalRequired,
+        soakPaperDaysClean: s.paperDays,
+        soakPaperDaysRequired: s.paperRequired,
+      };
+    })(),
   };
 }
 
-/** Distinct calendar days with a NAV snapshot since the configured soak start —
- *  a best-effort "days running clean on the sim" until a real tracker lands. */
-async function soakDaysClean(): Promise<number> {
-  const start = process.env.GRQ_SOAK_START ? new Date(process.env.GRQ_SOAK_START) : null;
-  if (!start || isNaN(start.getTime())) return 0;
-  const snaps = await prisma.navSnapshot.findMany({ where: { at: { gte: start } }, select: { at: true } });
-  const days = new Set(snaps.map((s) => etDateStr(s.at)));
-  return days.size;
+/* ---------- /api/fx (GET — mobile FX panel state, D62) ---------- */
+export async function fxStateResponse() {
+  const [pf, settings, reqs] = await Promise.all([
+    getPortfolio(),
+    prisma.settings.findUnique({ where: { id: 1 } }),
+    listFxRequests(),
+  ]);
+  const usdCashCadCents = pf.cashCents - pf.cadCashCents;
+  const usdPositionsCadCents = pf.positions.filter((p) => p.currency === "USD").reduce((s, p) => s + p.marketValueCadCents, 0);
+  const usdPct = pf.navCents > 0 ? Math.round(((usdCashCadCents + usdPositionsCadCents) / pf.navCents) * 1000) / 10 : 0;
+  const row = (r: Awaited<ReturnType<typeof listFxRequests>>["pending"][number]) => ({
+    id: r.id,
+    createdAt: r.createdAt.toISOString(),
+    amountUsdCents: r.amountUsdCents,
+    estCadCents: r.estCadCents,
+    reason: r.reason,
+    symbol: r.symbol,
+    status: r.status,
+    requestedBy: r.requestedBy,
+    decidedBy: r.decidedBy,
+    note: r.note,
+    executedRate: r.executedRate,
+    executedCadCents: r.executedCadCents,
+    executedUsdCents: r.executedUsdCents,
+    failReason: r.failReason,
+  });
+  return {
+    cadCashCents: pf.cadCashCents,
+    usdCashCents: pf.usdCashCents,
+    fxUsdCad: pf.fxUsdCad,
+    usdPct,
+    fxMaxPerRequestCents: settings?.fxMaxPerRequestCents ?? 0,
+    fxMaxPerWeekCents: settings?.fxMaxPerWeekCents ?? 0,
+    usdAllocationCapPct: settings?.usdAllocationCapPct ?? 100,
+    pending: reqs.pending.map(row),
+    recent: reqs.recent.map(row),
+  };
 }
 
 /* ---------- shared: latest stance + directive maps for a set of symbols ---------- */

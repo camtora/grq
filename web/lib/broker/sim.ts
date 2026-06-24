@@ -1,8 +1,8 @@
 import { prisma } from "../db";
 import { getQuote, getQuotes, isHardStale } from "./quotes";
-import { activeSymbols, BENCHMARK } from "../universe";
+import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
-import type { BrokerAdapter, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
+import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
  *  trade value (the cap may undercut the minimum on small orders — that's how
@@ -181,11 +181,17 @@ export class SimBroker implements BrokerAdapter {
 
     const commissionCents = ibkrFixedCommissionCents(input.qty, price);
 
+    // The name's native currency picks the cash bucket: a USD buy must be funded by
+    // USD cash, never CAD on margin (D34/D62 — same rule the agent's validator enforces).
+    const existingPos = await prisma.position.findUnique({ where: { symbol } });
+    const ccy = (existingPos?.currency ?? (await universeEntry(symbol))?.currency ?? "CAD").toUpperCase();
+    const isUsd = ccy === "USD";
+
     const account = await prisma.account.findUnique({ where: { id: 1 } });
-    const cash = account?.cashCents ?? 0;
+    const cash = isUsd ? account?.usdCashCents ?? 0 : account?.cashCents ?? 0;
     if (input.side === "BUY") {
       const cost = input.qty * price + commissionCents;
-      if (cost > cash) return reject(`Insufficient cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
+      if (cost > cash) return reject(`Insufficient ${ccy} cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
     } else {
       const pos = await prisma.position.findUnique({ where: { symbol } });
       if (!pos || pos.qty < input.qty) return reject(`Insufficient shares: selling ${input.qty} ${symbol}, hold ${pos?.qty ?? 0} (no shorting — guardrail).`);
@@ -231,10 +237,13 @@ export class SimBroker implements BrokerAdapter {
           await tx.position.update({ where: { symbol }, data: { qty: newQty, avgCostCents: newAvg } });
         } else {
           await tx.position.create({
-            data: { symbol, qty: input.qty, avgCostCents: Math.round(totalCost / input.qty) },
+            data: { symbol, qty: input.qty, avgCostCents: Math.round(totalCost / input.qty), currency: ccy },
           });
         }
-        await tx.account.update({ where: { id: 1 }, data: { cashCents: { decrement: totalCost } } });
+        await tx.account.update({
+          where: { id: 1 },
+          data: isUsd ? { usdCashCents: { decrement: totalCost } } : { cashCents: { decrement: totalCost } },
+        });
       } else {
         realizedPnlCents = input.qty * (price - pos!.avgCostCents) - commissionCents;
         const remaining = pos!.qty - input.qty;
@@ -245,7 +254,9 @@ export class SimBroker implements BrokerAdapter {
         }
         await tx.account.update({
           where: { id: 1 },
-          data: { cashCents: { increment: input.qty * price - commissionCents } },
+          data: isUsd
+            ? { usdCashCents: { increment: input.qty * price - commissionCents } }
+            : { cashCents: { increment: input.qty * price - commissionCents } },
         });
       }
 
@@ -262,8 +273,8 @@ export class SimBroker implements BrokerAdapter {
           body:
             (input.reason ?? "(no thesis recorded)") +
             (realizedPnlCents !== null
-              ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} CAD (after ${(commissionCents / 100).toFixed(2)} commission)`
-              : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} CAD`),
+              ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} ${ccy} (after ${(commissionCents / 100).toFixed(2)} commission)`
+              : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} ${ccy}`),
           agentVersion: agentVersion ?? "v1.0-phase2",
         },
       });
@@ -304,5 +315,35 @@ export class SimBroker implements BrokerAdapter {
       if (res.ok) filled++;
     }
     return filled;
+  }
+
+  /** Move cash between CAD and USD at the BoC rate, minus a flat IDEALPRO-style fee.
+   *  Instant in the sim (no resting FX order). The member-approved FX path calls this. */
+  async convertCurrency(input: FxConvertInput): Promise<FxConvertResult> {
+    const { fromCurrency, toCurrency, amountToCents } = input;
+    if (fromCurrency === toCurrency) return { ok: false, error: "From and to currencies are the same." };
+    if (!Number.isInteger(amountToCents) || amountToCents <= 0) return { ok: false, error: "Amount must be a positive whole number of cents." };
+    const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+    if (settings?.killSwitch) return { ok: false, error: "Kill switch is engaged — no conversions while halted." };
+    const fx = await usdCadRate(); // USD→CAD
+    if (!fx || fx <= 0) return { ok: false, error: "No USD/CAD rate available (BoC) — refusing to convert blind." };
+    const account = await prisma.account.findUnique({ where: { id: 1 } });
+    const FEE_CAD = 200; // ≈ IBKR IDEALPRO minimum (~US$2)
+
+    if (toCurrency === "USD") {
+      const cadCost = Math.round(amountToCents * fx) + FEE_CAD;
+      const have = account?.cashCents ?? 0;
+      if (cadCost > have) return { ok: false, error: `Insufficient CAD: need $${(cadCost / 100).toFixed(2)}, have $${(have / 100).toFixed(2)}.` };
+      await prisma.account.update({ where: { id: 1 }, data: { cashCents: { decrement: cadCost }, usdCashCents: { increment: amountToCents } } });
+      await writeNavSnapshot("FX CAD→USD").catch(() => {});
+      return { ok: true, rate: fx, fromDebitedCents: cadCost, toCreditedCents: amountToCents, commissionCents: FEE_CAD };
+    }
+    // USD → CAD
+    const usdCost = Math.round((amountToCents + FEE_CAD) / fx);
+    const haveUsd = account?.usdCashCents ?? 0;
+    if (usdCost > haveUsd) return { ok: false, error: `Insufficient USD: need US$${(usdCost / 100).toFixed(2)}, have US$${(haveUsd / 100).toFixed(2)}.` };
+    await prisma.account.update({ where: { id: 1 }, data: { usdCashCents: { decrement: usdCost }, cashCents: { increment: amountToCents } } });
+    await writeNavSnapshot("FX USD→CAD").catch(() => {});
+    return { ok: true, rate: fx, fromDebitedCents: usdCost, toCreditedCents: amountToCents, commissionCents: FEE_CAD };
   }
 }

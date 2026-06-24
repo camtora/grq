@@ -40,6 +40,7 @@ const MOBILE_API = [
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
   "/api/messages",        // D61 member-to-member DMs/shares (GET thread/unread, POST send/read)
   "/api/killswitch",
+  "/api/fx",               // D62 FX-approval: GET state + POST convert/approve/reject (members-only in-route)
   "/api/universe",
   "/api/stocks/directive",
   "/api/stocks/share",    // member shares a stock with the other member (push)
