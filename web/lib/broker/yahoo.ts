@@ -175,31 +175,52 @@ export async function fetchDailyBars(symbol: string, range = "1y"): Promise<Fetc
   }
 }
 
-export type IntradayPoint = { t: number; c: number }; // t = ms epoch · c = close in cents
+// t = ms epoch · c = close in cents · session = which trading session the bar fell in.
+// `pre`/`post` are extended hours (US names; greyed on the chart), `regular` is 9:30–16:00.
+export type IntradaySession = "pre" | "regular" | "post";
+export type IntradayPoint = { t: number; c: number; session: IntradaySession };
 
 /** Today's intraday line (5-min closes for the current session) for the stock-page
- *  chart's "1D" range. Same crumb-free chart endpoint, finer interval. Returns [] on any
- *  failure — the caller falls back to the daily series. */
+ *  chart's "1D" range. `includePrePost=true` pulls extended-hours bars too; each bar is
+ *  tagged pre/regular/post off Yahoo's own regular-session window (meta.currentTradingPeriod
+ *  — no DST/exchange-hours math) so the chart can grey the extended portion. Returns [] on
+ *  any failure — the caller falls back to the daily series. */
 export async function fetchIntradayBars(symbol: string): Promise<IntradayPoint[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     await toYahoo(symbol),
-  )}?interval=5m&range=1d`;
+  )}?interval=5m&range=1d&includePrePost=true`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: ctrl.signal });
     if (!res.ok) return [];
     const json = (await res.json()) as {
-      chart?: { result?: { timestamp?: number[]; indicators?: { quote?: { close?: (number | null)[] }[] } }[] };
+      chart?: {
+        result?: {
+          timestamp?: number[];
+          meta?: { currentTradingPeriod?: { regular?: { start?: number; end?: number } } };
+          indicators?: { quote?: { close?: (number | null)[] }[] };
+        }[];
+      };
     };
     const r = json.chart?.result?.[0];
     const ts = r?.timestamp ?? [];
     const close = r?.indicators?.quote?.[0]?.close ?? [];
+    // Regular-session window in epoch SECONDS (Yahoo's own boundaries). If absent, every
+    // bar falls through as `regular` — i.e. exactly today's behaviour, no greying.
+    const reg = r?.meta?.currentTradingPeriod?.regular;
+    const regStart = typeof reg?.start === "number" ? reg.start : null;
+    const regEnd = typeof reg?.end === "number" ? reg.end : null;
+    const sessionFor = (tSec: number): IntradaySession => {
+      if (regStart !== null && tSec < regStart) return "pre";
+      if (regEnd !== null && tSec >= regEnd) return "post";
+      return "regular";
+    };
     const out: IntradayPoint[] = [];
     for (let i = 0; i < ts.length; i++) {
       const c = close[i];
       if (typeof c !== "number" || !(c > 0)) continue; // skip gaps (null bars)
-      out.push({ t: ts[i] * 1000, c: Math.round(c * 100) });
+      out.push({ t: ts[i] * 1000, c: Math.round(c * 100), session: sessionFor(ts[i]) });
     }
     return out;
   } catch {

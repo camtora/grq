@@ -13,7 +13,12 @@ import { money } from "@/lib/money";
 // the crosshair lands exactly on the line. vectorEffect="non-scaling-stroke" keeps
 // strokes crisp despite that non-uniform stretch.
 
-type Pt = { t: number; c: number }; // t = ms epoch · c = close in cents
+type Pt = { t: number; c: number; session?: "pre" | "regular" | "post" }; // t = ms epoch · c = close cents
+
+// Extended-hours (pre/post-market) line colour — a muted, theme-aware grey so after-hours
+// movement reads as context next to the solid up/down regular session. Only 1D carries
+// session tags; daily ranges + the NAV tape have none, so they render exactly as before.
+const EXT_STROKE = "color-mix(in oklab, var(--body-fg) 38%, transparent)";
 
 // `days` slices the daily series; `intraday` is special-cased (fetched on demand). `null`
 // days = YTD. 1D draws today's intraday line; 1W..1Y slice the daily closes.
@@ -95,11 +100,21 @@ export default function PriceChart({
 
   const n = pts.length;
   const hasData = n >= 2; // 1D can briefly have 0 points while the intraday fetch is in flight
-  const min = hasData ? Math.min(...pts.map((p) => p.c)) : 0;
+  const min = hasData ? Math.min(...pts.map((p) => p.c)) : 0; // y-axis spans ALL bars (incl. pre/post)
   const max = hasData ? Math.max(...pts.map((p) => p.c)) : 0;
   const span = max - min || 1;
-  const changePct = hasData && pts[0].c > 0 ? (pts[n - 1].c - pts[0].c) / pts[0].c : 0;
-  const up = hasData ? pts[n - 1].c >= pts[0].c : true;
+
+  // Extended-hours awareness (1D only). The regular session is one contiguous block in the
+  // middle; pre is before it, post after. The headline % + up/down colour track the REGULAR
+  // session (the conventional "today" move vs the open), not the pre-market print.
+  const regIdx = pts.map((p, i) => ((p.session ?? "regular") === "regular" ? i : -1)).filter((i) => i >= 0);
+  const hasExt = pts.some((p) => p.session && p.session !== "regular");
+  const firstReg = regIdx[0] ?? -1;
+  const lastReg = regIdx[regIdx.length - 1] ?? -1;
+  const dir = regIdx.length >= 2 ? regIdx.map((i) => pts[i]) : pts; // points that set the headline direction/%
+
+  const changePct = hasData && dir[0].c > 0 ? (dir[dir.length - 1].c - dir[0].c) / dir[0].c : 0;
+  const up = hasData ? dir[dir.length - 1].c >= dir[0].c : true;
   const stroke = up ? "var(--spark-up)" : "var(--spark-down)";
 
   const xy = (i: number) => ({
@@ -107,6 +122,11 @@ export default function PriceChart({
     y: (1 - (pts[i].c - min) / span) * 100,
   });
   const poly = pts.map((_, i) => { const p = xy(i); return `${p.x.toFixed(2)},${p.y.toFixed(2)}`; }).join(" ");
+  // Colour overlay over just the regular session; the grey base line (poly) shows pre/post.
+  const polyReg =
+    hasExt && firstReg >= 0
+      ? Array.from({ length: lastReg - firstReg + 1 }, (_, k) => { const p = xy(firstReg + k); return `${p.x.toFixed(2)},${p.y.toFixed(2)}`; }).join(" ")
+      : "";
 
   const onMove = (e: React.MouseEvent) => {
     const el = wrapRef.current;
@@ -118,6 +138,9 @@ export default function PriceChart({
 
   const hi = hoverIdx != null && hoverIdx >= 0 && hoverIdx < n ? hoverIdx : null;
   const hp = hi != null ? xy(hi) : null;
+  // The dot rests on the latest bar (or the hovered one); grey it when that bar is extended-hours.
+  const dotIdx = hi ?? (n > 0 ? n - 1 : 0);
+  const dotColor = hasData && (pts[dotIdx]?.session ?? "regular") !== "regular" ? EXT_STROKE : stroke;
 
   const longSpan = hasData && pts[n - 1].t - pts[0].t > 200 * 86_400_000;
   const hhmm = (t: number) =>
@@ -149,6 +172,12 @@ export default function PriceChart({
           {(changePct * 100).toFixed(1)}%
         </span>
         <span className="text-[11px] text-teal-200/40">{isIntra ? "today" : range === "1Y" ? "past year" : range}</span>
+        {isIntra && hasExt && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-teal-200/40" title="Pre-/post-market moves, greyed — for tracking, not a regular-session price">
+            <span className="inline-block h-[3px] w-3 rounded-full align-middle" style={{ background: EXT_STROKE }} />
+            extended hrs
+          </span>
+        )}
       </div>
       {mode === "daily" && (
         <div className="flex gap-1">
@@ -197,13 +226,22 @@ export default function PriceChart({
               {[0, 50, 100].map((y) => (
                 <line key={y} x1={0} y1={y} x2={100} y2={y} stroke="var(--card-border)" strokeWidth="1" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
               ))}
-              <polyline points={poly} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              {hasExt ? (
+                <>
+                  {/* Full line greyed (pre/post show as grey context)… */}
+                  <polyline points={poly} fill="none" stroke={EXT_STROKE} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                  {/* …then the regular session overlaid in the up/down colour (absent before the open). */}
+                  {polyReg && <polyline points={polyReg} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
+                </>
+              ) : (
+                <polyline points={poly} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              )}
             </svg>
 
             {/* A real round dot: on the hovered session, or resting on the latest close. */}
             <div
               className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-              style={{ left: `${(hp ?? xy(n - 1)).x}%`, top: `${(hp ?? xy(n - 1)).y}%`, backgroundColor: stroke }}
+              style={{ left: `${(hp ?? xy(n - 1)).x}%`, top: `${(hp ?? xy(n - 1)).y}%`, backgroundColor: dotColor }}
             />
 
             {hi != null && (

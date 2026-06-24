@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { fetchIntradayBars } from "@/lib/broker/yahoo";
+import { fetchIntradayBars, type IntradayPoint } from "@/lib/broker/yahoo";
 
 export const dynamic = "force-dynamic";
 
 // Today's intraday line for the stock-page chart's "1D" range — fetched lazily by
 // PriceChart only when a member picks 1D. Cookie-authenticated (not in MOBILE_API),
 // like /api/quotes. A short in-process cache shares one Yahoo hit across open tabs.
-type Cached = { at: number; points: { t: number; c: number }[] };
+// Each point carries its session (pre/regular/post) so the chart greys extended hours.
+type Cached = { at: number; points: IntradayPoint[] };
 const cache = new Map<string, Cached>();
 const TTL_MS = 60_000;
 
