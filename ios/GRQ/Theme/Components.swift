@@ -310,6 +310,7 @@ struct BrandHeader: View {
                 .foregroundStyle(p.textMuted)
             Spacer()
             ChatButton()
+            NotificationBell()
             AvatarButton()
         }
         .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)

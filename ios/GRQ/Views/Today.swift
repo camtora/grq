@@ -6,6 +6,12 @@ struct TodayView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var today: Today?
+    @State private var live: [String: LiveQuote] = [:]
+
+    // Movers + top hitters → one batched live-quote poll (the indices strip stays on its
+    // own /api/today feed; index symbols aren't FMP stock tickers).
+    private var moverSymbols: [String] { ((today?.movers ?? []) + (today?.topHitters ?? [])).map { $0.symbol } }
+    private var liveKey: String { Set(moverSymbols.map { $0.uppercased() }).sorted().joined(separator: ",") }
 
     var body: some View {
         NavigationStack {
@@ -32,6 +38,7 @@ struct TodayView: View {
             .refreshable { today = await APIClient.shared.today() }
         }
         .task { today = await APIClient.shared.today() }
+        .task(id: liveKey) { await pollLiveQuotes(moverSymbols) { live = $0 } }
     }
 
     private func masthead(_ t: Today) -> some View {
@@ -42,6 +49,7 @@ struct TodayView: View {
             Text("\(t.edition.label) · \(t.dateISO)")
                 .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
             ChatButton()
+            NotificationBell()
             AvatarButton()
         }
         .padding(.top, 4)
@@ -149,8 +157,9 @@ struct TodayView: View {
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
-                                MoneyText(cents: m.lastCents, currency: m.currency).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
-                                BpsBadge(bps: m.dayChangeBps).font(.caption)
+                                MoneyText(cents: live.priceCents(m.symbol, fallback: m.lastCents), currency: m.currency)
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                                BpsBadge(bps: live.dayBps(m.symbol, fallback: m.dayChangeBps)).font(.caption)
                             }
                         }
                         .contentShape(Rectangle())

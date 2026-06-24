@@ -142,6 +142,8 @@ struct FundSettings: Codable {
 struct FxRequest: Codable, Identifiable {
     let id: Int
     let createdAt: String
+    let fromCurrency: String?  // "CAD"|"USD" — direction (older rows null → CAD→USD)
+    let toCurrency: String?
     let amountUsdCents: Int
     let estCadCents: Int
     let reason: String
@@ -222,6 +224,27 @@ struct Signals: Codable {
     let trend: String
     let rsi: Double?
     let macd: String?
+}
+
+// MARK: - Live quotes (the /api/quotes price overlay)
+
+/// One symbol's live FMP price + day move, keyed by OUR symbol in the response map.
+/// `changePct` is a PERCENT (e.g. -4.4 = -4.40%), matching the web endpoint.
+struct LiveQuote: Codable, Equatable {
+    let priceCents: Int
+    let changePct: Double
+}
+
+extension Dictionary where Key == String, Value == LiveQuote {
+    /// Live price for `symbol`, or `fallback` (the delayed snapshot) until a poll lands.
+    func priceCents(_ symbol: String, fallback: Int) -> Int {
+        self[symbol.uppercased()]?.priceCents ?? fallback
+    }
+    /// Live day move in basis points (percent × 100), or the snapshot's `fallback` bps.
+    func dayBps(_ symbol: String, fallback: Int) -> Int {
+        guard let q = self[symbol.uppercased()] else { return fallback }
+        return Int((q.changePct * 100).rounded())
+    }
 }
 
 // MARK: - Market names (universe / watchlist)

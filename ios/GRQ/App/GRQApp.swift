@@ -113,6 +113,8 @@ struct MainTabView: View {
     @Environment(\.colorScheme) private var scheme
     @StateObject private var chat = ChatLauncher()
     @StateObject private var inbox = MessagesInbox()
+    @StateObject private var notifs = NotificationsInbox()
+    @StateObject private var notifLauncher = NotificationsLauncher()
     @StateObject private var more = MoreLauncher()
     @State private var selection = 0     // Today (the splash fades into it)
     @State private var visited: Set<Int> = [0]
@@ -142,6 +144,8 @@ struct MainTabView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .environmentObject(chat)
         .environmentObject(inbox)
+        .environmentObject(notifs)
+        .environmentObject(notifLauncher)
         .environmentObject(more)
         // The unified chat (member thread + GRQ agent). Pushed StockDetailViews (from
         // shared-stock cards) need auth + glossary.
@@ -150,6 +154,14 @@ struct MainTabView: View {
                 .environmentObject(auth)
                 .environmentObject(inbox)
                 .environmentObject(glossary)
+        }
+        // The notification center (D63) — opened from the header bell on every screen.
+        // Pushed StockDetailViews (deep-linked from a notification) need auth + glossary.
+        .sheet(isPresented: $notifLauncher.show) {
+            NotificationsDrawer()
+                .environmentObject(auth)
+                .environmentObject(glossary)
+                .environmentObject(notifs)
         }
         // MORE — opened from the header avatar on every screen. Messages lives inside,
         // so when its row asks for chat we open it AFTER More fully dismisses (one sheet
@@ -164,7 +176,7 @@ struct MainTabView: View {
                 .environmentObject(glossary)
                 .environmentObject(more)
         }
-        .task { inbox.start() }
+        .task { inbox.start(); notifs.start() }
         // A tapped message push (no symbol) opens the unified chat (member thread).
         .onChange(of: push.openMessages) { _, open in
             if open { chat.show = true; push.openMessages = false }

@@ -15,6 +15,7 @@ struct StockDetailView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var d: Dossier?
+    @State private var live: [String: LiveQuote] = [:]
     @State private var actionNote: String?
     @State private var showChat = false
     @State private var showAlertSheet = false
@@ -87,6 +88,9 @@ struct StockDetailView: View {
             d = await APIClient.shared.dossier(symbol)
             await loadAlerts()
         }
+        // Live hero price — a touch snappier than the list tables (this is the focal
+        // number, like the web stock-page ticker). Auto-cancels when the page closes.
+        .task(id: symbol) { await pollLiveQuotes([symbol], everySeconds: 5) { live = $0 } }
         .sheet(isPresented: $showChat) {
             ChatView(symbol: symbol).environmentObject(auth)
         }
@@ -135,11 +139,17 @@ struct StockDetailView: View {
                     }
                     Spacer()
                 }
-                if let last = d.lastCents {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                // Live price overlay: prefer the polled quote, fall back to the dossier's
+                // delayed snapshot. The day-move badge lights up once a poll lands (the
+                // dossier payload itself carries no day change).
+                if let last = live[d.symbol.uppercased()]?.priceCents ?? d.lastCents {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(Fmt.money(last, d.currency))
                             .font(.system(.title, design: .rounded).weight(.black)).monospacedDigit()
                             .foregroundStyle(Theme.brandGradient)
+                        if let q = live[d.symbol.uppercased()] {
+                            BpsBadge(bps: Int((q.changePct * 100).rounded())).font(.caption)
+                        }
                         Text("per share").font(.caption2).foregroundStyle(p.textMuted)
                     }
                 }

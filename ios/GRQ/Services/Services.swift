@@ -184,9 +184,32 @@ final class APIClient {
         return (r?.universe ?? [], r?.watchlist ?? [])
     }
 
+    /// Live FMP quotes for the on-screen price overlay (the web's `/api/quotes`, now
+    /// Bearer-reachable). One batched call returns prices keyed by OUR symbol. The list
+    /// surfaces poll this every ~10s and overlay it on the delayed `/market`/`/dossier`
+    /// snapshot. Returns nil on any failure → callers keep showing the snapshot.
+    func liveQuotes(symbols: [String]) async -> [String: LiveQuote]? {
+        let syms = symbols.filter { !$0.isEmpty }
+        guard !syms.isEmpty else { return [:] }
+        let q = syms.joined(separator: ",").addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        struct R: Decodable { let quotes: [String: LiveQuote] }
+        let r: R? = await get("quotes?symbols=\(q)")
+        return r?.quotes
+    }
+
     // The Wire — the discovery feed (prototype): finds + dossiers + watchlist adds +
     // market news + lessons, woven into one scroll.
     func wire() async -> WireResponse? { await get("wire") }
+
+    /// The notification center feed (D63) — the header bell. Members-only; Bearer-reachable.
+    func notifications() async -> (items: [NotificationItem], unread: Int) {
+        struct R: Decodable { let notifications: [NotificationItem]; let unread: Int }
+        let r: R? = await get("notifications")
+        return (r?.notifications ?? [], r?.unread ?? 0)
+    }
+
+    /// Opening the bell clears the badge — mark the caller's notifications read.
+    func markNotificationsRead() async { _ = await postResult("notifications/read", [:]) }
 
     // The Hunt (A1) — the centerpiece feed + the on-demand refresh/brief.
     func hunt() async -> HuntResponse? { await get("hunt") }
@@ -215,10 +238,11 @@ final class APIClient {
 
     func setKillSwitch(_ engaged: Bool) async -> ActionResult { await postResult("killswitch", ["engaged": engaged]) }
 
-    // FX (D62) — read the panel state; convert CAD→USD; approve/reject the agent's requests.
+    // FX (D62) — read the panel state; convert either direction with the amount typed in either
+    // currency; approve/reject the agent's requests. `amountCents` is denominated in `inputCurrency`.
     func fxState() async -> FxState? { await get("fx") }
-    func fxConvert(amountUsdCents: Int) async -> ActionResult {
-        await postResult("fx", ["action": "convert", "amountCents": amountUsdCents])
+    func fxConvert(amountCents: Int, inputCurrency: String, from: String, to: String) async -> ActionResult {
+        await postResult("fx", ["action": "convert", "amountCents": amountCents, "inputCurrency": inputCurrency, "fromCurrency": from, "toCurrency": to])
     }
     func fxApprove(id: Int, note: String? = nil) async -> ActionResult {
         var body: [String: Any] = ["action": "approve", "id": id]
@@ -428,6 +452,26 @@ final class APIClient {
             default: break
             }
         }
+    }
+}
+
+/// Poll `/api/quotes` for `symbols` every ~`everySeconds` until cancelled, handing each
+/// fresh snapshot to `onUpdate`. Drop into a SwiftUI `.task(id:)` keyed on the symbol set
+/// so it auto-cancels on disappear (and restarts when the set changes) — the app's
+/// equivalent of the web `<LiveQuotesProvider>`: one batched poll per screen, not per row.
+/// Skips polling while the app is backgrounded (the OS suspends timers anyway; this also
+/// avoids a burst on resume). Mirrors the calmer table cadence, not the 2.5s hero ticker.
+@MainActor
+func pollLiveQuotes(_ symbols: [String], everySeconds: UInt64 = 10,
+                    onUpdate: @escaping ([String: LiveQuote]) -> Void) async {
+    let syms = Array(Set(symbols.map { $0.uppercased() }.filter { !$0.isEmpty })).sorted()
+    guard !syms.isEmpty else { return }
+    while !Task.isCancelled {
+        if UIApplication.shared.applicationState != .background,
+           let fresh = await APIClient.shared.liveQuotes(symbols: syms) {
+            onUpdate(fresh)
+        }
+        try? await Task.sleep(nanoseconds: everySeconds * 1_000_000_000)
     }
 }
 

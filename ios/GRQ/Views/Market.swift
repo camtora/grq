@@ -10,12 +10,18 @@ struct MarketsView: View {
     @State private var tab: MarketTab = .watchlist
     @State private var universe: [MarketName] = []
     @State private var watchlist: [MarketName] = []
+    @State private var live: [String: LiveQuote] = [:]
     @State private var loaded = false
     @State private var actionNote: String?
 
     private var isMember: Bool { auth.currentUser?.role == .member }
 
     enum MarketTab: String, CaseIterable { case watchlist = "Watchlist", universe = "Universe", smartMoney = "Smart Money" }
+
+    // Every name on either list — one batched live-quote poll covers both tabs, so
+    // switching tabs doesn't restart the poller. The key drives `.task(id:)`.
+    private var allSymbols: [String] { (universe + watchlist).map { $0.symbol } }
+    private var liveKey: String { Set(allSymbols.map { $0.uppercased() }).sorted().joined(separator: ",") }
 
     var body: some View {
         NavigationStack {
@@ -38,6 +44,8 @@ struct MarketsView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .task { if !loaded { await load() } }
+        // Live price overlay: poll once the names load; auto-cancels on disappear.
+        .task(id: liveKey) { await pollLiveQuotes(allSymbols) { live = $0 } }
     }
 
     private var selector: some View {
@@ -69,7 +77,7 @@ struct MarketsView: View {
             Card {
                 VStack(spacing: 0) {
                     ForEach(Array(names.enumerated()), id: \.element.id) { idx, n in
-                        MarketRow(name: n, isMember: isMember, candidate: candidates,
+                        MarketRow(name: n, live: live, isMember: isMember, candidate: candidates,
                                   onPromote: { Task { await promote(n) } },
                                   onDirective: { dir in Task { await directive(n, dir) } })
                         if idx < names.count - 1 { Divider().overlay(p.cardBorder.opacity(0.5)).padding(.vertical, 12) }
@@ -109,6 +117,7 @@ struct MarketsView: View {
 struct MarketRow: View {
     @Environment(\.colorScheme) private var scheme
     let name: MarketName
+    var live: [String: LiveQuote] = [:]
     let isMember: Bool
     let candidate: Bool
     let onPromote: () -> Void
@@ -116,6 +125,9 @@ struct MarketRow: View {
 
     var body: some View {
         let p = Theme.palette(scheme)
+        // Live price/move where a poll has landed; the delayed snapshot otherwise.
+        let cents = live.priceCents(name.symbol, fallback: name.lastCents)
+        let bps = live.dayBps(name.symbol, fallback: name.dayChangeBps)
         HStack(spacing: 12) {
             NavigationLink { StockDetailView(symbol: name.symbol) } label: {
                 HStack(spacing: 12) {
@@ -132,11 +144,11 @@ struct MarketRow: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: 8)
-            if name.lastCents > 0 {
+            if cents > 0 {
                 VStack(alignment: .trailing, spacing: 2) {
-                    MoneyText(cents: name.lastCents, currency: name.currency)
+                    MoneyText(cents: cents, currency: name.currency)
                         .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary).lineLimit(1)
-                    BpsBadge(bps: name.dayChangeBps).font(.caption)
+                    BpsBadge(bps: bps).font(.caption)
                 }
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)

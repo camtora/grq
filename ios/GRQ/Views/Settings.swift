@@ -228,8 +228,9 @@ struct MoreView: View {
 
 // MARK: - Currency & FX (D62 — the fund holds CAD + USD)
 
-// Members convert CAD→USD and approve/reject the conversions the agent requests to
-// fund US buys. Every money-moving action confirms with Face ID. Mirrors the web FxPanel.
+// Members convert either way (amount typed in CAD or USD) and approve/reject the conversions
+// the agent requests to fund US buys. Every money-moving action confirms with Face ID. Mirrors
+// the web FxPanel.
 struct FxView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var state: FxState?
@@ -237,17 +238,19 @@ struct FxView: View {
     @State private var busy = false
     @State private var note: String?
     @State private var convertText = ""
+    @State private var dir = "CAD→USD"      // direction
+    @State private var amountCcy = "CAD"    // which currency the typed amount is in
 
     var body: some View {
         let p = Theme.palette(scheme)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("US stocks settle in USD, so the fund holds both. Convert CAD→USD, or approve a conversion the agent asked for. Confirms with Face ID — it moves money.")
+                Text("US stocks settle in USD, so the fund holds both. Convert either way — enter the amount in CAD or USD — or approve a conversion the agent asked for. Confirms with Face ID — it moves money.")
                     .font(.caption).foregroundStyle(p.textMuted)
                 if let s = state {
                     balancesCard(s)
                     if !s.pending.isEmpty { pendingCard(s) }
-                    convertCard()
+                    convertCard(s)
                     if !s.recent.isEmpty { recentCard(s) }
                 } else if !loaded {
                     ProgressView().tint(Theme.brandAccent).frame(maxWidth: .infinity).padding(.vertical, 30)
@@ -272,6 +275,21 @@ struct FxView: View {
 
     private func cad(_ c: Int) -> String { "CA" + Fmt.money(c) }
     private func usd(_ c: Int) -> String { "US" + Fmt.money(c) }
+    private func money(_ ccy: String, _ c: Int) -> String { ccy == "USD" ? usd(c) : cad(c) }
+
+    // Both legs from an amount typed in either currency (mirrors lib/fx-requests legsFor).
+    private func legs(_ typedCents: Int, _ ccy: String, _ fx: Double) -> (usd: Int, cad: Int) {
+        ccy == "USD" ? (typedCents, Int((Double(typedCents) * fx).rounded()))
+                     : (Int((Double(typedCents) / fx).rounded()), typedCents)
+    }
+
+    // "$X CAD → US$Y" / "US$X → $Y CAD" — direction-aware, uses executed legs once filled.
+    private func fxLabel(_ r: FxRequest) -> String {
+        let done = r.status == "EXECUTED" && r.executedCadCents != nil
+        let c = done ? (r.executedCadCents ?? 0) : r.estCadCents
+        let u = done ? (r.executedUsdCents ?? 0) : r.amountUsdCents
+        return r.toCurrency == "CAD" ? "\(usd(u)) → \(cad(c))" : "\(cad(c)) → \(usd(u))"
+    }
 
     private func balancesCard(_ s: FxState) -> some View {
         let p = Theme.palette(scheme)
@@ -296,7 +314,7 @@ struct FxView: View {
                 ForEach(s.pending) { r in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
-                            Text("\(cad(r.estCadCents)) → \(usd(r.amountUsdCents))")
+                            Text(fxLabel(r))
                                 .font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
                             if let sym = r.symbol { Chip(text: sym, tone: .teal) }
                             Spacer()
@@ -319,19 +337,34 @@ struct FxView: View {
         }
     }
 
-    private func convertCard() -> some View {
+    private func convertCard(_ s: FxState) -> some View {
         let p = Theme.palette(scheme)
+        let fx = s.fxUsdCad ?? 0
+        let typedCents = Int(((Double(convertText) ?? 0) * 100).rounded())
+        let canPreview = typedCents > 0 && fx > 0
+        let l = canPreview ? legs(typedCents, amountCcy, fx) : (usd: 0, cad: 0)
         return Card {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Convert CAD → USD")
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Convert manually")
+                Picker("", selection: $dir) {
+                    Text("CAD → USD").tag("CAD→USD")
+                    Text("USD → CAD").tag("USD→CAD")
+                }.pickerStyle(.segmented)
                 HStack(spacing: 8) {
-                    Text("US$").foregroundStyle(p.textMuted)
+                    Picker("", selection: $amountCcy) {
+                        Text("$ CAD").tag("CAD")
+                        Text("US$").tag("USD")
+                    }.pickerStyle(.segmented).frame(width: 150)
                     TextField("amount", text: $convertText).keyboardType(.decimalPad).textFieldStyle(.roundedBorder)
-                    Button { Task { await convert() } } label: {
-                        Text("Convert").font(.subheadline.weight(.bold))
-                    }.buttonStyle(.borderedProminent).tint(p.accent).disabled(busy || (Double(convertText) ?? 0) <= 0)
                 }
-                Text("Buys USD with CAD at the BoC rate (odd-lot under US$25k). Same caps + kill switch as an approval.")
+                if canPreview {
+                    Text("≈ \(amountCcy == "USD" ? cad(l.cad) : usd(l.usd)) \(amountCcy == "USD" ? "CAD" : "USD")")
+                        .font(.caption).foregroundStyle(p.textMuted)
+                }
+                Button { Task { await convert(s) } } label: {
+                    Text("Convert \(dir)").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity)
+                }.buttonStyle(.borderedProminent).tint(p.accent).disabled(busy || !canPreview)
+                Text("Enter the amount in CAD or USD, at the BoC rate now. The side you type is exact; the other sizes at the fill. Won't overdraw — no margin. Same kill switch + caps as an approval.")
                     .font(.caption2).foregroundStyle(p.textMuted.opacity(0.7))
             }
         }
@@ -346,9 +379,7 @@ struct FxView: View {
                     HStack(spacing: 8) {
                         Text(r.status).font(.caption2.weight(.bold))
                             .foregroundStyle(r.status == "EXECUTED" ? p.accent : (r.status == "FAILED" ? p.neg : p.textMuted))
-                        Text(r.status == "EXECUTED" && r.executedCadCents != nil
-                             ? "\(cad(r.executedCadCents ?? 0)) → \(usd(r.executedUsdCents ?? 0))"
-                             : "\(cad(r.estCadCents)) → \(usd(r.amountUsdCents))")
+                        Text(fxLabel(r))
                             .font(.caption).foregroundStyle(p.textMuted)
                         Spacer()
                         if let by = r.decidedBy { Text(by).font(.caption2).foregroundStyle(p.textMuted.opacity(0.6)) }
@@ -358,12 +389,19 @@ struct FxView: View {
         }
     }
 
-    private func convert() async {
-        guard !busy, let dollars = Double(convertText), dollars > 0 else { return }
-        let cents = Int((dollars * 100).rounded())
-        guard await BiometricGate.confirm("Confirm it's you to convert \(usd(cents)) CAD→USD.") else { return }
+    private func convert(_ s: FxState) async {
+        guard !busy, let dollars = Double(convertText), dollars > 0, let fx = s.fxUsdCad, fx > 0 else { return }
+        let typedCents = Int((dollars * 100).rounded())
+        let from = dir == "USD→CAD" ? "USD" : "CAD"
+        let to = dir == "USD→CAD" ? "CAD" : "USD"
+        let l = legs(typedCents, amountCcy, fx)
+        let fromCents = from == "USD" ? l.usd : l.cad
+        let toCents = to == "USD" ? l.usd : l.cad
+        // Broker delivers the destination exactly; the FX fee comes out of the source → source is ~.
+        let summary = "~\(money(from, fromCents)) → \(money(to, toCents))"
+        guard await BiometricGate.confirm("Confirm it's you to convert \(summary).") else { return }
         busy = true; note = nil
-        let res = await APIClient.shared.fxConvert(amountUsdCents: cents)
+        let res = await APIClient.shared.fxConvert(amountCents: typedCents, inputCurrency: amountCcy, from: from, to: to)
         if res.ok { note = "Converted."; convertText = ""; await load() } else { note = res.error }
         busy = false
     }
@@ -371,7 +409,7 @@ struct FxView: View {
     private func decide(_ r: FxRequest, approve: Bool) async {
         guard !busy else { return }
         let verb = approve ? "approve & convert" : "reject"
-        guard await BiometricGate.confirm("Confirm it's you to \(verb) \(usd(r.amountUsdCents)).") else { return }
+        guard await BiometricGate.confirm("Confirm it's you to \(verb) \(fxLabel(r)).") else { return }
         busy = true; note = nil
         let res = approve ? await APIClient.shared.fxApprove(id: r.id) : await APIClient.shared.fxReject(id: r.id)
         if res.ok { note = approve ? "Converted." : "Rejected."; await load() } else { note = res.error }

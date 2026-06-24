@@ -50,22 +50,31 @@ struct WireView: View {
                        message: "The agent's finds, dossiers and the board fill this in as it works.")
                 .padding(.horizontal, 20).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView(.vertical) {
-                LazyVStack(spacing: 0) {
-                    // Key by position, not item.id — wire ids (find:/dossier:/watch:/lesson:)
-                    // can collide for one symbol, which dropped a page (the 10→11→12 skip).
-                    ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                        WireCardPage(item: item, index: idx, total: items.count)
-                            .containerRelativeFrame(.vertical)
-                            .shareLongPress(enabled: isMember && item.symbol != nil) {
-                                if let sym = item.symbol { share = WireShare(symbol: sym, name: item.name) }
-                            }
+            // Each card must snap to exactly the area between the header and the custom
+            // tab bar. containerRelativeFrame(.vertical) measured the scroll view's FULL
+            // span — which bleeds under the tab bar (a .safeAreaInset footer) — so the
+            // bottom CTA hid behind the buttons. Size each card to the GeometryReader's
+            // height instead: it measures the safe-area-respecting content slot (header
+            // above, tab bar below both excluded), so the buttons clear the footer
+            // (Cam 2026-06-24).
+            GeometryReader { geo in
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 0) {
+                        // Key by position, not item.id — wire ids (find:/dossier:/watch:/lesson:)
+                        // can collide for one symbol, which dropped a page (the 10→11→12 skip).
+                        ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                            WireCardPage(item: item, index: idx, total: items.count)
+                                .frame(height: geo.size.height)
+                                .shareLongPress(enabled: isMember && item.symbol != nil) {
+                                    if let sym = item.symbol { share = WireShare(symbol: sym, name: item.name) }
+                                }
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .scrollTargetLayout()
+                .scrollTargetBehavior(.paging)
+                .scrollIndicators(.hidden)
             }
-            .scrollTargetBehavior(.paging)
-            .scrollIndicators(.hidden)
         }
     }
 }
@@ -504,10 +513,6 @@ private struct WireCardPage: View {
                 }
             }
             Spacer(minLength: 0)
-            Button {
-                glossary.present(GlossaryEntry(slug: item.lessonSlug ?? item.id,
-                                               term: item.lessonTerm ?? "Lesson", def: item.lessonBody ?? ""))
-            } label: { cta("More in the glossary  →") }.buttonStyle(.plain)
             swipeHint
         }
         .padding(.horizontal, 24).padding(.top, 10).padding(.bottom, 14)
