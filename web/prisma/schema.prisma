@@ -603,6 +603,7 @@ model NotificationPreference {
   hunt         Boolean  @default(true) // new hunt names / directed-hunt / smart-money scan
   agentMoves   Boolean  @default(true) // the agent self-tracks or self-promotes a name
   reports      Boolean  @default(true) // morning plan / midday / EOD / weekly review
+  checkins     Boolean  @default(true) // per-holding agent check-in reads (holds / "no trade") — noisy as the portfolio grows
   members      Boolean  @default(true) // the OTHER member's universe/directive/kill actions
   messages     Boolean  @default(true) // the OTHER member messages you or shares a stock (D61)
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
@@ -621,7 +622,7 @@ model Notification {
   id       Int       @id @default(autoincrement())
   at       DateTime  @default(now())
   email    String // recipient member (normalized lowercase)
-  category String // NotifCategory (trades|risk|fx|dossiers|hunt|agentMoves|reports|members|system|priceTargets)
+  category String // NotifCategory (trades|risk|fx|dossiers|hunt|agentMoves|reports|checkins|members|system|priceTargets)
   severity String    @default("info") // "info" | "warning" | "critical"
   title    String
   body     String    @default("")

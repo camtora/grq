@@ -19,6 +19,7 @@ export type NotifCategory =
   | "hunt" // new hunt names / directed-hunt / smart-money scan
   | "agentMoves" // the agent self-tracks or self-promotes a name
   | "reports" // morning plan / midday / EOD / weekly review
+  | "checkins" // per-holding agent check-in reads (holds / "no trade") — distinct from the daily briefs
   | "members" // the OTHER member's universe/directive/kill actions
   | "messages" // the OTHER member messaged you or shared a stock (D61)
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
@@ -35,6 +36,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   hunt: "hunt",
   agentMoves: "agentMoves",
   reports: "reports",
+  checkins: "checkins",
   members: "members",
   messages: "messages",
   system: "system",
@@ -47,6 +49,7 @@ type PrefRow = {
   hunt: boolean;
   agentMoves: boolean;
   reports: boolean;
+  checkins: boolean;
   members: boolean;
   messages: boolean;
   system: boolean;

@@ -255,7 +255,9 @@ Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etD
 /** Push the agent's decision to members after a check-in — the "Check-in — …"
  *  RESEARCH note the session just wrote. Closes the gap where the agent reviews
  *  or acts on a holding's move (or a scheduled slot) but nothing notifies.
- *  Category "reports" so it groups with the daily briefs and stays muteable. */
+ *  Category "checkins" — its own toggle, so members can mute the per-holding
+ *  "hold / no trade" reads (noisy as the portfolio grows) without losing the daily
+ *  briefs (those stay "reports"). Cam 2026-06-24. */
 async function notifyCheckinDecision(startedAt: Date): Promise<{ id: number; symbol: string | null } | null> {
   try {
     const note = await prisma.journalEntry.findFirst({
@@ -263,7 +265,7 @@ async function notifyCheckinDecision(startedAt: Date): Promise<{ id: number; sym
       orderBy: { at: "desc" },
     });
     if (!note) return null;
-    await alert("info", note.title, note.body.slice(0, 800), { category: "reports" });
+    await alert("info", note.title, note.body.slice(0, 800), { category: "checkins" });
     return { id: note.id, symbol: note.symbol };
   } catch (e) {
     console.error("notifyCheckinDecision failed", e);

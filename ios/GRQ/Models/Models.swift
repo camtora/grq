@@ -180,6 +180,7 @@ struct NotificationPreferences: Codable, Equatable {
     var hunt: Bool = true
     var agentMoves: Bool = true
     var reports: Bool = true
+    var checkins: Bool = true
     var members: Bool = true
     var messages: Bool = true
     var system: Bool = true
@@ -191,6 +192,7 @@ struct NotificationPreferences: Codable, Equatable {
         (\.hunt, "hunt", "The Hunt & ideas", "New hunt names, directed-hunt results, and smart-money scans."),
         (\.agentMoves, "agentMoves", "Agent universe moves", "When the agent tracks or self-promotes a name into its tradeable universe."),
         (\.reports, "reports", "Daily reports", "Morning plan, midday brief, end-of-day close, and the weekly review."),
+        (\.checkins, "checkins", "Agent check-ins", "Each time the agent checks in on a holding — holds, passes, and “no trade” reads. Gets noisy as the portfolio grows."),
         (\.members, "members", "Member activity", "When the other member blocks, pins, promotes, or demotes a name."),
         (\.messages, "messages", "Messages", "When the other member sends you a message or shares a stock."),
         (\.system, "system", "System health", "Agent restarts and data-feed or broker hiccups (non-critical)."),

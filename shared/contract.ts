@@ -130,6 +130,7 @@ export const NotificationPreferences = z.object({
   hunt: z.boolean(), // new hunt names / directed-hunt / smart-money scan
   agentMoves: z.boolean(), // the agent self-tracks or self-promotes a name
   reports: z.boolean(), // morning plan / midday / EOD / weekly review
+  checkins: z.boolean(), // per-holding agent check-in reads (holds / "no trade")
   members: z.boolean(), // the OTHER member's universe/directive actions
   messages: z.boolean(), // the OTHER member messaged you or shared a stock (D61)
   system: z.boolean(), // agent restarts, data-feed/broker hiccups (non-critical)
