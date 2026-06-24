@@ -47,10 +47,15 @@ export default async function Portfolio() {
       where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } },
       orderBy: { at: "desc" },
     }),
-    // Intraday trading check-ins (10:00/12:30/15:00 + self-scheduled) write a
-    // "Check-in — …" RESEARCH note; match loosely so any check-in phrasing counts.
+    // Intraday trading check-ins (scheduled 10/11/13/14/15 ET + self-scheduled wakeups)
+    // write a "Check-in — …" RESEARCH note. These are FUND-LEVEL reads, so they leave
+    // `symbol` null. A held-position trigger escalation (evaluateTriggers → runMiddayCheckIn)
+    // also writes a "Check-in — …" note but TAGS it with the holding (`symbol`) — e.g. an
+    // ATD pop firing every 30 min. We deliberately EXCLUDE those here (symbol must be null)
+    // so the briefing slot stays the fund-level narrative instead of one noisy holding; the
+    // per-name notes still live on that stock's page and still push (Cam 2026-06-24).
     prisma.journalEntry.findFirst({
-      where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" } },
+      where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" }, symbol: null },
       orderBy: { at: "desc" },
     }),
     prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),

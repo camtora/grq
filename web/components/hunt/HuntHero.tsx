@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { money, pct } from "@/lib/money";
+import { pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
+import { LiveHuntPrice } from "@/components/LiveTableCells";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
 import ShareStockButton from "@/components/ShareStockButton";
@@ -8,6 +9,7 @@ import DismissButton from "@/components/DismissButton";
 import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
+import WatchedBy from "@/components/hunt/WatchedBy";
 import { wordCount } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
 
@@ -43,7 +45,9 @@ export default function HuntHero({ find, isMember, toName }: { find: HuntFind; i
             </div>
           </div>
           <div className="my-4 flex items-baseline gap-3.5">
-            {find.cur != null && <span className="font-mono text-3xl font-bold tabular-nums text-teal-50">{money(find.cur, find.currency)}</span>}
+            {find.cur != null && (
+              <LiveHuntPrice symbol={find.sym} initialCents={find.cur} currency={find.currency} className="font-mono text-3xl font-bold tabular-nums text-teal-50" />
+            )}
             {find.change30d != null && (
               <span className={`font-mono text-base font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
                 {up ? "+" : ""}
@@ -61,7 +65,9 @@ export default function HuntHero({ find, isMember, toName }: { find: HuntFind; i
             >
               full dossier →
             </Link>
-            {isMember && (find.watch === "universe" ? <WatchButton symbol={find.sym} state="universe" /> : <WatchButton symbol={find.sym} state={find.watch} />)}
+            {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
+            {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} />}
+            {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" />}
             {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
             {isMember && <DismissButton symbol={find.sym} name={find.name} />}
           </div>
@@ -74,7 +80,7 @@ export default function HuntHero({ find, isMember, toName }: { find: HuntFind; i
               <span className="uppercase tracking-wide">30-day price</span>
               {find.cur != null && (
                 <span className={`font-mono ${up ? "text-emerald-400" : "text-red-400"}`}>
-                  now {money(find.cur, find.currency)}
+                  now <LiveHuntPrice symbol={find.sym} initialCents={find.cur} currency={find.currency} flash={false} />
                   {find.change30d != null ? ` ${up ? "+" : ""}${pct(find.change30d, 0)}` : ""}
                 </span>
               )}

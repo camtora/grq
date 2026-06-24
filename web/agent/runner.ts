@@ -256,7 +256,7 @@ async function evaluateTriggers() {
       decisionSessionsToday++;
       sessionRunning = true;
       try {
-        await runMiddayCheckIn(event);
+        await runMiddayCheckIn(event, p.symbol);
       } finally {
         sessionRunning = false;
       }

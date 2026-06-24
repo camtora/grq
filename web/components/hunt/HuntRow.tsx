@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { money, pct } from "@/lib/money";
+import { pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
+import { LiveHuntPrice } from "@/components/LiveTableCells";
 import StockLogo from "@/components/StockLogo";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ShareStockButton from "@/components/ShareStockButton";
@@ -9,6 +10,7 @@ import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import HeatMeter from "@/components/hunt/HeatMeter";
+import WatchedBy from "@/components/hunt/WatchedBy";
 import { OBSCURITY_LABEL, previewText, wordCount } from "@/components/hunt/shared";
 
 // One Hunt find as a Direction-A "Heat Board" row (design handoff). Leads-not-verdicts:
@@ -29,6 +31,7 @@ export type HuntFind = {
   obscurity: number | null;
   rank: number;
   watch: WatchState;
+  watchedBy: string | null; // who's watching it (the candidate's addedBy); null unless a member watches it
   body: string;
 };
 
@@ -76,7 +79,9 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
           </div>
         </div>
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-          {find.cur != null && <span className="font-mono text-[15px] font-semibold tabular-nums text-teal-50">{money(find.cur, find.currency)}</span>}
+          {find.cur != null && (
+            <LiveHuntPrice symbol={find.sym} initialCents={find.cur} currency={find.currency} className="font-mono text-[15px] font-semibold tabular-nums text-teal-50" />
+          )}
           {find.change30d != null && (
             <span className={`font-mono text-xs font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
               {up ? "+" : ""}
@@ -133,7 +138,9 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
         <ConfidenceGauge value={find.confidence} size={58} />
       </div>
 
-      {/* actions */}
+      {/* actions — dossier · who's watching (or watch) · share · dismiss, stacked.
+          Dismiss rides the bottom of the stack (was an absolute corner ✕ that
+          overlapped the dossier button — Cam 2026-06-24). */}
       <div className="flex w-28 shrink-0 flex-col gap-2">
         <Link
           href={`/stocks/${find.sym}`}
@@ -141,20 +148,16 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
         >
           full dossier →
         </Link>
-        {isMember && find.watch === "universe" ? (
-          <span className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-center text-[11px] font-semibold text-emerald-300/80">✓ universe</span>
-        ) : isMember ? (
-          <WatchButton symbol={find.sym} state={find.watch} />
-        ) : null}
+        {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
+        {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} />}
+        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" />}
         {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
+        {isMember && (
+          <div className="flex justify-center">
+            <DismissButton symbol={find.sym} name={find.name} />
+          </div>
+        )}
       </div>
-
-      {/* dismiss */}
-      {isMember && (
-        <div className="absolute right-4 top-3">
-          <DismissButton symbol={find.sym} name={find.name} />
-        </div>
-      )}
     </div>
   );
 }

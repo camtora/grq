@@ -2,11 +2,12 @@ import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type Scree
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
 import { prisma } from "@/lib/db";
-import { money } from "@/lib/money";
 import { Card, PageHeader } from "@/components/ui";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
 import SortableTable from "@/components/SortableTable";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
+import { LiveLastCell } from "@/components/LiveTableCells";
 
 export const dynamic = "force-dynamic";
 
@@ -224,6 +225,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
         </Card>
       ) : (
         <Card className="overflow-x-auto">
+          <LiveQuotesProvider symbols={rows.map((r) => r.symbol)}>
           <SortableTable
             className="w-full text-sm"
             headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
@@ -257,9 +259,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5 text-teal-200/60">{r.sector ?? "—"}</td>
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/70">{capLabel(r.marketCapM)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">
-                    {r.priceCents !== null ? money(r.priceCents, r.currency) : "—"}
-                  </td>
+                  <LiveLastCell symbol={r.symbol} initialCents={r.priceCents} currency={r.currency} />
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
                       <ResearchButton symbol={bareTicker(r.symbol)} state={researchState(r.symbol)} canResearch={isMember} />
@@ -270,6 +270,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               ),
             }))}
           />
+          </LiveQuotesProvider>
         </Card>
       )}
       <p className="mt-3 text-xs text-teal-200/40">

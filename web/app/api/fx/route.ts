@@ -8,6 +8,12 @@ import { money } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
+// "$X CAD → US$Y" / "US$X → $Y CAD" — formatted from the realized legs + direction.
+const fxLine = (r: { fromCurrency: "CAD" | "USD"; toCurrency: "CAD" | "USD"; fromDebitedCents: number; toCreditedCents: number }) => {
+  const f = (ccy: string, c: number) => (ccy === "USD" ? `US$${(c / 100).toFixed(2)}` : `$${(c / 100).toFixed(2)} CAD`);
+  return `${f(r.fromCurrency, r.fromDebitedCents)} → ${f(r.toCurrency, r.toCreditedCents)}`;
+};
+
 // Members only — money-moving (D62). The web FxPanel POSTs here over the oauth2-proxy
 // cookie; the iOS app reads GET + POSTs over a GRQ-JWT Bearer (in middleware MOBILE_API).
 // Both resolve identity via memberFromRequest.
@@ -48,7 +54,7 @@ export async function POST(req: Request) {
     if (!r.ok) return NextResponse.json({ ok: false, error: r.reason }, { status: 400 });
     await notifyOut(
       "info",
-      `FX executed: $${(r.cadDebitedCents / 100).toFixed(2)} CAD → US$${(r.usdCreditedCents / 100).toFixed(2)}`,
+      `FX executed: ${fxLine(r)}`,
       `${who} approved request #${id} @ ${r.rate.toFixed(4)} USD/CAD.`,
       { category: "fx", actorEmail: session.email },
     ).catch(() => {});
@@ -56,14 +62,22 @@ export async function POST(req: Request) {
   }
 
   if (action === "convert") {
-    const amountCents = Number(body.amountCents);
-    if (!Number.isInteger(amountCents) || amountCents <= 0) return NextResponse.json({ error: "amountCents must be a positive integer (USD cents to acquire)." }, { status: 400 });
+    const amountCents = Number(body.amountCents); // the typed amount, in `inputCurrency` cents
+    if (!Number.isInteger(amountCents) || amountCents <= 0) return NextResponse.json({ error: "amountCents must be a positive integer (cents)." }, { status: 400 });
+    // Direction defaults to CAD→USD (back-compat); USD→CAD brings money home.
+    const fromCurrency = body.fromCurrency === "USD" ? "USD" : "CAD";
+    const toCurrency = body.toCurrency === "CAD" ? "CAD" : "USD";
+    if (fromCurrency === toCurrency) return NextResponse.json({ error: "from and to currencies must differ." }, { status: 400 });
+    // Which currency the typed amount is in. Defaults to "USD" — the historic semantics where
+    // amountCents was always the USD leg (keeps older mobile builds working).
+    const inputCurrency = body.inputCurrency === "CAD" ? "CAD" : "USD";
+    if (inputCurrency !== fromCurrency && inputCurrency !== toCurrency) return NextResponse.json({ error: "inputCurrency must be one of the two sides." }, { status: 400 });
     const note = typeof body.note === "string" ? body.note.slice(0, 300) : undefined;
-    const r = await manualConvert(amountCents, session.email, note);
+    const r = await manualConvert({ inputCurrency, inputAmountCents: amountCents, fromCurrency, toCurrency }, session.email, note);
     if (!r.ok) return NextResponse.json({ ok: false, error: r.reason }, { status: 400 });
     await notifyOut(
       "info",
-      `FX executed: $${(r.cadDebitedCents / 100).toFixed(2)} CAD → US$${(r.usdCreditedCents / 100).toFixed(2)}`,
+      `FX executed: ${fxLine(r)}`,
       `${who} converted manually @ ${r.rate.toFixed(4)} USD/CAD.`,
       { category: "fx", actorEmail: session.email },
     ).catch(() => {});

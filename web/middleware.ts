@@ -36,6 +36,7 @@ const MOBILE_API = [
   "/api/reports",         // A10 (list + /day/[date])
   "/api/stock-extras",    // A7 (lazy earnings/grades)
   "/api/symbol-search",   // A7 (Browse; member-guarded in-route)
+  "/api/quotes",          // live FMP ticker for the app's price overlay (self-guards via sessionFromRequest)
   // Member writes (self-guard via memberFromRequest; the order gate still disposes).
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
   "/api/messages",        // D61 member-to-member DMs/shares (GET thread/unread, POST send/read)

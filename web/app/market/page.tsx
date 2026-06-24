@@ -29,6 +29,16 @@ export default async function Market() {
     const s = statusBy.get(sym);
     return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
   };
+  // Who put it on the watchlist. addedBy carries system sentinels for non-member
+  // adds (seed / migration backfill) — only surface an actual person (mirrors the
+  // Watchlist's watchedBy()).
+  const watcherOf = (sym: string): string | null => {
+    const u = uBy.get(sym);
+    if (!u || u.status !== "CANDIDATE") return null;
+    const by = u.addedBy;
+    if (!by || by === "migration" || by.startsWith("seed")) return null;
+    return by;
+  };
 
   // The hunt feed = the most recent symbol-tagged "Hunt dossier" entries (one per name).
   const huntRaw = await prisma.journalEntry.findMany({
@@ -98,6 +108,7 @@ export default async function Market() {
       obscurity: d.obscurity ?? null,
       rank: 0,
       watch: watchOf(sym),
+      watchedBy: watcherOf(sym),
       body: d.body,
     };
   });

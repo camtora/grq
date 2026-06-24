@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { money } from "@/lib/money";
 
 // The detailed price history with a timeframe picker + a hover tooltip. All daily
@@ -15,7 +15,11 @@ import { money } from "@/lib/money";
 
 type Pt = { t: number; c: number }; // t = ms epoch · c = close in cents
 
-const RANGES: { key: string; days: number | null }[] = [
+// `days` slices the daily series; `intraday` is special-cased (fetched on demand). `null`
+// days = YTD. 1D draws today's intraday line; 1W..1Y slice the daily closes.
+const RANGES: { key: string; days: number | null; intraday?: boolean }[] = [
+  { key: "1D", days: null, intraday: true },
+  { key: "1W", days: 7 },
   { key: "1M", days: 30 },
   { key: "3M", days: 91 },
   { key: "6M", days: 182 },
@@ -30,25 +34,50 @@ const RANGES: { key: string; days: number | null }[] = [
 // its own card (the Today tape keeps its "opened → now · vs XIC" header).
 export default function PriceChart({
   data,
+  symbol,
   currency = "CAD",
   mode = "daily",
   label = "Price",
   bare = false,
+  heightClass = "h-56",
+  defaultRange = "1Y",
 }: {
   data: Pt[];
+  symbol?: string; // needed for the "1D" range (lazy intraday fetch)
   currency?: string | null;
   mode?: "daily" | "intraday";
   label?: string;
   bare?: boolean;
+  heightClass?: string; // plot height — default h-56; the stock page halves it to h-28
+  defaultRange?: string; // which range button is selected on first paint (daily mode)
 }) {
-  const [range, setRange] = useState("1Y");
+  const [range, setRange] = useState(defaultRange);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  // "1D" needs today's intraday line, which isn't in the daily `data`. Fetch it the first
+  // time 1D is picked (cached in state thereafter). null = not loaded; [] = loaded-but-empty.
+  const [intraday, setIntraday] = useState<Pt[] | null>(null);
+  const [intradayLoading, setIntradayLoading] = useState(false);
+  useEffect(() => {
+    if (range !== "1D" || !symbol || intraday !== null || intradayLoading) return;
+    setIntradayLoading(true);
+    fetch(`/api/intraday?symbol=${encodeURIComponent(symbol)}`)
+      .then((r) => r.json())
+      .then((d) => setIntraday(Array.isArray(d.points) ? d.points : []))
+      .catch(() => setIntraday([]))
+      .finally(() => setIntradayLoading(false));
+  }, [range, symbol, intraday, intradayLoading]);
+
+  // Intraday view: the NAV tape (mode), or the stock chart's "1D" range (today's fetched
+  // line). Either way, an HH:MM time axis instead of dates.
+  const isIntra = mode === "intraday" || range === "1D";
+
   // Slice to the selected window; fall back to the full series if a short window
-  // would leave us with fewer than two points to draw.
+  // would leave us with fewer than two points to draw. "1D" uses the fetched intraday line.
   const pts = useMemo(() => {
     if (mode === "intraday") return data; // one session — never sliced by range
+    if (range === "1D") return intraday ?? []; // [] while loading / empty → guarded below
     const last = data[data.length - 1]?.t ?? Date.now();
     let sliced = data;
     if (range === "YTD") {
@@ -62,14 +91,15 @@ export default function PriceChart({
       }
     }
     return sliced.length >= 2 ? sliced : data;
-  }, [data, range, mode]);
+  }, [data, range, mode, intraday]);
 
   const n = pts.length;
-  const min = Math.min(...pts.map((p) => p.c));
-  const max = Math.max(...pts.map((p) => p.c));
+  const hasData = n >= 2; // 1D can briefly have 0 points while the intraday fetch is in flight
+  const min = hasData ? Math.min(...pts.map((p) => p.c)) : 0;
+  const max = hasData ? Math.max(...pts.map((p) => p.c)) : 0;
   const span = max - min || 1;
-  const changePct = pts[0].c > 0 ? (pts[n - 1].c - pts[0].c) / pts[0].c : 0;
-  const up = pts[n - 1].c >= pts[0].c;
+  const changePct = hasData && pts[0].c > 0 ? (pts[n - 1].c - pts[0].c) / pts[0].c : 0;
+  const up = hasData ? pts[n - 1].c >= pts[0].c : true;
   const stroke = up ? "var(--spark-up)" : "var(--spark-down)";
 
   const xy = (i: number) => ({
@@ -89,19 +119,20 @@ export default function PriceChart({
   const hi = hoverIdx != null && hoverIdx >= 0 && hoverIdx < n ? hoverIdx : null;
   const hp = hi != null ? xy(hi) : null;
 
-  const longSpan = pts[n - 1].t - pts[0].t > 200 * 86_400_000;
+  const longSpan = hasData && pts[n - 1].t - pts[0].t > 200 * 86_400_000;
   const hhmm = (t: number) =>
     new Date(t).toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hour12: false });
   // Daily bars are stored as "ET trading day at UTC midnight" (see yahoo.ts etDayUtc),
   // so the *UTC* calendar components hold the trading day. Format daily dates in UTC —
   // formatting in any negative-offset zone (incl. the browser's local ET) reads
-  // 2026-06-22T00:00:00Z back as June 21 8pm and mislabels the weekday by a day.
+  // 2026-06-22T00:00:00Z back as June 21 8pm and mislabels the weekday by a day. Intraday
+  // points (1D / NAV tape) are real epoch ms, so format those as ET clock time.
   const fmtAxis = (t: number) =>
-    mode === "intraday"
+    isIntra
       ? hhmm(t)
       : new Date(t).toLocaleDateString("en-CA", { timeZone: "UTC", ...(longSpan ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" }) });
   const fmtFull = (t: number) =>
-    mode === "intraday"
+    isIntra
       ? `${hhmm(t)} ET`
       : new Date(t).toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
@@ -117,7 +148,7 @@ export default function PriceChart({
           {changePct >= 0 ? "+" : ""}
           {(changePct * 100).toFixed(1)}%
         </span>
-        <span className="text-[11px] text-teal-200/40">{mode === "intraday" ? "today" : range === "1Y" ? "past year" : range}</span>
+        <span className="text-[11px] text-teal-200/40">{isIntra ? "today" : range === "1Y" ? "past year" : range}</span>
       </div>
       {mode === "daily" && (
         <div className="flex gap-1">
@@ -137,17 +168,25 @@ export default function PriceChart({
     </div>
   );
 
-  const chart = (
+  const chart = !hasData ? (
+    <div className={`flex ${heightClass} items-center justify-center text-sm text-teal-200/40`}>
+      {range === "1D"
+        ? intraday === null || intradayLoading
+          ? "Loading today's prices…"
+          : "No intraday data for this session yet."
+        : "Not enough price history."}
+    </div>
+  ) : (
     <div className="text-[10px] tabular-nums text-teal-200/40">
         <div className="flex items-stretch">
-          <div className="flex h-56 w-16 shrink-0 flex-col justify-between py-[3px] pr-2 text-right">
+          <div className={`flex ${heightClass} w-16 shrink-0 flex-col justify-between py-[3px] pr-2 text-right`}>
             <span>{money(max, currency)}</span>
             <span>{money(Math.round((min + max) / 2), currency)}</span>
             <span>{money(min, currency)}</span>
           </div>
           <div
             ref={wrapRef}
-            className="relative h-56 min-w-0 flex-1 cursor-crosshair"
+            className={`relative ${heightClass} min-w-0 flex-1 cursor-crosshair`}
             onMouseMove={onMove}
             onMouseLeave={() => setHoverIdx(null)}
           >

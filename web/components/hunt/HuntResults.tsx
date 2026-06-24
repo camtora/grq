@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import RefreshHuntButton from "@/components/RefreshHuntButton";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import HuntRow, { type HuntFind } from "@/components/hunt/HuntRow";
 import HuntHero from "@/components/hunt/HuntHero";
 import HuntGridCard from "@/components/hunt/HuntGridCard";
@@ -41,7 +42,7 @@ export default function HuntResults({ finds, isMember, toName }: { finds: HuntFi
   }
 
   return (
-    <div>
+    <LiveQuotesProvider symbols={finds.map((f) => f.sym)}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {/* segmented switcher */}
         <div className="flex gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--field-bg)] p-1">
@@ -95,6 +96,6 @@ export default function HuntResults({ finds, isMember, toName }: { finds: HuntFi
       )}
 
       {view === "C" && <ScannerTable finds={finds} isMember={isMember} toName={toName} />}
-    </div>
+    </LiveQuotesProvider>
   );
 }

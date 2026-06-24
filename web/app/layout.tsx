@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { cookies } from "next/headers";
 import NavBar from "@/components/NavBar";
-import ChatDrawer from "@/components/ChatDrawer";
+import MessagesDrawer from "@/components/MessagesDrawer";
+import GrqChat from "@/components/GrqChat";
 import Tracker from "@/components/Tracker";
 import { getSession } from "@/lib/session";
 import { USERS, isOwner } from "@/lib/users";
@@ -51,7 +52,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="mx-auto max-w-[1700px] px-6 py-10">{children}</div>
         {/* Usage beacon — only for an authenticated session (everyone behind SSO). */}
         {session && <Tracker />}
-        {session?.role === "member" && <ChatDrawer meEmail={session.email} members={CHAT_MEMBERS} />}
+        {session?.role === "member" && (
+          <>
+            {/* Member↔member messages (header bubble) + the floating Ask-GRQ bubble. */}
+            <MessagesDrawer />
+            <GrqChat meEmail={session.email} members={CHAT_MEMBERS} />
+          </>
+        )}
         <footer className="mx-auto max-w-[1700px] px-6 pb-10 text-xs text-teal-200/30">
           &ldquo;Get rich quick, slowly, with receipts.&rdquo; · Markets open 9:30–16:00 ET ·
           Hard guardrails enforced in code, not vibes

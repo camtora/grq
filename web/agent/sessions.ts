@@ -256,19 +256,26 @@ Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etD
  *  RESEARCH note the session just wrote. Closes the gap where the agent reviews
  *  or acts on a holding's move (or a scheduled slot) but nothing notifies.
  *  Category "reports" so it groups with the daily briefs and stays muteable. */
-async function notifyCheckinDecision(startedAt: Date): Promise<void> {
+async function notifyCheckinDecision(startedAt: Date): Promise<{ id: number; symbol: string | null } | null> {
   try {
     const note = await prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Check-in" }, at: { gte: startedAt } },
       orderBy: { at: "desc" },
     });
-    if (note) await alert("info", note.title, note.body.slice(0, 800), { category: "reports" });
+    if (!note) return null;
+    await alert("info", note.title, note.body.slice(0, 800), { category: "reports" });
+    return { id: note.id, symbol: note.symbol };
   } catch (e) {
     console.error("notifyCheckinDecision failed", e);
+    return null;
   }
 }
 
-export async function runMiddayCheckIn(reason: string): Promise<void> {
+// `symbol` = the holding whose move triggered this check-in (evaluateTriggers). A held-
+// position trigger check-in is about ONE name, so its note must carry that symbol: it
+// files on the stock page AND stays out of the fund-level Portfolio brief (which requires
+// symbol:null) so one noisy holding can't dominate it. The push still fires (Cam 2026-06-24).
+export async function runMiddayCheckIn(reason: string, symbol?: string | null): Promise<void> {
   const startedAt = new Date();
   const ctx = await buildContext();
   const prompt = `${ctx}
@@ -281,7 +288,12 @@ The market is open. Review the trigger above against your morning game plan (get
 - If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
 Keep it tight: this is a check-in, not a research project.`;
   await runSession({ label: `decision:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 24 });
-  await notifyCheckinDecision(startedAt);
+  const note = await notifyCheckinDecision(startedAt);
+  // Belt-and-suspenders: guarantee the note carries its holding so the fund-level brief
+  // skips it even if the agent left `symbol` off (the agent reliably sets it today).
+  if (note && symbol && !note.symbol) {
+    await prisma.journalEntry.update({ where: { id: note.id }, data: { symbol: symbol.toUpperCase() } });
+  }
 }
 
 /** Scheduled / self-scheduled trading check-in — a decision-capable session that

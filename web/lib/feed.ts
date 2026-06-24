@@ -203,6 +203,8 @@ export async function fxStateResponse() {
   const row = (r: Awaited<ReturnType<typeof listFxRequests>>["pending"][number]) => ({
     id: r.id,
     createdAt: r.createdAt.toISOString(),
+    fromCurrency: r.fromCurrency,
+    toCurrency: r.toCurrency,
     amountUsdCents: r.amountUsdCents,
     estCadCents: r.estCadCents,
     reason: r.reason,
@@ -362,8 +364,11 @@ export async function todayResponse() {
     // last active report.
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" } }, orderBy: { at: "desc" } }),
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } }, orderBy: { at: "desc" } }),
-    // Intraday check-ins write a "Check-in — …" RESEARCH note; match loosely.
-    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" } }, orderBy: { at: "desc" } }),
+    // Intraday check-ins write a "Check-in — …" RESEARCH note. Fund-level check-ins leave
+    // `symbol` null; a held-position trigger escalation tags the holding (symbol). Require
+    // symbol:null so a noisy single-name trigger (e.g. ATD) can't take the brief — matches
+    // the web Portfolio page; the per-name note still lives on its stock page (Cam 2026-06-24).
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { contains: "check-in", mode: "insensitive" }, symbol: null }, orderBy: { at: "desc" } }),
     prisma.report.findFirst({ where: { kind: "EOD" }, orderBy: { createdAt: "desc" } }),
     prisma.report.findFirst({ where: { kind: "WEEKLY" }, orderBy: { createdAt: "desc" } }),
     getQuote("XIC").catch(() => null),

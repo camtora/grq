@@ -78,6 +78,8 @@ export const Portfolio = z.object({
 export const FxRequest = z.object({
   id: z.number().int(),
   createdAt: z.string(),
+  fromCurrency: z.string().nullish(), // "CAD" | "USD" — direction (older rows may be null → CAD→USD)
+  toCurrency: z.string().nullish(),
   amountUsdCents: z.number().int(),
   estCadCents: z.number().int(),
   reason: z.string(),

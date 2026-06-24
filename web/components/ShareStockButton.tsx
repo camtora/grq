@@ -83,7 +83,9 @@ export default function ShareStockButton({
     );
   }
 
-  const size = compact ? "gap-1 rounded-lg px-2.5 py-1 text-xs" : "gap-1.5 rounded-lg px-3 py-1.5 text-sm";
+  // Non-compact rides the stock-page action row, so it matches that row's button
+  // metrics (px-2 py-1 text-[11px]) instead of being a size larger (Cam 2026-06-24).
+  const size = compact ? "gap-1 rounded-lg px-2.5 py-1 text-xs" : "gap-1.5 rounded-md px-2 py-1 text-[11px]";
   return (
     <button
       onClick={share}
@@ -91,7 +93,7 @@ export default function ShareStockButton({
       title={`Share ${symbol} with ${toName}`}
       className={`inline-flex items-center border font-semibold transition-colors disabled:opacity-50 ${size} ${tone}`}
     >
-      {glyph(compact ? 13 : 15)}
+      {glyph(13)}
       {label}
     </button>
   );

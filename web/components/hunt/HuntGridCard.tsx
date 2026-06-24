@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { money, pct } from "@/lib/money";
+import { pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
+import { LiveHuntPrice } from "@/components/LiveTableCells";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
 import ShareStockButton from "@/components/ShareStockButton";
 import Sparkline from "@/components/Sparkline";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import HeatMeter from "@/components/hunt/HeatMeter";
+import WatchedBy from "@/components/hunt/WatchedBy";
 import { previewText } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
 
@@ -30,7 +32,9 @@ export default function HuntGridCard({ find, isMember, toName }: { find: HuntFin
           {find.name !== find.sym && <div className="truncate text-[10.5px] text-teal-200/50">{find.name}</div>}
         </div>
         <div className="shrink-0 text-right">
-          {find.cur != null && <div className="font-mono text-[13px] font-semibold tabular-nums text-teal-50">{money(find.cur, find.currency)}</div>}
+          {find.cur != null && (
+            <LiveHuntPrice as="div" symbol={find.sym} initialCents={find.cur} currency={find.currency} className="font-mono text-[13px] font-semibold tabular-nums text-teal-50" />
+          )}
           {find.change30d != null && (
             <div className={`font-mono text-[11px] font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
               {up ? "+" : ""}
@@ -66,7 +70,9 @@ export default function HuntGridCard({ find, isMember, toName }: { find: HuntFin
         >
           full dossier →
         </Link>
-        {isMember && <WatchButton symbol={find.sym} state={find.watch} iconOnly />}
+        {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
+        {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} compact />}
+        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" iconOnly />}
         {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} iconOnly />}
       </div>
     </div>

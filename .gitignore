@@ -11,3 +11,7 @@ screenshots/
 # APNs auth keys — secret, never commit (D53)
 *.p8
 AuthKey_*.p8
+
+# Xcode build output — TestFlight .xcarchive exports live here (large, regenerated)
+archives/
+*.xcarchive/

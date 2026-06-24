@@ -21,6 +21,7 @@ export default function LiveQuote({
   currency = "CAD",
   className = "",
   showChange = true,
+  dollars = false,
   live = false,
 }: {
   symbol: string;
@@ -29,6 +30,10 @@ export default function LiveQuote({
   currency?: string | null;
   className?: string;
   showChange?: boolean;
+  /** Render the change as the watchlist line — "↘ US$7.47 (-4.40%)": arrow + the $
+   *  move (unsigned; arrow/colour carry the sign) + the signed % — instead of the small
+   *  inline "+0.17%". Derives the $ change from the live price + day %. */
+  dollars?: boolean;
   /** Show the freshness marker (pulsing dot + "live · Ns ago") beside the price. */
   live?: boolean;
 }) {
@@ -80,14 +85,24 @@ export default function LiveQuote({
   const ageSec = ageMs !== null ? Math.max(0, Math.round(ageMs / 1000)) : null;
   const stale = ageMs !== null && ageMs > STALE_AFTER_MS;
 
+  // Today's $ move, derived from the live price and the day %: prevClose = price/(1+chg).
+  const chgCents = dollars && cents !== null && chg !== null && 1 + chg !== 0 ? Math.round(cents - cents / (1 + chg)) : null;
+
   return (
     <>
       <span className={`tabular-nums transition-colors duration-500 ${flash === "up" ? "text-emerald-300" : flash === "down" ? "text-red-300" : ""} ${className}`}>
         {cents !== null ? money(cents, currency) : "—"}
-        {showChange && chg !== null && <span className={`ml-1.5 text-xs ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(chg)}</span>}
+        {showChange && !dollars && chg !== null && <span className={`ml-1.5 text-xs ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(chg)}</span>}
       </span>
+      {dollars && chgCents !== null && chg !== null && (
+        <span className={`inline-flex items-center gap-1.5 text-xl font-semibold tabular-nums ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+          <span aria-hidden>{chg > 0 ? "↗" : chg < 0 ? "↘" : ""}</span>
+          {money(Math.abs(chgCents), currency)}
+          <span className="font-normal opacity-80">({fmtPct(chg)})</span>
+        </span>
+      )}
       {live && (
-        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
+        <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-teal-200/40">
           <span className={`h-1.5 w-1.5 rounded-full ${stale ? "bg-amber-400" : "animate-pulse bg-emerald-400"}`} />
           {stale ? "stale" : "live"}
           {ageSec !== null && <span className="tabular-nums normal-case text-teal-200/30">· {ageSec}s ago</span>}

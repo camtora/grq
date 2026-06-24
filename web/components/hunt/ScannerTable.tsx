@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { money, pct } from "@/lib/money";
+import { pct } from "@/lib/money";
 import { heatColor } from "@/lib/heat";
+import { LiveHuntPrice } from "@/components/LiveTableCells";
 import StockLogo from "@/components/StockLogo";
 import WatchButton from "@/components/WatchButton";
 import ShareStockButton from "@/components/ShareStockButton";
 import Sparkline from "@/components/Sparkline";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
+import WatchedBy from "@/components/hunt/WatchedBy";
 import { previewText } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
 
@@ -79,7 +81,14 @@ function ScannerRow({ find, isMember, toName }: { find: HuntFind; isMember: bool
         </div>
       </div>
       {/* last */}
-      <div className="text-right font-mono text-sm font-semibold tabular-nums text-teal-50">{find.cur != null ? money(find.cur, find.currency) : "—"}</div>
+      <LiveHuntPrice
+        as="div"
+        symbol={find.sym}
+        initialCents={find.cur}
+        currency={find.currency}
+        fallback="—"
+        className="text-right font-mono text-sm font-semibold tabular-nums text-teal-50"
+      />
       {/* chg */}
       <div className={`text-right font-mono text-[13px] font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
         {find.change30d != null ? `${up ? "+" : ""}${pct(find.change30d, 0)}` : "—"}
@@ -108,7 +117,9 @@ function ScannerRow({ find, isMember, toName }: { find: HuntFind; isMember: bool
         >
           dossier
         </Link>
-        {isMember && <WatchButton symbol={find.sym} state={find.watch} iconOnly />}
+        {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
+        {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} compact />}
+        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" iconOnly />}
         {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} iconOnly />}
       </div>
     </div>

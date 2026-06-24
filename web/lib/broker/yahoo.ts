@@ -174,3 +174,37 @@ export async function fetchDailyBars(symbol: string, range = "1y"): Promise<Fetc
     clearTimeout(timer);
   }
 }
+
+export type IntradayPoint = { t: number; c: number }; // t = ms epoch · c = close in cents
+
+/** Today's intraday line (5-min closes for the current session) for the stock-page
+ *  chart's "1D" range. Same crumb-free chart endpoint, finer interval. Returns [] on any
+ *  failure — the caller falls back to the daily series. */
+export async function fetchIntradayBars(symbol: string): Promise<IntradayPoint[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+    await toYahoo(symbol),
+  )}?interval=5m&range=1d`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: ctrl.signal });
+    if (!res.ok) return [];
+    const json = (await res.json()) as {
+      chart?: { result?: { timestamp?: number[]; indicators?: { quote?: { close?: (number | null)[] }[] } }[] };
+    };
+    const r = json.chart?.result?.[0];
+    const ts = r?.timestamp ?? [];
+    const close = r?.indicators?.quote?.[0]?.close ?? [];
+    const out: IntradayPoint[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const c = close[i];
+      if (typeof c !== "number" || !(c > 0)) continue; // skip gaps (null bars)
+      out.push({ t: ts[i] * 1000, c: Math.round(c * 100) });
+    }
+    return out;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}

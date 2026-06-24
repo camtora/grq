@@ -12,6 +12,8 @@ import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile } from "@/lib/fmp";
 import MarketIndices from "@/components/MarketIndices";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
+import { LiveMoverPrice } from "@/components/LiveTableCells";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
 import { getMacro, macroLine } from "@/lib/macro";
@@ -47,10 +49,7 @@ function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol:
           {sm.abbr}
         </span>
       )}
-      <div className="ml-auto text-right">
-        <div className="text-sm tabular-nums text-teal-100/80">{money(midCents)}</div>
-        <div className={`text-xs tabular-nums ${dayClass(dayBps)}`}>{signedPct(dayBps)}</div>
-      </div>
+      <LiveMoverPrice symbol={symbol} initialCents={midCents} initialBps={dayBps} />
     </li>
   );
 }
@@ -545,14 +544,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <SectionTitle>Market Movers · our tracked names</SectionTitle>
         <Card className="overflow-hidden p-1">
           {gainers.length > 0 || losers.length > 0 ? (
-            <ul className="grid gap-x-6 sm:grid-cols-2">
-              {gainers.map((m) => (
-                <MoverRow key={`g-${m.symbol}`} {...m} />
-              ))}
-              {losers.map((m) => (
-                <MoverRow key={`l-${m.symbol}`} {...m} />
-              ))}
-            </ul>
+            <LiveQuotesProvider symbols={[...gainers, ...losers].map((m) => m.symbol)}>
+              <ul className="grid gap-x-6 sm:grid-cols-2">
+                {gainers.map((m) => (
+                  <MoverRow key={`g-${m.symbol}`} {...m} />
+                ))}
+                {losers.map((m) => (
+                  <MoverRow key={`l-${m.symbol}`} {...m} />
+                ))}
+              </ul>
+            </LiveQuotesProvider>
           ) : (
             <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
           )}

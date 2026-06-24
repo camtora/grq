@@ -26,6 +26,7 @@ export default function ChatClient({
   selfLoad = false,
   owner,
   meEmail,
+  active = true,
 }: {
   initialMessages?: Msg[];
   symbol?: string;
@@ -33,6 +34,7 @@ export default function ChatClient({
   selfLoad?: boolean;
   owner?: string;
   meEmail?: string;
+  active?: boolean; // when this becomes visible, jump straight to the latest message
 }) {
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [draft, setDraft] = useState(
@@ -56,11 +58,30 @@ export default function ChatClient({
   const [pending, setPending] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  // Jump the scroll container to the latest message. The first paint (and each time
+  // the panel (re)opens) lands at the bottom instantly — no slow scroll-through of the
+  // whole history; new messages after that animate smoothly.
+  const scrollToBottom = (instant: boolean) => {
+    const el = listRef.current;
+    if (!el) return;
+    if (instant) el.scrollTop = el.scrollHeight;
+    else el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom(!didInitialScroll.current);
+    if (messages.length) didInitialScroll.current = true;
   }, [messages, pending, status]);
+
+  useEffect(() => {
+    if (active) {
+      didInitialScroll.current = false;
+      requestAnimationFrame(() => scrollToBottom(true));
+    }
+  }, [active]);
 
   async function send() {
     const message = draft.trim();
@@ -128,7 +149,7 @@ export default function ChatClient({
 
   return (
     <div className={`flex flex-col ${heightClass}`}>
-      <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+      <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto pr-1">
         {messages.length === 0 && !pending && (
           <p className="pt-10 text-center text-sm text-teal-200/40">
             Ask the agent anything — stocks, the portfolio, &ldquo;defend this position&rdquo;.
@@ -169,7 +190,6 @@ export default function ChatClient({
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       <div className="mt-4 flex items-end gap-2">

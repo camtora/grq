@@ -36,7 +36,17 @@ export default function MemberChat({ active, heightClass = "h-full" }: { active:
   const [busy, setBusy] = useState(false);
   const [otherName, setOtherName] = useState("your partner");
   const lastId = useRef(0);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  // Open straight at the latest message — instant on first paint / each (re)open,
+  // smooth for new messages after that.
+  const scrollToBottom = (instant: boolean) => {
+    const el = listRef.current;
+    if (!el) return;
+    if (instant) el.scrollTop = el.scrollHeight;
+    else el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
 
   const markRead = useCallback(() => {
     fetch("/api/messages/read", { method: "POST" })
@@ -89,8 +99,16 @@ export default function MemberChat({ active, heightClass = "h-full" }: { active:
   }, [active, loaded, markRead]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom(!didInitialScroll.current);
+    if (messages.length) didInitialScroll.current = true;
   }, [messages]);
+
+  useEffect(() => {
+    if (active) {
+      didInitialScroll.current = false;
+      requestAnimationFrame(() => scrollToBottom(true));
+    }
+  }, [active]);
 
   async function send() {
     const body = draft.trim();
@@ -120,7 +138,7 @@ export default function MemberChat({ active, heightClass = "h-full" }: { active:
 
   return (
     <div className={`flex flex-col ${heightClass}`}>
-      <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto pr-1">
         {loaded && messages.length === 0 && (
           <p className="pt-10 text-center text-sm text-teal-200/40">
             No messages yet. Say hi, or share a stock from its page.
@@ -154,7 +172,6 @@ export default function MemberChat({ active, heightClass = "h-full" }: { active:
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
 
       <div className="mt-3 flex items-end gap-2">

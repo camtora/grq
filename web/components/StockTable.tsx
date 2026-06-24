@@ -13,6 +13,8 @@ import { capTier } from "@/lib/fundamentals";
 import UniverseActions from "@/components/UniverseActions";
 import ExpandableRow from "@/components/ExpandableRow";
 import SortableTable, { type SortableColumn, type SortableRow } from "@/components/SortableTable";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
+import { LiveLastCell, LiveDayCell } from "@/components/LiveTableCells";
 import RowExtras from "@/components/RowExtras";
 import Avatar from "@/components/Avatar";
 import { personByName, ownerKeyFor } from "@/lib/people";
@@ -132,42 +134,12 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
       );
     }
     case "last":
-      return <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/80">{r.lastCents !== null ? money(r.lastCents, r.currency) : "—"}</td>;
-    case "day": {
-      // Today's move in dollars alongside the percent: derive the $ change from the
-      // last price and the day % (prevClose = last / (1 + day%)), since the quote
-      // cache only carries the bps. (Cam 2026-06-18)
-      const f = (r.dayBps ?? 0) / 10_000;
-      const chgCents =
-        r.lastCents !== null && r.dayBps !== null && 1 + f !== 0 ? Math.round(r.lastCents - r.lastCents / (1 + f)) : null;
-      return (
-        <td
-          className={`px-4 py-2.5 text-right tabular-nums ${
-            (r.dayBps ?? 0) > 0 ? "text-emerald-400" : (r.dayBps ?? 0) < 0 ? "text-red-400" : "text-teal-200/50"
-          }`}
-        >
-          {r.dayBps !== null ? (
-            // Stacked to match the design: a direction arrow + today's $ change on top,
-            // the percent in parentheses beneath — same font size. The arrow + cell
-            // colour carry the sign, so the $ value is unsigned (Cam 2026-06-19).
-            <span className="flex flex-col items-end leading-tight">
-              <span className="inline-flex items-center gap-1">
-                {f > 0 ? <span aria-hidden>↗</span> : f < 0 ? <span aria-hidden>↘</span> : null}
-                <span>{chgCents !== null ? money(Math.abs(chgCents), r.currency) : pct(f, 2)}</span>
-              </span>
-              {chgCents !== null && (
-                <span>
-                  ({f > 0 ? "+" : ""}
-                  {pct(f, 2)})
-                </span>
-              )}
-            </span>
-          ) : (
-            "—"
-          )}
-        </td>
-      );
-    }
+      // Live: reads from <LiveQuotesProvider>, falls back to the SSR snapshot (Cam 2026-06-24).
+      return <LiveLastCell symbol={r.symbol} initialCents={r.lastCents} currency={r.currency} />;
+    case "day":
+      // Live: today's $ move + percent, derived from the live price + day % (was the
+      // static SSR bps — the table now stays in sync with the stock page; Cam 2026-06-24).
+      return <LiveDayCell symbol={r.symbol} initialBps={r.dayBps} initialCents={r.lastCents} currency={r.currency} />;
     case "signals":
       return (
         <td className="px-4 py-2.5">
@@ -447,7 +419,10 @@ export default function StockTable({
 
   return (
     <Card className="overflow-x-auto">
-      <SortableTable columns={sortColumns} rows={sortRows} initialSort={initialSort} />
+      {/* One batched poll for every symbol on the page feeds the live Last/Day cells. */}
+      <LiveQuotesProvider symbols={rows.map((r) => r.symbol)}>
+        <SortableTable columns={sortColumns} rows={sortRows} initialSort={initialSort} />
+      </LiveQuotesProvider>
     </Card>
   );
 }
