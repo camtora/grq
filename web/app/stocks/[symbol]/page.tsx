@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { universeEntry, bareTicker, yahooForListing } from "@/lib/universe";
 import { fmpLogo } from "@/lib/logos";
 import { getQuote } from "@/lib/broker/quotes";
-import { getCloses } from "@/lib/bars";
+import { getCloses, refreshBars } from "@/lib/bars";
 import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
@@ -185,7 +185,19 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       prisma.agentFocus.findUnique({ where: { symbol } }),
       prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
       prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
-      getCloses(symbol, 260).catch(() => []),
+      // Self-heal the price tape for untracked names (dossier'd hunt finds, candidates):
+      // bars only get nightly-refreshed for tracked symbols, so an untracked page would
+      // otherwise have no closes → no tape/sparkline. Mirror the market/feed self-heal —
+      // if the DB has nothing, backfill from Yahoo once (keyed by the bare route symbol,
+      // toYahoo() resolves the listing) and re-read. First-visit only; then it's cached.
+      (async () => {
+        let c = await getCloses(symbol, 260).catch(() => []);
+        if (c.length < 2) {
+          await refreshBars([symbol], "1y").catch(() => 0);
+          c = await getCloses(symbol, 260).catch(() => []);
+        }
+        return c;
+      })(),
       computeSignals(symbol).catch(() => null),
       prisma.symbolDirective.findUnique({ where: { symbol } }),
       getScoreboard(symbol).catch(() => []),
