@@ -57,7 +57,12 @@ export default function Term({
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) => {
+          // Don't let a glossary tap bubble into an ancestor click handler — a
+          // sortable column header or an expandable row would otherwise also fire.
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
         className={`cursor-help border-b border-dotted border-teal-400/60 ${className}`}
         aria-label={`Explain ${title}`}
       >

@@ -6,6 +6,7 @@ import { money } from "@/lib/money";
 import { Card, PageHeader } from "@/components/ui";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
+import SortableTable from "@/components/SortableTable";
 
 export const dynamic = "force-dynamic";
 
@@ -223,20 +224,30 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
         </Card>
       ) : (
         <Card className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
-                <th className="px-4 py-3">Symbol</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Sector</th>
-                <th className="px-4 py-3">Exch</th>
-                <th className="px-4 py-3 text-right">Cap</th>
-                <th className="px-4 py-3 text-right">Price</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
+          <SortableTable
+            className="w-full text-sm"
+            headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
+            initialSort={{ key: "symbol", dir: "asc" }}
+            columns={[
+              { key: "symbol", label: "Symbol", align: "left" },
+              { key: "name", label: "Name", align: "left" },
+              { key: "sector", label: "Sector", align: "left" },
+              { key: "exchange", label: "Exch", align: "left" },
+              { key: "cap", label: "Cap", align: "right", numeric: true },
+              { key: "price", label: "Price", align: "right", numeric: true },
+              { label: null, align: "left" },
+            ]}
+            rows={rows.map((r) => ({
+              key: `${r.symbol}-${r.exchange}`,
+              sort: {
+                symbol: r.symbol,
+                name: r.name,
+                sector: r.sector,
+                exchange: r.exchange,
+                cap: r.marketCapM,
+                price: r.priceCents,
+              },
+              node: (
                 <tr key={`${r.symbol}-${r.exchange}`} className="border-t border-teal-400/10">
                   <td className="px-4 py-2.5 font-semibold text-teal-200">{r.symbol}</td>
                   <td className="px-4 py-2.5 text-teal-100/70">
@@ -256,9 +267,9 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              ),
+            }))}
+          />
         </Card>
       )}
       <p className="mt-3 text-xs text-teal-200/40">

@@ -1061,13 +1061,14 @@ struct SetPriceAlertSheet: View {
 
 /// Light haptics for the share gesture (recreates the old context-menu lift feel).
 private enum Haptics {
-    static func soft()  { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
     static func rigid() { UIImpactFeedbackGenerator(style: .rigid).impactOccurred() }
 }
 
 extension View {
-    /// Long-press to share: the view grows + taps a haptic on press (the old
-    /// context-menu lift), then fires `onShare` when held. The tight `maximumDistance`
+    /// Long-press to share: the view grows while held, then fires `onShare` + a single
+    /// haptic only once the press completes (the share trigger). No haptic on touch-down —
+    /// `pressing:` fires the instant a finger lands, which is indistinguishable from the
+    /// start of a scroll, so a tap there buzzed on every scroll. The tight `maximumDistance`
     /// lets a drag cancel the press at once, so it never fights a scroll or page swipe.
     /// Inert when `enabled` is false. Used by the stock panels and the Wire feed.
     func shareLongPress(enabled: Bool, onShare: @escaping () -> Void) -> some View {
@@ -1097,7 +1098,6 @@ private struct ShareLongPressBox<Wrapped: View>: View {
             .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 10, pressing: { p in
                 guard enabled else { return }
                 pressing = p
-                if p { Haptics.soft() }
             }, perform: {
                 guard enabled else { return }
                 pressing = false

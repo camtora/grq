@@ -12,6 +12,7 @@ import Term from "@/components/Term";
 import { capTier } from "@/lib/fundamentals";
 import UniverseActions from "@/components/UniverseActions";
 import ExpandableRow from "@/components/ExpandableRow";
+import SortableTable, { type SortableColumn, type SortableRow } from "@/components/SortableTable";
 import RowExtras from "@/components/RowExtras";
 import Avatar from "@/components/Avatar";
 import { personByName, ownerKeyFor } from "@/lib/people";
@@ -291,39 +292,79 @@ function RowDetail({ r }: { r: StockRow }) {
   );
 }
 
+// Which sort each column uses (the key matches the column name) and whether it's
+// numeric — numbers default to descending on first click, text to ascending.
+const COL_NUMERIC: Record<StockColumn, boolean> = {
+  tier: false,
+  watcher: false,
+  last: true,
+  day: true,
+  signals: true,
+  call: true,
+  upside: true,
+  conf: true,
+  position: true,
+  unrealized: true,
+  journal: true,
+  researched: true,
+};
+
+// A flat bag of comparable values for one row — fed to <SortableTable>. GRQ's call
+// (and the signal lean) sort by the needle position, so Strong Buy → Strong Sell.
+function sortValues(r: StockRow): Record<string, string | number | null> {
+  const callPos = (r.stance ? stanceMeta(r.stance)?.pos : r.rec ? stanceMeta(r.rec.label)?.pos : null) ?? null;
+  return {
+    symbol: r.symbol,
+    name: r.name,
+    tier: r.tier,
+    watcher: r.addedBy ?? null,
+    last: r.lastCents,
+    day: r.dayBps,
+    signals: (r.rec ? stanceMeta(r.rec.label)?.pos : null) ?? null,
+    call: callPos,
+    upside: r.upsidePct,
+    conf: r.confidence,
+    position: r.held ? r.mvCents : null,
+    unrealized: r.held ? r.upnlCents : null,
+    journal: r.journal,
+    researched: r.lastResearchedAt ? r.lastResearchedAt.getTime() : null,
+  };
+}
+
 export default function StockTable({
   rows,
   columns,
   isMember,
   currentUser,
   inUniverseLink = false,
+  initialSort = { key: "symbol", dir: "asc" },
 }: {
   rows: StockRow[];
   columns: StockColumn[];
   isMember: boolean;
   currentUser: string;
   inUniverseLink?: boolean; // Watchlist: render ACTIVE rows as an "In universe" link, not the Demote action (which stays on the Universe page).
+  // Default: A→Z by symbol. Pass null to keep the order the rows arrive in (the
+  // Researched tab stays newest-first). Headers stay clickable either way; the choice
+  // is client-only and resets on refresh.
+  initialSort?: { key: string; dir: "asc" | "desc" } | null;
 }) {
   const colSpan = 2 + columns.length + (isMember ? 1 : 0);
-  return (
-    <Card className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-center text-xs uppercase tracking-wider text-teal-200/40">
-            <th className="px-4 py-3">Symbol</th>
-            <th className="px-4 py-3">Name</th>
-            {columns.map((c) => (
-              <th key={c} className="px-4 py-3">
-                {HEADERS[c].label}
-              </th>
-            ))}
-            {isMember && <th className="px-4 py-3">Manage</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
+
+  // Symbol + Name lead; the page's columns follow; Manage trails (not sortable).
+  const sortColumns: SortableColumn[] = [
+    { key: "symbol", label: "Symbol" },
+    { key: "name", label: "Name" },
+    ...columns.map((c): SortableColumn => ({ key: c, label: HEADERS[c].label, numeric: COL_NUMERIC[c] })),
+    ...(isMember ? [{ label: "Manage" } as SortableColumn] : []),
+  ];
+
+  const sortRows: SortableRow[] = rows.map((r) => {
             const expandable = hasDetail(r);
-            return (
+            return {
+              key: r.symbol,
+              sort: sortValues(r),
+              node: (
             <ExpandableRow
               key={r.symbol}
               className={`stock-row border-t border-teal-400/10 ${r.held || r.pinnedBy ? "bg-teal-400/[0.05]" : ""}`}
@@ -400,10 +441,13 @@ export default function StockTable({
                 </td>
               )}
             </ExpandableRow>
-            );
-          })}
-        </tbody>
-      </table>
+              ),
+            };
+  });
+
+  return (
+    <Card className="overflow-x-auto">
+      <SortableTable columns={sortColumns} rows={sortRows} initialSort={initialSort} />
     </Card>
   );
 }

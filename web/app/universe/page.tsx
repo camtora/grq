@@ -233,7 +233,7 @@ export default async function Universe() {
             {researchedRows.length === 0 ? (
               <Card className="p-6 text-sm text-teal-200/40">No dossiers on file yet.</Card>
             ) : (
-              <StockTable rows={researchedRows} columns={RESEARCHED_COLUMNS} isMember={false} currentUser={me} />
+              <StockTable rows={researchedRows} columns={RESEARCHED_COLUMNS} isMember={false} currentUser={me} initialSort={null} />
             )}
           </section>
         }

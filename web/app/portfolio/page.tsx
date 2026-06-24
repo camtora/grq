@@ -7,6 +7,7 @@ import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
 import { soakStatus } from "@/lib/soak";
 import ActivityFeed from "@/components/ActivityFeed";
+import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import { etDateStr } from "@/agent/calendar";
@@ -203,20 +204,33 @@ export default async function Portfolio() {
                 every guardrail. Patience is a position.
               </p>
             ) : (
-              <table className="mt-2 w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
-                    <th className="px-5 py-2">Symbol</th>
-                    <th className="px-5 py-2 text-right">Qty</th>
-                    <th className="px-5 py-2 text-right"><Term k="acb" align="right">Avg cost</Term></th>
-                    <th className="px-5 py-2 text-right">Last</th>
-                    <th className="px-5 py-2 text-right"><Term k="market-value" align="right">Market value</Term></th>
-                    <th className="px-5 py-2 text-right"><Term k="unrealized-pnl" align="right">Unrealized P&L</Term></th>
-                    <th className="px-5 py-2 text-right"><Term k="weight" align="right">Weight</Term></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pf.positions.map((p) => (
+              <SortableTable
+                className="mt-2 w-full text-sm"
+                headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
+                initialSort={{ key: "symbol", dir: "asc" }}
+                columns={[
+                  { key: "symbol", label: "Symbol", align: "left" },
+                  { key: "qty", label: "Qty", align: "right", numeric: true },
+                  { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
+                  { key: "last", label: "Last", align: "right", numeric: true },
+                  { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
+                  { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
+                  { key: "weight", label: <Term k="weight" align="right">Weight</Term>, align: "right", numeric: true },
+                ]}
+                rows={pf.positions.map((p) => ({
+                  key: p.symbol,
+                  sort: {
+                    symbol: p.symbol,
+                    qty: p.qty,
+                    avgCost: p.avgCostCents,
+                    last: p.lastCents,
+                    // Market value + weight sort on the CAD-normalised value so a USD
+                    // holding sorts against a CAD one apples-to-apples.
+                    value: p.marketValueCadCents,
+                    unrealized: p.unrealizedPnlCents,
+                    weight: p.marketValueCadCents,
+                  },
+                  node: (
                     <tr key={p.symbol} className="border-t border-teal-400/10">
                       <td className="px-5 py-2.5">
                         <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
@@ -237,32 +251,36 @@ export default async function Portfolio() {
                         {pf.navCents > 0 ? pct(p.marketValueCadCents / pf.navCents) : "—"}
                       </td>
                     </tr>
-                  ))}
-                  <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
-                    <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
-                    <td className="px-5 py-2.5" colSpan={3} />
-                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
-                    <td className="px-5 py-2.5" />
-                    <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                      {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
-                    </td>
-                  </tr>
-                  {pf.usdCashCents > 0 && (
-                    <tr className="bg-teal-400/[0.03]">
-                      <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
+                  ),
+                }))}
+                footer={
+                  <>
+                    <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
+                      <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
                       <td className="px-5 py-2.5" colSpan={3} />
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                        {usd(pf.usdCashCents)}
-                        <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
-                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
                       <td className="px-5 py-2.5" />
                       <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                        {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
+                        {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                    {pf.usdCashCents > 0 && (
+                      <tr className="bg-teal-400/[0.03]">
+                        <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
+                        <td className="px-5 py-2.5" colSpan={3} />
+                        <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                          {usd(pf.usdCashCents)}
+                          <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
+                        </td>
+                        <td className="px-5 py-2.5" />
+                        <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                          {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                }
+              />
             )}
           </Card>
 
