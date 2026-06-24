@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications (D53) — RELEASE/distribution builds. A TestFlight or App
+	     Store build is distribution-signed (its provisioning profile grants the
+	     PRODUCTION aps-environment), so the entitlement here must say "production" too.
+	     A development value on a distribution build mints a token APNs rejects on BOTH
+	     gateways (prod → BadEnvironmentKeyInToken, sandbox → BadDeviceToken) — the bug
+	     that kept TestFlight push dark (2026-06-24). Debug builds use GRQ.entitlements
+	     (development → sandbox). The app reports the minted env per token so the server
+	     sends to the matching gateway. See docs/PUSH-NOTIFICATIONS.md. -->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>
