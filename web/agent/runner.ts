@@ -22,17 +22,19 @@ import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
-import { runMorningResearch, runMiddayCheckIn, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
+import { runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // In-memory day state (rebuilt from DB checks on restart, so restarts are safe).
+// NB: the ad-hoc decision budget and the held-position trigger anchors are NOT kept
+// here — they live in AgentState (DB) so a restart can't reset them. (Cam 2026-06-24:
+// they used to be in-memory, and ~8 restarts/day defeated both the daily cap and the
+// per-symbol cooldown, letting one name re-escalate ~13×.)
 let lastFullRefresh = 0;
 let lastFastRefresh = 0;
 let lastSnapshot = 0;
-let decisionSessionsToday = 0;
-let decisionsDate = "";
 let lastBarsDay = "";
 let lastLogoBackfill = 0;
 let lastFundamentalsBackfill = 0;
@@ -41,15 +43,47 @@ let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
 let startupReviewChecked = false;
 let dailyLossAlerted = "";
-const triggerCooldown = new Map<string, number>();
 let sessionRunning = false;
 
-function resetDayCounters() {
+// --- Persisted ad-hoc decision budget (AgentState) ---------------------------
+// The count of ad-hoc decision sessions used today (held-position escalations +
+// self-scheduled wakeups). Auto-resets when the ET date rolls over.
+async function getAdhocBudget(): Promise<number> {
   const today = etDateStr();
-  if (decisionsDate !== today) {
-    decisionsDate = today;
-    decisionSessionsToday = 0;
+  const s = await prisma.agentState.findUnique({ where: { id: 1 } });
+  return s && s.adhocDate === today ? s.adhocCount : 0;
+}
+async function bumpAdhocBudget(): Promise<void> {
+  const today = etDateStr();
+  const s = await prisma.agentState.findUnique({ where: { id: 1 } });
+  const count = s && s.adhocDate === today ? s.adhocCount + 1 : 1;
+  await prisma.agentState.upsert({
+    where: { id: 1 },
+    create: { id: 1, adhocDate: today, adhocCount: count },
+    update: { adhocDate: today, adhocCount: count },
+  });
+}
+
+// --- Persisted held-position trigger anchors (AgentState) --------------------
+// The day-% at which we last CHECKED each held name. evaluateTriggers fires on the
+// move SINCE that anchor (a fresh ±4% leg), not the absolute day-move.
+type TriggerAnchor = { bps: number; day: string };
+async function loadAnchors(): Promise<Map<string, TriggerAnchor>> {
+  const s = await prisma.agentState.findUnique({ where: { id: 1 } });
+  if (!s?.triggerAnchorsJson) return new Map();
+  try {
+    return new Map(Object.entries(JSON.parse(s.triggerAnchorsJson) as Record<string, TriggerAnchor>));
+  } catch {
+    return new Map();
   }
+}
+async function saveAnchors(anchors: Map<string, TriggerAnchor>): Promise<void> {
+  const json = JSON.stringify(Object.fromEntries(anchors));
+  await prisma.agentState.upsert({
+    where: { id: 1 },
+    create: { id: 1, triggerAnchorsJson: json },
+    update: { triggerAnchorsJson: json },
+  });
 }
 
 // Polite cadence: full universe every 10 min (market hours) / hourly (closed);
@@ -236,32 +270,57 @@ async function checkDailyLossPause() {
   await alert("warning", "Daily-loss pause engaged", "Day P&L ≤ −3% NAV for two consecutive checks: no new buys today. Risk-reducing sells still allowed.", { category: "risk" });
 }
 
+// Held-position trigger (every 2-min tick): fire a check when a holding has moved
+// ≥4% SINCE THE LAST TIME WE CHECKED IT — a fresh ±4% leg — not when its absolute
+// day-move is ≥4%. So a name that gaps +14% and sits there is checked ONCE; a run to
+// +18% or a reversal to +10% earns a NEW check; the same move never re-reports. The
+// anchor (the day-% at the last check) is persisted, so restarts can't resurrect the
+// drumbeat. A "note"/"ignore" triage is a non-event — it's logged, NOT pushed. (Cam
+// 2026-06-24: replaces the old absolute-≥4% + in-memory-30-min-cooldown trigger.)
 async function evaluateTriggers() {
-  if (sessionRunning || decisionSessionsToday >= HARD.maxDecisionSessionsPerDay) return;
+  if (sessionRunning) return;
+  if ((await getAdhocBudget()) >= HARD.maxDecisionSessionsPerDay) return;
   const positions = await prisma.position.findMany();
   if (positions.length === 0) return;
   const quotes = await getQuotes(positions.map((p) => p.symbol));
+  const today = etDateStr();
+  const anchors = await loadAnchors();
   for (const p of positions) {
     const q = quotes.get(p.symbol);
     if (!q || typeof q.dayChangeBps !== "number") continue;
-    if (Math.abs(q.dayChangeBps) < 400) continue;
-    const last = triggerCooldown.get(p.symbol) ?? 0;
-    if (Date.now() - last < HARD.triageCooldownMs) continue;
-    triggerCooldown.set(p.symbol, Date.now());
+    const sym = p.symbol.toUpperCase();
+    const anchor = anchors.get(sym);
+    // Baseline = the day-% at our last check on this name (or the open, 0%, for the
+    // first check of the day). Suppress unless it has moved another ±4% off that.
+    const baselineBps = anchor && anchor.day === today ? anchor.bps : 0;
+    if (Math.abs(q.dayChangeBps - baselineBps) < HARD.triggerMoveBps) continue;
 
-    const event = `Holding ${p.symbol} (${p.qty} sh, ACB $${(p.avgCostCents / 100).toFixed(2)}) has moved ${(q.dayChangeBps / 100).toFixed(2)}% today, now $${(q.midCents / 100).toFixed(2)}.`;
+    // A genuine new move. Anchor it NOW (before triage/escalation) and PERSIST, so the
+    // same move can't re-fire — even if the process restarts mid-session.
+    anchors.set(sym, { bps: q.dayChangeBps, day: today });
+    await saveAnchors(anchors);
+
+    const fromLabel = baselineBps === 0 ? "the open" : `${(baselineBps / 100).toFixed(1)}% at last check`;
+    const event = `Holding ${sym} (${p.qty} sh, ACB $${(p.avgCostCents / 100).toFixed(2)}) has moved to ${(q.dayChangeBps / 100).toFixed(2)}% today (from ${fromLabel}), now $${(q.midCents / 100).toFixed(2)}.`;
     console.log(`[trigger] ${event}`);
     const action = await runTriage(event);
-    if (action === "escalate" && decisionSessionsToday < HARD.maxDecisionSessionsPerDay) {
-      decisionSessionsToday++;
+    if (action === "escalate") {
+      if ((await getAdhocBudget()) >= HARD.maxDecisionSessionsPerDay) {
+        console.log(`[trigger] ${sym} escalation skipped — ad-hoc decision budget spent for today`);
+        continue;
+      }
+      await bumpAdhocBudget();
       sessionRunning = true;
       try {
-        await runMiddayCheckIn(event, p.symbol);
+        await runPositionCheck(event, sym);
       } finally {
         sessionRunning = false;
       }
-    } else if (action === "note") {
-      await alert("info", `Noted: ${p.symbol} moved ${(q.dayChangeBps / 100).toFixed(1)}% (no action)`, "", { category: "system", symbol: p.symbol });
+    } else {
+      // "note"/"ignore": a no-action move. The anchor is already updated so it won't
+      // re-trigger; we log it but DON'T push — a no-action move is noise on the phone
+      // (Cam 2026-06-24: "IFC moved 5.6% (no action) — I don't care").
+      console.log(`[trigger] ${sym} triage=${action} — logged, no push`);
     }
   }
 }
@@ -282,17 +341,18 @@ async function fireDueWakeups() {
     orderBy: { dueAt: "asc" },
   });
   if (!due) return;
-  if (decisionSessionsToday >= HARD.maxDecisionSessionsPerDay) {
+  if ((await getAdhocBudget()) >= HARD.maxDecisionSessionsPerDay) {
     await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "CANCELLED" } });
     await alert("warning", "Self-scheduled check-in skipped — budget spent", `"${due.reason}" came due, but today's ${HARD.maxDecisionSessionsPerDay} ad-hoc decision sessions are used up.`, { category: "system" });
     return;
   }
   await prisma.agentWakeup.update({ where: { id: due.id }, data: { status: "FIRED", firedAt: new Date() } });
-  decisionSessionsToday++;
+  await bumpAdhocBudget();
   sessionRunning = true;
   try {
+    // The check-in itself writes its "Intraday Check-in — …" note and pushes under
+    // "checkins" (notifyCheckinDecision). No separate "ran" ping — that was redundant.
     await runScheduledCheckin(`self-scheduled — ${due.reason}`);
-    await alert("info", "Self-scheduled check-in ran", due.reason, { category: "reports" });
   } finally {
     sessionRunning = false;
   }
@@ -485,7 +545,6 @@ async function maybeScheduledSessions() {
 }
 
 async function tick() {
-  resetDayCounters();
   const open = isMarketOpen();
 
   await refreshQuotes(open);

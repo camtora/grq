@@ -16,7 +16,7 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, wakeups] =
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, wakeups, agenda] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -29,6 +29,7 @@ export async function buildContext(): Promise<string> {
       getScoreboard().catch(() => []),
       getMacro().catch(() => null),
       prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } }),
+      prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "asc" } }),
     ]);
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const dialName = settings?.riskLevel ?? "BALANCED";
@@ -82,6 +83,30 @@ export async function buildContext(): Promise<string> {
     )
   ).filter((l): l is string => !!l);
 
+  // Current dossier verdict per focus name — the AUTHORITATIVE live call (latest
+  // "Dossier —" RESEARCH entry). Surfaced next to each focus note so the agent
+  // grounds on real state instead of its own scratch note, which has no update
+  // timestamp and can drift stale (e.g. L's note kept claiming a "CPI-error dossier,
+  // needs a refresh" long after the clean refresh landed it at Hold/63 — every
+  // check-in re-read the stale note and parroted it; D-fix 2026-06-24).
+  const focusSyms = [...new Set(focus.map((f) => f.symbol.toUpperCase()))];
+  const focusDossierRows = focusSyms.length
+    ? await prisma.journalEntry.findMany({
+        where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: focusSyms } },
+        orderBy: { at: "desc" },
+        select: { symbol: true, stance: true, confidence: true, at: true },
+      })
+    : [];
+  const focusDossier = new Map<string, { stance: string | null; confidence: number | null; at: Date }>();
+  for (const d of focusDossierRows) {
+    if (d.symbol && !focusDossier.has(d.symbol)) focusDossier.set(d.symbol, { stance: d.stance, confidence: d.confidence, at: d.at });
+  }
+  const focusLine = (w: { symbol: string; note: string | null }): string => {
+    const d = focusDossier.get(w.symbol.toUpperCase());
+    const call = d ? ` — GRQ's call ${d.stance ?? "?"}${d.confidence != null ? `/${d.confidence}%` : ""} as of dossier ${d.at.toISOString().slice(0, 10)}` : " — (no dossier yet)";
+    return `  ${w.symbol}${call}${w.note ? ` · your note: ${w.note}` : ""}`;
+  };
+
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
 Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — TSX session 9:30–16:00 ET.
@@ -111,12 +136,20 @@ ${
 }
 
 ## Your focus (ACTIVE names you're monitoring for an entry — update via set_focus)
-${focus.length === 0 ? "  (empty)" : focus.map((w) => `  ${w.symbol}${w.note ? ` — ${w.note}` : ""}`).join("\n")}
+The dated "GRQ's call" is the CURRENT dossier verdict and is AUTHORITATIVE. Your note is scratch text with no update timestamp — if it disagrees with a fresher dossier (e.g. claims a name "needs a refresh" or cites old data, but the dossier date is newer), the DOSSIER WINS: act on it and fix the note via set_focus. Don't re-state a stale note as if it were today's read.
+${focus.length === 0 ? "  (empty)" : focus.map(focusLine).join("\n")}
 
-## Your scheduled check-ins today (you set these; revise via schedule_checkin / cancel_checkin)
+## Your agenda — follow-ups to work at your NEXT hourly check-in (add via add_agenda, close via resolve_agenda)
+${
+  agenda.length === 0
+    ? "  (empty — park follow-ups here instead of scheduling separate sessions: \"revisit DRX once its dossier lands\", \"watch LNR for the add-zone\")"
+    : agenda.map((a) => `  #${a.id}${a.symbol ? ` [${a.symbol}]` : ""}: ${a.body}`).join("\n")
+}
+
+## Your scheduled wake-ups today (ONLY for events that can't wait until the next hourly check-in; revise via schedule_checkin / cancel_checkin)
 ${
   wakeups.length === 0
-    ? "  (none — schedule_checkin to be woken later today for an event or price level)"
+    ? "  (none — for anything that can wait an hour, use add_agenda instead)"
     : wakeups.map((w) => `  ${pad2(etParts(w.dueAt).hour)}:${pad2(etParts(w.dueAt).minute)} ET — ${w.reason}`).join("\n")
 }
 Fixed daily trading check-ins run at ${CHECKIN_TIMES_ET.join(", ")} ET (you don't schedule those).

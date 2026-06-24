@@ -35,7 +35,7 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod, weekly] = await Promise.all([
+  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod, weekly, agenda] = await Promise.all([
     getSession(),
     getPortfolio(),
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
@@ -62,7 +62,11 @@ export default async function Portfolio() {
     // The Saturday 09:00 weekly review takes the briefing slot all weekend until
     // Monday's game plan (a newer brief) supersedes it (Cam 2026-06-21).
     prisma.report.findFirst({ where: { kind: "WEEKLY" }, orderBy: { createdAt: "desc" } }),
+    // The agent's standing to-do list — follow-ups it parked for the next check-in.
+    // Shown in the right rail when non-empty (Cam 2026-06-24).
+    prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "desc" } }),
   ]);
+  const hasAgenda = agenda.length > 0;
   const name = session?.user?.name ?? "friend";
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
@@ -95,6 +99,190 @@ export default async function Portfolio() {
   const soak = soakStatus();
   const paperFrac = soak.paperRequired > 0 ? Math.min(1, soak.paperDays / soak.paperRequired) : 0;
   const totalFrac = soak.totalRequired > 0 ? Math.min(1, soak.totalDays / soak.totalRequired) : 0;
+
+  // The main cards, factored out so the layout can be arranged two ways without
+  // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
+  // grid row (Activity matches the Positions height) and brief/journal + Agenda drop to
+  // the row below; without one, the classic single-column-of-cards + full-height rail.
+  const positionsCard = (
+    <Card className="overflow-x-auto">
+      <div className="flex items-baseline justify-between px-5 pt-4">
+        <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+          Positions
+        </span>
+        <span className="text-xs text-teal-200/40">
+          {pf.quotesAsOf
+            ? `quotes delayed ~15 min · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
+            : "ACB includes commissions"}
+        </span>
+      </div>
+      {pf.positions.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-teal-200/40">
+          All cash — the agent researches at 9:00 ET and only buys when a thesis clears
+          every guardrail. Patience is a position.
+        </p>
+      ) : (
+        <SortableTable
+          className="mt-2 w-full text-sm"
+          headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
+          initialSort={{ key: "symbol", dir: "asc" }}
+          columns={[
+            { key: "symbol", label: "Symbol", align: "left" },
+            { key: "qty", label: "Qty", align: "right", numeric: true },
+            { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
+            { key: "last", label: "Last", align: "right", numeric: true },
+            { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
+            { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
+            { key: "weight", label: <Term k="weight" align="right">Weight</Term>, align: "right", numeric: true },
+          ]}
+          rows={pf.positions.map((p) => ({
+            key: p.symbol,
+            sort: {
+              symbol: p.symbol,
+              qty: p.qty,
+              avgCost: p.avgCostCents,
+              last: p.lastCents,
+              // Market value + weight sort on the CAD-normalised value so a USD
+              // holding sorts against a CAD one apples-to-apples.
+              value: p.marketValueCadCents,
+              unrealized: p.unrealizedPnlCents,
+              weight: p.marketValueCadCents,
+            },
+            node: (
+              <tr key={p.symbol} className="border-t border-teal-400/10">
+                <td className="px-5 py-2.5">
+                  <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
+                    {p.symbol}
+                  </Link>
+                </td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                  {money(p.marketValueCents)}
+                  {p.currency !== "CAD" ? <span className="ml-1 text-[10px] text-teal-200/40">{p.currency}</span> : null}
+                </td>
+                <td className="px-5 py-2.5 text-right">
+                  <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
+                </td>
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                  {pf.navCents > 0 ? pct(p.marketValueCadCents / pf.navCents) : "—"}
+                </td>
+              </tr>
+            ),
+          }))}
+          footer={
+            <>
+              <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
+                <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
+                <td className="px-5 py-2.5" colSpan={3} />
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
+                <td className="px-5 py-2.5" />
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                  {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
+                </td>
+              </tr>
+              {pf.usdCashCents > 0 && (
+                <tr className="bg-teal-400/[0.03]">
+                  <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
+                  <td className="px-5 py-2.5" colSpan={3} />
+                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                    {usd(pf.usdCashCents)}
+                    <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
+                  </td>
+                  <td className="px-5 py-2.5" />
+                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
+                    {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
+                  </td>
+                </tr>
+              )}
+            </>
+          }
+        />
+      )}
+    </Card>
+  );
+
+  const briefCard = latestBrief && (
+    <Card className="p-5">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
+          {latestBrief.kicker}
+        </span>
+        <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
+      </div>
+      <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
+      <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
+        <Sources sourcesJson={latestBrief.sourcesJson} />
+      </CollapsibleMd>
+      <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
+        <Link href={latestBrief.href} className="text-xs font-semibold text-teal-300 hover:underline">
+          {latestBrief.cta} →
+        </Link>
+      </div>
+    </Card>
+  );
+
+  const journalCard = (
+    <Card className="p-5">
+      <div className="mb-3 flex items-baseline justify-between">
+        <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
+        <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
+          journal →
+        </Link>
+      </div>
+      {recentJournal.length === 0 ? (
+        <p className="text-sm text-teal-200/40">Quiet so far.</p>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {recentJournal.map((j) => (
+            <li key={j.id} className="flex items-center gap-2">
+              <Chip tone="dim">{j.kind}</Chip>
+              <span className="truncate text-sm font-medium text-teal-50">{j.title}</span>
+              <span className="ml-auto shrink-0 text-xs text-teal-200/40">{fmtWhen(j.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+
+  const activityHeader = (
+    <div className="flex shrink-0 items-baseline justify-between px-5 pt-4">
+      <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">Activity</span>
+      <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
+        ledger →
+      </Link>
+    </div>
+  );
+
+  const agendaCard = (
+    <Card className="overflow-hidden">
+      <div className="flex items-baseline justify-between px-5 pt-4">
+        <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">Agenda</span>
+        <span className="shrink-0 text-xs text-teal-200/40">
+          {agenda.length} open · what the agent's watching for
+        </span>
+      </div>
+      <ul className="mt-2 divide-y divide-teal-400/10">
+        {agenda.map((a) => (
+          <li key={a.id} className="px-5 py-3">
+            <div className="flex items-center gap-2">
+              {a.symbol ? (
+                <Link href={`/stocks/${a.symbol}`} className="text-sm font-bold text-teal-300 hover:underline">
+                  {a.symbol}
+                </Link>
+              ) : (
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/40">Fund-level</span>
+              )}
+              <span className="ml-auto shrink-0 text-[10px] text-teal-200/40">{fmtWhen(a.createdAt)}</span>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-teal-100/70">{a.body}</p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
 
   return (
     <main>
@@ -189,166 +377,50 @@ export default async function Portfolio() {
         </Card>
       </section>
 
-      <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-        {/* Main column: positions, latest briefing, latest journal */}
-        <div className="space-y-6 lg:col-span-2">
-          <Card className="overflow-x-auto">
-            <div className="flex items-baseline justify-between px-5 pt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-                Positions
-              </span>
-              <span className="text-xs text-teal-200/40">
-                {pf.quotesAsOf
-                  ? `quotes delayed ~15 min · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
-                  : "ACB includes commissions"}
-              </span>
-            </div>
-            {pf.positions.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-teal-200/40">
-                All cash — the agent researches at 9:00 ET and only buys when a thesis clears
-                every guardrail. Patience is a position.
-              </p>
-            ) : (
-              <SortableTable
-                className="mt-2 w-full text-sm"
-                headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
-                initialSort={{ key: "symbol", dir: "asc" }}
-                columns={[
-                  { key: "symbol", label: "Symbol", align: "left" },
-                  { key: "qty", label: "Qty", align: "right", numeric: true },
-                  { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
-                  { key: "last", label: "Last", align: "right", numeric: true },
-                  { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
-                  { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
-                  { key: "weight", label: <Term k="weight" align="right">Weight</Term>, align: "right", numeric: true },
-                ]}
-                rows={pf.positions.map((p) => ({
-                  key: p.symbol,
-                  sort: {
-                    symbol: p.symbol,
-                    qty: p.qty,
-                    avgCost: p.avgCostCents,
-                    last: p.lastCents,
-                    // Market value + weight sort on the CAD-normalised value so a USD
-                    // holding sorts against a CAD one apples-to-apples.
-                    value: p.marketValueCadCents,
-                    unrealized: p.unrealizedPnlCents,
-                    weight: p.marketValueCadCents,
-                  },
-                  node: (
-                    <tr key={p.symbol} className="border-t border-teal-400/10">
-                      <td className="px-5 py-2.5">
-                        <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                          {p.symbol}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                        {money(p.marketValueCents)}
-                        {p.currency !== "CAD" ? <span className="ml-1 text-[10px] text-teal-200/40">{p.currency}</span> : null}
-                      </td>
-                      <td className="px-5 py-2.5 text-right">
-                        <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
-                      </td>
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                        {pf.navCents > 0 ? pct(p.marketValueCadCents / pf.navCents) : "—"}
-                      </td>
-                    </tr>
-                  ),
-                }))}
-                footer={
-                  <>
-                    <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
-                      <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
-                      <td className="px-5 py-2.5" colSpan={3} />
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
-                      <td className="px-5 py-2.5" />
-                      <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                        {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
-                      </td>
-                    </tr>
-                    {pf.usdCashCents > 0 && (
-                      <tr className="bg-teal-400/[0.03]">
-                        <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
-                        <td className="px-5 py-2.5" colSpan={3} />
-                        <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                          {usd(pf.usdCashCents)}
-                          <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
-                        </td>
-                        <td className="px-5 py-2.5" />
-                        <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
-                          {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                }
-              />
-            )}
-          </Card>
+      {hasAgenda ? (
+        // With an agenda: Positions and Activity share grid row 1 (so Activity stretches
+        // to the Positions height and scrolls internally), and brief/journal + Agenda drop
+        // to row 2 — putting the Agenda beside the agent's latest briefing.
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">{positionsCard}</div>
 
-          {latestBrief && (
-            <Card className="p-5">
-              <div className="mb-2 flex items-baseline justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
-                  {latestBrief.kicker}
-                </span>
-                <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
-              </div>
-              <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
-              <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
-                <Sources sourcesJson={latestBrief.sourcesJson} />
-              </CollapsibleMd>
-              <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
-                <Link href={latestBrief.href} className="text-xs font-semibold text-teal-300 hover:underline">
-                  {latestBrief.cta} →
-                </Link>
+          {/* On lg: an absolutely-filled card so the grid row track is set by Positions
+              alone; the Activity card fills that height and scrolls. On mobile it's a
+              normal block (full feed). */}
+          <div className="lg:relative lg:col-span-1 lg:self-stretch">
+            <Card className="flex flex-col overflow-hidden lg:absolute lg:inset-0">
+              {activityHeader}
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+                <ActivityFeed limit={12} compact />
               </div>
             </Card>
-          )}
+          </div>
 
-          <Card className="p-5">
-            <div className="mb-3 flex items-baseline justify-between">
-              <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
-              <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
-                journal →
-              </Link>
-            </div>
-            {recentJournal.length === 0 ? (
-              <p className="text-sm text-teal-200/40">Quiet so far.</p>
-            ) : (
-              <ul className="grid gap-3 md:grid-cols-2">
-                {recentJournal.map((j) => (
-                  <li key={j.id} className="flex items-center gap-2">
-                    <Chip tone="dim">{j.kind}</Chip>
-                    <span className="truncate text-sm font-medium text-teal-50">{j.title}</span>
-                    <span className="ml-auto shrink-0 text-xs text-teal-200/40">{fmtWhen(j.at)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        {/* Right rail: activity feed */}
-        <aside className="lg:col-span-1">
-          <Card className="overflow-hidden">
-            <div className="flex items-baseline justify-between px-5 pt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-                Activity
-              </span>
-              <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
-                ledger →
-              </Link>
-            </div>
-            <div className="mt-2">
-              <ActivityFeed limit={15} compact />
-            </div>
-          </Card>
-        </aside>
-      </section>
+          <div className="space-y-6 lg:col-span-2">
+            {briefCard}
+            {journalCard}
+          </div>
+          <aside className="lg:col-span-1">{agendaCard}</aside>
+        </section>
+      ) : (
+        // No agenda: the classic layout — a single column of cards with the full-height
+        // activity feed in the rail.
+        <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            {positionsCard}
+            {briefCard}
+            {journalCard}
+          </div>
+          <aside className="lg:col-span-1">
+            <Card className="overflow-hidden">
+              {activityHeader}
+              <div className="mt-2">
+                <ActivityFeed limit={15} compact />
+              </div>
+            </Card>
+          </aside>
+        </section>
+      )}
     </main>
   );
 }

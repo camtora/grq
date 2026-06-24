@@ -37,7 +37,12 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
       where: {
         kind: "RESEARCH",
         at: { gte: start, lt: end },
-        OR: [{ title: { startsWith: "Check-in" } }, { title: { startsWith: "Midday brief" } }],
+        OR: [
+          { title: { startsWith: "Intraday Check-in" } }, // fund-level hourly reads
+          { title: { startsWith: "Position Note" } }, // per-holding ±4%-move reads
+          { title: { startsWith: "Midday brief" } },
+          { title: { startsWith: "Check-in" } }, // legacy (pre-2026-06-24 naming)
+        ],
       },
       orderBy: { at: "desc" }, // newest first — read the day backwards from the close
     }),
@@ -97,6 +102,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
                     <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
                       <span className="shrink-0 text-xs tabular-nums text-teal-200/50">{etTime(e.at)} ET</span>
                       {e.title.startsWith("Midday brief") && <Chip tone="dim">brief</Chip>}
+                      {e.title.startsWith("Position Note") && e.symbol && <Chip tone="dim">{e.symbol}</Chip>}
                       <span className="min-w-0 flex-1 truncate text-sm font-medium text-teal-50">{e.title}</span>
                       <span className="shrink-0 text-xs text-teal-300/60 group-open:hidden">▸</span>
                       <span className="hidden shrink-0 text-xs text-teal-300/40 group-open:inline">▾</span>

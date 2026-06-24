@@ -10,7 +10,7 @@ import { createFxRequest } from "../lib/fx-requests";
 import { notifyOut } from "./alerts";
 import { computeSignals, overallSignal } from "./signals";
 import { fmpProfile } from "../lib/fmp";
-import { AGENT_VERSION, MAX_PENDING_WAKEUPS } from "./policy";
+import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
 
@@ -355,7 +355,7 @@ const requestFxTool = tool(
 
 const scheduleCheckinTool = tool(
   "schedule_checkin",
-  'Schedule your own future trading check-in LATER TODAY — e.g. "wake me at 14:05 for the Fed dot plot, then I deploy the XIC core". `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now; it must be in the future, same-day, and within market hours (9:30–16:00 ET). At that time you get a decision-capable session pre-loaded with your standing plan. Use this in your morning plan and revise it at midday. Capped at a few pending at once; these draw on your ad-hoc decision budget when they fire.',
+  'Schedule a future trading check-in LATER TODAY for something that genuinely CANNOT wait until your next hourly check-in — e.g. "wake me at 14:05 for the Fed dot plot". `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now; future, same-day, market hours (9:30–16:00 ET). At that time you get a decision-capable session pre-loaded with your plan, and it draws on your ad-hoc decision budget. PREFER add_agenda for anything that CAN wait until the next hour — a follow-up like "revisit DRX once its dossier lands" or "watch LNR for the add-zone" belongs on the agenda (the next hourly check-in works it) rather than spawning its own session + push. Reserve schedule_checkin for genuinely sub-hourly events; capped at a few pending at once.',
   { at: z.string(), reason: z.string().min(5).max(300) },
   async (args) => {
     const r = resolveEtToday(args.at);
@@ -388,6 +388,38 @@ const cancelCheckinTool = tool(
   },
 );
 
+const addAgendaTool = tool(
+  "add_agenda",
+  'Add a follow-up to your standing to-do list — the thing to come back to at your NEXT hourly check-in instead of scheduling a separate session. Use this for anything that can wait an hour: "revisit DRX once its dossier lands — promote if ≥Buy/75", "watch LNR for the $96–99 add-zone", "trim ATD if it clears $98". The next scheduled intraday check-in reads the agenda and works through it. `symbol` is optional (the name it concerns).',
+  { item: z.string().min(5).max(300), symbol: z.string().optional() },
+  async (args) => {
+    const open = await prisma.agentAgendaItem.count({ where: { status: "OPEN" } });
+    if (open >= MAX_OPEN_AGENDA) return text(`SKIP: ${open} open agenda items already (cap ${MAX_OPEN_AGENDA}). Resolve some via resolve_agenda first (list_agenda to see them).`);
+    const a = await prisma.agentAgendaItem.create({
+      data: { body: args.item, symbol: args.symbol?.toUpperCase() ?? null, createdBy: "session" },
+    });
+    return text(`AGENDA #${a.id} added: ${args.item}${a.symbol ? ` [${a.symbol}]` : ""}. Your next hourly check-in will work it.`);
+  },
+);
+
+const listAgendaTool = tool("list_agenda", "Your OPEN agenda — the follow-ups to work through this check-in (id, name, the to-do). Resolve each one you handle with resolve_agenda.", {}, async () => {
+  const items = await prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "asc" } });
+  if (items.length === 0) return text("(agenda empty)");
+  return text(items.map((a) => `#${a.id}${a.symbol ? ` [${a.symbol}]` : ""}: ${a.body}`).join("\n"));
+});
+
+const resolveAgendaTool = tool(
+  "resolve_agenda",
+  'Close an agenda item once you\'ve handled it (or it\'s no longer relevant). `outcome` is a one-line record of what you did ("promoted DRX, sized 2%", "LNR never hit the add-zone, dropping"). Use status "DONE" when you acted on it, "DROPPED" when it\'s moot.',
+  { id: z.number().int(), outcome: z.string().min(3).max(300), status: z.enum(["DONE", "DROPPED"]).optional() },
+  async (args) => {
+    const a = await prisma.agentAgendaItem.findUnique({ where: { id: args.id } });
+    if (!a || a.status !== "OPEN") return text(`SKIP: #${args.id} is not an open agenda item.`);
+    await prisma.agentAgendaItem.update({ where: { id: args.id }, data: { status: args.status ?? "DONE", outcome: args.outcome, resolvedAt: new Date() } });
+    return text(`RESOLVED #${args.id} (${args.status ?? "DONE"}): ${args.outcome}`);
+  },
+);
+
 export const grqServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
@@ -407,6 +439,9 @@ export const grqServer = createSdkMcpServer({
     scheduleCheckinTool,
     listScheduledTool,
     cancelCheckinTool,
+    addAgendaTool,
+    listAgendaTool,
+    resolveAgendaTool,
   ],
 });
 
@@ -426,6 +461,9 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__schedule_checkin",
   "mcp__grq__list_scheduled",
   "mcp__grq__cancel_checkin",
+  "mcp__grq__add_agenda",
+  "mcp__grq__list_agenda",
+  "mcp__grq__resolve_agenda",
 ];
 
 // Read-only variant for the chat (2.5c): no propose_order, no writes —

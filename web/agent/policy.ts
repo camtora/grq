@@ -16,9 +16,12 @@ export const HARD = {
   warmupMs: 5 * 60_000, // no agent trading for 5 min after a restart
   noEntriesFirstMin: 15, // no new BUYs in the first 15 min of the session
   noEntriesLastMin: 15, // …or the last 15
-  maxDecisionSessionsPerDay: 6, // AD-HOC decision budget: held-position trigger escalations + self-scheduled wakeups. The fixed CHECKIN_TIMES_ET check-ins are EXEMPT (bounded by being a short fixed list).
-  triageCooldownMs: 30 * 60_000, // per-symbol trigger cooldown
+  maxDecisionSessionsPerDay: 6, // AD-HOC decision budget: held-position trigger escalations + self-scheduled wakeups. The fixed CHECKIN_TIMES_ET check-ins are EXEMPT (bounded by being a short fixed list). Persisted per-ET-day in AgentState (Cam 2026-06-24) so restarts can't reset it.
+  triggerMoveBps: 400, // a held name fires a check when it has moved ≥4% SINCE THE LAST CHECK (a fresh ±4% leg) — not when its absolute day-move is ≥4%. So a +14% gap that holds is one check, not a 30-min drumbeat; a run to +18% or a reversal to +10% is a new check. The anchor is persisted (AgentState.triggerAnchorsJson). The 2-min scan cadence is unchanged. (Cam 2026-06-24)
 };
+
+// Anti-runaway cap on the agent's standing to-do list (AgentAgendaItem).
+export const MAX_OPEN_AGENDA = 12;
 
 // Fixed intraday trading check-ins (ET) — HOURLY 10:00→15:00 EXCEPT noon (Cam 2026-06-18,
 // was 10:00/12:30/15:00). Each is a decision-capable session that acts on the standing game

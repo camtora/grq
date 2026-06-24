@@ -102,7 +102,15 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         take: 40,
       }),
       prisma.journalEntry.findMany({
-        where: { kind: "RESEARCH", OR: [{ title: { startsWith: "Check-in" } }, { title: { startsWith: "Midday brief" } }] },
+        where: {
+          kind: "RESEARCH",
+          OR: [
+            { title: { startsWith: "Intraday Check-in" } },
+            { title: { startsWith: "Position Note" } },
+            { title: { startsWith: "Midday brief" } },
+            { title: { startsWith: "Check-in" } }, // legacy (pre-2026-06-24 naming)
+          ],
+        },
         orderBy: { at: "desc" },
         take: 400,
         select: { at: true },

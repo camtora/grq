@@ -542,7 +542,36 @@ model AgentState {
   // record powering the Hunt page's "directed hunt" banner. A blank refresh and the
   // daily scheduled hunt clear it (broad run); a briefed submit overwrites it.
   huntBrief     String?
+  // Held-position trigger anchors (Cam 2026-06-24): the day-% at which we last CHECKED
+  // each held name, so evaluateTriggers fires on the MOVE-SINCE-LAST-CHECK (a fresh ±4%
+  // leg), not the absolute day-move. Persisted so a restart can't wipe it and resurrect
+  // the same-move drumbeat. JSON: { "ATD": { "bps": 1400, "day": "2026-06-24" } }.
+  triggerAnchorsJson String?
+  // Ad-hoc decision budget, persisted (Cam 2026-06-24): the count of ad-hoc decision
+  // sessions (held-position escalations + self-scheduled wakeups) used on `adhocDate`.
+  // Was in-memory and reset on every restart, defeating the daily cap (8 restarts/day
+  // let ATD re-escalate ~13×). Auto-resets when the ET date rolls over.
+  adhocDate     String?
+  adhocCount    Int       @default(0)
   updatedAt     DateTime  @updatedAt
+}
+
+// The agent's standing to-do list (Cam 2026-06-24). Instead of self-scheduling a
+// separate decision session + push for every "revisit X when its dossier lands"
+// follow-up, the agent files it here and the NEXT hourly intraday check-in works
+// through it — folding follow-ups into the scheduled cadence rather than spawning
+// noise. schedule_checkin stays for the rare event that genuinely can't wait an hour.
+model AgentAgendaItem {
+  id         Int       @id @default(autoincrement())
+  body       String // the to-do, e.g. "Revisit DRX once its dossier lands — promote if ≥Buy/75"
+  symbol     String? // the name it concerns, if any (for display + deep-link)
+  status     String    @default("OPEN") // OPEN | DONE | DROPPED
+  createdBy  String // the session label that added it
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  outcome    String? // how it was handled, set when resolved
+
+  @@index([status])
 }
 
 // Agent self-scheduling: a decision session can queue its own future trading
