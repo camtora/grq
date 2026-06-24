@@ -5,11 +5,13 @@ each member's iOS devices via APNs, gated by per-user preferences. This is the
 operational guide: the architecture, the categories, the Apple-portal steps (the only
 part a human must do), config, deploy, and verification.
 
-**Status (2026-06-23): LIVE.** The Apple-portal steps are done and the `APNS_*` env is
-set in `.env` + both containers — `apnsConfigured()` is true and APNs delivers to
-registered devices. Cam's device is registered (sandbox/Xcode build); a member only
-no-ops if they have no `DeviceToken` row yet (e.g. Graham hasn't opened the app). The
-config/runbook below is kept for reference (key rotation, a fresh device, redeploy).
+**Status (2026-06-24): LIVE to production (TestFlight).** Verified end-to-end —
+`pushNotify({category:"trades"})` lands on Cam's TestFlight device. Getting here took
+fixing a three-layer failure (see **Troubleshooting: the 2026-06-24 production-push
+chase** below); the headline lesson: **GRQ has TWO env-split APNs keys and the server
+must use the production one (`93LXUPS3V6`), NOT the sandbox-only `9VAQ4T6CYS`.** A member
+only no-ops if they have no `DeviceToken` row yet (e.g. Graham hasn't opened the app).
+The config/runbook below is kept for reference (key rotation, a fresh device, redeploy).
 
 ---
 
@@ -37,8 +39,20 @@ event (a fill, a dossier, a kill-switch flip, …)
   root `.env` via `env_file`, so one place covers both.
 - **Tokens carry their env.** Each device token is `sandbox` or `production`; the
   server sends it to the matching gateway (`api.sandbox.push.apple.com` vs
-  `api.push.apple.com`). The single `.p8` Auth Key works for BOTH — token auth is not
-  environment-specific (unlike the old certificate model). One key, both gateways.
+  `api.push.apple.com`).
+- **⚠️ Two env-split keys — NOT one universal key.** The textbook says a token-auth
+  `.p8` works for both gateways. In GRQ's account that is **not** what we observed: there
+  are two APNs keys under team `3WR9SN94Q4`, and each only delivers to one environment:
+  - `AuthKey_93LXUPS3V6.p8` → **production** tokens (TestFlight/App Store). **This is the
+    one the server must use.** `APNS_KEY_ID=93LXUPS3V6`.
+  - `AuthKey_9VAQ4T6CYS.p8` → **sandbox** tokens (Xcode debug builds) only.
+
+  Send a production token with the sandbox key and APNs returns `403
+  BadEnvironmentKeyInToken` (prod gateway) / `BadDeviceToken` (sandbox gateway) — a
+  rejection that *looks* like a bad build but is actually the wrong key. Real users are
+  all production, so the production key is what matters; the sandbox key only matters for
+  local Xcode debugging. If you ever need both to work at once, `sendApns` would have to
+  pick the key per token-env (not built — no real sandbox users).
 
 ### Sandbox vs production (the gotcha that cost us a test)
 
@@ -134,28 +148,33 @@ column + a contract field exist as placeholders; no event is wired to it yet.
 
 ## Server config (`.env`, then rebuild)
 
-**Done (2026-06-23) — kept for reference / key rotation.** The block is set in `.env`
-(env_file rule: **no quotes**):
+**Done (2026-06-24) — kept for reference / key rotation.** The block is set in `.env`
+(env_file rule: **no quotes**). **Use the production key `93LXUPS3V6`** (see the two-key
+gotcha above — `9VAQ4T6CYS` is sandbox-only and silently drops every TestFlight device):
 
 ```bash
-APNS_KEY_ID=XXXXXXXXXX
+APNS_KEY_ID=93LXUPS3V6
 APNS_TEAM_ID=3WR9SN94Q4
 APNS_BUNDLE_ID=ca.camerontora.grq
-APNS_KEY_B64=<base64 of the .p8>      # base64 -w0 AuthKey_XXXXXXXXXX.p8
+APNS_KEY_B64=<base64 of the .p8>      # base64 -w0 AuthKey_93LXUPS3V6.p8
 ```
 
 `APNS_KEY_B64` is preferred (env_file-safe — no newlines, no `$`). Alternatives the
 sender also accepts: `APNS_KEY_PATH` (a mounted .p8 file) or `APNS_KEY` (raw PEM with
-`\n` escapes). Then rebuild both services so they pick up the env + new code:
+`\n` escapes). The `.p8` files live in the repo root (gitignored, untracked).
+
+**Changing only `.env` is an env-only change — NO image rebuild needed.** Just recreate
+the push-sending containers so they re-read the `env_file` (and re-mint the cached
+provider JWT with the new key):
 
 ```bash
 cd /home/camerontora/grq
-docker-compose build web && docker-compose up -d web && docker image prune -f
-docker-compose build agent && docker-compose up -d agent && docker image prune -f
-# (chat doesn't send push — no rebuild needed unless its source changed)
+docker-compose up -d --force-recreate web agent chat   # all three call pushNotify
 ```
 
-Watch `/var` between builds (the agent image is ~3.5 GB — see CLAUDE.md disk notes).
+(`web` = member-action routes, `agent` = the runner/alerts, `chat` also links the lib.)
+A rebuild is only needed when `web/lib/push/*` **source** changes — then build per
+CLAUDE.md disk rules (the agent/chat images are ~3.5 GB; watch `/var`).
 
 ## Verify
 
@@ -169,6 +188,70 @@ Watch `/var` between builds (the agent image is ~3.5 GB — see CLAUDE.md disk n
    `BadDeviceToken` auto-prunes the row.
 4. **Toggles.** Settings → Notifications (web *and* iOS) → flip a category off → confirm
    that category's events stop while trades/risk keep arriving.
+
+## Troubleshooting: the 2026-06-24 production-push chase
+
+TestFlight push was dark for days. It was **three independent bugs stacked**, each hiding
+the next. If a real (production) device gets no push, walk these in order:
+
+**1. TestFlight is serving a stale build (build number never bumped).**
+`CFBundleVersion` was a hardcoded literal `1` in `ios/GRQ/Info.plist` (it wins over the
+`CURRENT_PROJECT_VERSION` build setting). Re-archiving produced build `1` again; App Store
+Connect **silently rejects a duplicate build number**, so TestFlight kept serving the old
+binary and reinstalling "the update" gave back the same broken app. **Always bump the
+build number before re-archiving**, and confirm the installed build number on-device.
+
+**2. The archive baked `aps-environment=development` (wrong signing identity).**
+The Release config pinned `CODE_SIGN_IDENTITY = "iPhone Developer"` (a *development*
+identity) with no `CODE_SIGN_STYLE`, so automatic signing matched the dev "iOS Team
+Provisioning Profile" and downgraded the entitlement to `development`. A distribution
+build with a development push entitlement mints a token APNs rejects. Fix: Release →
+`CODE_SIGN_IDENTITY = "Apple Development"` + `CODE_SIGN_STYLE = Automatic` (lets Xcode
+upgrade to Apple Distribution at archive/export). Debug stays sandbox.
+  - *Red herring:* the signing cert shows `Apple Development: Cameron Tora (X95943D6H3)`.
+    That 10-char code is the **individual cert identifier**, NOT a wrong team — the team
+    is still `3WR9SN94Q4`. One team, "Cameron Tora (Developer Team)", Admin. Not the bug.
+
+**3. THE REAL WALL — the server used the sandbox-only APNs key.** See the two-key gotcha
+above. Even a perfectly production-signed build was rejected because `APNS_KEY_ID` was
+`9VAQ4T6CYS` (sandbox-only). This was invisible until bugs 1–2 were fixed and a *valid
+production token* finally existed to test against. Fix: `APNS_KEY_ID=93LXUPS3V6`.
+
+### The diagnostics that actually localize it
+
+- **Verify the artifact, not the project.** Under automatic signing the `.xcarchive` is
+  *development*-signed and only re-signed to production at the **Distribute → export**
+  step — so inspecting the archive misleads. Instead **export the `.ipa`** (Distribute
+  App → App Store Connect → **Export**, not Upload) and read its *final* signed
+  entitlements. Win condition: `aps-environment: production`, `get-task-allow: false`,
+  `Cloud Managed Apple Distribution` cert, an `…Store Provisioning Profile`.
+- **Probe a known production token with each key, on both gateways.** This is what
+  exposed bug 3. From the agent container (it has `jsonwebtoken` + `tsx`):
+  ```
+  # mint a JWT per .p8 (issuer = team 3WR9SN94Q4, kid = key id) and POST
+  # /3/device/<token> to api.push.apple.com AND api.sandbox.push.apple.com
+  # 93LXUPS3V6 + prod token + prod gateway → 200 OK   ← the right key
+  # 9VAQ4T6CYS + prod token + prod gateway → 403 BadEnvironmentKeyInToken
+  ```
+- **Decode an embedded profile (from an `.xcarchive` or unzipped `.ipa`):**
+  ```
+  openssl smime -inform DER -verify -noverify -in .../embedded.mobileprovision \
+    | grep -A1 -E 'aps-environment|team-identifier|<key>Name'
+  # production App Store profile → aps-environment=production, NO ProvisionedDevices
+  ```
+- **Stale device token?** iOS vends a sticky token per app+device; a clean **delete +
+  reinstall** (not an update) forces a fresh token — the hex *changing* confirms the old
+  one was stale. (It wasn't the root cause here, but it's a cheap isolation step.)
+
+### Error-code cheat sheet (what APNs is really telling you)
+
+| APNs response | Means | Likely fix |
+|---|---|---|
+| `200` | delivered | — |
+| `403 InvalidProviderToken` | JWT/key bad or key not in the issuer team | check `APNS_KEY_ID`/`APNS_KEY_B64`/`APNS_TEAM_ID` |
+| `403 BadEnvironmentKeyInToken` | key's environment ≠ the token's | wrong `.p8` for this token-env → use the other key |
+| `400 BadDeviceToken` | token invalid for (topic, environment) | dev-entitled build, wrong topic, or stale token |
+| `410` / `Unregistered` | app uninstalled | token auto-pruned by `notify.ts` |
 
 ## Files
 

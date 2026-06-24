@@ -1535,3 +1535,45 @@ backgrounded-but-alive, else the foreground reconcile catches up on next open. *
 only the read ones — needs `Notification.id` in the APNs payload), live badge counts on alert sends, `collapse-id`
 grouping. **Division of labor:** web shipped + deployed by the agent; the **iOS half is code-only here** (no Xcode on
 the host) — Cam archives → TestFlight → installs, then we verify Phase 3. Plan: `docs/PUSH-CLEAR-PLAN.md`.
+
+### D65 — FX is bidirectional + can't overdraw: USD→CAD path + a source-funds guard (Cam, 2026-06-24)
+**Context:** D62 only ever moved money CAD→USD, and `fx-requests.ts` had no sufficient-funds check — so a member
+convert of US$8,000 (≈$11.4k CAD) ran the **CAD balance negative** (−$1,647.71) because IBKR paper happily filled it
+on margin. Two bugs: one-way only, and no overdraw guard. **Decision (Cam):** money must move **both ways**, and **no
+conversion may overdraw the source currency** (no margin — house rule #3). **What shipped (web only):** (1)
+**`lib/fx-requests.ts` is now bidirectional** — `createFxRequest`/`manualConvert` take `fromCurrency`/`toCurrency`
+(default CAD→USD, so the agent's `request_fx` path is unchanged). `amountUsdCents` is always the **USD leg** (USD
+acquired on CAD→USD, USD spent on USD→CAD); `estCadCents` is the CAD leg; the broker gets the **TO-currency** amount
+(`toCurrency==="USD" ? amountUsdCents : estCadCents`). Both `SimBroker` and `IBKRBroker` `convertCurrency` already
+handled both directions (BUY/SELL on USD.CAD IDEALPRO) — the gap was purely this layer. (2) **`checkFunds` guard** in
+`executeRequest` refuses any conversion whose source leg exceeds the **mirrored broker balance** (`Account.cashCents`
+/ `usdCashCents`) — marks the request FAILED, never calls the broker. (3) The allocation/size **dials gate only
+CAD→USD** (adding USD); USD→CAD de-risks → cap-free (still kill-switch + funds gated). (4) `FxExecuteResult` +
+`fxStateResponse` now carry `fromCurrency`/`toCurrency`; the API `convert` action accepts a direction; **`FxPanel`**
+gained a CAD→USD / USD→CAD toggle + direction-aware row labels. **Remediation:** converted **US$3,000 → CA$4,259.55
+@ 1.41985** (IBKR paper, request #5) → CAD back to **+$2,611.84**, USD $6,000, USD allocation 50%→34%. **Verified:** a
+CAD→US$5,000 attempt (over the $2,611 held) was blocked — "Insufficient CAD … No margin" — no money moved. iOS FX
+panel still shows one-way copy (ignores the new fields harmlessly) — a later iOS pass can expose USD→CAD.
+
+### D66 — TestFlight push finally lands: the wrong APNs key (and a three-layer signing chase) (Cam, 2026-06-24)
+**Context:** D53 declared iOS push "LIVE" on 2026-06-23, but no TestFlight device ever actually received one (Cam
+missed the 9:07 alert). Diagnosing it surfaced **three independent bugs stacked**, each masking the next:
+**(1) stale TestFlight builds** — `CFBundleVersion` was a hardcoded literal `1` in `ios/GRQ/Info.plist` (it wins over
+the `CURRENT_PROJECT_VERSION` build setting), so every re-archive was build `1`; App Store Connect silently rejects a
+duplicate build number, so TestFlight kept serving the old binary. **(2) dev `aps-environment` in the archive** — the
+Release config pinned `CODE_SIGN_IDENTITY = "iPhone Developer"` (a development identity) with no `CODE_SIGN_STYLE`, so
+automatic signing matched the dev profile and baked `aps-environment=development` — a distribution build with a dev
+push entitlement mints a token APNs rejects on both gateways. **(3) THE REAL WALL — the server used the wrong APNs
+key.** GRQ has **two env-split `.p8` keys** under team `3WR9SN94Q4`: `93LXUPS3V6` delivers to **production** tokens,
+`9VAQ4T6CYS` only to **sandbox**. `APNS_KEY_ID` was set to `9VAQ4T6CYS`, so every TestFlight (production) device was
+rejected with `403 BadEnvironmentKeyInToken` no matter how perfect the build — invisible until bugs 1–2 were fixed and
+a real production token existed to test against. **Decision/fixes:** iOS — bump build number per release; Release
+config → `CODE_SIGN_IDENTITY = "Apple Development"` + `CODE_SIGN_STYLE = Automatic` (Xcode upgrades to Apple
+Distribution at archive/export). Server — `APNS_KEY_ID=93LXUPS3V6` + matching `APNS_KEY_B64`; env-only change →
+`docker-compose up -d --force-recreate web agent chat` (no rebuild). **Diagnostic technique that localized #3:** probe
+a known production token with each `.p8` on both gateways; and verify the **exported `.ipa`** entitlements (not the
+`.xcarchive`, which automatic signing leaves development-signed until the export re-signs). **Verified:**
+`pushNotify({category:"trades"})` landed on Cam's TestFlight phone. The `X95943D6H3` on the signing cert is the
+individual cert identifier, NOT a wrong team — a red herring. Full runbook + error-code cheat sheet in
+`docs/PUSH-NOTIFICATIONS.md` (Troubleshooting). Graham still gets nothing until he installs + opens the app (no
+`DeviceToken` row yet).

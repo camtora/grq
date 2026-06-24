@@ -15,7 +15,14 @@ import { readFileSync } from "node:fs";
 //
 // A device token carries the env that minted it ("production" = TestFlight/store,
 // "sandbox" = an Xcode debug build); they use different gateways, so we send each
-// token to its own host. The provider JWT + key are shared across both.
+// token to its own host with the single configured key.
+//
+// ⚠️ GRQ's two .p8 keys are ENV-SPLIT (NOT the textbook "one universal key"): the
+// configured key only delivers to ONE gateway's tokens. Use the PRODUCTION key
+// (APNS_KEY_ID=93LXUPS3V6) — 9VAQ4T6CYS is sandbox-only and silently drops every real
+// TestFlight device (returns 403 BadEnvironmentKeyInToken). Real users are all
+// production, so this is fine; sandbox tokens (local Xcode builds) just won't deliver.
+// See docs/PUSH-NOTIFICATIONS.md (the two-key gotcha + Troubleshooting).
 
 const DEFAULT_TEAM_ID = "3WR9SN94Q4";
 const DEFAULT_BUNDLE_ID = "ca.camerontora.grq";
