@@ -1,9 +1,9 @@
 import SwiftUI
 
-// MARKETS — the hub folding the four web market destinations behind one tab:
-// Watchlist · Universe · Browse · Smart Money. Universe = the investable set the agent
-// may buy; Watchlist = candidates being researched; Browse = screener search to add a
-// name; Smart Money = what notable portfolios are doing.
+// MARKETS — the hub folding the web market destinations behind one tab:
+// Watchlist · Universe · Smart Money. Universe = the investable set the agent may buy;
+// Watchlist = candidates being researched; Smart Money = what notable portfolios are
+// doing. (Browse — the screener search — is now its own bottom-bar tab.)
 struct MarketsView: View {
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
@@ -15,7 +15,7 @@ struct MarketsView: View {
 
     private var isMember: Bool { auth.currentUser?.role == .member }
 
-    enum MarketTab: String, CaseIterable { case watchlist = "Watchlist", universe = "Universe", browse = "Browse", smartMoney = "Smart Money" }
+    enum MarketTab: String, CaseIterable { case watchlist = "Watchlist", universe = "Universe", smartMoney = "Smart Money" }
 
     var body: some View {
         NavigationStack {
@@ -28,7 +28,6 @@ struct MarketsView: View {
                         switch tab {
                         case .watchlist:  rows(watchlist, candidates: true)
                         case .universe:   rows(universe, candidates: false)
-                        case .browse:     BrowseSection(isMember: isMember) { note in actionNote = note }
                         case .smartMoney: SmartMoneySection()
                         }
                     }
@@ -164,6 +163,35 @@ struct MarketRow: View {
             }
         }
         .opacity(name.directive == .noFly ? 0.55 : 1)
+    }
+}
+
+// MARK: - Browse tab (the screener search, lifted out of Markets onto its own bottom-bar tab)
+
+struct BrowseTabView: View {
+    @EnvironmentObject private var auth: AuthManager
+    @Environment(\.colorScheme) private var scheme
+    @State private var actionNote: String?
+
+    private var isMember: Bool { auth.currentUser?.role == .member }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                BrandHeader(title: "BROWSE")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Search any ticker or company, then watch it onto the watchlist — the agent dossiers it.")
+                            .font(.caption).foregroundStyle(Theme.palette(scheme).textMuted)
+                        if let actionNote { Text(actionNote).font(.caption).foregroundStyle(Theme.palette(scheme).accentText) }
+                        BrowseSection(isMember: isMember) { note in actionNote = note }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 32)
+                }
+            }
+            .background(ScreenBackground().ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+        }
     }
 }
 

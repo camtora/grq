@@ -98,19 +98,22 @@ struct RootView: View {
     }
 }
 
-// The 6-button bar: Today · Fund · Hunt · Markets · Wire · More (Today is the default
+// The 6-button bar: Today · Fund · Hunt · Markets · Wire · Browse (Today is the default
 // landing — the splash fades into it). The system TabView shows only 5 on iPhone (it
 // collapses the rest into a "More" tab), and Markets being buried made it hard to reach
 // — so we drive a CUSTOM bar. Visited tabs stay alive (state + nav stacks + pollers
 // preserved, like the system bar) and load lazily on first tap. Chat is a top-right
-// button on every screen → the unified chat sheet, presented here.
+// button on every screen → the unified chat sheet, presented here. The MORE page (fund
+// controls + the long tail) moved off the bar onto the header avatar → the `more` sheet.
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var glossary: GlossaryPresenter
     @EnvironmentObject private var push: PushManager
     @Environment(\.colorScheme) private var scheme
     @StateObject private var chat = ChatLauncher()
     @StateObject private var inbox = MessagesInbox()
+    @StateObject private var more = MoreLauncher()
     @State private var selection = 0     // Today (the splash fades into it)
     @State private var visited: Set<Int> = [0]
 
@@ -120,7 +123,7 @@ struct MainTabView: View {
         ("Hunt", "binoculars.fill"),
         ("Markets", "chart.bar.fill"),
         ("Wire", "dot.radiowaves.left.and.right"),
-        ("More", "ellipsis.circle.fill"),
+        ("Browse", "magnifyingglass"),
     ]
 
     var body: some View {
@@ -139,6 +142,7 @@ struct MainTabView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .environmentObject(chat)
         .environmentObject(inbox)
+        .environmentObject(more)
         // The unified chat (member thread + GRQ agent). Pushed StockDetailViews (from
         // shared-stock cards) need auth + glossary.
         .sheet(isPresented: $chat.show) {
@@ -146,6 +150,19 @@ struct MainTabView: View {
                 .environmentObject(auth)
                 .environmentObject(inbox)
                 .environmentObject(glossary)
+        }
+        // MORE — opened from the header avatar on every screen. Messages lives inside,
+        // so when its row asks for chat we open it AFTER More fully dismisses (one sheet
+        // at a time). Sheets don't inherit environment — re-inject what More needs.
+        .sheet(isPresented: $more.show, onDismiss: {
+            if more.openChatAfterClose { more.openChatAfterClose = false; chat.show = true }
+        }) {
+            MoreView()
+                .environmentObject(auth)
+                .environmentObject(theme)
+                .environmentObject(inbox)
+                .environmentObject(glossary)
+                .environmentObject(more)
         }
         .task { inbox.start() }
         // A tapped message push (no symbol) opens the unified chat (member thread).
@@ -161,7 +178,7 @@ struct MainTabView: View {
         case 2: HuntView()
         case 3: MarketsView()
         case 4: WireView()
-        default: MoreView()
+        default: BrowseTabView()
         }
     }
 
@@ -185,16 +202,7 @@ struct MainTabView: View {
             visited.insert(i)
         } label: {
             VStack(spacing: 3) {
-                ZStack {
-                    Image(systemName: tabs[i].icon).font(.system(size: 18))
-                    if i == 5 && inbox.unread > 0 {
-                        Text("\(min(inbox.unread, 9))")
-                            .font(.system(size: 9, weight: .black)).foregroundStyle(.white)
-                            .frame(width: 15, height: 15)
-                            .background(Circle().fill(p.neg))
-                            .offset(x: 11, y: -9)
-                    }
-                }
+                Image(systemName: tabs[i].icon).font(.system(size: 18))
                 Text(tabs[i].title).font(.system(size: 9, weight: .semibold))
             }
             .foregroundStyle(on ? p.accent : p.textMuted)

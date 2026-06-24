@@ -42,7 +42,7 @@ struct TodayView: View {
             Text("\(t.edition.label) · \(t.dateISO)")
                 .font(.caption2.weight(.bold)).tracking(0.8).foregroundStyle(p.textMuted)
             ChatButton()
-            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
+            AvatarButton()
         }
         .padding(.top, 4)
     }

@@ -1,12 +1,21 @@
 import SwiftUI
 
+/// Drives the MORE sheet (opened from the header avatar). `openChatAfterClose` lets the
+/// Messages row hand off to the chat sheet once More fully dismisses — one sheet at a time.
+final class MoreLauncher: ObservableObject {
+    @Published var show = false
+    var openChatAfterClose = false
+}
+
 // MORE — the fund's controls + the long tail: profile, the risk dial, the (real,
-// Face-ID-gated) kill switch, the soak gate, Reports, About, theme, sign out.
+// Face-ID-gated) kill switch, the soak gate, Reports, About, theme, sign out. Presented
+// as a sheet from the header avatar (not a tab).
 struct MoreView: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: ThemeManager
-    @EnvironmentObject private var chat: ChatLauncher
     @EnvironmentObject private var inbox: MessagesInbox
+    @EnvironmentObject private var more: MoreLauncher
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var settings: FundSettings?
     @State private var killOn = false
@@ -19,7 +28,7 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                BrandHeader(title: "MORE")
+                sheetHeader
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         memberCard
@@ -59,11 +68,33 @@ struct MoreView: View {
         }
     }
 
+    // The sheet's own header (More is presented, not a tab): wordmark + a close button.
+    private var sheetHeader: some View {
+        let p = Theme.palette(scheme)
+        return HStack(spacing: 10) {
+            BrandLogo(height: 24)
+            Text("MORE").font(.system(size: 13, weight: .black, design: .rounded)).tracking(1)
+                .foregroundStyle(p.textMuted)
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.subheadline.weight(.bold))
+                    .foregroundStyle(p.textMuted)
+                    .padding(9)
+                    .background(Circle().fill(p.cardBg))
+                    .overlay(Circle().strokeBorder(p.cardBorder, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+    }
+
     // Member-to-member chat (D61) — a Button (sheet launcher) styled like the link rows,
-    // with an unread count. Mirrors the More-tab badge.
+    // with an unread count. Hands off to the chat sheet once More dismisses (we can't
+    // stack a second sheet on top of this one).
     private var messagesRow: some View {
         let p = Theme.palette(scheme)
-        return Button { chat.show = true } label: {
+        return Button { more.openChatAfterClose = true; dismiss() } label: {
             Card {
                 HStack {
                     Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(p.accent)

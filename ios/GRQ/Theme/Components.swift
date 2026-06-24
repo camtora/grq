@@ -266,12 +266,40 @@ struct BrandLogo: View {
     }
 }
 
+/// The signed-in member's headshot in a header — tapping it opens MORE (the fund's
+/// controls + the long tail: profile, risk dial, kill switch, soak, Reports, theme,
+/// sign out). Carries the unread-messages badge, since Messages lives under More.
+/// Lives in tab-screen headers (provided MoreLauncher + MessagesInbox at the tab root).
+struct AvatarButton: View {
+    @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var more: MoreLauncher
+    @EnvironmentObject private var inbox: MessagesInbox
+    @Environment(\.colorScheme) private var scheme
+    var size: CGFloat = 30
+    var body: some View {
+        let p = Theme.palette(scheme)
+        Button { more.show = true } label: {
+            MemberAvatar(email: auth.currentUser?.email ?? "", size: size)
+                .overlay(alignment: .topTrailing) {
+                    if inbox.unread > 0 {
+                        Text("\(min(inbox.unread, 9))")
+                            .font(.system(size: 9, weight: .black)).foregroundStyle(.white)
+                            .frame(width: 15, height: 15)
+                            .background(Circle().fill(p.neg))
+                            .offset(x: 4, y: -4)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More")
+    }
+}
+
 /// The one consistent top header on every screen: the GRQ logo + a screen title, then
 /// the chat button and the signed-in member's photo on the right. Fixed (non-scrolling)
 /// — place it above the screen's ScrollView. Members-only controls (ChatButton) hide
-/// themselves for viewers.
+/// themselves for viewers; tapping the photo opens MORE.
 struct BrandHeader: View {
-    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     var title: String
     var body: some View {
@@ -282,7 +310,7 @@ struct BrandHeader: View {
                 .foregroundStyle(p.textMuted)
             Spacer()
             ChatButton()
-            MemberAvatar(email: auth.currentUser?.email ?? "", size: 30)
+            AvatarButton()
         }
         .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
     }
