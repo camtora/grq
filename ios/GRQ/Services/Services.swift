@@ -87,21 +87,9 @@ final class AuthManager: ObservableObject {
         }
     }
 
-    /// Dev login — mints a token without Google, for testing before the OAuth
-    /// client exists. Only works when the server has GRQ_DEV_LOGIN=1 (off in prod).
-    /// Wired to the existing "Continue as …" buttons.
-    func signIn(_ email: String) {
-        Task {
-            authError = nil
-            signingIn = true
-            defer { signingIn = false }
-            await authenticate(path: "auth/dev", body: ["email": email])
-        }
-    }
-
     private func authenticate(path: String, body: [String: String]) async {
         guard let auth = await APIClient.shared.login(path: path, body: body) else {
-            authError = "Sign-in failed. Use Google, or (testing) ensure the server has GRQ_DEV_LOGIN=1."
+            authError = "Sign-in failed. Please try again."
             return
         }
         APIClient.shared.token = auth.token

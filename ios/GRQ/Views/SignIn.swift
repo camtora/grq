@@ -21,12 +21,6 @@ struct SignInView: View {
                     Button("Sign in with Google") { Task { await auth.signInWithGoogle() } }
                         .buttonStyle(GradientButtonStyle())
                         .disabled(auth.signingIn)
-                    // Dev logins — work only against a server with GRQ_DEV_LOGIN=1.
-                    HStack(spacing: 12) {
-                        Button("Dev · Cam") { auth.signIn("cameron.tora@gmail.com") }
-                        Button("Dev · Graham") { auth.signIn("g.j.appleby@gmail.com") }
-                    }
-                    .font(.footnote).foregroundStyle(p.accent).disabled(auth.signingIn)
                 }
                 if let err = auth.authError {
                     Text(err).font(.caption2).foregroundStyle(p.neg)
