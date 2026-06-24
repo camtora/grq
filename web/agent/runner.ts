@@ -518,7 +518,13 @@ async function tick() {
     await checkPriceAlerts();
     await checkDrawdown();
     await checkDailyLossPause();
-    if (Date.now() - lastSnapshot > 30 * 60_000) {
+    // Snapshot NAV every ~2 min while open — matched to the holdings quote refresh
+    // (lastFastRefresh, also 2 min), so each point reflects fresh prices and the NAV
+    // tape draws a smooth intraday curve instead of jagged 30-min jumps (Cam 2026-06-24).
+    // NAV is recomputed fresh each time (writeNavSnapshot), and every reader of these rows
+    // is day-scoped or a pre-day lookup, so finer points only help the tape. (Fills/FX
+    // still snapshot at the moment they happen, on top of this cadence.)
+    if (Date.now() - lastSnapshot > 2 * 60_000) {
       await writeNavSnapshot("intraday");
       lastSnapshot = Date.now();
     }
