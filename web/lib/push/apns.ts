@@ -34,6 +34,11 @@ export type ApnsPayload = {
   threadId?: string;
   /** Extra keys delivered alongside `aps` (e.g. a deep-link symbol). */
   data?: Record<string, string | number | boolean | null>;
+  /** Silent/background push (`content-available`) — no alert/sound, wakes the app
+   *  to do housekeeping (e.g. clear delivered notifications). Best-effort by iOS. */
+  silent?: boolean;
+  /** App-icon badge to set. 0 clears it. Omit to leave the badge untouched. */
+  badge?: number;
 };
 
 export type ApnsResult = {
@@ -115,10 +120,12 @@ function providerToken(): string | null {
 }
 
 function apsBody(payload: ApnsPayload): string {
-  const aps: Record<string, unknown> = {
-    alert: { title: payload.title, body: payload.body },
-    sound: "default",
-  };
+  // Silent/background push: content-available wakes the app, NO alert/sound. A
+  // visible alert carries the title/body + sound. Either may set the badge.
+  const aps: Record<string, unknown> = payload.silent
+    ? { "content-available": 1 }
+    : { alert: { title: payload.title, body: payload.body }, sound: "default" };
+  if (payload.badge != null) aps.badge = payload.badge;
   if (payload.threadId) aps["thread-id"] = payload.threadId;
   return JSON.stringify({ aps, ...(payload.data ?? {}) });
 }
@@ -139,6 +146,10 @@ export async function sendApns(
   const http2 = await import("node:http2");
   const topic = bundleId();
   const body = apsBody(payload);
+  // A background push must declare apns-push-type: background + a low priority (5);
+  // a visible alert is type "alert" at priority 10.
+  const pushType = payload.silent ? "background" : "alert";
+  const priority = payload.silent ? "5" : "10";
 
   // One reused TLS/HTTP2 session per gateway (HTTP/2 multiplexes concurrent streams).
   const sessions = new Map<string, import("node:http2").ClientHttp2Session>();
@@ -158,8 +169,8 @@ export async function sendApns(
         ":method": "POST",
         ":path": `/3/device/${deviceToken}`,
         "apns-topic": topic,
-        "apns-push-type": "alert",
-        "apns-priority": "10",
+        "apns-push-type": pushType,
+        "apns-priority": priority,
         authorization: `bearer ${token}`,
         "content-type": "application/json",
         "content-length": Buffer.byteLength(body),

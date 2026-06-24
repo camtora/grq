@@ -283,6 +283,14 @@ final class APIClient {
         return r?.unread ?? 0
     }
 
+    /// Unread count from the notification feed — nil on a failed fetch (so the
+    /// foreground reconcile doesn't clear the lock screen on a transient error, D64).
+    func notificationsUnread() async -> Int? {
+        struct R: Decodable { let unread: Int }
+        let r: R? = await get("notifications")
+        return r?.unread
+    }
+
     // MARK: - Push notifications (D53)
 
     /// Register this device's APNs token under the signed-in member. `apnsEnv` is
@@ -561,6 +569,23 @@ final class PushManager: ObservableObject {
         guard let hex = deviceTokenHex, APIClient.shared.token != nil else { return }
         _ = await APIClient.shared.registerDeviceToken(hex, apnsEnv: Self.apnsEnv)
     }
+
+    /// Wipe every delivered notification + zero the app badge. Triggered by the silent
+    /// "clear" push (member opened the web bell) and by the foreground reconcile (D64).
+    func clearDelivered() async {
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        try? await UNUserNotificationCenter.current().setBadgeCount(0)
+    }
+
+    /// On app foreground: if the server says nothing's unread, clear the delivered pile.
+    /// The catch-up net for a silent "clear" push iOS throttled or never delivered (the
+    /// app was force-quit). Does nothing on a failed fetch (notificationsUnread → nil).
+    func reconcileOnForeground() async {
+        guard APIClient.shared.token != nil else { return }
+        if let unread = await APIClient.shared.notificationsUnread(), unread == 0 {
+            await clearDelivered()
+        }
+    }
 }
 
 /// Minimal app delegate — SwiftUI has no lifecycle hook for remote-notification
@@ -581,6 +606,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
         print("[push] APNs registration failed: \(error.localizedDescription)")
+    }
+
+    // A silent (content-available) push carrying `clear` means the member triaged the
+    // notifications on the web bell — wipe the delivered pile + badge here (D64).
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if userInfo["clear"] != nil {
+            Task { await PushManager.shared.clearDelivered() }
+        }
+        completionHandler(.noData)
     }
 
     // Show banners even when the app is foregrounded (a fill mid-session still pings).

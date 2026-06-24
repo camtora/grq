@@ -76,6 +76,9 @@ struct RootView: View {
         .onChange(of: scenePhase) { old, new in
             // Make it rain on every open — cold launch and every return from background.
             if new == .active && old == .background { showSplash = true }
+            // Catch-up net (D64): if a silent "clear" push was throttled/dropped while we
+            // were away, reconcile the delivered notifications against server unread.
+            if new == .active { Task { await push.reconcileOnForeground() } }
         }
         // Register for push once the member is signed in (the OS prompts once); also
         // (re)upload the token in case APNs handed it to us before auth landed (D53).

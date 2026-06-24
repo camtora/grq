@@ -1512,3 +1512,26 @@ the broker badge and the avatar, members-only. The settings notification card ga
 **Unchanged:** the §6 gate, kill switch, and notification *preferences* (same toggles now gate both push and the bell).
 **Verified:** `tsc --noEmit` clean; `prisma db push` applied (table + indexes confirmed). Web-only feature — no
 `shared/contract.ts` change yet (iOS already has its own push + chat).
+
+### D64 — Opening the web notification bell clears the iPhone's lock-screen pile (Cam, 2026-06-23)
+**Context:** D63 gave the web a notification center, but the web bell and the phone are independent surfaces —
+Cam triages on the desktop and the iPhone lock screen stays a graveyard of stale dossier/trade/report pings.
+He wants the natural behavior: **open the web drawer → the phone's delivered notifications clear.** **Decision
+(Cam):** build the **web → phone clear** path. The only server-initiated way to remove an already-delivered iOS
+notification is a **silent (background) push** that wakes the app to call `removeAllDeliveredNotifications()` —
+so that's the mechanism, with **clear-all** semantics (no per-notification id mapping). **What shipped:** (1)
+**`apns.ts`** grew a silent-push capability — `ApnsPayload.silent`/`badge`; `apsBody` emits
+`aps:{ "content-available":1, badge }` (no alert/sound) when silent; headers switch to
+`apns-push-type: background` + `apns-priority: 5`. Reuses the existing provider-token/http2/env-retry/dead-token
+machinery. (2) **`notify.ts` `pushClear(email)`** — silent push carrying `{ clear:"all" }` to a member's devices,
+no preference gating (housekeeping), best-effort. (3) **`/api/notifications/read`** fires `pushClear` after marking
+read (the bell already calls this route on open → no UI change). (4) **iOS:** `Info.plist`
+`UIBackgroundModes:[remote-notification]`; `AppDelegate.didReceiveRemoteNotification` → on `clear`,
+`PushManager.clearDelivered()` (`removeAllDeliveredNotifications` + `setBadgeCount(0)`); a **foreground reconcile**
+(`GRQApp` scenePhase→active → `reconcileOnForeground()`: if server `unread==0`, clear locally) as the catch-up net,
+with `APIClient.notificationsUnread()` returning `Int?` so a failed fetch never wipes the screen. **The honest
+ceiling (Apple's):** silent pushes are throttled and **undelivered to a force-quit app** — reliable when the app is
+backgrounded-but-alive, else the foreground reconcile catches up on next open. **Deferred:** per-id precision (clear
+only the read ones — needs `Notification.id` in the APNs payload), live badge counts on alert sends, `collapse-id`
+grouping. **Division of labor:** web shipped + deployed by the agent; the **iOS half is code-only here** (no Xcode on
+the host) — Cam archives → TestFlight → installs, then we verify Phase 3. Plan: `docs/PUSH-CLEAR-PLAN.md`.

@@ -165,3 +165,30 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
     console.error("pushNotify failed", e);
   }
 }
+
+/** Tell a member's iOS devices to clear their delivered notifications + zero the
+ *  app badge (D64). A SILENT (background) push carrying `{ clear: "all" }` — the app
+ *  handles it by calling removeAllDeliveredNotifications(). Fired when the member
+ *  opens the web notification bell, so the lock-screen pile clears once they've
+ *  triaged on the desktop. No preference gating (housekeeping). Best-effort: iOS
+ *  throttles background pushes and won't deliver to a force-quit app — the app's
+ *  foreground reconcile is the catch-up net. Configured-or-no-op. */
+export async function pushClear(email: string): Promise<void> {
+  if (!apnsConfigured()) return;
+  try {
+    const devices = await prisma.deviceToken.findMany({ where: { email: email.trim().toLowerCase() } });
+    if (devices.length === 0) return;
+
+    const results = await sendApns(
+      devices.map((d) => ({ token: d.token, apnsEnv: d.apnsEnv })),
+      { silent: true, badge: 0, title: "", body: "", data: { clear: "all" } },
+    );
+
+    const dead = results.filter((r) => !r.ok && (r.status === 410 || (r.reason && DEAD_REASONS.has(r.reason)))).map((r) => r.token);
+    if (dead.length) {
+      await prisma.deviceToken.deleteMany({ where: { token: { in: dead } } }).catch(() => {});
+    }
+  } catch (e) {
+    console.error("pushClear failed", e);
+  }
+}

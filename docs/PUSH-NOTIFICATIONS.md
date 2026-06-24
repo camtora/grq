@@ -59,6 +59,37 @@ Two defenses keep this from silently dropping pushes:
    `sendApns` retries the other gateway and `notify.ts` persists the corrected env. So
    even a mis-recorded token gets delivered (and fixed) on the first real push.
 
+## Clearing the lock-screen pile from the web bell (D64)
+
+Triage on the desktop, and the phone follows: opening the web notification bell clears
+the iPhone's *delivered* notifications + zeroes the app badge.
+
+```
+member opens the web bell
+   │
+   └─ POST /api/notifications/read       web/app/api/notifications/read/route.ts
+          ├─ markNotificationsRead()      (web feed → read)
+          └─ pushClear(email)             web/lib/push/notify.ts
+                 └─ sendApns({ silent:true, badge:0, data:{ clear:"all" } })
+                        apns-push-type: background · apns-priority: 5
+                        aps: { "content-available": 1, badge: 0 }
+                              │
+                              ▼  (iOS wakes the app in the background)
+            AppDelegate.didReceiveRemoteNotification(clear) → PushManager.clearDelivered()
+                              → removeAllDeliveredNotifications() + setBadgeCount(0)
+```
+
+- **Clear-all semantics** — opening the bell wipes the whole delivered pile; no
+  per-notification id mapping. (Per-id precision is deferred.)
+- **Best-effort, by Apple's design.** Silent/background pushes are throttled and are
+  **not delivered to a force-quit app**. Reliable when the app is backgrounded-but-alive;
+  otherwise the **foreground reconcile** is the catch-up net: on app activation
+  (`GRQApp` scenePhase → `PushManager.reconcileOnForeground()`), if the server reports
+  `unread == 0` the app clears its delivered notifications locally. A *failed* unread
+  fetch returns `nil` → no clear (so a transient error never wipes the lock screen).
+- **iOS needs `UIBackgroundModes: [remote-notification]`** (`ios/GRQ/Info.plist`) — added
+  for D64. `aps-environment` already covers it; no entitlement change.
+
 ## Categories (Cam, 2026-06-22 — "default opt in for all categories")
 
 **Always-on — non-toggleable:**

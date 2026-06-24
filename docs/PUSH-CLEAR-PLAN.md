@@ -1,9 +1,9 @@
 # Plan — Clear the iPhone lockscreen by opening the web notification drawer
 
-**Status:** Planned, not started · **Drafted:** 2026-06-23 · **Owner:** Cam (iOS build) + agent (web/code)
-**Depends on:** D63 (web notification center) · **Touches:** `web/` + `ios/` · **Proposed decision:** D64
+**Status:** Web shipped + deployed · iOS code written (awaiting Cam's TestFlight build) · **Drafted:** 2026-06-23
+**Decision:** D64 · **Depends on:** D63 (web notification center) · **Touches:** `web/` + `ios/`
 
-> Parked for later — this is the full reference so it can be picked up cold without re-deriving.
+> Phases 1 (web) + 2 (iOS code) are done. Remaining: Cam archives → TestFlight → installs, then Phase 3 verify.
 
 ---
 
