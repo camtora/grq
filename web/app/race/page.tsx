@@ -26,6 +26,16 @@ function modelLabel(id: string): string {
   return id;
 }
 
+// A challenger ends its prose with a fenced ```json decision block — but we already parse that
+// into the action chip + summary line above, so strip the trailing block from the text we show.
+// Handles a closed fence and an unclosed trailing one; no-op when there's no such block.
+function stripDecisionBlock(text: string): string {
+  return text
+    .replace(/\s*```(?:json)?\s*\{[\s\S]*?\}\s*```\s*$/i, "")
+    .replace(/\s*```(?:json)?\s*\{[\s\S]*?\}\s*$/i, "")
+    .trimEnd();
+}
+
 type Row = {
   id: number;
   sessionAt: Date;
@@ -85,7 +95,7 @@ function Lane({ row }: { row: Row }) {
         </p>
       )}
       <div className="mt-2">
-        <CollapsibleMd text={row.text} threshold={420} />
+        <CollapsibleMd text={isChampion ? row.text : stripDecisionBlock(row.text)} threshold={420} />
       </div>
     </div>
   );
