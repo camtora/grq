@@ -52,6 +52,16 @@ export async function buildContext(): Promise<string> {
       ? `vs-XIC benchmark: same contributions in XIC would be ${money(pf.benchmarkCents)} (we are ${money(pf.navCents - pf.benchmarkCents)} ${pf.navCents >= pf.benchmarkCents ? "ahead" : "behind"})`
       : "vs-XIC benchmark: unavailable";
 
+  // Cash is multi-currency (D34): the fund holds CAD and USD separately. NEVER
+  // describe the total as "CAD idle" — the US$ leg funds US-listed buys directly
+  // (no FX needed) and converting between currencies requires a member-approved
+  // request_fx (D62). Spell the split out so the agent reasons per-currency.
+  const fxNote = pf.fxUsdCad ? ` @ ${pf.fxUsdCad.toFixed(4)} USD→CAD` : "";
+  const cashLine =
+    pf.usdCashCents > 0
+      ? `Cash by currency: CA$${(pf.cadCashCents / 100).toFixed(2)} + US$${(pf.usdCashCents / 100).toFixed(2)} (= ${money(pf.cashCents)} total valued in CAD${fxNote}). The US$ leg funds US-listed buys directly and is NOT idle CAD; only CA$ funds CAD buys. Moving cash between currencies needs a member-approved request_fx.`
+      : `Cash: ${money(pf.cashCents)}, all CAD.`;
+
   // Upcoming earnings on holdings + focus (Tier 6 awareness) — a catalyst to size
   // and time around. Best-effort; empty if FMP is off or uncovered.
   const earnSyms = [...new Set([...pf.positions.map((x) => x.symbol), ...focus.map((f) => f.symbol)])];
@@ -113,7 +123,8 @@ Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"
 Kill switch: ${pf.killSwitch ? "ENGAGED — no order will fill" : "off"}.
 
 ## Account
-NAV ${money(pf.navCents)} = cash ${money(pf.cashCents)} + positions ${money(pf.positionsCents)}
+NAV ${money(pf.navCents)} = cash ${money(pf.cashCents)} (valued in CAD) + positions ${money(pf.positionsCents)}
+${cashLine}
 Contributions ${money(pf.contributionsCents)} · Total P&L ${money(pf.totalPnlCents)} · Day P&L ${(dayBps / 100).toFixed(2)}%
 ${benchLine}
 Fee budget: ${money(pf.feeSpentMonthCents)} spent of ${money(pf.feeBudgetCentsMonth)} this month.
