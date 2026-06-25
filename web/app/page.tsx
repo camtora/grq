@@ -510,7 +510,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
       {/* Market indices — live until the close (the screenshot strip). Live data,
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
-      {isToday && <MarketIndices initial={marketIndices} />}
+      {isToday && <MarketIndices initial={marketIndices} fundDayPct={marketDay ? dayPnlPct : null} />}
 
       {/* Macro strip — rates/CPI/FX context (moved here from Portfolio, Cam 2026-06-18) */}
       {isToday && macro && (
