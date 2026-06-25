@@ -113,6 +113,51 @@ design (affirmed 2026-06-22, D50): a quiet check-in won't ping. And because `inf
 journal, the absence of a journal entry does NOT mean the alert didn't fire — verify the *outcome*
 (check `Order`/positions) or send a test ping to confirm webhook delivery.
 
+## Agent token usage (`/admin/usage`)
+
+The agent runs on Cam's shared Claude Max token, so its burn **competes with Cam's interactive
+Claude Code usage on the same quota**. We log every Claude session to inventory that burn (D67).
+Owner-only page `/admin/usage` (`isOwner` → 404 for everyone else) + CLI twin:
+
+```bash
+cd web && npx tsx scripts/token-report.ts          # since ET midnight today
+cd web && npx tsx scripts/token-report.ts 24h      # last 24h  (also: 7d, or YYYY-MM-DD)
+```
+
+**One row per session** (`AgentUsage`), written by `runSession()` (`web/agent/sessions.ts`
+`recordUsage`), summed across the subagent fan-out (`modelUsage`, falling back to the aggregate
+`usage` shape). Logging is wrapped so it can never break a trading session.
+
+**How to read the page** (`web/lib/usage.ts` does the math):
+- **Total tokens = input + output + cache-write + cache-read, all four summed.** Cache reads are
+  cheap per-token but still count toward *volume* (and toward the rate-limit window), so they're in
+  the total — that's why a big day looks token-heavy even when most of it is cached context replay.
+- **By session type** groups by the label prefix before the first `:` — `dossier:ATD` → `dossier`,
+  `checkin:11:00` → `checkin` — so the ~24 daily dossiers collapse to one line. This is where you
+  see *what* ate the day (usually `startup-universe-review` and `dossier`).
+- **Rolling 5-hour window** is the thing that trips the Max limit. It sums rows where `at ≥ now−5h`
+  (the page query spans `min(ET-day-start, now−5h)`). The bar turns amber ≥70%, red ≥90%.
+- **Est. cost** is integer micro-USD and *is* populated even on the Max OAuth token (`—` when zero).
+  It's a what-this-would-cost-metered figure, not a charge — the Max token is unmetered.
+
+**The denominator is an estimate, not a real quota — calibrate it.** Anthropic exposes no true
+"remaining" number for a subscription and publishes no token figure for the Max 20x window (only
+relative capacity = 20× Pro). So the "headroom" bar is *our* measured burn against the optional
+`GRQ_MAX_5H_TOKENS` env var; unset → no bar, raw burn only. To calibrate: watch the rolling-5h total
+at the moment sessions start failing with rate-limit `status` (the per-call table flips that row red),
+and set `GRQ_MAX_5H_TOKENS` to ~80% of that as a warning line. It's **env-only → no rebuild**:
+`docker-compose up -d --force-recreate web`.
+
+**Caveat — the 5h window is probably NOT the binding constraint for GRQ.** Decision sessions are
+Opus 4.8 and a single boot library scan burns multiple million tokens; the limit that actually drains
+the quota is the **weekly all-models / weekly-Opus cap** (independently estimated ~24–40 Opus-hours/wk,
+shared with Cam's own use — Anthropic publishes no token figure for it either). **We don't track the
+weekly window at all** — the dashboard is a relative burn tracker, not a true quota gauge. The real
+mitigations live elsewhere: the once-per-ET-day boot-scan guard (`runner.ts` ~L367; force a re-scan by
+deleting today's `Startup universe review%` journal rows) and batching agent changes into one rebuild.
+The bigger un-done lever is giving the agent its own `ANTHROPIC_API_KEY` so its burn stops competing
+with Cam's Max quota (a real-cost call, deferred). See `CLAUDE.md` → the boot-scan gotcha, and D67.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -129,6 +174,7 @@ journal, the absence of a journal entry does NOT mean the alert didn't fire — 
 | All orders rejected | kill switch engaged | check NavBar dot / Settings; journal shows who |
 | `node: command not found` | nvm not sourced | `source ~/.nvm/nvm.sh` |
 | npm scripts die sourcing .env | unquoted `$` in a value | single-quote it |
+| Agent sessions fail / quota drained by ~11am | restart-looping the agent re-fires the boot library scan (multi-M tokens) on the shared Max token | check `/admin/usage` for the burn (esp. `startup-universe-review`); confirm the once/day guard held (today's `Startup universe review%` journal rows); batch agent changes into one rebuild |
 
 ## Disk & maintenance
 

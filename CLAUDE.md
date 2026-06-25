@@ -214,7 +214,7 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `docs/PHASES.md` | Detailed phase-by-phase roadmap & exit criteria |
 | `docs/SIM-ENGINE.md` | SimBroker spec: fills, commissions, ACB, gate order |
 | `docs/AGENT-SPEC.md` | **Phase 2 blueprint — start here when building the agent** |
-| `docs/OPERATIONS.md` | Runbook: deploy, db, backups, troubleshooting |
+| `docs/OPERATIONS.md` | Runbook: deploy, db, backups, agent token usage (`/admin/usage`), troubleshooting |
 | `docs/DATA-SOURCES.md` | 10-tier data taxonomy + source scoring system |
 | `docs/IBKR-SETUP.md` | Forwardable account-opening guide |
 | `docs/IBKR-PHASE3.md` | **IBKR-paper bring-up runbook** — gateway/proxy, 2FA, the connection saga (D22) |
