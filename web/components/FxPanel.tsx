@@ -71,8 +71,11 @@ export default function FxPanel({ cadCashCents, usdCashCents, usdPct, fxUsdCad, 
         setMsg({ kind: "err", text: data.error ?? `HTTP ${res.status}` });
       } else {
         setMsg({ kind: "ok", text: "Done." });
-        router.refresh();
       }
+      // Refresh on success AND failure: a failed convert is recorded as a FAILED FxRequest
+      // (with its failReason), so re-fetch so it surfaces in "Recent" too — not just the
+      // transient banner. router.refresh() preserves this client component's msg state.
+      router.refresh();
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -162,6 +165,17 @@ export default function FxPanel({ cadCashCents, usdCashCents, usdPct, fxUsdCad, 
       {/* Member controls: manual convert + dials */}
       {!readOnly && (
         <div className="mt-5 space-y-4">
+          {msg && (
+            <div
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                msg.kind === "ok"
+                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                  : "border-red-400/40 bg-red-400/10 text-red-300"
+              }`}
+            >
+              {msg.text}
+            </div>
+          )}
           {(() => {
             const fromCcy = dir === "USD→CAD" ? "USD" : "CAD";
             const toCcy = dir === "USD→CAD" ? "CAD" : "USD";
@@ -334,7 +348,6 @@ export default function FxPanel({ cadCashCents, usdCashCents, usdPct, fxUsdCad, 
         </div>
       )}
 
-      {msg && <div className={`mt-3 text-sm ${msg.kind === "ok" ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</div>}
     </div>
   );
 }
