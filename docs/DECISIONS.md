@@ -1608,3 +1608,36 @@ restart→scan→quota link + the batch-one-rebuild discipline. **Verified:** sc
 new); a cheap in-container Haiku session wrote a real `AgentUsage` row (`in 517 / out 54 / $0.0388`) end-to-end, then
 was deleted. **Bigger lever still open (not done):** give the agent its *own* `ANTHROPIC_API_KEY` so its burn stops
 competing with Cam's interactive Max quota (a real-cost decision — deferred to Cam).
+
+### D69 — Stock-page header + bottom-line/price-targets layout polish (Cam, 2026-06-24)
+*(D68 is "The Race", landing on a separate branch — this entry skips ahead so the two don't collide.)*
+**Context:** Cam walked the `/stocks/[symbol]` page and called out a stack of alignment/hierarchy nits: the live price
+floated centred against the whole hero (lower than, then higher than, the ticker), the "watched by" badge was a
+different shape/height than the chips beside it, the action buttons weren't anchored, the bottom-line verdict panel was
+crowded with targets + technicals + two caveats, the price-targets panel's numbers were oversized, and the
+candidate chip used internal jargon ("candidate — not tradeable") instead of the site's own words.
+**Decision (Cam):** pure presentation cleanup on the stock page — **no data, schema, or agent change.** Keep the verdict
+panel to the *verdict* (call → bar → confidence → date), let analyst numbers live in the price-targets panel, and use
+the same status vocabulary as the rest of the site.
+**What shipped (`web/app/stocks/[symbol]/page.tsx` + 3 components):**
+- **Hero** restructured into a top row (title group left · live price **right-justified onto the ticker's own
+  baseline** via `items-baseline` — the ticker isn't moved) and a bottom row (action buttons **bottom-justified** ·
+  "researched …" freshness on the bottom-right). The today's $/% move is sized to the **company name** (`text-base`)
+  via a new `changeClassName` prop on `<LiveQuote>` (default unchanged, only this call site overrides).
+- **Status chip uses site verbiage** (`lib/users`/universe language): CANDIDATE → **"on watchlist"**, ACTIVE →
+  **"in universe"**, RETIRED → **"retired"** (was "candidate — not tradeable"). ACTIVE now shows a chip where it didn't
+  before.
+- **"Watched by" → a pill** matching the adjacent `<Chip>` (new `pill` variant in `components/hunt/WatchedBy.tsx`:
+  `rounded-full` teal token, `text-[10px]`, tiny avatar). The chips ride in their own `items-center` sub-group so the
+  avatar pill lines up with the text chips instead of floating high.
+- **Bottom line** trimmed to the verdict: removed the technical-indicators strip (its disclaimer, trimmed to "An input
+  the agent weighs — trend/momentum only.", moved to the **Signals panel**) and the analyst-consensus line (now only in
+  the price-targets panel). GRQ's near/12-mo **Target stays in the bottom line**; the "GRQ's call is the judgment"
+  caveat stays under **Why**.
+- **Price-targets panel:** "Consensus" → **"Analyst consensus"** (glossary `<Term>` underline); the **upside % + source**
+  ("+X% upside · US listing/Wall St.") sits **beside the consensus price**, not the title; value sizes dropped
+  `text-base`→`text-sm` to match the earnings "next report" date.
+- **`UniverseActions`:** the candidate **✕ retire button is now labelled "Retire"** (the `btn` class uppercases →
+  "RETIRE"); same confirm + action.
+**Verified:** `tsc --noEmit` clean; fresh-image grep confirmed the new strings present + old ones gone (not stale);
+web rebuilt + recreated; `/stocks/AMD.US` 200; `/var` steady at 77%. Shipped in three deploys as Cam iterated.

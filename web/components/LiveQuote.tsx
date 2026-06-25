@@ -20,6 +20,7 @@ export default function LiveQuote({
   initialChangePct = null,
   currency = "CAD",
   className = "",
+  changeClassName = "text-xl",
   showChange = true,
   dollars = false,
   live = false,
@@ -29,6 +30,9 @@ export default function LiveQuote({
   initialChangePct?: number | null;
   currency?: string | null;
   className?: string;
+  /** Size/weight classes for the `dollars`-mode change line — defaults to the large
+   *  "↘ $7.47 (-4.40%)" treatment; override (e.g. "text-base") to match adjacent copy. */
+  changeClassName?: string;
   showChange?: boolean;
   /** Render the change as the watchlist line — "↘ US$7.47 (-4.40%)": arrow + the $
    *  move (unsigned; arrow/colour carry the sign) + the signed % — instead of the small
@@ -95,7 +99,7 @@ export default function LiveQuote({
         {showChange && !dollars && chg !== null && <span className={`ml-1.5 text-xs ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(chg)}</span>}
       </span>
       {dollars && chgCents !== null && chg !== null && (
-        <span className={`inline-flex items-center gap-1.5 text-xl font-semibold tabular-nums ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+        <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${changeClassName} ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>
           <span aria-hidden>{chg > 0 ? "↗" : chg < 0 ? "↘" : ""}</span>
           {money(Math.abs(chgCents), currency)}
           <span className="font-normal opacity-80">({fmtPct(chg)})</span>

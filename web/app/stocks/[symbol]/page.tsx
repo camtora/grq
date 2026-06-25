@@ -33,7 +33,6 @@ import Sparkline from "@/components/Sparkline";
 import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import DirectiveButtons from "@/components/DirectiveButtons";
-import SignalStrip from "@/components/SignalStrip";
 import Term from "@/components/Term";
 
 // Always render fresh on the server — never a prefetch-cached copy. A find researched
@@ -307,23 +306,50 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <Sparkline values={closes.map((c) => c.closeCents)} className="h-full w-full" />
           </div>
         )}
-        <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          {/* Left column: the title line + the action buttons, stacked. Its height drives the
-              hero, so the quote on the right centres against the WHOLE panel, buttons included. */}
-          <div className="flex min-w-0 flex-col gap-3">
-            {/* logo · symbol · name · chips — baseline-aligned to the symbol. */}
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className="relative flex flex-col gap-3">
+          {/* Top row: title group on the left, the live price right-justified onto the ticker's
+              own baseline (items-baseline) — the ticker isn't moved; the price just sits inline
+              with it instead of floating high (Cam 2026-06-25). */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+            {/* logo · symbol · name · status/watcher chips — baseline-aligned to the symbol. */}
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
               <StockLogo symbol={symbol} logoUrl={entry.logoUrl} className="h-10 w-10 self-center text-sm" />
               <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
               <span className="text-teal-200/60">{entry.name}</span>
-              <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
-              {entry.currency && entry.currency !== "CAD" && <Chip tone="teal">{entry.currency}</Chip>}
-              {!tracked && <Chip tone="dim">not tracked</Chip>}
-              {tracked && entry.status === "CANDIDATE" && <Chip tone="red">candidate — not tradeable</Chip>}
-              {tracked && entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
-              {watch && <Chip tone="teal">agent watching</Chip>}
-              {watcher && <WatchedBy name={watcher.name} />}
+              {/* The chips ride in their own centre-aligned group so the watched-by pill (it
+                  carries a face) lines up with the text chips rather than floating high. Status
+                  uses the same words as the rest of the site (Cam 2026-06-25). */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip tone="dim">{entry.tier ?? "untiered"}</Chip>
+                {entry.currency && entry.currency !== "CAD" && <Chip tone="teal">{entry.currency}</Chip>}
+                {!tracked && <Chip tone="dim">not tracked</Chip>}
+                {tracked && entry.status === "CANDIDATE" && <Chip tone="teal">on watchlist</Chip>}
+                {tracked && entry.status === "ACTIVE" && <Chip tone="green">in universe</Chip>}
+                {tracked && entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
+                {watch && <Chip tone="teal">agent watching</Chip>}
+                {watcher && <WatchedBy name={watcher.name} pill />}
+              </div>
             </div>
+            {/* Live price, right-justified onto the ticker's baseline; the $/% move (sized to the
+                company name) + live marker stack just beneath it. */}
+            {quote && (
+              <div className="flex flex-col items-end gap-1">
+                <LiveQuote
+                  symbol={symbol}
+                  initialCents={quote.midCents}
+                  initialChangePct={dayBps / 10_000}
+                  currency={entry.currency}
+                  className="text-3xl font-bold leading-none text-teal-50"
+                  changeClassName="text-base"
+                  dollars
+                  live
+                />
+              </div>
+            )}
+          </div>
+          {/* Bottom row: the action buttons sit bottom-justified; the researched-freshness line
+              rides the bottom-right. */}
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <div className="flex flex-wrap items-center gap-2">
               {isMember && tracked && (
                 <UniverseActions
@@ -344,25 +370,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               {isMember && otherName && <ShareStockButton symbol={symbol} toName={otherName} />}
               {isMember && <AskGrq symbol={symbol} />}
             </div>
+            <span className="text-sm text-teal-200/45" title="When the agent last researched this name">
+              {lastResearched ? `researched ${fmtWhen(lastResearched)}` : "not yet researched"}
+            </span>
           </div>
-          {/* Right: the live quote stack — vertically centred against the whole panel (all
-              four lines: price · today's $/% move · live marker · researched). */}
-          {quote && (
-            <div className="flex flex-col items-end gap-1">
-              <LiveQuote
-                symbol={symbol}
-                initialCents={quote.midCents}
-                initialChangePct={dayBps / 10_000}
-                currency={entry.currency}
-                className="text-3xl font-bold leading-none text-teal-50"
-                dollars
-                live
-              />
-              <span className="text-sm text-teal-200/45" title="When the agent last researched this name">
-                {lastResearched ? `researched ${fmtWhen(lastResearched)}` : "not yet researched"}
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -428,19 +439,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               ) : (
                 <p className="text-sm text-teal-200/50">Not yet rated — the agent hasn&apos;t filed a call on this name.</p>
               )}
-              {signals && (
-                <div className="mt-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <SignalStrip signals={signals} />
-                    <span className="text-[10px] uppercase tracking-wider text-teal-200/40">
-                      technical indicators
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-teal-200/35">An input the agent weighs — trend/momentum only, not the call.</p>
-                </div>
-              )}
+              {/* GRQ's own near/12-mo target — back in the bottom line, under the confidence
+                  date (Cam 2026-06-25). */}
               {(nearPct !== null || farPct !== null) && (
-                <p className="mt-3 text-sm text-teal-200/70">
+                <p className="mt-4 text-sm text-teal-200/70">
                   <Term k="price-target">Target</Term>:{" "}
                   {nearPct !== null && (
                     <>
@@ -463,16 +465,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   )}
                 </p>
               )}
-              {analyst && (
-                <p className="mt-2 text-sm text-teal-200/70">
-                  <Term k="analyst-target">Analyst consensus</Term>:{" "}
-                  <span className={analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}>
-                    {analyst.upsidePct > 0 ? "+" : ""}
-                    {pct(analyst.upsidePct, 0)} upside
-                  </span>
-                  <span className="text-xs text-teal-200/40"> · Wall St.{analyst.currency !== "CAD" ? " (US listing)" : ""}</span>
-                </p>
-              )}
             </div>
             <div className="lg:col-span-3">
               {bottomLineEntry?.bottomLine ? (
@@ -488,6 +480,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   {signals ? ` For now, the technical read: ${signalsOneLine(signals)}.` : ""}
                 </p>
               )}
+              {/* The caveat back under the Why (Cam 2026-06-25). */}
               <p className="mt-3 text-[11px] text-teal-200/40">
                 The rating above is <span className="text-teal-200/60">GRQ&apos;s call</span> — its judgment. The technical
                 signals are an input, not the verdict; the trade it actually places lives in its journal below.
@@ -689,17 +682,19 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               const now = Math.round(anchor);
               return (
                 <Card className="p-4 text-sm flex-1">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-[11px] uppercase tracking-wider text-teal-200/50">Consensus</span>
-                    <span className="text-[11px] text-teal-200/40">
-                      {reanchor ? "US analysts" : analyst.currency !== "CAD" ? "US listing" : "Wall St."}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-2">
-                    <span className="text-base font-semibold tabular-nums text-teal-50">{money(con, dispCur)}</span>
+                  {/* Label on its own line; the upside + source ride beside the consensus PRICE,
+                      not the title (Cam 2026-06-25). */}
+                  <Term k="analyst-target" className="text-[11px] uppercase tracking-wider text-teal-200/50">
+                    Analyst consensus
+                  </Term>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="text-sm font-semibold tabular-nums text-teal-50">{money(con, dispCur)}</span>
                     <span className={`text-sm font-semibold ${analyst.upsidePct > 0 ? "text-emerald-400" : "text-red-400"}`}>
                       {analyst.upsidePct > 0 ? "+" : ""}
                       {pct(analyst.upsidePct, 0)}
+                    </span>
+                    <span className="text-[11px] text-teal-200/40">
+                      upside · {reanchor ? "US analysts" : analyst.currency !== "CAD" ? "US listing" : "Wall St."}
                     </span>
                   </div>
                   {lo > 0 && hi > lo ? (
@@ -734,11 +729,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                           <div className="mt-2 flex justify-between tabular-nums">
                             <span className="flex flex-col">
                               <span className="text-[10px] uppercase tracking-wider text-teal-200/40">low</span>
-                              <span className="text-base font-semibold text-red-400">{money(lo, dispCur)}</span>
+                              <span className="text-sm font-semibold text-red-400">{money(lo, dispCur)}</span>
                             </span>
                             <span className="flex flex-col items-end">
                               <span className="text-[10px] uppercase tracking-wider text-teal-200/40">high</span>
-                              <span className="text-base font-semibold text-emerald-400">{money(hi, dispCur)}</span>
+                              <span className="text-sm font-semibold text-emerald-400">{money(hi, dispCur)}</span>
                             </span>
                           </div>
                           {/* The live price re-listed beside consensus; consensus is green when it
@@ -769,9 +764,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   ) : lo > 0 || hi > 0 ? (
                     <div className="mt-2 flex items-center gap-2 tabular-nums">
                       <span className="text-[10px] uppercase tracking-wider text-teal-200/40">range</span>
-                      <span className="text-base font-semibold text-red-400">{money(lo, dispCur)}</span>
+                      <span className="text-sm font-semibold text-red-400">{money(lo, dispCur)}</span>
                       <span className="text-teal-200/40">–</span>
-                      <span className="text-base font-semibold text-emerald-400">{money(hi, dispCur)}</span>
+                      <span className="text-sm font-semibold text-emerald-400">{money(hi, dispCur)}</span>
                     </div>
                   ) : null}
                   {/* Momentum: are targets climbing? % is currency-invariant (last quarter
@@ -879,6 +874,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   </li>
                 ))}
               </ul>
+            )}
+            {signals && (
+              <p className="mt-3 border-t border-teal-400/10 pt-2 text-[11px] text-teal-200/40">
+                An input the agent weighs — trend/momentum only.
+              </p>
             )}
           </Card>
         </div>

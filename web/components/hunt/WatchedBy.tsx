@@ -6,7 +6,7 @@ import { personByName } from "@/lib/people";
 // column uses). Informational only: watch / un-watch still lives on the watchlist
 // and the stock page. Callers hide this once a name is in the universe (a promoted
 // name isn't "being watched" anymore — Cam 2026-06-24).
-export default function WatchedBy({ name, compact = false }: { name: string | null; compact?: boolean }) {
+export default function WatchedBy({ name, compact = false, pill = false }: { name: string | null; compact?: boolean; pill?: boolean }) {
   const p = personByName(name);
   const who = p?.name ?? "A member";
   const title = `${who} is watching this find`;
@@ -16,6 +16,20 @@ export default function WatchedBy({ name, compact = false }: { name: string | nu
     return (
       <span title={title} className="flex h-[34px] w-[34px] shrink-0 items-center justify-center">
         <Avatar src={p?.photo ?? null} name={who} size="h-7 w-7" />
+      </span>
+    );
+  }
+
+  // Pill: matches the size/format of the <Chip> pills it sits beside (e.g. on the
+  // stock-page title line) — same rounded-full teal token, with a tiny face tucked in.
+  if (pill) {
+    return (
+      <span
+        title={title}
+        className="inline-flex items-center gap-1 rounded-full border border-teal-400/20 bg-teal-400/15 py-0.5 pl-0.5 pr-2 text-[10px] font-bold uppercase tracking-wider text-teal-300"
+      >
+        <Avatar src={p?.photo ?? null} name={who} size="h-4 w-4" />
+        <span className="truncate">{p ? p.name : "watching"}</span>
       </span>
     );
   }

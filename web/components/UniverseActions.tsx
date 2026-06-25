@@ -117,7 +117,7 @@ export default function UniverseActions({
             aria-label={`Retire ${symbol}`}
             className={`${btn} border-teal-400/15 text-teal-200/40 hover:bg-teal-400/5`}
           >
-            ✕
+            Retire
           </button>
         </>
       )}
