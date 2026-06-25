@@ -68,7 +68,7 @@ export default function RiskDial({
             <button
               onClick={save}
               disabled={state === "saving"}
-              className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-5 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
+              className="rounded-lg border border-teal-400/40 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
             >
               {state === "saving" ? "Saving…" : "Save"}
             </button>

@@ -5,7 +5,6 @@ import { getPortfolio } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
-import { soakStatus } from "@/lib/soak";
 import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
@@ -100,12 +99,6 @@ export default async function Portfolio() {
   const usdExposureCadCents = usdCashCadCents + usdPositionsCadCents;
   const usdPct = pf.navCents > 0 ? (usdExposureCadCents / pf.navCents) * 100 : 0;
   const holdsUsd = pf.usdCashCents > 0 || usdPositionsCadCents > 0;
-
-  // Soak gate countdown (PROJECT_PLAN §9) — surfaced in the header so the road to
-  // real money is visible. Paper is the binding constraint right now.
-  const soak = soakStatus();
-  const paperFrac = soak.paperRequired > 0 ? Math.min(1, soak.paperDays / soak.paperRequired) : 0;
-  const totalFrac = soak.totalRequired > 0 ? Math.min(1, soak.totalDays / soak.totalRequired) : 0;
 
   // The main cards, factored out so the layout can be arranged two ways without
   // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
@@ -304,26 +297,6 @@ export default async function Portfolio() {
           <Chip tone={pf.killSwitch ? "red" : "teal"}>
             {pf.killSwitch ? "Trading halted" : "Agent on duty"}
           </Chip>
-          <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-1.5">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">IBKR paper soak</div>
-            <div className="text-sm font-semibold tabular-nums text-teal-50">
-              {soak.paperDays} / {soak.paperRequired}
-              <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
-            </div>
-            <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-teal-400/10">
-              <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${paperFrac * 100}%` }} />
-            </div>
-          </div>
-          <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-1.5">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">Total soak</div>
-            <div className="text-sm font-semibold tabular-nums text-teal-50">
-              {soak.totalDays} / {soak.totalRequired}
-              <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
-            </div>
-            <div className="mt-1 h-1 w-20 overflow-hidden rounded-full bg-teal-400/10">
-              <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${totalFrac * 100}%` }} />
-            </div>
-          </div>
         </div>
       </div>
 

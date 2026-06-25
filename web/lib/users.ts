@@ -50,17 +50,19 @@ export function userForEmail(email: string | null | undefined): GrqUser | null {
   return USERS[email.trim().toLowerCase()] ?? null;
 }
 
-// Owner tier — the third, narrowest tier, ABOVE member. Members (Cam, Graham) act
-// on the fund; the owner additionally sees the admin/usage dashboard (/admin).
-// This is a separate concept from GrqUser.role ("admin"), which is just a display
-// label and gates nothing. Default = Cam; OWNER_EMAILS env extends it without a
-// rebuild. Gate /admin and /api/admin/* on this; hide the nav link unless owner.
+// Owner/admin tier — the narrowest tier. Cam & Graham are both owners: they alone
+// see the admin-only pages (Settings, Traffic, Tokens, How GRQ works) and the
+// admin/usage dashboard. Viewers (and any anonymous GRQ_ALLOWED_EMAILS member)
+// cannot. This is a separate concept from GrqUser.role ("admin"), which is just a
+// display label and gates nothing. Default = Cam + Graham; OWNER_EMAILS env
+// replaces the default without a rebuild. Gate /settings, /traffic, /tokens,
+// /how-it-works, and /api/admin/* on this; hide the nav links unless owner.
 function ownerEmails(): string[] {
   const env = (process.env.OWNER_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  return env.length ? env : ["cameron.tora@gmail.com"];
+  return env.length ? env : ["cameron.tora@gmail.com", "g.j.appleby@gmail.com"];
 }
 
 export function isOwner(email: string | null | undefined): boolean {

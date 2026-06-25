@@ -24,7 +24,6 @@ const PRIMARY: NavLink[] = [
 const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },
   { href: "/race", label: "The Race" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export default function NavBar({
@@ -79,11 +78,10 @@ export default function NavBar({
         <div className="ml-auto flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1">
             {SECONDARY.map(renderLink)}
-            {/* "How GRQ works" lives top-right on the Settings page (Cam 2026-06-25),
-                not in the header. */}
-            {/* Owner-only — usage/admin dashboard (Cam). Hidden for everyone else;
-                the page itself enforces the owner gate, this is just the link. */}
-            {isOwner && renderLink({ href: "/admin", label: "Admin" })}
+            {/* Settings is now owner-only (Cam & Graham). It hosts the entry links to
+                How GRQ works, Traffic, and Tokens — so there's no separate Admin link.
+                The pages enforce the owner gate; hiding the link is cosmetic. */}
+            {isOwner && renderLink({ href: "/settings", label: "Settings" })}
           </div>
           {!isMember && (
             <span

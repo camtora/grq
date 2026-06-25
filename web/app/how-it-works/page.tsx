@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { isOwner } from "@/lib/users";
 import { getPortfolio } from "@/lib/portfolio";
 import { usdCadRate } from "@/lib/fx";
 import { PageHeader, Card, Chip } from "@/components/ui";
@@ -32,7 +33,8 @@ const TAG_TONE: Record<ChangeTag, "teal" | "green" | "dim"> = {
 // out of sync with reality. Curated prose covers the philosophy + the changelog.
 export default async function HowItWorks({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const session = await getSession();
-  if (session?.role !== "member") notFound();
+  // Admin-only: Cam & Graham (owners) only — viewers and non-owner members get a 404.
+  if (!session || !isOwner(session.email)) notFound();
   const sp = await searchParams;
   const tab = sp.tab === "decisions" ? "decisions" : "manual";
 

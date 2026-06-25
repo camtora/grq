@@ -44,6 +44,12 @@ export function sectionForPath(pathRaw: string): Section {
   if (path === "/activity" || path.startsWith("/activity/")) return "Activity";
   if (path === "/ideas" || path.startsWith("/ideas/")) return "Ideas";
   if (path === "/research" || path.startsWith("/research/")) return "Research";
-  if (path === "/admin" || path.startsWith("/admin/")) return "Admin";
+  if (
+    path === "/admin" ||
+    path.startsWith("/admin/") ||
+    path === "/traffic" ||
+    path === "/tokens"
+  )
+    return "Admin";
   return "Other";
 }

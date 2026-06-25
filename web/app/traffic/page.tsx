@@ -49,27 +49,19 @@ export default async function AdminPage({
 
   return (
     <main>
+      <Link href="/settings" className="text-xs text-teal-300 hover:underline">
+        ← settings
+      </Link>
       <PageHeader
-        title="Admin · Usage"
+        title="Traffic"
         sub="Who's using GRQ, and which sections get the traffic."
         right={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
-              <Link href="/admin" className="rounded-lg bg-teal-400/15 px-3 py-1 text-xs font-semibold text-teal-200">
-                Traffic
-              </Link>
-              <Link
-                href="/admin/usage"
-                className="rounded-lg px-3 py-1 text-xs font-semibold text-teal-200/50 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
-              >
-                Tokens
-              </Link>
-            </div>
-            <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
               {WINDOWS.map((w) => (
                 <Link
                   key={w.days}
-                  href={`/admin?days=${w.days}`}
+                  href={`/traffic?days=${w.days}`}
                   className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
                     w.days === days
                       ? "bg-teal-400/15 text-teal-200"
@@ -148,8 +140,16 @@ export default async function AdminPage({
                   {usage.byUser.map((u) => (
                     <tr key={u.email}>
                       <td className="py-2 pr-4">
-                        <span className="text-teal-50">{u.name ?? u.email.split("@")[0]}</span>
-                        {u.name && <span className="ml-2 text-xs text-teal-200/40">{u.email}</span>}
+                        {u.name ? (
+                          <>
+                            <span className="text-teal-50">{u.name}</span>
+                            <span className="ml-2 text-xs text-teal-200/40">{u.email}</span>
+                          </>
+                        ) : (
+                          // No named member for this email (e.g. an allowlisted viewer) —
+                          // show the full address, not just the local part.
+                          <span className="text-teal-50">{u.email}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-4">
                         <Chip tone={roleTone(u.role)}>{u.role}</Chip>

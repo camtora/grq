@@ -94,7 +94,7 @@ export default function KillSwitch({
         <button
           onClick={toggle}
           disabled={busy}
-          className={`rounded-xl px-5 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
+          className={`rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${
             engaged
               ? "border border-teal-400/40 bg-teal-400/10 text-teal-200 hover:bg-teal-400/20"
               : "border border-red-400/40 bg-red-400/10 text-red-200 hover:bg-red-400/25"
@@ -103,7 +103,7 @@ export default function KillSwitch({
           {busy ? "…" : engaged ? "Resume trading" : "Halt trading"}
         </button>
       ) : (
-        <span className="rounded-xl border border-red-400/15 px-4 py-2 text-xs uppercase tracking-wider text-red-200/40">
+        <span className="rounded-lg border border-red-400/15 px-2.5 py-1 text-xs uppercase tracking-wider text-red-200/40">
           view only
         </span>
       )}

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { userForEmail } from "@/lib/users";
+import { userForEmail, isOwner, roleForEmail } from "@/lib/users";
 
 // Aggregations for the owner-only /admin usage dashboard. All read-only over the
 // PageView table. Everything is bounded to a trailing window so the page stays
@@ -128,7 +128,10 @@ export async function getUsage(days: number): Promise<Usage> {
     .map(([email, u]) => ({
       email,
       name: userForEmail(email)?.name ?? null,
-      role: u.role,
+      // Show the CURRENT authoritative role, not the snapshot stored at view time —
+      // a promotion (e.g. Graham → owner) should reflect immediately, not wait for
+      // their next page view. Owner > member > viewer.
+      role: isOwner(email) ? "owner" : (roleForEmail(email) ?? u.role),
       views: u.views,
       lastSeen: u.lastSeen,
       topSection: userTop.get(email)?.section ?? null,

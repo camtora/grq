@@ -60,14 +60,14 @@ export default function FeeBudget({
           <span className="text-xs text-teal-200/40">/ mo</span>
         </div>
         {readOnly ? (
-          <span className="rounded-xl border border-teal-400/15 px-4 py-2.5 text-xs uppercase tracking-wider text-teal-200/40">
+          <span className="rounded-lg border border-teal-400/15 px-2.5 py-1 text-xs uppercase tracking-wider text-teal-200/40">
             view only
           </span>
         ) : (
           <button
             onClick={save}
             disabled={state === "saving"}
-            className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
+            className="rounded-lg border border-teal-400/40 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25 disabled:opacity-50"
           >
             {state === "saving" ? "Saving…" : "Save"}
           </button>

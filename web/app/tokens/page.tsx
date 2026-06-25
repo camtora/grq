@@ -4,7 +4,7 @@ import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/users";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import { getUsageDashboard, fmtTokens, fmtUsd, fmtDuration } from "@/lib/usage";
-import UsageWindowControl from "@/components/UsageWindowControl";
+import RollingWindowPanel from "@/components/RollingWindowPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -27,37 +27,23 @@ function etTime(d: Date): string {
   }).format(d);
 }
 
-const tabClass = (active: boolean) =>
-  `rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
-    active ? "bg-teal-400/15 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10 hover:text-teal-100"
-  }`;
-
 export default async function AdminUsagePage() {
   const session = await getSession();
   // Same lock as /admin — owner only; everyone else gets a 404.
   if (!session || !isOwner(session.email)) notFound();
 
-  const { today, rolling5h, recent, maxFiveH, windowResetAt, generatedAt } = await getUsageDashboard();
+  const { today, rolling5h, recent, maxFiveH, window, anchorResetAt, generatedAt } = await getUsageDashboard();
 
   const dayTotal = today.totals.total || 1; // avoid /0
-  const fivePct = maxFiveH ? Math.min(100, Math.round((rolling5h.total / maxFiveH) * 100)) : null;
-  const remaining = maxFiveH ? Math.max(0, maxFiveH - rolling5h.total) : null;
 
   return (
     <main>
+      <Link href="/settings" className="text-xs text-teal-300 hover:underline">
+        ← settings
+      </Link>
       <PageHeader
-        title="Admin · Token usage"
+        title="Token usage"
         sub="What the autonomous agent spends of Cam's shared Claude Max quota."
-        right={
-          <div className="flex items-center gap-1 rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
-            <Link href="/admin" className={tabClass(false)}>
-              Traffic
-            </Link>
-            <Link href="/admin/usage" className={tabClass(true)}>
-              Tokens
-            </Link>
-          </div>
-        }
       />
 
       {today.totals.calls === 0 ? (
@@ -82,43 +68,38 @@ export default async function AdminUsagePage() {
               value={today.totals.costMicroUsd > 0 ? fmtUsd(today.totals.costMicroUsd) : "—"}
               note={today.totals.costMicroUsd > 0 ? "if metered" : "Max token: unmetered"}
             />
-            <StatCard label="Last 5h" value={fmtTokens(rolling5h.total)} note={`${rolling5h.calls} sessions`} />
+            <StatCard
+              label="This 5h window"
+              value={fmtTokens(rolling5h.total)}
+              note={`${rolling5h.calls} sessions${window ? "" : " · sliding"}`}
+            />
           </div>
 
-          {/* Rolling 5-hour window — the thing that trips the Max limit */}
+          {/* Rolling 5-hour window — the thing that trips the Max limit. Auto-rolls every 5h from
+              the owner-set anchor; the panel shows token burn beside time elapsed so you can see
+              whether the agent is spending ahead of the clock. */}
           <Card className="p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
                 Rolling 5-hour window
               </h2>
               <span className="text-xs text-teal-200/40">
-                the Max plan resets on a ~5h sliding window · {fmtTokens(rolling5h.total)} burned
-                {maxFiveH ? ` of ~${fmtTokens(maxFiveH)} est.` : ""}
+                {window
+                  ? "auto-rolling 5h window · burn vs the clock"
+                  : "sliding ~5h window · anchor a reset to track the clock"}
               </span>
             </div>
-            {fivePct !== null ? (
-              <>
-                <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-teal-400/10">
-                  <div
-                    className={`h-full rounded-full ${fivePct >= 90 ? "bg-red-400/70" : fivePct >= 70 ? "bg-amber-400/70" : "bg-teal-400/60"}`}
-                    style={{ width: `${fivePct}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-xs text-teal-200/50">
-                  ~{fmtTokens(remaining ?? 0)} estimated headroom left ({fivePct}% used). This bar is GRQ&apos;s own
-                  measured burn against a configurable estimate (<code className="text-teal-200/40">GRQ_MAX_5H_TOKENS</code>),
-                  not a number Anthropic reports.
-                </div>
-              </>
-            ) : (
-              <div className="mt-2 text-sm text-teal-200/50">
-                Anthropic doesn&apos;t expose true remaining quota for a Max subscription, so we track our own measured
-                burn: <span className="font-semibold text-teal-100">{fmtTokens(rolling5h.total)} tokens</span> across{" "}
-                {rolling5h.calls} sessions in the last 5 hours. Set{" "}
-                <code className="text-teal-200/40">GRQ_MAX_5H_TOKENS</code> to show a remaining-headroom bar.
-              </div>
-            )}
-            <UsageWindowControl resetAt={windowResetAt ? windowResetAt.toISOString() : null} />
+            <RollingWindowPanel
+              anchorAt={anchorResetAt ? anchorResetAt.toISOString() : null}
+              serverWindowStart={window ? window.start.toISOString() : null}
+              tokensBurned={rolling5h.total}
+              maxFiveH={maxFiveH}
+            />
+            <p className="mt-3 text-xs text-teal-200/40">
+              The token bar is GRQ&apos;s own measured burn against a configurable estimate
+              (<code className="text-teal-200/40">GRQ_MAX_5H_TOKENS</code>), not a number Anthropic reports for a Max
+              subscription.
+            </p>
           </Card>
 
           {/* Where the day's tokens went, by session type */}

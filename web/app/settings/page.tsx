@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { USERS } from "@/lib/users";
+import { USERS, isOwner } from "@/lib/users";
 import { getSession } from "@/lib/session";
+import { soakStatus } from "@/lib/soak";
 import { ACCOUNT_TYPE } from "@/agent/policy";
 import { getBroker } from "@/lib/broker";
 import Link from "next/link";
@@ -33,7 +35,16 @@ export default async function Settings() {
     getPortfolio(),
     listFxRequests(),
   ]);
-  const isMember = session?.role === "member";
+  // Admin-only page: Cam & Graham (owners) only. Viewers — and any non-owner
+  // member — get a 404; the page does not exist for them.
+  if (!session || !isOwner(session.email)) notFound();
+  const isMember = session.role === "member";
+
+  // Soak-gate countdown (PROJECT_PLAN §9) — the road to real money, shown in the
+  // "Road to real money" panel below. Paper is the binding constraint right now.
+  const soak = soakStatus();
+  const paperFrac = soak.paperRequired > 0 ? Math.min(1, soak.paperDays / soak.paperRequired) : 0;
+  const totalFrac = soak.totalRequired > 0 ? Math.min(1, soak.totalDays / soak.totalRequired) : 0;
 
   // USD exposure = USD cash (in CAD) + USD positions (in CAD), as a % of NAV.
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
@@ -71,12 +82,26 @@ export default async function Settings() {
         title="Settings"
         sub="The dials you control. The agent controls nothing on this page — and never can."
         right={
-          <Link
-            href="/how-it-works"
-            className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25"
-          >
-            How GRQ works →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/how-it-works"
+              className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+            >
+              How GRQ works
+            </Link>
+            <Link
+              href="/traffic"
+              className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+            >
+              Traffic
+            </Link>
+            <Link
+              href="/tokens"
+              className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+            >
+              Tokens
+            </Link>
+          </div>
         }
       />
 
@@ -198,6 +223,31 @@ export default async function Settings() {
                 </li>
               ))}
             </ol>
+
+            {/* Soak-gate clock — the ≥4 weeks total / ≥2 on IBKR paper that must pass
+                before step 4 (real money). Moved here from the Portfolio header. */}
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-teal-400/10 pt-4">
+              <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">IBKR paper soak</div>
+                <div className="text-sm font-semibold tabular-nums text-teal-50">
+                  {soak.paperDays} / {soak.paperRequired}
+                  <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
+                </div>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-teal-400/10">
+                  <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${paperFrac * 100}%` }} />
+                </div>
+              </div>
+              <div className="rounded-xl border border-teal-400/20 bg-teal-400/[0.04] px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">Total soak</div>
+                <div className="text-sm font-semibold tabular-nums text-teal-50">
+                  {soak.totalDays} / {soak.totalRequired}
+                  <span className="ml-1 text-[10px] font-normal text-teal-200/40">days</span>
+                </div>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-teal-400/10">
+                  <span className="block h-full rounded-full bg-teal-400/70" style={{ width: `${totalFrac * 100}%` }} />
+                </div>
+              </div>
+            </div>
           </Card>
         </div>
 
