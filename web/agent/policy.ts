@@ -1,6 +1,14 @@
 import type { Tier } from "../lib/universe";
 
-export const AGENT_VERSION = "v1.0-phase2";
+// Provenance stamp on every agent-authored record (Settings "on duty", trades, journal
+// entries, proposals). Convention `v<major>.<minor>-phase<N>` (D77):
+//   major — a deliberate full re-architecture of the agent (still 1); promoting it resets the minor.
+//   minor — BUMP +1 ON EVERY AGENT REDEPLOY. Seeded at 48 = the count of DECISIONS.md entries
+//           that changed the agent's behaviour/guardrails through D76 (2026-06-25); from here it
+//           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
+//   phase — the PROJECT_PLAN §9 project phase (phase4).
+// Edit this constant in the SAME build you ship, so the new stamp is honest.
+export const AGENT_VERSION = "v1.48-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {

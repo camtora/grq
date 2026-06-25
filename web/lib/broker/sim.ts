@@ -275,7 +275,7 @@ export class SimBroker implements BrokerAdapter {
             (realizedPnlCents !== null
               ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} ${ccy} (after ${(commissionCents / 100).toFixed(2)} commission)`
               : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} ${ccy}`),
-          agentVersion: agentVersion ?? "v1.0-phase2",
+          agentVersion: agentVersion ?? "v1.48-phase4",
         },
       });
 

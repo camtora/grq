@@ -154,6 +154,11 @@ cd /home/camerontora/grq
 # agent + chat share web/Dockerfile.agent and the web/ source tree (no bind mounts —
 # a source change needs a rebuild, not just a restart).
 docker-compose build web && docker-compose up -d web
+# ⚠️ VERSION RULE (D77): EVERY agent redeploy bumps AGENT_VERSION (agent/policy.ts) FIRST.
+#   - any agent redeploy → minor +1   (v1.48-phase4 → v1.49-phase4)
+#   - a major re-architecture of the agent → major +1, reset minor (→ v2.0-phaseN)
+#   - a new PROJECT_PLAN §9 phase → update the -phaseN suffix
+#   Edit the constant in the SAME build so the stamp on new trades/journal/Settings is honest.
 docker-compose build agent chat && docker-compose up -d agent chat
 docker image prune -f   # after any heavy build — Docker root is on / and fills fast
 

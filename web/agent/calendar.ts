@@ -90,3 +90,14 @@ export function startOfEtDay(d: Date = new Date()): Date {
 export function etDateStr(d: Date = new Date()): string {
   return etParts(d).dateStr;
 }
+
+/**
+ * The 9:30 open and 16:00 close of the ET trading day containing `d`, as epoch ms.
+ * Built off startOfEtDay (which probes the correct UTC offset), so DST is handled —
+ * a trading day never straddles a DST switch, so adding the fixed session minutes is safe.
+ * Used to pin the Today NAV tape to a fixed 9:30→16:00 x-axis.
+ */
+export function etSessionBounds(d: Date = new Date()): { open: number; close: number } {
+  const midnight = startOfEtDay(d).getTime();
+  return { open: midnight + OPEN_MIN * 60_000, close: midnight + CLOSE_MIN * 60_000 };
+}

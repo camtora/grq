@@ -2,11 +2,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getPortfolio, PAPER_INCEPTION, type PositionView } from "@/lib/portfolio";
 import { allUniverse } from "@/lib/universe";
-import { startOfEtDay, etDateStr, etParts, isMarketDay } from "@/agent/calendar";
+import { startOfEtDay, etDateStr, etParts, isMarketDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
 import { money, signedMoney, pct } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import PriceChart from "@/components/PriceChart";
+import LiveTape from "@/components/LiveTape";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
@@ -331,6 +331,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   if (isToday && tapePts.length >= 1 && tapePts[tapePts.length - 1].c !== pf.navCents) {
     tapePts.push({ t: Date.now(), c: pf.navCents });
   }
+  // The fixed 9:30→16:00 window the tape's x-axis is pinned to, so the line sits at its real
+  // clock-time and grows rightward through the session (the live "today" view polls it forward).
+  const tapeWin = etSessionBounds(anchor);
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
   const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
@@ -521,37 +524,19 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
       )}
 
-      {/* The Tape — the day's NAV, start → finish. Above the headlines (Cam 2026-06-16) */}
-      <Card className="mb-6 p-5">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-            <Term k="the-tape">The Tape</Term> · the day&apos;s NAV
-          </span>
-          <span className="text-xs text-teal-200/40">
-            opened {money(dayOpenNav)} → {isToday ? "now" : "close"} {money(pf.navCents)}{" "}
-            <span className={dayClass(dayPnl)}>({signedMoney(dayPnl)})</span>
-            {pf.benchmarkCents !== null && (
-              <>
-                {" · "}
-                <Term k="vs-xic" align="right">vs XIC</Term>{" "}
-                <span className={dayClass(pf.navCents - pf.benchmarkCents)}>{signedMoney(pf.navCents - pf.benchmarkCents)}</span>
-              </>
-            )}
-          </span>
-        </div>
-        {tapePts.length >= 2 ? (
-          <PriceChart mode="intraday" label="NAV" data={tapePts} currency="CAD" bare />
-        ) : pf.positions.length > 0 ? (
-          <p className="py-4 text-sm text-teal-200/40">
-            Quiet tape — not enough NAV snapshots yet today; it fills in as the agent ticks through the session.
-            The fund holds {pf.positions.length} position{pf.positions.length > 1 ? "s" : ""}, not cash.
-          </p>
-        ) : (
-          <p className="py-4 text-sm text-teal-200/40">
-            Flat line — the fund&apos;s parked in cash. The tape comes alive the day the agent takes a position.
-          </p>
-        )}
-      </Card>
+      {/* The Tape — the day's NAV on a fixed 9:30→16:00 axis, creeping right as the session
+          runs (the live "today" view polls it forward). Above the headlines (Cam 2026-06-16) */}
+      <LiveTape
+        initialPoints={tapePts}
+        navCents={pf.navCents}
+        dayOpenNavCents={dayOpenNav}
+        benchmarkCents={pf.benchmarkCents}
+        windowStart={tapeWin.open}
+        windowEnd={tapeWin.close}
+        marketOpen={isMarketOpen()}
+        hasPositions={pf.positions.length > 0}
+        live={isToday}
+      />
 
       {/* Headlines — today's news. Live, so today only — archive hides stale headlines (Cam 2026-06-16) */}
       {isToday && marketNews.length > 0 && (

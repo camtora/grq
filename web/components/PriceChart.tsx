@@ -46,6 +46,8 @@ export default function PriceChart({
   bare = false,
   heightClass = "h-56",
   defaultRange = "1Y",
+  windowStart,
+  windowEnd,
 }: {
   data: Pt[];
   symbol?: string; // needed for the "1D" range (lazy intraday fetch)
@@ -55,6 +57,11 @@ export default function PriceChart({
   bare?: boolean;
   heightClass?: string; // plot height — default h-56; the stock page halves it to h-28
   defaultRange?: string; // which range button is selected on first paint (daily mode)
+  // Intraday only: pin the x-axis to a FIXED time window (epoch ms) instead of stretching
+  // the data edge-to-edge. The NAV tape passes the 9:30→16:00 session so the line sits at
+  // its real clock-time and grows rightward into empty space as the day goes on.
+  windowStart?: number;
+  windowEnd?: number;
 }) {
   const [range, setRange] = useState(defaultRange);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -117,8 +124,14 @@ export default function PriceChart({
   const up = hasData ? dir[dir.length - 1].c >= dir[0].c : true;
   const stroke = up ? "var(--spark-up)" : "var(--spark-down)";
 
+  // Fixed-window mode (the NAV tape): place each point by its real clock-time within
+  // [windowStart, windowEnd] instead of stretching the series edge-to-edge, so the line
+  // occupies only the elapsed slice of the session and creeps right as the day goes on.
+  const useWindow = isIntra && typeof windowStart === "number" && typeof windowEnd === "number" && windowEnd > windowStart;
+  const xAt = (t: number) =>
+    useWindow ? Math.min(100, Math.max(0, ((t - windowStart!) / (windowEnd! - windowStart!)) * 100)) : 0;
   const xy = (i: number) => ({
-    x: n === 1 ? 0 : (i / (n - 1)) * 100,
+    x: useWindow ? xAt(pts[i].t) : n === 1 ? 0 : (i / (n - 1)) * 100,
     y: (1 - (pts[i].c - min) / span) * 100,
   });
   const poly = pts.map((_, i) => { const p = xy(i); return `${p.x.toFixed(2)},${p.y.toFixed(2)}`; }).join(" ");
@@ -133,7 +146,19 @@ export default function PriceChart({
     if (!el || n < 2) return;
     const rect = el.getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    setHoverIdx(Math.round(frac * (n - 1)));
+    if (useWindow) {
+      // Points are time-positioned, not evenly spaced — snap to the nearest point in time.
+      const tTarget = windowStart! + frac * (windowEnd! - windowStart!);
+      let best = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < n; i++) {
+        const d = Math.abs(pts[i].t - tTarget);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      setHoverIdx(best);
+    } else {
+      setHoverIdx(Math.round(frac * (n - 1)));
+    }
   };
 
   const hi = hoverIdx != null && hoverIdx >= 0 && hoverIdx < n ? hoverIdx : null;
@@ -256,9 +281,11 @@ export default function PriceChart({
           </div>
         </div>
         <div className="ml-16 mt-1 flex justify-between">
-          <span>{fmtAxis(pts[0].t)}</span>
-          <span>{fmtAxis(pts[Math.floor((n - 1) / 2)].t)}</span>
-          <span>{fmtAxis(pts[n - 1].t)}</span>
+          {/* Windowed (NAV tape): fixed 9:30 / midday / 16:00 ticks so the axis stays put
+              as the line grows. Otherwise: first / mid / last point of the drawn series. */}
+          <span>{fmtAxis(useWindow ? windowStart! : pts[0].t)}</span>
+          <span>{fmtAxis(useWindow ? (windowStart! + windowEnd!) / 2 : pts[Math.floor((n - 1) / 2)].t)}</span>
+          <span>{fmtAxis(useWindow ? windowEnd! : pts[n - 1].t)}</span>
         </div>
       </div>
   );
