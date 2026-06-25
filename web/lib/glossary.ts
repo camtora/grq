@@ -226,6 +226,18 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "A $50 stock earning $2.50 a share trades at a P/E of 20 — twenty years of today's profit.",
     related: ["market-cap", "free-cash-flow", "moat"],
   },
+  eps: {
+    term: "EPS — Earnings Per Share",
+    def: "A company's profit divided by its shares — the per-share slice of what it earned that quarter. Analysts publish an estimate beforehand; the reported actual beating or missing it is what usually moves the stock.",
+    example: "Estimate $1.20, reports $1.35 → a beat. The market often cares more about the beat/miss than the raw number.",
+    related: ["pe", "earnings"],
+  },
+  earnings: {
+    term: "Earnings report",
+    def: "A company's quarterly scorecard — revenue, profit, and EPS for the last three months, plus its outlook. Filed before the open (BMO) or after the close (AMC), it's the single biggest scheduled event for a stock.",
+    example: "MU and AMD both reported after the close — the reaction shows up in the next session's price.",
+    related: ["eps", "pe"],
+  },
   etf: {
     term: "ETF — Exchange-Traded Fund",
     def: "A basket of stocks bought as one ticker. XIC, for instance, holds the whole TSX — instant diversification in a single trade.",

@@ -10,7 +10,7 @@ import PriceChart from "@/components/PriceChart";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile } from "@/lib/fmp";
+import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
 import MarketIndices from "@/components/MarketIndices";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveMoverPrice } from "@/components/LiveTableCells";
@@ -142,6 +142,79 @@ function IdeaRow({ idea }: { idea: Idea }) {
   );
 }
 
+type EarnView = {
+  symbol: string;
+  name: string;
+  logoUrl: string | null;
+  date: string; // YYYY-MM-DD
+  epsEstimated: number | null;
+  epsActual: number | null;
+  revenueEstimated: number | null;
+  revenueActual: number | null;
+  dayBps: number | null;
+};
+
+const fmtEps = (v: number | null) => (v == null ? "—" : `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`);
+function fmtEarnDate(d: string): string {
+  return new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+function relDay(d: string, today: string): string {
+  const n = Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+  if (n === 0) return "today";
+  if (n === 1) return "tomorrow";
+  if (n === -1) return "yesterday";
+  return n < 0 ? `${-n}d ago` : `in ${n}d`;
+}
+
+function EarningRow({ e, mode, today }: { e: EarnView; mode: "reported" | "upcoming"; today: string }) {
+  // Beat/miss on the reported side — EPS first, revenue as the fallback.
+  const beat =
+    e.epsActual != null && e.epsEstimated != null
+      ? e.epsActual >= e.epsEstimated
+      : e.revenueActual != null && e.revenueEstimated != null
+        ? e.revenueActual >= e.revenueEstimated
+        : null;
+  const soon = mode === "upcoming" && (e.date === today || relDay(e.date, today) === "tomorrow");
+  return (
+    <li className="flex items-center gap-3 px-3 py-2">
+      <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-8 w-8 text-[11px]" />
+      <div className="min-w-0">
+        <Link href={`/stocks/${e.symbol}`} className="font-semibold text-teal-200 hover:underline">
+          {e.symbol}
+        </Link>
+        <div className="truncate text-xs text-teal-200/40">{e.name}</div>
+      </div>
+      <div className="ml-auto shrink-0 text-right">
+        {mode === "reported" ? (
+          <>
+            <div className="flex items-center justify-end gap-1.5 tabular-nums">
+              {beat != null && (
+                <span className={`text-[10px] font-black ${beat ? "text-emerald-400" : "text-red-400"}`}>
+                  {beat ? "beat ✓" : "miss ✗"}
+                </span>
+              )}
+              {e.dayBps != null && <span className={`text-xs ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)}</span>}
+            </div>
+            <div className="text-[10px] text-teal-200/40">
+              {fmtEarnDate(e.date)} · EPS {fmtEps(e.epsActual)} vs {fmtEps(e.epsEstimated)} est
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`text-xs font-semibold tabular-nums ${soon ? "text-amber-300" : "text-teal-200/70"}`}>
+              {relDay(e.date, today)}
+            </div>
+            <div className="text-[10px] text-teal-200/40">
+              {fmtEarnDate(e.date)}
+              {e.epsEstimated != null && ` · EPS est ${fmtEps(e.epsEstimated)}`}
+            </div>
+          </>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function editionLabel(): string {
   if (!isMarketDay()) return "Weekend Edition";
   const m = etParts().minutesSinceMidnight;
@@ -161,6 +234,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const isToday = dateStr === todayStr;
   const prev = etDateStr(new Date(start.getTime() - 12 * 60 * 60 * 1000));
   const next = etDateStr(new Date(end.getTime() + 12 * 60 * 60 * 1000));
+  // Earnings calendar window: a week back (so just-reported names linger) → two
+  // weeks ahead (the upcoming docket). Today-only, like the other live panels.
+  const earnFrom = etDateStr(new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000));
+  const earnTo = etDateStr(new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000));
   const dayLabel = anchor.toLocaleDateString("en-CA", {
     timeZone: "America/Toronto",
     weekday: "long",
@@ -168,7 +245,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, macro] =
+  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, macro, earnCal] =
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
@@ -196,6 +273,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpIndices().catch(() => []) : Promise.resolve([]),
       getMacro().catch(() => null),
+      isToday && fmpEnabled() ? fmpEarningsCalendar(earnFrom, earnTo).catch(() => [] as EarningsCalRow[]) : Promise.resolve([] as EarningsCalRow[]),
     ]);
   // Per-mover detail for the expandable whole-market movers (best-effort).
   const gainerProfiles = await Promise.all(
@@ -324,6 +402,57 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     })
     .sort((a, b) => a.obscurity - b.obscurity || (b.far ?? -9) - (a.far ?? -9))
     .slice(0, 6);
+
+  // Earnings on the docket — filter the bulk calendar down to our universe∪watchlist.
+  // Match on the bare ticker (FMP lists TSX names suffixed, e.g. RY.TO) so a name
+  // resolves whether the calendar carries the .TO or the US listing. Universe wins
+  // over a watchlist-only stub (richer name/logo).
+  // Map the FMP calendar's bare market ticker → our entry. Match on the *yahoo*
+  // ticker (the real listing — AMD.US is stored with yahoo "AMD"), because the
+  // internal symbol carries a ".US" tag the calendar never uses. Skip RETIRED
+  // duplicates (the dead CDR shells) so a US name resolves to its live entry, not
+  // a "...CDR (CAD HEDGED)" husk — but keep anything explicitly on the watchlist.
+  const dayBpsBy = new Map(quoteRows.map((q) => [q.symbol, q.dayChangeBps]));
+  const uBySymbol = new Map(universeRows.map((u) => [u.symbol, u]));
+  const watchedSyms = new Set(watchlist.map((w) => w.symbol));
+  const STATUS_RANK: Record<string, number> = { ACTIVE: 0, CANDIDATE: 1, RETIRED: 2 };
+  const bareToName = new Map<string, { symbol: string; name: string; logoUrl: string | null; rank: number }>();
+  const considerEarn = (symbol: string, name: string, logoUrl: string | null, yahoo: string, status: string) => {
+    const key = stripSuffix(yahoo || symbol).toUpperCase();
+    const rank = STATUS_RANK[status] ?? 3;
+    const cur = bareToName.get(key);
+    if (!cur || rank < cur.rank) bareToName.set(key, { symbol, name, logoUrl, rank });
+  };
+  for (const u of universeRows) {
+    if (u.status === "RETIRED" && !watchedSyms.has(u.symbol)) continue;
+    considerEarn(u.symbol, u.name, u.logoUrl, u.yahoo, u.status);
+  }
+  // Watchlist names with no universe row to resolve a yahoo — match on the symbol.
+  for (const w of watchlist) {
+    if (uBySymbol.has(w.symbol)) continue;
+    considerEarn(w.symbol, nameBy.get(w.symbol) ?? w.symbol, logoBy.get(w.symbol) ?? null, w.symbol, "CANDIDATE");
+  }
+  const earnSeen = new Set<string>();
+  const earnMatched: EarnView[] = [];
+  for (const r of earnCal) {
+    const hit = bareToName.get(stripSuffix(r.symbol).toUpperCase());
+    if (!hit) continue;
+    const key = `${hit.symbol}|${r.date}`;
+    if (earnSeen.has(key)) continue;
+    earnSeen.add(key);
+    earnMatched.push({ ...r, symbol: hit.symbol, name: hit.name, logoUrl: hit.logoUrl, dayBps: dayBpsBy.get(hit.symbol) ?? null });
+  }
+  // Reported (actuals filed) vs upcoming (no actuals, still to come) — the same
+  // split the stock-page dossier uses.
+  const recentEarn = earnMatched
+    .filter((e) => e.epsActual != null || e.revenueActual != null)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+  const upcomingEarn = earnMatched
+    .filter((e) => e.date >= todayStr && e.epsActual == null && e.revenueActual == null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 8);
+  const hasEarnings = recentEarn.length > 0 || upcomingEarn.length > 0;
 
   const edition = isToday ? editionLabel() : "Archive";
 
@@ -535,6 +664,43 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </p>
         </div>
       </section>
+
+      {/* Earnings — recently reported (beat/miss) + upcoming, for names we track or watch (Cam 2026-06-25) */}
+      {isToday && hasEarnings && (
+        <section className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+          <div>
+            <SectionTitle>Recently reported · <Term k="earnings">earnings</Term></SectionTitle>
+            <Card className="overflow-hidden p-1">
+              {recentEarn.length > 0 ? (
+                <ul className="divide-y divide-teal-400/10">
+                  {recentEarn.map((e) => (
+                    <EarningRow key={`r-${e.symbol}-${e.date}`} e={e} mode="reported" today={todayStr} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-3 text-sm text-teal-200/40">None of our names reported in the last week.</p>
+              )}
+            </Card>
+          </div>
+          <div>
+            <SectionTitle>On the calendar · upcoming</SectionTitle>
+            <Card className="overflow-hidden p-1">
+              {upcomingEarn.length > 0 ? (
+                <ul className="divide-y divide-teal-400/10">
+                  {upcomingEarn.map((e) => (
+                    <EarningRow key={`u-${e.symbol}-${e.date}`} e={e} mode="upcoming" today={todayStr} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-3 text-sm text-teal-200/40">Nothing scheduled in the next two weeks.</p>
+              )}
+            </Card>
+            <p className="mt-2 px-1 text-[10px] text-teal-200/40">
+              earnings for the names we track or watch · <Term k="eps">EPS</Term> figures from FMP · beat/miss is the actual vs the analyst estimate
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Live market data below — today only; archived days hide it (stale otherwise) (Cam 2026-06-16) */}
       {isToday && (

@@ -323,6 +323,29 @@ export async function fmpEarningsReport(symbol: string): Promise<FmpEarningsRepo
   return { last, next };
 }
 
+// Bulk earnings calendar across ALL companies in a date window — ONE call covers
+// the whole tracked list, vs. a per-symbol fetch each. The Today page filters the
+// result down to our universe∪watchlist. Same row shape as the per-symbol endpoint.
+// (FMP's stable endpoint carries no before-open/after-close field, so we don't.) Tier 6.
+export type EarningsCalRow = EarningsRow & { symbol: string };
+
+export async function fmpEarningsCalendar(from: string, to: string): Promise<EarningsCalRow[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(
+    `earnings-calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({
+      symbol: String(r.symbol ?? ""),
+      date: String(r.date ?? ""),
+      epsEstimated: numOrNull(r.epsEstimated),
+      epsActual: numOrNull(r.epsActual),
+      revenueEstimated: numOrNull(r.revenueEstimated),
+      revenueActual: numOrNull(r.revenueActual),
+    }))
+    .filter((r) => r.symbol && r.date);
+}
+
 // --- Tier 7: per-stock news ---------------------------------------------------
 export type StockNews = { title: string; publisher: string; url: string; at: string; image: string };
 
