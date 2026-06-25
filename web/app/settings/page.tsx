@@ -4,12 +4,12 @@ import { USERS } from "@/lib/users";
 import { getSession } from "@/lib/session";
 import { ACCOUNT_TYPE } from "@/agent/policy";
 import { getBroker } from "@/lib/broker";
+import Link from "next/link";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import RiskDial from "@/components/RiskDial";
 import FeeBudget from "@/components/FeeBudget";
 import KillSwitch from "@/components/KillSwitch";
 import ThemeToggle from "@/components/ThemeToggle";
-import OrderTicket from "@/components/OrderTicket";
 import NotificationSettings from "@/components/NotificationSettings";
 import FxPanel, { type FxRequestRow } from "@/components/FxPanel";
 import { prefsFromRow } from "@/lib/push/categories";
@@ -70,6 +70,14 @@ export default async function Settings() {
       <PageHeader
         title="Settings"
         sub="The dials you control. The agent controls nothing on this page — and never can."
+        right={
+          <Link
+            href="/how-it-works"
+            className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 transition-colors hover:bg-teal-400/25"
+          >
+            How GRQ works →
+          </Link>
+        }
       />
 
       <div className="space-y-8">
@@ -111,22 +119,6 @@ export default async function Settings() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="p-5">
             <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Members
-            </div>
-            <ul className="space-y-2">
-              {Object.entries(USERS).map(([email, u]) => (
-                <li key={email} className="flex items-center gap-3 text-sm">
-                  <span className="font-semibold text-teal-50">{u.name}</span>
-                  <span className="text-teal-200/50">{email}</span>
-                  <Chip tone="teal">{u.role}</Chip>
-                  <span className="ml-auto text-xs text-teal-200/40">holds kill switch</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
               System
             </div>
             <dl className="space-y-2 text-sm">
@@ -134,6 +126,15 @@ export default async function Settings() {
                 <dt className="text-teal-200/50">Broker</dt>
                 <dd className="font-semibold text-teal-50">
                   {(process.env.BROKER ?? "sim").toUpperCase()} — real delayed quotes
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-teal-200/50">Trading account</dt>
+                <dd className="font-semibold text-teal-50">
+                  {process.env.IBKR_ACCOUNT_ID ?? "—"}
+                  {(process.env.BROKER ?? "").includes("paper") && (
+                    <span className="ml-1 text-[11px] font-normal text-teal-200/40">(paper)</span>
+                  )}
                 </dd>
               </div>
               <div className="flex justify-between">
@@ -164,6 +165,39 @@ export default async function Settings() {
                 </dd>
               </div>
             </dl>
+            <div className="mt-4 border-t border-teal-400/10 pt-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal-200/40">Members</div>
+              <ul className="space-y-2">
+                {Object.entries(USERS).map(([email, u]) => (
+                  <li key={email} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="font-semibold text-teal-50">{u.name}</span>
+                    <span className="text-teal-200/50">{email}</span>
+                    <Chip tone="teal">{u.role}</Chip>
+                    <span className="ml-auto text-xs text-teal-200/40">holds kill switch</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+              Road to real money
+            </div>
+            <ol className="space-y-2">
+              {ROADMAP.map((p) => (
+                <li key={p.n} className="flex items-center gap-3 text-sm">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      p.done ? "bg-teal-400 text-teal-950" : "border border-teal-400/30 text-teal-200/60"
+                    }`}
+                  >
+                    {p.done ? "✓" : p.n}
+                  </span>
+                  <span className={p.done ? "text-teal-200/50 line-through" : "text-teal-50"}>{p.label}</span>
+                </li>
+              ))}
+            </ol>
           </Card>
         </div>
 
@@ -193,31 +227,6 @@ export default async function Settings() {
           </div>
         </div>
 
-        {isMember && <OrderTicket symbols={symbols} />}
-
-        <Card className="p-5">
-          <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Road to real money
-          </div>
-          <ol className="space-y-2">
-            {ROADMAP.map((p) => (
-              <li key={p.n} className="flex items-center gap-3 text-sm">
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                    p.done
-                      ? "bg-teal-400 text-teal-950"
-                      : "border border-teal-400/30 text-teal-200/60"
-                  }`}
-                >
-                  {p.done ? "✓" : p.n}
-                </span>
-                <span className={p.done ? "text-teal-200/50 line-through" : "text-teal-50"}>
-                  {p.label}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </Card>
       </div>
     </main>
   );

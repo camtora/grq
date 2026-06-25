@@ -10,8 +10,8 @@ import { getScoreboard } from "@/lib/scoreboard";
 
 const KINDS = ["ALL", "SYSTEM", "RESEARCH", "DECISION", "TRADE", "RETRO", "LESSON"] as const;
 
-// The Journal lives at the bottom of Settings (Cam 2026-06-16). Filter links
-// carry the #journal anchor so the page returns here after a kind change.
+// The body of the standalone /journal page (Cam 2026-06-25). Filter chips deep-link
+// to /journal?kind=X. The page header above it supplies the title + description.
 export default async function JournalSection({ kind: kindParam }: { kind?: string }) {
   const kind = (kindParam ?? "ALL").toUpperCase();
   const where =
@@ -29,13 +29,7 @@ export default async function JournalSection({ kind: kindParam }: { kind?: strin
   ]);
 
   return (
-    <section id="journal" className="scroll-mt-20 border-t border-teal-400/10 pt-8">
-      <div className="mb-1 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Journal</div>
-      <p className="mb-6 text-sm text-teal-200/50">
-        The agent&apos;s working memory: every thesis, decision, retro, and lesson — including the decisions not to
-        trade. The full order ledger is at the bottom.
-      </p>
-
+    <section>
       <div className="mb-6">
         <Scoreboard rows={scoreboard} />
       </div>
@@ -44,7 +38,7 @@ export default async function JournalSection({ kind: kindParam }: { kind?: strin
         {KINDS.map((k) => (
           <Link
             key={k}
-            href={`${k === "ALL" ? "/settings" : `/settings?kind=${k}`}#journal`}
+            href={k === "ALL" ? "/journal" : `/journal?kind=${k}`}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
               kind === k ? "bg-teal-400/20 text-teal-200" : "text-teal-200/50 hover:bg-teal-400/10"
             }`}

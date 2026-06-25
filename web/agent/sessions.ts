@@ -9,31 +9,12 @@ import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
-import { MODELS, RACE, AGENT_VERSION, taxContext, SELF_INVEST } from "./policy";
-import { alert, heartbeat } from "./alerts";
+import { MODELS, RACE, AGENT_VERSION, SELF_INVEST } from "./policy";
+import { PERSONA } from "./persona";
+import { alert, heartbeat, sendDiscord } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
 
-const PERSONA = `You are GRQ's trading agent — an autonomous swing-trading fund manager for Cam & Graham's $25,000 CAD fund (it will become real money; treat it as real).
-
-Your job is to PUT THE FUND TO WORK. You are an active manager, not a cash custodian — the members hired a stock-picker. A portfolio that sits in cash because nothing on a short watchlist triggered is failing at the job. Over a month, chronic under-deployment is a BIGGER risk than any single wrong pick.
-
-Disposition:
-- The scorecard is MONTH-OVER-MONTH, not daily. Day-to-day P&L is noise. You're measured on whether the fund compounds over months — and you can neither compound nor LEARN without taking real positions. A trade that goes wrong is tuition; refusing to trade teaches the fund nothing.
-- When your watched names don't clear the bar, the answer is to WIDEN THE SEARCH, not default to cash. Go research more names — across the whole market, not just your current focus list — until you find ones you'd genuinely back, then track/promote and trade them. There is almost always a high-conviction setup somewhere. Cash is the right call only after a genuinely wide look comes up empty, or the whole tape is clearly risk-off — not after glancing at five names.
-- The conviction bar is real and you keep it HONEST — never inflate a number to clear a gate. But "I can't get to high conviction on these few names" means "find better names," never "hold cash and wait."
-- Research is ALWAYS available — you never need permission or a special session for it. Any time a name is worth a look (or you need more conviction on one), research it and write a dossier (write_journal), and add_candidate it to your watchlist — that both tracks it AND queues a FULL dossier the runner completes in the background. Do this anytime, in any session. If you'd act on a name but its dossier isn't ready yet, do NOT drop it and do NOT rush a thesis to beat a clock: add_candidate it now and schedule_checkin a time to come back once the research has landed, then decide with the finished dossier in front of you. A parked idea with a scheduled follow-up beats a forgotten idea or a forced thesis.
-
-Operating principles:
-- Hard guardrails are enforced in code. You cannot change them. A rejection from propose_order is FINAL — adapt, never retry the same order hoping for a different answer.
-- US names are first-class — treat a US-listed name exactly like a Canadian one when picking. BUT the fund holds CAD and USD as SEPARATE cash (mirroring the broker), and a USD buy must be covered by USD cash — there is no auto-FX and no margin. If a US buy is rejected for "Insufficient USD", use request_fx to ask a member to convert CAD→USD (any amount you'd genuinely deploy — the member is the gate). You cannot convert currency yourself; money moves only when a member approves. Until then, set_focus the name and move on — don't drop a good idea just because the USD isn't funded yet.
-- Every thesis must be falsifiable (target, stop, horizon, invalidation) and must cite sources. Your retros grade those sources' hit-rates — the fund learns which inputs deserve trust.
-- Diversify the THESIS, not just the tickers. Count independent thesis axes (e.g. rates / secular compounders / idiosyncratic catalysts / index ballast / commodity), not symbols — three names riding one rate bet is ONE bet, not three positions. Whenever the book holds more than a couple of names, keep at least 2–3 independent axes live, and name the concentration out loud the moment it drifts toward a single factor. (Approved standing rule, 2026-06-21 weekly review §4.)
-- Fees and taxes are real drags on a small account: a trade must clear ≥3× its round-trip commissions, and when you realize a gain, name the tax consequence. Taxes (Canadian, CRA): ${taxContext()} This is a reason to pick well and let winners run — NOT a reason to never trade.
-- "vs just buying XIC" is the benchmark you must beat — and you beat it by deploying into better ideas, not by hiding in cash to stay nominally "ahead" of the index. Being ahead of XIC while sitting in cash is not a win; it's an un-deployed fund.
-- Be honest in journals and reports: luck is luck, mistakes are named.
-- Literacy: when you write for Cam & Graham, wrap finance/investing jargon a non-expert might not know in [[double brackets]] — e.g. [[shell company]], [[free cash flow]], [[short interest]], [[dilution]]. The app turns those into tap-to-explain links. Sparingly — only genuinely non-obvious terms, and don't bracket the same term twice in one piece.
-- Voice: plain, lightly funny, never funny about losses or guardrails. Tagline: "Get rich quick, slowly, with receipts."`;
 
 type SessionOpts = {
   label: string;
@@ -266,6 +247,31 @@ async function latestNoteBody(titlePrefix: string, since: Date): Promise<string 
     .findFirst({ where: { title: { startsWith: titlePrefix }, at: { gte: since } }, orderBy: { at: "desc" } })
     .catch(() => null);
   return n?.body ?? null;
+}
+
+/** Pre-morning read (Cam 2026-06-25) — a 6:00 ET scan that runs hours before the
+ *  day's heavy workload. Two jobs: (1) catch what moved overnight — post-market /
+ *  pre-market earnings, news, gaps — and request_research a fresh dossier on the FEW
+ *  names a real catalyst changes, so that research lands before the 9:00 game plan
+ *  reads it; and (2) write ONE SHORT read for Cam & Graham. It is NOT the game plan —
+ *  it's a quick "here's what's interesting and the high-level shape of the day." It
+ *  owns the Portfolio briefing slot from 6:00 until the 9:00 Game plan (a newer
+ *  brief) supersedes it. Discord-only (no 6am phone push); surfaces on Reports. */
+export async function runPremorningRead(): Promise<void> {
+  const ctx = await buildContext();
+  const prompt = `${ctx}
+
+# TASK: Pre-morning read (6:00 ET, ${etDateStr()})
+
+It's early — hours before the open and before your 9:00 game plan. Two jobs:
+
+1. SCAN what changed overnight. WebSearch (and WebFetch a promising article or two) for anything that moved while the market was closed and touches your holdings or focus names: post-market / pre-market EARNINGS, guidance, M&A, downgrades, a notable gap, or a macro print due at 8:30 ET. Be quick and selective — you're triaging, not writing theses.
+2. REFRESH research only where something genuinely changed. For any name whose overnight news could change your call, request_research it so a fresh dossier lands before 9:00. Do NOT refresh the whole book — only names with a real overnight catalyst. If nothing changed, queue nothing.
+
+Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Keep it BRIEF — 3–5 tight sentences or a few bullets. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
+  await runSession({ label: "premorning-read", prompt, model: MODELS.decision, withTools: true, maxTurns: 18 });
+  const body = await latestNoteBody("Pre-morning read", new Date(Date.now() - 30 * 60_000));
+  if (body) await sendDiscord("info", `Pre-morning read — ${etDateStr()}`, body.slice(0, 1500));
 }
 
 export async function runMorningResearch(): Promise<void> {
@@ -539,13 +545,14 @@ export async function runScheduledCheckin(reason: string): Promise<void> {
 
 # TASK: Trading check-in — ${reason} (${etDateStr()})
 
-The market is open. This is a scheduled check-in to ACT on your best read of the market RIGHT NOW. Your morning game plan is a HYPOTHESIS, not a contract — markets move all day, and you have full freedom to act on the plan, revise it, or throw it out and form a new one if the picture has changed since the open.
+The market is open. This is your HOURLY REBUILD — not a glance at the morning plan to check triggers, a full re-derivation of the plan for the rest of the day. Start from the prior plan + your agenda, then layer in EVERYTHING that's happened since the last hour: fresh quotes, fills, news, macro, the tape's tone, your holdings' moves. Then write a NEW plan that supersedes the old one. The morning plan is a starting hypothesis with a short shelf life — mornings especially move fast, so the early check-ins are genuine re-evaluations, not trigger-checks. You have the context budget; actually re-think it rather than re-stating this morning's read.
 1. Re-read today's plan (get_journal kind=RESEARCH limit=1 — the "Game plan"), your AGENDA (list_agenda — the follow-ups you parked for a check-in like this one), your focus list (get_focus), and fresh quotes (get_quotes) for holdings + focus names. If something is clearly moving (a breakout, a catalyst, a macro turn), a quick WebSearch to confirm is fair game.
 2. WORK YOUR AGENDA: for each open item now actionable (its dossier landed, its price level hit, its catalyst passed), do it — propose_order if warranted — and resolve_agenda it with a one-line outcome. Carry an item that genuinely isn't ready yet; resolve_agenda(status:"DROPPED") anything now moot. This is where parked follow-ups get done — not in a separately-scheduled session.
-3. Then decide — does the plan still fit the tape?
-   - PLAN STILL HOLDS: for each standing condition now met — a live entry trigger, a stop/trim level, a broken thesis — propose_order it with a full thesis + sources.
-   - TAPE HAS CHANGED: if new information has overtaken the morning plan — a name broke out, a catalyst hit, the macro turned, a thesis is invalidated — you are EXPECTED to change course, not cling to a stale plan. Drop focus names that no longer make sense (set_focus), hunt a fresh idea (WebSearch → research entry → promote_to_universe if needed), exit a position whose thesis broke, or enter a new one — then say so in your note. Changing your mind on new evidence is good judgment, not inconsistency.
-   Rejections are final: journal why and adapt. Don't force a junk trade — but if NONE of your ideas are live and the fund is sitting on cash, that is NOT an automatic "stand down": it means your pipeline is thin. Either act on a genuine setup you can defend right now, or state plainly that the next hunt has to go WIDER. Cash is a verdict you earn after looking, not a reflex.
+3. REBUILD the plan from scratch given the prior plan + the last hour, and ACT on the fresh read:
+   - For every standing condition now met — a live entry trigger, a stop/trim level, a broken thesis — propose_order it with a full thesis + sources.
+   - Where new information has overtaken the old plan — a name broke out, a catalyst hit, the macro turned, a thesis is invalidated — change course: drop focus names that no longer fit (set_focus), enter/exit/rotate as the fresh read dictates, and say so. Do NOT anchor on the morning's read just because you wrote it — the best plan is the one that accounts for the most recent hour, and re-deriving it hourly is the job, not a failure of consistency.
+   Rejections are final: journal why and adapt. Don't force a junk trade — but if NONE of your ideas are live and the fund is sitting on cash, that is NOT an automatic "stand down": it means your pipeline is thin. Either act on a genuine setup you can defend right now, or state plainly that the next hunt has to go WIDER. Cash is a verdict you earn after looking, not a reflex. And the reverse: if a genuinely better setup appears but the fund is heavily deployed with little cash, don't just pass — rank your book by the weight + dossier call shown in Positions, and if the new idea clearly beats your weakest-conviction holding (net of taxes/fees, and it clears the 75% bar), ROTATE: propose the SELL to free the cash, then the BUY. Name the swap in your note.
+   MANDATORY — every check-in MUST advance the pipeline, and you have ample token budget for real breadth, so use it. Before you finish: (a) research AT LEAST FIVE genuinely new names you don't already track — WebSearch each, form a real view, and add_candidate every one worth tracking (or request_research if it's already tracked), each with a one-line thesis. Cast wide: sectors breaking out, fresh earnings beats, clustered insider buying, peers of names you like, US AND Canadian. Expect to actually track at least one or two per check-in, usually more — never pad with junk to hit a number, but "none of five was worth a look" is not credible and means you didn't look. AND (b) promote_to_universe any researched candidate whose latest dossier now clears Buy/≥75. This is NOT optional and is NOT satisfied by "I scanned my watchlist and nothing qualified" — the investable market is thousands of names and your watchlist is a sliver of it. Name the new names you researched/promoted in your note. To be clear, this WIDENS the funnel — it does not force a trade: tracking or promoting a name does not buy it, and every buy still clears the gate and the 75% bar. AND: if your context flags a currency leg OVER its cash ceiling, deploying that leg this check-in is part of the mandate — a real stock if you have one (preferred), index-ETF ballast (XIC for CAD, a US index for USD; no FX) only if you genuinely don't. A check-in that bought nothing AND researched no new names is a failed check-in.
 4. For anything to revisit LATER: prefer add_agenda(item, symbol?) — the NEXT hourly check-in will work it (no extra session, no extra ping). Only use schedule_checkin for something that genuinely can't wait an hour (a timed event before the next check-in); tidy stale ones with list_scheduled / cancel_checkin.
 5. Write ONE short DECISION-grade RESEARCH note (write_journal) titled "Intraday Check-in — <a one-line summary of your read>" — what you did, or why you stood down. This is a FUND-LEVEL read, so do NOT set \`symbol\` on it (leave it blank) even if you focused on one holding — a symbol here hides it from the Portfolio home brief and the scheduled-check-in notifications. (If a single name earned its own write-up, file that as a SEPARATE symbol-tagged RESEARCH entry.) Lead with a clean at-a-glance read; "No trade" is a decision and gets receipts too.
 6. If — and ONLY if — this check-in surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off observation about today), ALSO record it as a separate LESSON: write_journal(kind:"LESSON") with a crisp title and the pattern + why it matters. Lessons are re-read before every future decision, so keep them rare and real — most check-ins won't earn one; don't manufacture one.
@@ -668,7 +675,7 @@ Computed stats (use these numbers, do not invent): ${JSON.stringify(stats)}
 Today's fills: ${trades.map((t) => `${t.side} ${t.qty} ${t.symbol} @ $${(t.priceCents / 100).toFixed(2)}`).join("; ") || "none"}
 Today's rejections: ${rejections.map((r) => `${r.side} ${r.qty} ${r.symbol}: ${r.rejectReason}`).join("; ") || "none"}
 
-Write the EOD report body in markdown (no top-level title — the dashboard adds it): what happened, why (with the thesis behind each trade), guardrail events, how we stand vs XIC, and tomorrow's watch items. Honest, brief, lightly funny where the numbers allow it. Your ENTIRE final response must be just the report body.`;
+Write the EOD report body in markdown (no top-level title — the dashboard adds it): what happened, why (with the thesis behind each trade), guardrail events, where we stand — lead with the return RATE and the compounding arc (vs XIC is the floor, not the headline; don't dress small dollars up as a win) — and tomorrow's watch items. Honest, brief, lightly funny where the numbers allow it. Your ENTIRE final response must be just the report body.`;
   const body = await runSession({ label: "eod-report", prompt, model: MODELS.decision, withTools: false, maxTurns: 4 });
   if (!body) return;
   await prisma.report.upsert({

@@ -1,10 +1,12 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
+import { personByName } from "@/lib/people";
 import { prisma } from "@/lib/db";
 import { Card, PageHeader } from "@/components/ui";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
+import WatchedBy from "@/components/hunt/WatchedBy";
 import SortableTable from "@/components/SortableTable";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveLastCell } from "@/components/LiveTableCells";
@@ -93,6 +95,14 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
   const watchState = (sym: string): WatchState => {
     const s = statusBy.get(stripSuffix(sym).toUpperCase());
     return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
+  };
+  // Tracking tile (Cam 2026-06-25): is this name already in the universe / on the watchlist,
+  // and who put it there (the member who added it; agent/seed/migration adds resolve to null).
+  const entryBy = new Map(universe.map((u) => [u.symbol.toUpperCase(), u]));
+  const trackingOf = (sym: string): { state: WatchState; watcher: ReturnType<typeof personByName> } => {
+    const u = entryBy.get(stripSuffix(sym).toUpperCase());
+    if (!u || u.status === "RETIRED") return { state: "none", watcher: null };
+    return { state: u.status === "ACTIVE" ? "universe" : "watching", watcher: personByName(u.addedBy) };
   };
 
   const { q = "", exchange = "", sector = "", country = "", cap = "" } = sp;
@@ -237,6 +247,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               { key: "exchange", label: "Exch", align: "left" },
               { key: "cap", label: "Cap", align: "right", numeric: true },
               { key: "price", label: "Price", align: "right", numeric: true },
+              { key: "tracking", label: "Tracking", align: "left" },
               { label: null, align: "left" },
             ]}
             rows={rows.map((r) => ({
@@ -248,6 +259,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                 exchange: r.exchange,
                 cap: r.marketCapM,
                 price: r.priceCents,
+                tracking: ({ universe: 2, watching: 1, none: 0 } as const)[trackingOf(r.symbol).state],
               },
               node: (
                 <tr key={`${r.symbol}-${r.exchange}`} className="border-t border-teal-400/10">
@@ -260,6 +272,26 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/70">{capLabel(r.marketCapM)}</td>
                   <LiveLastCell symbol={r.symbol} initialCents={r.priceCents} currency={r.currency} />
+                  <td className="px-4 py-2.5">
+                    {(() => {
+                      const { state, watcher } = trackingOf(r.symbol);
+                      if (state === "none") return <span className="text-teal-200/30">—</span>;
+                      return (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={
+                              state === "universe"
+                                ? "rounded-full border border-teal-400/30 bg-teal-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-200"
+                                : "rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200"
+                            }
+                          >
+                            {state === "universe" ? "Universe" : "Watchlist"}
+                          </span>
+                          {watcher && <WatchedBy name={watcher.name} pill />}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
                       <ResearchButton symbol={bareTicker(r.symbol)} state={researchState(r.symbol)} canResearch={isMember} />

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/db";
 import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
-import { universeEntry, activeSymbols, yahooForListing } from "../lib/universe";
+import { universeEntry, activeSymbols, yahooForListing, bareTicker } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
 import { createFxRequest } from "../lib/fx-requests";
@@ -311,6 +311,21 @@ const addCandidateTool = tool(
   },
 );
 
+const requestResearchTool = tool(
+  "request_research",
+  "Queue a FRESH full dossier (the deep runStockDossier pass) for a name you ALREADY track. Use this ANY time you want real research and don't have it: a catalyst hit (earnings, news, a gap, an analyst move), the dossier you can see is STALE, or you only have a preliminary/inline scratch note (NOT a full 'Dossier —' entry) on a name you're weighing. Don't just write your own note and wait — if you'd act on a name once the research lands, queue it here NOW, then add_agenda/schedule_checkin to come back and decide with the finished dossier in front of you. Unlike add_candidate (for a name you don't yet track), this re-runs research on a tracked name. Be selective — not the whole book. Idempotent: a no-op if a refresh is already queued or running. The runner completes it in the background. Pass the ticker and a one-line reason.",
+  { symbol: z.string(), reason: z.string().min(10).max(300) },
+  async (args) => {
+    const key = bareTicker(args.symbol);
+    const pending = await prisma.researchRequest.count({
+      where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } },
+    });
+    if (pending > 0) return text(`SKIP: a dossier refresh for ${key} is already queued/running.`);
+    await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "agent" } });
+    return text(`QUEUED a fresh full dossier for ${key} — it'll land in the background. Park an agenda item or schedule a check-in to come back and decide with it.`);
+  },
+);
+
 const promoteToUniverseTool = tool(
   "promote_to_universe",
   "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. The human watchlist→universe path is separate and unchanged. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
@@ -433,6 +448,7 @@ export const grqServer = createSdkMcpServer({
     getSignalsTool,
     gradeSourcesTool,
     addCandidateTool,
+    requestResearchTool,
     promoteToUniverseTool,
     proposeOrderTool,
     requestFxTool,
@@ -455,6 +471,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__get_signals",
   "mcp__grq__grade_sources",
   "mcp__grq__add_candidate",
+  "mcp__grq__request_research",
   "mcp__grq__promote_to_universe",
   "mcp__grq__propose_order",
   "mcp__grq__request_fx",

@@ -7,7 +7,7 @@ import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreb
 import { fmpEnabled, fmpEarnings } from "../lib/fmp";
 import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { getMacro, macroLine } from "../lib/macro";
-import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET } from "./policy";
+import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
 
 function money(c: number): string {
   return `$${(c / 100).toFixed(2)}`;
@@ -37,30 +37,82 @@ export async function buildContext(): Promise<string> {
   const p = etParts();
   const dayBps = await dayPnlBps().catch(() => 0);
 
+  // Current dossier verdict per HOLDING and focus name — the AUTHORITATIVE live call
+  // (latest "Dossier —" RESEARCH entry). Surfaced next to each position AND focus note
+  // so the agent grounds on real state — and can RANK its own book by conviction for
+  // rotation decisions — instead of its own scratch note, which has no update timestamp
+  // and can drift stale (e.g. L's note kept claiming a "CPI-error dossier, needs a
+  // refresh" long after the clean refresh landed it at Hold/63 — every check-in re-read
+  // the stale note and parroted it; D-fix 2026-06-24).
+  const bookSyms = [...new Set([...pf.positions.map((x) => x.symbol.toUpperCase()), ...focus.map((f) => f.symbol.toUpperCase())])];
+  const dossierRows = bookSyms.length
+    ? await prisma.journalEntry.findMany({
+        where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: bookSyms } },
+        orderBy: { at: "desc" },
+        select: { symbol: true, stance: true, confidence: true, at: true },
+      })
+    : [];
+  const bookDossier = new Map<string, { stance: string | null; confidence: number | null; at: Date }>();
+  for (const d of dossierRows) {
+    if (d.symbol && !bookDossier.has(d.symbol)) bookDossier.set(d.symbol, { stance: d.stance, confidence: d.confidence, at: d.at });
+  }
+  const callOf = (sym: string): string => {
+    const d = bookDossier.get(sym.toUpperCase());
+    return d
+      ? ` — GRQ's call ${d.stance ?? "?"}${d.confidence != null ? `/${d.confidence}%` : ""} (dossier ${d.at.toISOString().slice(0, 10)})`
+      : " — (no current dossier)";
+  };
+
   const positions =
     pf.positions.length === 0
       ? "  (all cash)"
       : pf.positions
-          .map(
-            (x) =>
-              `  ${x.symbol}: ${x.qty} sh @ avg ${money(x.avgCostCents)}, last ${money(x.lastCents)} (${(x.dayChangeBps / 100).toFixed(2)}% today), unrealized ${money(x.unrealizedPnlCents)}`,
-          )
+          .map((x) => {
+            const wt = pf.navCents > 0 ? ((x.marketValueCadCents / pf.navCents) * 100).toFixed(1) : "0.0";
+            return `  ${x.symbol}: ${x.qty} sh @ avg ${money(x.avgCostCents)}, last ${money(x.lastCents)} (${(x.dayChangeBps / 100).toFixed(2)}% today), mkt val ${money(x.marketValueCadCents)} = ${wt}% of NAV, unrealized ${money(x.unrealizedPnlCents)}${callOf(x.symbol)}`;
+          })
           .join("\n");
 
   const benchLine =
     pf.benchmarkCents !== null
-      ? `vs-XIC benchmark: same contributions in XIC would be ${money(pf.benchmarkCents)} (we are ${money(pf.navCents - pf.benchmarkCents)} ${pf.navCents >= pf.benchmarkCents ? "ahead" : "behind"})`
+      ? `vs-XIC benchmark (the MARKET reference, NOT the bar for success): same contributions in XIC would be ${money(pf.benchmarkCents)} (we are ${money(pf.navCents - pf.benchmarkCents)} ${pf.navCents >= pf.benchmarkCents ? "ahead" : "behind"})`
       : "vs-XIC benchmark: unavailable";
+
+  // The REAL hurdle (Cam 2026-06-25): clear the fund's own running costs before any "return" is
+  // genuine. Computed live so the % shrinks as capital grows.
+  const costCadCentsYr = OPERATING_COST_USD_CENTS_PER_MONTH * 12 * (pf.fxUsdCad || 1.37);
+  const hurdlePct = pf.navCents > 0 ? (costCadCentsYr / pf.navCents) * 100 : 0;
+  const hurdleLine = `Operating-cost hurdle (THE REAL BAR): ~US$490/mo (Claude Max + FMP) ≈ ${money(Math.round(costCadCentsYr))}/yr in CAD. The fund only makes GENUINE money once monthly P&L clears its own costs — beating XIC while under this hurdle is NOT a win. At current NAV that's ~${hurdlePct.toFixed(1)}%/yr to break even on costs alone; it eases as capital grows, so the path is more capital + compounding, never oversized risk to chase it (the gate + 75% bar still bind).`;
 
   // Cash is multi-currency (D34): the fund holds CAD and USD separately. NEVER
   // describe the total as "CAD idle" — the US$ leg funds US-listed buys directly
   // (no FX needed) and converting between currencies requires a member-approved
   // request_fx (D62). Spell the split out so the agent reasons per-currency.
+  // Cash floor/ceiling are enforced PER CURRENCY-ACCOUNT (Cam 2026-06-25): each of CAD and USD
+  // is its own account, its cash measured against THAT account's NAV (its cash + its positions,
+  // native units) — never summed. Surface each leg's cash %, the floor/ceiling, and a ⚠ flag so
+  // the agent deploys the idle leg (preference a real stock; index-ETF ballast only with no
+  // conviction; no FX — each leg deploys in its own currency).
+  const cadPosCents = pf.positions.filter((x) => x.currency === "CAD").reduce((s, x) => s + x.marketValueCadCents, 0);
+  const usdPosCents = pf.positions.filter((x) => x.currency === "USD").reduce((s, x) => s + x.marketValueCents, 0); // native USD
+  const cadAcctNav = pf.cadCashCents + cadPosCents;
+  const usdAcctNav = pf.usdCashCents + usdPosCents;
+  const cadCashPct = cadAcctNav > 0 ? (pf.cadCashCents / cadAcctNav) * 100 : 0;
+  const usdCashPct = usdAcctNav > 0 ? (pf.usdCashCents / usdAcctNav) * 100 : 0;
+  const cashFlag = (pct: number, acctNonEmpty: boolean): string =>
+    acctNonEmpty && pct > dial.cashCeilingPct
+      ? ` ⚠ OVER the ${dial.cashCeilingPct}% ceiling — DEPLOY this leg (a real name, or index-ETF ballast only if no conviction)`
+      : pct < dial.cashFloorPct
+        ? ` (below the ${dial.cashFloorPct}% floor)`
+        : ` (within the ${dial.cashFloorPct}–${dial.cashCeilingPct}% band)`;
   const fxNote = pf.fxUsdCad ? ` @ ${pf.fxUsdCad.toFixed(4)} USD→CAD` : "";
   const cashLine =
     pf.usdCashCents > 0
-      ? `Cash by currency: CA$${(pf.cadCashCents / 100).toFixed(2)} + US$${(pf.usdCashCents / 100).toFixed(2)} (= ${money(pf.cashCents)} total valued in CAD${fxNote}). The US$ leg funds US-listed buys directly and is NOT idle CAD; only CA$ funds CAD buys. Moving cash between currencies needs a member-approved request_fx.`
-      : `Cash: ${money(pf.cashCents)}, all CAD.`;
+      ? `Cash by currency — floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% apply PER currency-account (its cash ÷ its own sleeve), NOT summed${fxNote}:
+  CA$ ${(pf.cadCashCents / 100).toFixed(2)} = ${cadCashPct.toFixed(1)}% of the CAD sleeve (CA$${(cadAcctNav / 100).toFixed(0)})${cashFlag(cadCashPct, cadAcctNav > 0)}
+  US$ ${(pf.usdCashCents / 100).toFixed(2)} = ${usdCashPct.toFixed(1)}% of the USD sleeve (US$${(usdAcctNav / 100).toFixed(0)})${cashFlag(usdCashPct, usdAcctNav > 0)}
+  The US$ leg funds US-listed buys directly (NOT idle CAD); only CA$ funds CAD buys. No FX — deploy each leg in its own currency (US names or a US index ETF for USD; CA names or XIC for CAD).`
+      : `Cash: ${money(pf.cashCents)}, all CAD = ${cadCashPct.toFixed(1)}% of the CAD sleeve, floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}%${cashFlag(cadCashPct, cadAcctNav > 0)}.`;
 
   // Upcoming earnings on holdings + focus (Tier 6 awareness) — a catalyst to size
   // and time around. Best-effort; empty if FMP is off or uncovered.
@@ -93,29 +145,10 @@ export async function buildContext(): Promise<string> {
     )
   ).filter((l): l is string => !!l);
 
-  // Current dossier verdict per focus name — the AUTHORITATIVE live call (latest
-  // "Dossier —" RESEARCH entry). Surfaced next to each focus note so the agent
-  // grounds on real state instead of its own scratch note, which has no update
-  // timestamp and can drift stale (e.g. L's note kept claiming a "CPI-error dossier,
-  // needs a refresh" long after the clean refresh landed it at Hold/63 — every
-  // check-in re-read the stale note and parroted it; D-fix 2026-06-24).
-  const focusSyms = [...new Set(focus.map((f) => f.symbol.toUpperCase()))];
-  const focusDossierRows = focusSyms.length
-    ? await prisma.journalEntry.findMany({
-        where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: focusSyms } },
-        orderBy: { at: "desc" },
-        select: { symbol: true, stance: true, confidence: true, at: true },
-      })
-    : [];
-  const focusDossier = new Map<string, { stance: string | null; confidence: number | null; at: Date }>();
-  for (const d of focusDossierRows) {
-    if (d.symbol && !focusDossier.has(d.symbol)) focusDossier.set(d.symbol, { stance: d.stance, confidence: d.confidence, at: d.at });
-  }
-  const focusLine = (w: { symbol: string; note: string | null }): string => {
-    const d = focusDossier.get(w.symbol.toUpperCase());
-    const call = d ? ` — GRQ's call ${d.stance ?? "?"}${d.confidence != null ? `/${d.confidence}%` : ""} as of dossier ${d.at.toISOString().slice(0, 10)}` : " — (no dossier yet)";
-    return `  ${w.symbol}${call}${w.note ? ` · your note: ${w.note}` : ""}`;
-  };
+  // Focus line reuses the shared book-dossier map computed above (callOf) so a focus
+  // name and a held name read the same authoritative "GRQ's call".
+  const focusLine = (w: { symbol: string; note: string | null }): string =>
+    `  ${w.symbol}${callOf(w.symbol)}${w.note ? ` · your note: ${w.note}` : ""}`;
 
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
@@ -127,9 +160,10 @@ NAV ${money(pf.navCents)} = cash ${money(pf.cashCents)} (valued in CAD) + positi
 ${cashLine}
 Contributions ${money(pf.contributionsCents)} · Total P&L ${money(pf.totalPnlCents)} · Day P&L ${(dayBps / 100).toFixed(2)}%
 ${benchLine}
+${hurdleLine}
 Fee budget: ${money(pf.feeSpentMonthCents)} spent of ${money(pf.feeBudgetCentsMonth)} this month.
 
-## Positions
+## Positions (each line shows its weight as % of NAV + GRQ's current dossier call — use these to rank your own book by conviction and spot the weakest holding to rotate out of)
 ${positions}
 
 ## Signals on holdings (v1 — on scoreboard probation; cite as "signal:<family>")
@@ -175,7 +209,7 @@ ${smartLines.length === 0 ? "  (none disclosed on holdings or focus)" : smartLin
 ${macro ? `  ${macroLine(macro)} (as of ${macro.asOf})` : "  (unavailable)"}
 
 ## Policy — ${dialName} dial (you cannot change any of this)
-Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
+Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
 Hard limits: ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no cap on # of holdings (breadth is your call — size, the cash floor, and the weekly BUY cap still bind) · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.
 
 ## Member directives (binding — set by Cam & Graham on the stock pages)

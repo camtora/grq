@@ -35,10 +35,16 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, recentJournal, latestPlan, midday, checkin, latestEod, weekly, agenda] = await Promise.all([
+  const [session, pf, recentJournal, premorning, latestPlan, midday, checkin, latestEod, weekly, agenda] = await Promise.all([
     getSession(),
     getPortfolio(),
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
+    // The 6:00 ET pre-morning read — owns the briefing slot from dawn until the 9:00
+    // game plan (a newer brief) supersedes it (Cam 2026-06-25).
+    prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { startsWith: "Pre-morning read" } },
+      orderBy: { at: "desc" },
+    }),
     prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
       orderBy: { at: "desc" },
@@ -74,6 +80,7 @@ export default async function Portfolio() {
   // only the single newest so a stale prior-day brief never lingers (Cam 2026-06-17).
   const dayHref = (at: Date) => `/reports/day/${etDateStr(at)}`;
   const briefs = [
+    premorning && { kicker: "Pre-Morning Read · what changed overnight", title: premorning.title, body: premorning.body, at: premorning.at, sourcesJson: premorning.sourcesJson, href: dayHref(premorning.at), cta: "View full day" },
     latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson, href: dayHref(latestPlan.at), cta: "View full day" },
     midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson, href: dayHref(midday.at), cta: "View full day" },
     checkin && { kicker: "Intraday Check-in · the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson, href: dayHref(checkin.at), cta: "View full day" },
@@ -159,8 +166,7 @@ export default async function Portfolio() {
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                  {money(p.marketValueCents)}
-                  {p.currency !== "CAD" ? <span className="ml-1 text-[10px] text-teal-200/40">{p.currency}</span> : null}
+                  {money(p.marketValueCents, p.currency)}
                 </td>
                 <td className="px-5 py-2.5 text-right">
                   <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
@@ -188,7 +194,6 @@ export default async function Portfolio() {
                   <td className="px-5 py-2.5" colSpan={3} />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
                     {usd(pf.usdCashCents)}
-                    <span className="ml-1 text-[10px] text-teal-200/40">≈ {cad(usdCashCadCents)}</span>
                   </td>
                   <td className="px-5 py-2.5" />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
@@ -227,7 +232,7 @@ export default async function Portfolio() {
     <Card className="p-5">
       <div className="mb-3 flex items-baseline justify-between">
         <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
-        <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
+        <Link href="/journal" className="text-xs text-teal-300 hover:underline">
           journal →
         </Link>
       </div>
@@ -250,7 +255,7 @@ export default async function Portfolio() {
   const activityHeader = (
     <div className="flex shrink-0 items-baseline justify-between px-5 pt-4">
       <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">Activity</span>
-      <Link href="/settings#journal" className="text-xs text-teal-300 hover:underline">
+      <Link href="/journal" className="text-xs text-teal-300 hover:underline">
         ledger →
       </Link>
     </div>
@@ -324,7 +329,7 @@ export default async function Portfolio() {
 
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard
-          label="Net asset value"
+          label="Net asset value (CAD)"
           term="nav"
           value={money(pf.navCents)}
           note={
@@ -366,13 +371,12 @@ export default async function Portfolio() {
           }
         />
         <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash</div>
-          <div className="mt-2 space-y-0.5">
-            <div className="text-xl font-semibold tabular-nums text-teal-50">{cad(pf.cadCashCents)}</div>
-            <div className="text-xl font-semibold tabular-nums text-teal-50">{usd(pf.usdCashCents)}</div>
+          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash (CAD)</div>
+          <div className="mt-2">
+            <div className="text-xl font-semibold tabular-nums text-teal-50">{cad(pf.cashCents)}</div>
           </div>
           {holdsUsd ? (
-            <div className="mt-1 text-xs text-teal-200/40">{usdPct.toFixed(1)}% of NAV in USD</div>
+            <div className="mt-1 text-xs text-teal-200/40">incl. USD held, at the BoC rate · {usdPct.toFixed(1)}% of NAV in USD</div>
           ) : null}
         </Card>
       </section>

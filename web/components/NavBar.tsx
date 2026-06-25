@@ -79,6 +79,8 @@ export default function NavBar({
         <div className="ml-auto flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1">
             {SECONDARY.map(renderLink)}
+            {/* "How GRQ works" lives top-right on the Settings page (Cam 2026-06-25),
+                not in the header. */}
             {/* Owner-only — usage/admin dashboard (Cam). Hidden for everyone else;
                 the page itself enforces the owner gate, this is just the link. */}
             {isOwner && renderLink({ href: "/admin", label: "Admin" })}

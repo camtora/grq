@@ -34,9 +34,11 @@ export const BENCHMARK = "XIC";
 export const CANDIDATE_CAP = 200;
 // (ON_DEMAND_RESEARCH_PER_DAY removed 2026-06-15 — Cam lifted the on-demand cap;
 // research is unlimited. The weekly-refresh size is the only remaining bound.)
-// Full-universe dossier refresh runs weekly: Saturday from 02:00 ET, so every
-// name is fresh before the Saturday 09:00 weekly review (~7h later).
-export const WEEKLY_REFRESH_WEEKDAY = 6; // Saturday
+// Full-universe dossier refresh runs weekly to keep the whole research library fresh
+// for the trading week ahead. Sunday 02:00 ET (= Saturday night) — decoupled from the
+// Saturday review, which only needs HELD names fresh, not the whole pool (Cam 2026-06-25).
+// Running it Sunday night also captures any weekend news right before Monday's open.
+export const WEEKLY_REFRESH_WEEKDAY = 0; // Sunday (Saturday-night 02:00)
 export const WEEKLY_REFRESH_START_MIN = 2 * 60; // 02:00 ET
 // (RESEARCH_DAILY_CEILING removed 2026-06-13 — Cam lifted the daily cap; the
 // on-demand budget above and the weekly-refresh size remain the bounds.)

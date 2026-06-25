@@ -28,9 +28,13 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
   const start = startOfEtDay(anchor);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  const [plan, intraday, eod] = await Promise.all([
+  const [plan, premorn, intraday, eod] = await Promise.all([
     prisma.journalEntry.findFirst({
       where: { kind: "RESEARCH", title: { startsWith: "Game plan" }, at: { gte: start, lt: end } },
+      orderBy: { at: "desc" },
+    }),
+    prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", title: { startsWith: "Pre-morning read" }, at: { gte: start, lt: end } },
       orderBy: { at: "desc" },
     }),
     prisma.journalEntry.findMany({
@@ -51,7 +55,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
 
   const prev = etDateStr(new Date(start.getTime() - 12 * 60 * 60 * 1000));
   const next = etDateStr(new Date(end.getTime() + 12 * 60 * 60 * 1000));
-  const nothing = !plan && intraday.length === 0 && !eod;
+  const nothing = !plan && !premorn && intraday.length === 0 && !eod;
 
   return (
     <main>
@@ -130,6 +134,24 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
               </div>
             </details>
           </Card>
+
+          {/* Pre-morning read — the 6:00 ET early scan, at the very bottom (it precedes
+              the morning plan). Collapsed by default; only shown when one was filed. */}
+          {premorn && (
+            <Card className="p-5">
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
+                  <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Pre-market read</h2>
+                  <span className="text-xs tabular-nums text-teal-200/40">{etTime(premorn.at)} ET</span>
+                  <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
+                  <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
+                </summary>
+                <div className="mt-3 border-t border-teal-400/10 pt-3">
+                  <Md text={premorn.body} />
+                </div>
+              </details>
+            </Card>
+          )}
         </div>
       )}
     </main>

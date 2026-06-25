@@ -22,7 +22,7 @@ import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
-import { runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
+import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -39,6 +39,7 @@ let lastBarsDay = "";
 let lastLogoBackfill = 0;
 let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
+let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
 let startupReviewChecked = false;
@@ -422,6 +423,26 @@ async function maybeScheduledSessions() {
     return;
   }
 
+  // 6:00–6:30 pre-morning read on market days (once/day) — a quick early scan, hours
+  // before the heavy 9:00 game plan. It catches overnight/post-market moves (earnings,
+  // gaps, downgrades), can request_research a fresh dossier on the few names a real
+  // catalyst changes (so the research lands before 9:00), and writes ONE short read
+  // that owns the Portfolio briefing slot until the game plan supersedes it (Cam 2026-06-25).
+  if (isMarketDay() && m >= 6 * 60 && m < 6 * 60 + 30) {
+    const existing = await prisma.journalEntry.count({
+      where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Pre-morning read" } },
+    });
+    if (existing === 0) {
+      sessionRunning = true;
+      try {
+        await runPremorningRead();
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
   // 9:00–9:30 pre-market research on market days (the morning brief — the Game
   // plan shown on the Portfolio page). At 9:00 (not 8:00) so the plan reflects the
   // 8:30 ET US macro prints — CPI/jobs/PPI, the day's biggest scheduled movers —
@@ -478,10 +499,12 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // 12:00–13:00 midday brief on market days (once/day) — the lunch read. NOON is the
-  // midday BRIEF (a readable summary), NOT a check-in (Cam 2026-06-18 — check-ins are the
-  // other hours 10/11/13/14/15). Moved from 12:30 to noon.
-  if (isMarketDay() && m >= 12 * 60 && m < 13 * 60) {
+  // 12:30–13:00 midday brief on market days (once/day) — the lunch read, a readable summary,
+  // NOT a decision session. Moved back to 12:30 (Cam 2026-06-25) so noon can be a real check-in:
+  // the noon check-in fires 12:00–12:30 via the check-in loop below, this brief 12:30–13:00. This
+  // block runs before the loop and returns, but it's once/day so it won't starve the noon check-in
+  // (which has already run by 12:30). Check-ins are now 10/11/12/13/14/15.
+  if (isMarketDay() && m >= 12 * 60 + 30 && m < 13 * 60) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Midday brief" } },
     });
@@ -538,9 +561,11 @@ async function maybeScheduledSessions() {
 
   // Saturday 09:00+ weekly review (Cam 2026-06-21, was Sunday 10:00). It takes the
   // portfolio page's briefing slot and stays there all weekend until Monday's 9:00
-  // game plan supersedes it. The Saturday 02:00 weekly-refresh has ~7h to finish
-  // fresh dossiers first. Dedupe on a WEEKLY already dated today (mirrors the EOD
-  // guard above) — a 6-day window would block the first Sat run after the Sun→Sat move.
+  // game plan supersedes it. It's a retrospective (RETROs, attribution, lessons, source
+  // grades, capital rec) and only needs HELD names fresh for open-thesis grading — the
+  // Saturday 06:00 held-names refresh (maybeSaturdayHeldRefreshEnqueue) handles that ~3h
+  // earlier; the heavy full-pool refresh is decoupled to Sunday 02:00 (Cam 2026-06-25).
+  // Dedupe on a WEEKLY already dated today (mirrors the EOD guard above).
   if (p.weekday === 6 && m >= 9 * 60) {
     const existing = await prisma.report.count({ where: { date: dayStart, kind: "WEEKLY" } });
     if (existing === 0) {
@@ -634,12 +659,15 @@ async function tick() {
 
   await maybeScheduledSessions();
   await maybeWeeklyRefreshEnqueue();
+  await maybeSaturdayHeldRefreshEnqueue();
   await maybeDailyRefreshEnqueue();
   await processResearchQueue();
 }
 
-// Weekly full-universe dossier refresh: Saturday from 02:00 ET, every tracked
-// symbol gets re-researched overnight — all fresh for the Saturday 09:00 review (~7h later).
+// Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every
+// tracked symbol gets re-researched overnight so the whole research library is fresh for
+// the trading week ahead. Decoupled from the Saturday 09:00 review (Cam 2026-06-25) — the
+// review only needs HELD names fresh (see maybeSaturdayHeldRefreshEnqueue), not the pool.
 async function maybeWeeklyRefreshEnqueue() {
   const p = etParts();
   if (p.weekday !== WEEKLY_REFRESH_WEEKDAY || p.minutesSinceMidnight < WEEKLY_REFRESH_START_MIN) return;
@@ -660,8 +688,33 @@ async function maybeWeeklyRefreshEnqueue() {
     await prisma.researchRequest.create({ data: { symbol: s, requestedBy: "weekly-refresh" } });
     queued++;
   }
-  console.log(`[weekly-refresh] queued ${queued} dossiers for the Saturday review`);
-  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "All universe names get fresh dossiers before the Saturday review.", { category: "dossiers" });
+  console.log(`[weekly-refresh] queued ${queued} dossiers for the week ahead`);
+  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "Every tracked name gets a fresh dossier overnight for the week ahead.", { category: "dossiers" });
+}
+
+// Saturday pre-review HELD-names refresh (Cam 2026-06-25): before the 09:00 weekly
+// review, re-dossier just the OPEN positions so the review grades open theses on fresh
+// data (Friday's close + any weekend news). Cheap — only the held set (~20), not the
+// whole pool; the heavy full-pool refresh runs Sunday 02:00. 06:00 ET gives ~3h before
+// the review, ample to drain the queue.
+const SAT_HELD_REFRESH_MIN = 6 * 60; // 06:00 ET
+async function maybeSaturdayHeldRefreshEnqueue() {
+  const p = etParts();
+  if (p.weekday !== 6 || p.minutesSinceMidnight < SAT_HELD_REFRESH_MIN) return;
+  if (lastSatHeldRefreshDay === p.dateStr) return;
+  lastSatHeldRefreshDay = p.dateStr;
+  const positions = await prisma.position.findMany({ select: { symbol: true } });
+  if (positions.length === 0) return;
+  const inFlight = new Set(
+    (await prisma.researchRequest.findMany({ where: { status: { in: ["QUEUED", "RUNNING"] } }, select: { symbol: true } })).map((r) => r.symbol),
+  );
+  let queued = 0;
+  for (const pos of positions) {
+    if (inFlight.has(pos.symbol)) continue;
+    await prisma.researchRequest.create({ data: { symbol: pos.symbol, requestedBy: "saturday-held-refresh" } });
+    queued++;
+  }
+  if (queued > 0) console.log(`[saturday-held-refresh] queued ${queued} held-name dossiers ahead of the 09:00 review`);
 }
 
 // Daily research-freshness pass (Cam 2026-06-21): once per market day, pre-market.

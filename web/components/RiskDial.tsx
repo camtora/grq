@@ -7,17 +7,17 @@ const DIALS = [
   {
     value: "CAUTIOUS",
     label: "Cautious",
-    desc: "Max 10% per position · 30% cash floor · broad ETFs + TSX60 · 5% stops · ≤2 new trades/wk",
+    desc: "Max 10% per position · 30–50% cash (floor–ceiling, per currency) · ETFs + large-cap (TSX60) · 5% stop / 15% take-profit · ≤15 new buys/wk",
   },
   {
     value: "BALANCED",
     label: "Balanced",
-    desc: "Max 15% per position · 15% cash floor · + liquid mid-caps · 8% stops · ≤5 new trades/wk",
+    desc: "Max 15% per position · 15–30% cash (per currency) · ETFs + large + mid-cap · 8% stop / 25% take-profit · ≤20 new buys/wk",
   },
   {
     value: "AGGRESSIVE",
     label: "Aggressive",
-    desc: "Max 25% per position · no cash floor · full whitelist · 12% stops · ≤10 new trades/wk",
+    desc: "Max 25% per position · 0–15% cash (per currency) · ETFs + large + mid-cap · 12% stop / 40% take-profit · ≤25 new buys/wk",
   },
 ] as const;
 

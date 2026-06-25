@@ -354,7 +354,7 @@ export async function todayResponse() {
   const start = startOfEtDay();
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  const [pf, dayOpenSnap, todaySnaps, latestPlan, midday, checkin, latestEod, weekly, xicQuote, all] = await Promise.all([
+  const [pf, dayOpenSnap, todaySnaps, premorning, latestPlan, midday, checkin, latestEod, weekly, xicQuote, all] = await Promise.all([
     getPortfolio(),
     prisma.navSnapshot.findFirst({ where: { at: { lt: start } }, orderBy: { at: "desc" } }),
     prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
@@ -362,6 +362,7 @@ export async function todayResponse() {
     // (web/app/portfolio/page.tsx): newest-of-its-kind for each brief type, then pick
     // whichever timestamp is freshest (below). NOT date-scoped, so a weekend shows the
     // last active report.
+    prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Pre-morning read" } }, orderBy: { at: "desc" } }),
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Game plan" } }, orderBy: { at: "desc" } }),
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Midday brief" } }, orderBy: { at: "desc" } }),
     // Intraday check-ins write a "Check-in — …" RESEARCH note. Fund-level check-ins leave
@@ -424,6 +425,7 @@ export async function todayResponse() {
   // the newest timestamp so the app tracks the same briefing the web shows, instead of
   // freezing on the morning plan (Cam 2026-06-22). The kicker doubles as the title.
   const briefs = [
+    premorning && { title: "Pre-Morning Read · what changed overnight", body: premorning.body, at: premorning.at },
     latestPlan && { title: "Morning Brief · the pre-market read", body: latestPlan.body, at: latestPlan.at },
     midday && { title: "Midday Review · the afternoon read", body: midday.body, at: midday.at },
     checkin && { title: "Intraday Check-in · the latest read", body: checkin.body, at: checkin.at },

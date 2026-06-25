@@ -180,7 +180,7 @@ export async function fetchDailyBars(symbol: string, range = "1y"): Promise<Fetc
 export type IntradaySession = "pre" | "regular" | "post";
 export type IntradayPoint = { t: number; c: number; session: IntradaySession };
 
-/** Today's intraday line (5-min closes for the current session) for the stock-page
+/** Today's intraday line (1-min closes for the current session) for the stock-page
  *  chart's "1D" range. `includePrePost=true` pulls extended-hours bars too; each bar is
  *  tagged pre/regular/post off Yahoo's own regular-session window (meta.currentTradingPeriod
  *  — no DST/exchange-hours math) so the chart can grey the extended portion. Returns [] on
@@ -188,7 +188,7 @@ export type IntradayPoint = { t: number; c: number; session: IntradaySession };
 export async function fetchIntradayBars(symbol: string): Promise<IntradayPoint[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     await toYahoo(symbol),
-  )}?interval=5m&range=1d&includePrePost=true`;
+  )}?interval=1m&range=1d&includePrePost=true`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {

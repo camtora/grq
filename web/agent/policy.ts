@@ -23,15 +23,16 @@ export const HARD = {
 // Anti-runaway cap on the agent's standing to-do list (AgentAgendaItem).
 export const MAX_OPEN_AGENDA = 12;
 
-// Fixed intraday trading check-ins (ET) — HOURLY 10:00→15:00 EXCEPT noon (Cam 2026-06-18,
-// was 10:00/12:30/15:00). Each is a decision-capable session that acts on the standing game
-// plan, fires once/day in a 60-min window, and runs AFTER any same-slot research/brief (those
-// blocks return first; the check-in falls through on a later tick within the hour). NOON is
-// NOT a check-in — it's the midday BRIEF (runMiddayReport, in runner.ts), a readable lunch
-// summary rather than a decision session. The day is bookended by the 9:00 morning plan
-// ("open") and the 16:15 EOD brief ("close"). EXEMPT from maxDecisionSessionsPerDay (a short
-// fixed list). Humans edit this.
-export const CHECKIN_TIMES_ET = ["10:00", "11:00", "13:00", "14:00", "15:00"] as const;
+// Fixed intraday trading check-ins (ET) — HOURLY 10:00→15:00 INCLUDING noon (Cam 2026-06-25;
+// noon used to be the midday brief — it's now a real check-in and the brief moved to 12:30).
+// Each is a decision-capable session that acts on the standing game plan, fires once/day in a
+// 60-min window, and runs AFTER any same-slot research/brief (those blocks return first; the
+// check-in falls through on a later tick within the hour). The 12:30 midday BRIEF (runMiddayReport,
+// in runner.ts) is a readable lunch summary, NOT a decision session: it shares the noon hour with
+// the 12:00 check-in (the check-in fires 12:00–12:30, the brief 12:30–13:00). The day is bookended
+// by the 9:00 morning plan ("open") and the 16:15 EOD brief ("close"). EXEMPT from
+// maxDecisionSessionsPerDay (a short fixed list). Humans edit this.
+export const CHECKIN_TIMES_ET = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"] as const;
 
 // Agent self-scheduling: how many of its own future check-ins may be PENDING at
 // once (anti-runaway). Same-day, market-hours wakeups only for now.
@@ -54,7 +55,14 @@ export const SELF_INVEST = {
 
 export type DialPolicy = {
   maxPositionPct: number; // of NAV, post-trade
-  cashFloorPct: number; // of NAV, post-trade
+  // cashFloorPct / cashCeilingPct are enforced PER CURRENCY-ACCOUNT (Cam 2026-06-25): each of
+  // CAD and USD is its own account, and its cash is measured against THAT account's NAV (its
+  // cash + its positions, native units) — never summed. Floor = MIN cash (a hard gate on buys).
+  // Ceiling = MAX idle cash before deployment is mandated; currently SOFT (a check-in mandate to
+  // deploy the over-ceiling leg — prefer a real stock, index-ETF ballast only with no conviction);
+  // the hard auto-sweep-to-ceiling is deferred (revisit if the soft mandate doesn't move it).
+  cashFloorPct: number;
+  cashCeilingPct: number;
   tiers: Tier[];
   stopPct: number; // deterministic stop distance below ACB
   takeProfitPct: number; // deterministic take-profit distance above ACB (claim the gain)
@@ -62,10 +70,22 @@ export type DialPolicy = {
 };
 
 export const DIALS: Record<"CAUTIOUS" | "BALANCED" | "AGGRESSIVE", DialPolicy> = {
-  CAUTIOUS: { maxPositionPct: 10, cashFloorPct: 30, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 2 },
-  BALANCED: { maxPositionPct: 15, cashFloorPct: 15, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 5 },
-  AGGRESSIVE: { maxPositionPct: 25, cashFloorPct: 0, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 10 },
+  // maxNewTradesPerWeek raised 2/5/10 → 15/20/25 (Cam 2026-06-25): the old caps bound the active-
+  // deployment push (a fresh US$25k sleeve to build + rotation), so they fought the strategy. The
+  // burst caps (HARD.maxOrdersPerDay 10 · /hour 4) still bound pace; the cautiousness of each dial
+  // now comes from size/cash/stops/universe, not the trade count.
+  CAUTIOUS: { maxPositionPct: 10, cashFloorPct: 30, cashCeilingPct: 50, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 15 },
+  BALANCED: { maxPositionPct: 15, cashFloorPct: 15, cashCeilingPct: 30, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 20 },
+  AGGRESSIVE: { maxPositionPct: 25, cashFloorPct: 0, cashCeilingPct: 15, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 25 },
 };
+
+// The fund's REAL hurdle (Cam 2026-06-25): it only earns genuine return once it clears its own
+// running costs — Claude Max (~$240 USD/mo) + FMP (~$250 USD/mo) ≈ $490 USD/mo in subscriptions.
+// Beating XIC while still UNDER this hurdle is NOT "doing a good job." The hurdle is brutal at
+// small AUM (a high % of a tiny NAV) and shrinks as capital grows — so the answer is scale +
+// patient compounding, NEVER oversized risk to chase it (the §6 gate + 75% bar are unchanged).
+// Surfaced live in context (as %/yr of current NAV) and weighed by the agent's reporting. USD cents.
+export const OPERATING_COST_USD_CENTS_PER_MONTH = 49000;
 
 // Seed research sources (Cam, 2026-06-12). The agent self-curates over time:
 // retros grade source hit-rates; adds/drops are proposed in weekly reviews.

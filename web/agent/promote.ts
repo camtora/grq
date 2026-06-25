@@ -28,15 +28,52 @@ export function setBootstrapMode(on: boolean): void {
   bootstrapMode = on;
 }
 
+// A full dossier older than this counts as STALE — a tracked name should get a fresh
+// pass rather than the agent waiting forever on / grounding on an aged read.
+const DOSSIER_STALE_DAYS = 5;
+
+/** Ensure a CURRENT full dossier (the runStockDossier pipeline → "Dossier —" entry) is
+ *  on the way for a tracked name. Returns what it found: "inflight" (one already queued
+ *  or running), "current" (a fresh "Dossier —" entry exists), or "queued" (none or stale
+ *  → queued a fresh ResearchRequest). Closes the 2026-06-25 gap where a name already a
+ *  CANDIDATE with only a stale/inline note never got a fresh dossier — the agent then
+ *  reported "dossier not landed" every check-in, waiting on a job nobody queued. */
+async function ensureDossierQueued(key: string): Promise<"inflight" | "current" | "queued"> {
+  const pending = await prisma.researchRequest.count({ where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } } });
+  if (pending > 0) return "inflight";
+  const latest = await prisma.journalEntry.findFirst({
+    where: { kind: "RESEARCH", symbol: key, title: { startsWith: "Dossier" } },
+    orderBy: { at: "desc" },
+    select: { at: true },
+  });
+  const fresh = latest ? Date.now() - latest.at.getTime() < DOSSIER_STALE_DAYS * 86_400_000 : false;
+  if (fresh) return "current";
+  await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "agent" } });
+  return "queued";
+}
+
 /** Track a researched name (e.g. a discovery-hunt find) as a CANDIDATE — the step
  *  BEFORE self-promotion. Resolves the listing (CAD listings first), pulls a year
- *  of bars so the liquidity screen can run later, queues a dossier if none exists,
- *  and alerts the members. Mirrors the human "watch" action, attributed to the agent. */
+ *  of bars so the liquidity screen can run later, queues a fresh dossier if none is
+ *  current, and alerts the members. Mirrors the human "watch" action, attributed to
+ *  the agent. */
 export async function addCandidate(symbol: string, reason: string, name?: string): Promise<CandidateResult> {
   const key = bareTicker(symbol);
 
   const existing = await universeEntry(key);
-  if (existing && existing.status !== "RETIRED") return { ok: false, reason: `${key} is already tracked (${existing.status}).` };
+  if (existing && existing.status !== "RETIRED") {
+    // Already tracked — don't re-add, but make sure a CURRENT dossier is actually on
+    // the way (the old early-bail left a candidate with a stale/inline note waiting on
+    // a dossier nobody queued; 2026-06-25 fix).
+    const d = await ensureDossierQueued(key);
+    const tail =
+      d === "queued"
+        ? ` — its dossier was missing or stale, so I queued a FRESH one. Decide once it lands (add_agenda / schedule_checkin to come back).`
+        : d === "inflight"
+          ? ` — a fresh dossier is already queued/running; it'll land shortly.`
+          : ` — its dossier is current.`;
+    return { ok: false, reason: `${key} is already tracked (${existing.status})${tail}` };
+  }
 
   const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
   if (candidates >= CANDIDATE_CAP) return { ok: false, reason: `candidate cap reached (${CANDIDATE_CAP}) — retire something first.` };
@@ -64,9 +101,7 @@ export async function addCandidate(symbol: string, reason: string, name?: string
   invalidateUniverseCache();
   await refreshQuotesFor([key]).catch(() => 0);
   await refreshBars([key], "1y").catch(() => 0); // bars now exist for the screen
-  const pending = await prisma.researchRequest.count({ where: { symbol: key, status: { in: ["QUEUED", "RUNNING"] } } });
-  const haveDossier = await prisma.journalEntry.count({ where: { kind: "RESEARCH", symbol: key, title: { startsWith: "Dossier" } } });
-  if (pending === 0 && haveDossier === 0) await prisma.researchRequest.create({ data: { symbol: key, requestedBy: "agent" } });
+  await ensureDossierQueued(key); // queue a fresh dossier unless one is current or already inflight
   await prisma.journalEntry.create({
     data: {
       kind: "DECISION",

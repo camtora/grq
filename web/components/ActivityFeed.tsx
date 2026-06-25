@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { money, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl, EmptyState } from "@/components/ui";
@@ -49,7 +50,10 @@ export default async function ActivityFeed({
                   {o.side}
                 </span>
                 <span className="text-sm font-semibold text-teal-50">
-                  {o.qty} {o.symbol}
+                  {o.qty}{" "}
+                  <Link href={`/stocks/${o.symbol}`} className="hover:underline">
+                    {o.symbol}
+                  </Link>
                 </span>
                 <Chip tone={STATUS_TONE[o.status] ?? "dim"}>{o.status}</Chip>
                 <span className="ml-auto shrink-0 text-xs text-teal-200/40">{fmtWhen(o.createdAt)}</span>
@@ -88,7 +92,10 @@ export default async function ActivityFeed({
                 {o.side}
               </span>
               <span className="font-semibold text-teal-50">
-                {o.qty} {o.symbol}
+                {o.qty}{" "}
+                <Link href={`/stocks/${o.symbol}`} className="hover:underline">
+                  {o.symbol}
+                </Link>
               </span>
               <span className="text-sm text-teal-200/50">
                 {o.type}

@@ -1673,3 +1673,126 @@ the same status vocabulary as the rest of the site.
   "RETIRE"); same confirm + action.
 **Verified:** `tsc --noEmit` clean; fresh-image grep confirmed the new strings present + old ones gone (not stale);
 web rebuilt + recreated; `/stocks/AMD.US` 200; `/var` steady at 77%. Shipped in three deploys as Cam iterated.
+
+### D70 — The pre-morning read: a 6:00 ET early scan that warms research before the 9:00 plan (Cam, 2026-06-25)
+**Context:** Cam wanted *"a pre-morning read — generated at 6am, on the portfolio until the morning brief is published.
+A high-level plan for the day, an opportunity to kick off any research it might want refreshed prior to 9."* The daily
+cadence already bookends the day with the **9:00 game plan** and **16:15 EOD**, but there was nothing earlier than 9:00 —
+so an overnight catalyst (a post-market earnings beat on a holding, an 8:30 macro print) only got picked up when the
+heavy 9:00 session ran. The insight: a cheap early pass can *triage* the overnight tape and **queue dossier refreshes** so
+the research has landed by the time the 9:00 plan reads it (the off-hours tick loop tightens to a 60s cadence whenever
+research is queued, `runner.ts:822` — ~3h is ample to drain a handful).
+**Decision (Cam):** add a **6:00–6:30 ET** session (market days, once/day, restart-safe via the dedupe-on-title guard) that
+does two jobs: **(1)** WebSearch the overnight/post-market for anything touching holdings or focus names, and
+**`request_research`** a fresh dossier on the *few* names a real catalyst changes — selective, **not** the whole book; and
+**(2)** write ONE **short** RESEARCH note titled `Pre-morning read — <date>`. It is deliberately **brief and NOT a second
+game plan** — a coffee read of what's interesting + the high-level shape of the day; the 9:00 session still does all the
+deep work. The cap is **prompt-bounded, not a hard code limit** (Cam: *"I don't want to operate under the impression
+we're locked"*) — it runs before the day's heavy load, so the token headroom is there. It owns the **Portfolio briefing
+slot** from dawn until the 9:00 game plan (a newer brief) supersedes it, and surfaces **below the morning brief** on
+Reports. **No 6am phone push** (deliberate — Discord-only via `sendDiscord`, so it's visible to the members without a
+dawn buzz); it still lands on the portfolio + reports for whoever looks.
+**What shipped:**
+- **New agent tool `request_research`** (`web/agent/tools.ts`, in the full `grqServer` only — NOT the read-only chat
+  server, so chat is unchanged): queues a fresh `ResearchRequest{requestedBy:"pre-morning"}` for an **already-tracked**
+  name (vs `add_candidate`, which only queues a name with no dossier yet). Idempotent — no-op if a refresh is already
+  queued/running.
+- **`runPremorningRead()`** (`web/agent/sessions.ts`) — tools-on, Opus, `maxTurns:18`; writes via `write_journal`; posts
+  the body to Discord only. Wired into the tick loop at the new 6:00–6:30 window in `runner.ts` (above the 9:00 block).
+- **Briefing slot:** added to the `briefs` array on **`web/app/portfolio/page.tsx`** (kicker *"Pre-Morning Read · what
+  changed overnight"*) and mirrored in the mobile feed **`web/lib/feed.ts`** — both already pick the newest brief, so the
+  6:00 read leads until 9:00 with no extra logic.
+- **Reports:** the daily-tab card shows a **Pre-market** preview indented below the Morning brief (`app/reports/page.tsx`),
+  and the per-day timeline gets a collapsed **Pre-market read** card at the very bottom — below the Morning plan, matching
+  its place in the day (`app/reports/day/[date]/page.tsx`).
+**Verified:** `tsc --noEmit` clean; fresh-image grep confirmed the new web + agent strings baked in (not stale); web +
+agent rebuilt one-at-a-time with `/var` watched (85%→79% after web prune). First pre-morning read fires at the next
+6:00 ET market day.
+**Deploy footgun (logged so it doesn't repeat):** the agent recreate **did** re-trigger the once-per-day startup scan,
+because I mis-read the guard's day boundary. The guard counts `Startup universe review%` entries with `at >= startOfEtDay()`
+= **midnight ET = 04:00Z (EDT)**. The prior scan ran at **23:37Z = 19:37 ET on the *24th*** — the previous ET day — so it
+did **not** count for the 25th and the boot correctly fired a fresh scan. My pre-deploy check was fooled by a psql
+`at AT TIME ZONE 'America/Toronto'` that shifted a UTC-stored timestamp the WRONG way (showed "03:37 Toronto", a phantom).
+Caught it from the boot log, `docker-compose restart agent` to SIGTERM the in-progress session (saving the bulk of the
+~3.8M-token burn), and the reboot **skipped** the scan because the "started" marker (written *before* the scan, 06:05:34Z)
+now satisfies the guard. Lesson: to check "did today's ET scan run," compare the entry's **raw UTC** `at` against the
+**04:00Z** (EDT) / 05:00Z (EST) boundary — never trust `AT TIME ZONE` on a tz-naive UTC column.
+
+### D71 — Reporting voice: stop celebrating small wins, anchor on the rate + the path to scale (Graham via Cam, 2026-06-25)
+**Context:** Graham's feedback, relayed by Cam: *"I won't be happy with making 500 bucks and having it tell me it's great.
+Oh we're beating the market. Like I can do that myself. So we need economies of scale. I get this is going to take time to
+grow and scale — just would rather get off on the right foot."* He's right, and the math backs him: on a $25k base, a
+percentage edge is small absolute dollars (beat XIC by 10% ≈ $2.5k/yr), and "we beat the index" is a *floor* anyone clears
+with one click — not a brag. The agent's framing was exactly what he reacted to: its persona measured success as *"vs just
+buying XIC is the benchmark you must beat"* and the EOD prompt asked for *"how we stand vs XIC"*, inviting chest-thumping
+over trivial gains.
+**Scope (Cam's call):** **reframe tone/reporting ONLY** — do NOT touch how the agent decides, sizes, or what it's allowed
+to do. The goal/strategy logic (the D39 active-deployment mandate, the conviction bar, the §6 gate) is unchanged. The
+"economies of scale" levers Cam named — **grow the capital base** + **more aggressive within the guardrails** — inform the
+*story the reports tell*, not the trading rules (position sizing / concentration remain a humans-only dial for a later,
+separate decision).
+**What shipped (`web/agent/sessions.ts`):**
+- A new **"Reporting voice"** block in `PERSONA` (inherited by every report/check-in/EOD/weekly session): small money makes
+  small dollars — say so flatly, never dress a trivial gain as a win; "we beat XIC" is the floor, not a trophy; **lead with
+  the RATE (%/annualized) and the long compounding arc**, show what the rate compounds to / produces on a larger base so the
+  focus is the path to scale, not the week's lunch money; the ambition is SCALE (compound the base + earn the right to add
+  capital, deployed decisively within the guardrails) and call out timidity/under-deployment as bluntly as a bad trade; no
+  self-congratulation — honest receipts over cheerleading.
+- The **EOD prompt** line changed from *"how we stand vs XIC"* to *"where we stand — lead with the return RATE and the
+  compounding arc (vs XIC is the floor, not the headline; don't dress small dollars up as a win)."*
+**Verified:** `tsc --noEmit` clean; today's ET startup scan already on record (06:05Z) so the agent rebuild **skipped** it
+(no Max-quota burn); fresh-image grep confirmed the new copy baked in (not stale); `agent` rebuilt alone, pruned, `/var`
+steady at 79%; agent booted clean + ticking. First report in the new voice is the 16:15 ET EOD.
+
+### D72 — Capital rotation + a dossier-queue fix: rank the book, swap on opportunity cost, never wait on a dossier nobody queued (Cam, 2026-06-25)
+**Context:** Two findings from a working session on "more aggressive." (1) The fund is barely half-invested (~43% cash,
+incl. a stranded US$6k = ~33% of NAV with zero US positions), and no position tops ~15% of NAV *only because idle cash
+inflates the denominator* — ATD is already 25% of the INVESTED book, so the Aggressive dial (25% cap) is genuinely being
+used; under-deployment is the real constraint, not the dial. (2) The agent had **no opportunity-cost / rotation logic**:
+selling was only ever triggered by a *broken* thesis, stop, or take-profit — never "I found something better and I'm out of
+cash." Worse, it couldn't even *see* its book as theses — holdings were shown as position+P&L only, with conviction
+annotated solely on focus names, so it had no ranked view to pick a "weakest holding" from. (3) Separately, an 11:00
+check-in correctly reported "DAL full dossier has NOT landed" — the agent saw its own *preliminary inline note*
+(Weak Buy/70) and stayed disciplined below the 75 gate, but the full dossier it was waiting on **was never queued**:
+`add_candidate` had bailed early ("already tracked", DAL was a CANDIDATE since 6/19) before reaching its queue step, and that
+step only fired when NO "Dossier —" entry had *ever* existed (no staleness check). So the agent waited forever on a job
+nobody created. Root cause = pipeline/plumbing + an inline-note-vs-full-dossier convention gap, NOT a model failure.
+**Scope:** reporting/decision FRAMING + research plumbing — the §6 gate, the 75% conviction bar, dial values, and the
+no-margin/shorting/options rules are all UNCHANGED. Rotation must clear the *same* 75% bar and be a clear step up net of
+taxes/fees; it's an UPGRADE path, not a loosening. (Deferred, owners' call: actually moving aggression dials — sizing /
+conviction bar. We confirmed the dial is already Aggressive and being used.)
+**What shipped (one batched `agent` rebuild):**
+- **Expose the book (`web/agent/context.ts`):** each Positions line now shows its **weight (% of NAV)** and **GRQ's current
+  dossier call/confidence + date** (e.g. `XIC … 12.0% of NAV — GRQ's call Hold/58% (dossier 2026-06-25)`). The "Dossier —"
+  lookup was widened from focus-only to **holdings + focus** (shared `bookDossier`/`callOf`; focus line reuses it), and the
+  section header tells the agent to rank the book and spot the weakest link.
+- **Opportunity-cost instruction:** a `PERSONA` disposition bullet ("Capital is finite — think in OPPORTUNITY COST … when
+  heavily deployed and a setup beats your LOWEST-conviction holding, ROTATE: SELL then BUY in the same session, name the
+  swap") + a concrete step in the scheduled check-in for the reverse case (strong idea, no cash → rank book → rotate).
+- **Dossier-queue fix (`web/agent/promote.ts`):** new `ensureDossierQueued(key)` helper — returns inflight/current/queued
+  and queues a fresh `ResearchRequest` when the latest "Dossier —" entry is missing or **older than `DOSSIER_STALE_DAYS=5`**.
+  `addCandidate`'s early "already tracked" branch now routes through it (and reports what it did) instead of bailing; the
+  new-add path uses it too.
+- **`request_research` (`web/agent/tools.ts`)** re-pitched from a pre-morning-only tool to the **any-time** way to queue a
+  full dossier on a tracked name (stale dossier, or only a preliminary inline note); `requestedBy` "pre-morning"→"agent".
+  A `PERSONA` clause now says an inline note is NOT a full dossier (treat as below-bar) and to fire `request_research` rather
+  than wait on a dossier never queued.
+**Verified:** `tsc --noEmit` clean; fresh-image grep confirmed all four edits baked in; today's startup scan already on
+record (06:05Z) so the rebuild **skipped** it (no Max-quota burn); `agent` rebuilt alone, pruned, `/var` steady at 79%;
+booted clean + ticking. Ran `buildContext()` live — Positions block renders weight + conviction per holding correctly.
+
+### D73 — Aggression + scale pass: cadence, forced breadth, hourly rebuild, the cost-of-capital benchmark, per-currency cash ceilings, and the $25k+$25k launch (Cam + Graham, 2026-06-25)
+**Context:** Graham's feedback ("I won't be happy making $500 and being told it's great… we need economies of scale… get off on the right foot") drove a working session on making the fund genuinely aggressive and honest about what "good" means. Diagnostics found: the Aggressive dial was set and used (ATD was 25% of the *invested* book) but the fund was ~43% cash — incl. a stranded US$6k (~33% of NAV, zero US positions) — so under-deployment, not the dial, was the constraint; the hourly check-ins talked about hunting but mostly didn't produce (humans were adding the names); and the agent measured success as "beat XIC," which on $25k is a few hundred dollars Graham could index himself.
+**Scope discipline:** the §6 gate, the 75% conviction bar, the no-margin/shorting/options rules, and the kill switch are all UNCHANGED. Everything here is cadence, framing, deployment pressure, and dial *values* (humans-only) — not a loosening of the gate.
+**What shipped (agent + web, batched builds):**
+- **Cadence (`policy.ts`/`runner.ts`):** intraday check-ins are now HOURLY **10/11/12/13/14/15 ET** (noon promoted from brief to a real check-in); the **midday brief moved to 12:30**.
+- **Forced breadth (`sessions.ts` check-in):** every check-in MUST advance the pipeline — **research ≥5 genuinely new names** (WebSearch + add_candidate the worthy ones) and/or promote a ready candidate; "I scanned and nothing qualified" is explicitly disallowed. Leans on the ample Claude-Max token headroom.
+- **Hourly rebuild (`sessions.ts`):** the check-in is reframed from a trigger-check into a **full hourly re-derivation** of the plan (prior plan + agenda + everything from the last hour → a new plan that supersedes the morning's). Hunts the intraday edge, hardest in the fast-moving mornings.
+- **The REAL benchmark = clear operating costs, not beat XIC (`policy.ts` `OPERATING_COST_USD_CENTS_PER_MONTH=49000`, surfaced live in `context.ts`, reframed in the persona):** Claude Max (~$240) + FMP (~$250) ≈ **US$490/mo**. The fund only earns *genuine* return once monthly P&L clears that hurdle; beating XIC while under it is not a win. Shown live as a %/yr of NAV (≈13.7% at the new ~CA$61k NAV) — steep at small size, shrinks with capital, and the answer is scale + compounding, never oversized risk (gate + bar still bind).
+- **Per-currency cash floor/ceiling + ballast (`policy.ts` `cashCeilingPct`, `context.ts`, `sessions.ts`; Settings text in `RiskDial.tsx`):** floor/ceiling now apply PER currency-account (each currency's cash ÷ its own sleeve, never summed) — Cautious **30–50%**, Balanced **15–30%**, Aggressive **0–15%**. Over-ceiling legs are flagged in context with a deploy mandate. Enforcement is **SOFT for now** (a check-in mandate; the hard auto-sweep-to-ceiling is deferred — revisit if soft doesn't move it). **Ballast = "deployed cash":** an index ETF (XIC for CAD, a US index for USD; **no FX**) is acceptable only with no conviction pick, counts toward the ceiling, and is the FIRST thing sold to fund a real stock — never preferred over a name the agent would actually back.
+- **Opportunity-cost rotation made explicit (`sessions.ts`):** compare the incoming name's expected return vs the OUTGOING name's *remaining* return + the swap's full cost (commission + tax on the realized gain). On this small account commissions are noise; tax and forgone upside are what bite.
+- **Weekly new-buy caps raised 2/5/10 → 15/20/25 (`policy.ts`):** the old caps bound the deployment push (fresh US$25k sleeve + rotation). Burst caps (10/day · 4/hour) still bound pace; each dial's cautiousness now comes from size/cash/stops/universe, not the trade count.
+- **Settings page restructure (`app/settings/page.tsx`):** removed the standalone Members panel and the manual sim-order ticket; the **System panel** now carries the live **Trading account** (`IBKR_ACCOUNT_ID`, paper) + the Members list; **Road to real money** sits beside it. Risk-dial descriptions corrected (take-profit added; Aggressive "full whitelist" → the real etf+large+mid universe; "trades" → "buys").
+**The launch re-baseline — actual trading starts at $25k CAD + $25k USD (Cam):** the soak so far ran on $25k CAD; the real fund launches **$25k CAD + $25k USD**, so the paper config was changed to mirror it. Cam reset the IBKR paper balances directly (CAD cash → CA$11,138.66 with kept positions ≈ CA$25k sleeve; USD cash → US$25k); `reconcile()` mirrored it. GRQ-side fixes: `scripts/relaunch-contributions.ts` wiped the old CA$25k inception row and recorded **CA$25k + US$25k** (CAD-equiv at the day's fx 1.4234, anchored to today's XIC 5570) so Total P&L reads the real **+CA$502** (not a phantom +CA$34k) and the vs-XIC benchmark restarts at launch. Today's NAV tape was inflated by the deposit (CA$35,571.40 added to pre-funding snapshots + the day-P&L baseline) so the deposit doesn't print as a day gain (day-P&L now ~0%, tape continuous at ~CA$61k). Cam chose **keep-positions / no soak-clock restart** (flagged: a 2.4× capital + new-USD-sleeve change is material; restarting the ≥2-wk IBKR clean clock would be the conservative read — owners' call). **Deferred follow-ups:** the hard cash-sweep; the per-currency *floor* in the validator (no-op at Aggressive 0%); making `dayPnlBps`/the chart contribution-aware so future deposits auto-exclude from performance (this one was a manual one-off).
+**Verified:** `tsc` clean throughout; fresh-image greps confirmed each batch baked in (not stale); the agent rebuild **skipped the startup scan** (today's 06:05Z marker held — no Max-quota burn); `/var` steady ~79% across builds; the noon check-in fired the new behavior live; the live Settings page renders the restructured panels + corrected dial text (HTTP 200); `getPortfolio()` confirmed NAV CA$61,087 / contributions CA$60,585 / Total P&L +CA$502.
+

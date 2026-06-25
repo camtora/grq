@@ -94,10 +94,16 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   if (tab === "daily") {
     // Each day = morning game plan + EOD close + a count of intraday updates
     // (check-ins + midday brief). The full per-day timeline lives at /reports/day/<date>.
-    const [eods, plans, intradayEntries] = await Promise.all([
+    const [eods, plans, premorns, intradayEntries] = await Promise.all([
       prisma.report.findMany({ where: { kind: "EOD" }, orderBy: { date: "desc" }, take: 40 }),
       prisma.journalEntry.findMany({
         where: { kind: "RESEARCH", title: { startsWith: "Game plan" } },
+        orderBy: { at: "desc" },
+        take: 40,
+      }),
+      // The 6:00 ET pre-morning read — shown below the morning brief on each day's card.
+      prisma.journalEntry.findMany({
+        where: { kind: "RESEARCH", title: { startsWith: "Pre-morning read" } },
         orderBy: { at: "desc" },
         take: 40,
       }),
@@ -121,7 +127,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       const k = etDateStr(e.at);
       intradayCountBy.set(k, (intradayCountBy.get(k) ?? 0) + 1);
     }
-    type Day = { date: Date; eod?: (typeof eods)[number]; plan?: (typeof plans)[number] };
+    type Day = { date: Date; eod?: (typeof eods)[number]; plan?: (typeof plans)[number]; premorn?: (typeof premorns)[number] };
     const days = new Map<string, Day>();
     for (const e of eods) days.set(etDateStr(e.date), { date: e.date, eod: e });
     for (const p of plans) {
@@ -129,6 +135,12 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       const cur = days.get(k);
       if (cur) cur.plan = p;
       else days.set(k, { date: p.at, plan: p });
+    }
+    for (const pm of premorns) {
+      const k = etDateStr(pm.at);
+      const cur = days.get(k);
+      if (cur) cur.premorn = pm;
+      else days.set(k, { date: pm.at, premorn: pm });
     }
     // Days that only logged intraday updates (no plan/close) still get a card.
     for (const k of intradayCountBy.keys()) {
@@ -166,6 +178,12 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
                   <div>
                     <span className="text-xs uppercase tracking-wider text-teal-200/40">Morning</span>{" "}
                     {d.plan ? preview(d.plan.body) : <span className="text-teal-200/30">no plan filed</span>}
+                    {d.premorn && (
+                      <div className="mt-1.5 border-l-2 border-teal-400/15 pl-2 text-teal-100/45">
+                        <span className="text-xs uppercase tracking-wider text-teal-200/35">Pre-market</span>{" "}
+                        {preview(d.premorn.body)}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span className="text-xs uppercase tracking-wider text-teal-200/40">Close</span>{" "}
