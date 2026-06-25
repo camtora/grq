@@ -28,9 +28,11 @@ const BASE = `${GATEWAY}/v1/api`;
 // A BUY settles cash-first at IBKR — `settledcash` drops the instant it fills, but
 // the positions ledger takes a few seconds to grow the new shares. Within this
 // window reconcile() defers mirroring the lower cash so the NAV tape never prints a
-// phantom "cash-out / no-stock-in" dip (see reconcile()). Spans several 60s ticks
-// and self-heals: a BUY older than this falls through and cash mirrors normally.
-const CASH_SETTLE_LAG_MS = 5 * 60_000;
+// phantom "cash-out / no-stock-in" dip (see reconcile()). The real terminator is the
+// shares landing (brokerQty > dbQty ends the deferral instantly, usually in seconds);
+// this window is only the backstop for a buy that NEVER lands, so cash isn't frozen
+// forever. Widened 5→15min after a TSM buy's shares took ~8min to mirror (2026-06-25).
+const CASH_SETTLE_LAG_MS = 15 * 60_000;
 
 // Scoped self-signed-cert trust: this agent applies ONLY to gateway calls below,
 // never globally (Yahoo quotes etc. keep full TLS verification).
@@ -485,14 +487,20 @@ export class IBKRBroker implements BrokerAdapter {
       const since = new Date(Date.now() - CASH_SETTLE_LAG_MS);
       // reconcile() only runs on the ibkr broker, so every recent trade here is IBKR.
       const recentBuys = await prisma.trade.findMany({ where: { side: "BUY", at: { gte: since } }, select: { symbol: true } });
+      // A debit "landed ahead of its shares" if EITHER cash bucket dropped below our
+      // mirror. We check BOTH buckets rather than the buy's own currency because a
+      // not-yet-landed buy has NO way to tell us its currency — its Position row
+      // doesn't exist yet (so brokerBy/dbBy miss) and Trade carries no currency. The
+      // old code defaulted that unknown currency to "CAD", so a USD buy (e.g. TSM)
+      // compared the untouched CAD bucket, never deferred, and printed the phantom
+      // dip this guard exists to prevent (2026-06-25 TSM, the bug this re-fixes).
+      const cadDropped = cash.cadCents < (account?.cashCents ?? 0);
+      const usdDropped = cash.usdCents < (account?.usdCashCents ?? 0);
       for (const { symbol } of recentBuys) {
         const brokerQty = brokerBy.get(symbol)?.qty ?? 0;
         const dbQty = dbBy.get(symbol)?.qty ?? 0;
         if (brokerQty > dbQty) continue; // broker grew the position → the buy has landed
-        const currency = brokerBy.get(symbol)?.currency ?? dbBy.get(symbol)?.currency ?? "CAD";
-        const brokerCash = currency === "USD" ? cash.usdCents : cash.cadCents;
-        const dbCash = currency === "USD" ? account?.usdCashCents ?? 0 : account?.cashCents ?? 0;
-        if (brokerCash < dbCash) { cashDeferred = true; break; } // debit landed ahead of the shares
+        if (cadDropped || usdDropped) { cashDeferred = true; break; } // debit landed ahead of the shares
       }
       if (cashDeferred) {
         console.log("[reconcile] deferring cash mirror — a filled BUY hasn't settled into the positions ledger yet (avoids a phantom NAV dip)");
