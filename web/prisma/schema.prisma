@@ -71,6 +71,10 @@ model Settings {
   fxMaxPerRequestCents Int      @default(0)
   fxMaxPerWeekCents    Int      @default(0)
   usdAllocationCapPct  Int      @default(100)
+  // Manual 5-hour usage-window reset instant (Cam 2026-06-25). The Max plan's rolling
+  // window slides with usage and the agent's token can't read it, so an owner sets when
+  // the current window resets (e.g. "3pm ET") on /admin/usage and the page counts down to it.
+  maxWindowResetAt    DateTime?
   updatedBy           String?
   updatedAt           DateTime  @updatedAt
 }

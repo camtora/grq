@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/users";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import { getUsageDashboard, fmtTokens, fmtUsd, fmtDuration } from "@/lib/usage";
+import UsageWindowControl from "@/components/UsageWindowControl";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function AdminUsagePage() {
   // Same lock as /admin — owner only; everyone else gets a 404.
   if (!session || !isOwner(session.email)) notFound();
 
-  const { today, rolling5h, recent, maxFiveH, generatedAt } = await getUsageDashboard();
+  const { today, rolling5h, recent, maxFiveH, windowResetAt, generatedAt } = await getUsageDashboard();
 
   const dayTotal = today.totals.total || 1; // avoid /0
   const fivePct = maxFiveH ? Math.min(100, Math.round((rolling5h.total / maxFiveH) * 100)) : null;
@@ -117,6 +118,7 @@ export default async function AdminUsagePage() {
                 <code className="text-teal-200/40">GRQ_MAX_5H_TOKENS</code> to show a remaining-headroom bar.
               </div>
             )}
+            <UsageWindowControl resetAt={windowResetAt ? windowResetAt.toISOString() : null} />
           </Card>
 
           {/* Where the day's tokens went, by session type */}

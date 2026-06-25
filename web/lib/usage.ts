@@ -101,8 +101,22 @@ export type UsageDashboard = {
     costMicroUsd: number;
   }>;
   maxFiveH: number | null;
+  windowResetAt: Date | null; // owner-set instant the current 5h window resets (manual; agent can't read it)
   generatedAt: Date;
 };
+
+// Resolve an ET wall-clock time ("HH:MM") to the next future instant. Reuses etDayStart
+// (ET-midnight-as-UTC, DST-aware at `now`); rolls to tomorrow if that time already passed today.
+export function resolveEtClockToInstant(hhmm: string, now = new Date()): Date | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  let t = etDayStart(now).getTime() + (h * 60 + min) * 60_000;
+  if (t <= now.getTime()) t += 24 * 60 * 60_000;
+  return new Date(t);
+}
 
 export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboard> {
   const now = new Date();
@@ -110,10 +124,10 @@ export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboar
   const fiveHAgo = new Date(now.getTime() - FIVE_H_MS);
   const windowStart = new Date(Math.min(dayStart.getTime(), fiveHAgo.getTime()));
 
-  const rows = await prisma.agentUsage.findMany({
-    where: { at: { gte: windowStart } },
-    orderBy: { at: "desc" },
-  });
+  const [rows, settings] = await Promise.all([
+    prisma.agentUsage.findMany({ where: { at: { gte: windowStart } }, orderBy: { at: "desc" } }),
+    prisma.settings.findUnique({ where: { id: 1 }, select: { maxWindowResetAt: true } }),
+  ]);
 
   const todayRows = rows.filter((r) => r.at >= dayStart);
   const fiveHRows = rows.filter((r) => r.at >= fiveHAgo);
@@ -137,7 +151,7 @@ export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboar
     costMicroUsd: r.costMicroUsd,
   }));
 
-  return { today, rolling5h, recent, maxFiveH: MAX_5H_TOKENS, generatedAt: now };
+  return { today, rolling5h, recent, maxFiveH: MAX_5H_TOKENS, windowResetAt: settings?.maxWindowResetAt ?? null, generatedAt: now };
 }
 
 // Aggregate an arbitrary window (used by the CLI report).
