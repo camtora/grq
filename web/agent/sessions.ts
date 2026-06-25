@@ -9,7 +9,7 @@ import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
-import { MODELS, AGENT_VERSION, taxContext, SELF_INVEST } from "./policy";
+import { MODELS, RACE, AGENT_VERSION, taxContext, SELF_INVEST } from "./policy";
 import { alert, heartbeat } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
@@ -141,7 +141,135 @@ async function recordUsage(opts: SessionOpts, rm: any, result: string | null): P
   }
 }
 
+// ----- The Race (D68): shadow-run the challenger model(s) on the SAME frozen prompt -----
+
+type ShadowKind = "morning" | "checkin" | "midday" | "eod" | "position";
+type Proposal = { action: string; symbol: string | null; qty: number | null; confidence: number | null; thesis: string | null };
+
+const ACTIONS = new Set(["BUY", "SELL", "HOLD", "NONE"]);
+
+/** Pull the structured decision out of a challenger's reply — the LAST JSON object in the text
+ *  (we ask it to end with a ```json block). Tolerant: returns null if nothing parseable. */
+function parseProposal(text: string): Proposal | null {
+  if (!text) return null;
+  // Prefer a fenced ```json block; fall back to the last {...} in the text.
+  const fences = [...text.matchAll(/```json\s*([\s\S]*?)```/gi)].map((m) => m[1]);
+  const candidates = fences.length ? [fences[fences.length - 1]] : [];
+  const lastBrace = text.lastIndexOf("{");
+  if (!candidates.length && lastBrace >= 0) candidates.push(text.slice(lastBrace, text.lastIndexOf("}") + 1));
+  for (const c of candidates) {
+    try {
+      const o = JSON.parse(c.trim());
+      const action = String(o.action ?? "").toUpperCase();
+      if (!ACTIONS.has(action)) continue;
+      const qty = Number.isFinite(Number(o.qty)) ? Math.trunc(Number(o.qty)) : null;
+      const confidence = Number.isFinite(Number(o.confidence)) ? Math.trunc(Number(o.confidence)) : null;
+      return {
+        action,
+        symbol: o.symbol ? String(o.symbol).toUpperCase().replace(/[^A-Z0-9.\-]/g, "") || null : null,
+        qty: qty && qty > 0 ? qty : null,
+        confidence: confidence != null ? Math.max(0, Math.min(100, confidence)) : null,
+        thesis: o.thesis ? String(o.thesis).slice(0, 800) : null,
+      };
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+const SHADOW_DECISION_SUFFIX = `
+
+---
+SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). You have NO tools and you place NO orders; the live agent (the champion) acts, you only state what YOU would do given the EXACT same information above. Do your normal reasoning briefly, then END your reply with a single fenced JSON block and nothing after it:
+\`\`\`json
+{"action":"BUY|SELL|HOLD|NONE","symbol":"TICKER or null","qty":<whole shares or null>,"confidence":<0-100 or null>,"thesis":"one or two sentences on why"}
+\`\`\`
+If you'd place several orders, put your single highest-conviction one in the JSON and describe the rest in your reasoning. action: BUY/SELL = a trade you'd place now · HOLD = stay in current positions, no change · NONE = nothing actionable / stay in cash. Use the SAME ≥75% conviction discipline the champion is held to.`;
+
+const SHADOW_NARRATIVE_SUFFIX = `
+
+---
+SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). Write the SAME piece the task asks for, based ONLY on the information given above (you have no tools). Your ENTIRE response is that piece — no preamble about being a challenger.`;
+
+/** Run the configured challenger model(s) on the EXACT prompt the champion ran, one-shot and
+ *  tool-less, and record both sides to ShadowRun for The Race. Never throws into the caller and
+ *  never touches a broker/order path — a challenger can only ever produce text. No-op unless the
+ *  Race is enabled and at least one challenger is configured. */
+async function runShadow(opts: {
+  kind: ShadowKind;
+  decisionKind: "decision" | "narrative";
+  label: string;
+  reason: string;
+  sessionAt: Date;
+  prompt: string; // the frozen champion prompt — challengers get these exact bytes
+  championText: string | null; // what the champion actually produced (its note / report body)
+}): Promise<void> {
+  if (!RACE.enabled || RACE.challengers.length === 0) return;
+  try {
+    // Champion row first — its real action lives in Order/Trade; here we keep its written read.
+    await prisma.shadowRun.create({
+      data: {
+        sessionAt: opts.sessionAt,
+        sessionKind: opts.kind,
+        label: opts.label,
+        reason: opts.reason,
+        model: MODELS.decision,
+        role: "champion",
+        text: opts.championText ?? "(champion produced no written output)",
+        agentVersion: AGENT_VERSION,
+      },
+    });
+  } catch (e) {
+    console.error("[race] champion row failed", e instanceof Error ? e.message : e);
+  }
+
+  const suffix = opts.decisionKind === "decision" ? SHADOW_DECISION_SUFFIX : SHADOW_NARRATIVE_SUFFIX;
+  for (const model of RACE.challengers) {
+    try {
+      const text = await runSession({
+        label: `race:${opts.label}`,
+        prompt: opts.prompt + suffix,
+        model,
+        withTools: false, // shadow = frozen seed only; a tool call would diverge from what the champion saw
+        maxTurns: 3,
+      });
+      if (text == null) continue;
+      const p = opts.decisionKind === "decision" ? parseProposal(text) : null;
+      await prisma.shadowRun.create({
+        data: {
+          sessionAt: opts.sessionAt,
+          sessionKind: opts.kind,
+          label: opts.label,
+          reason: opts.reason,
+          model,
+          role: "challenger",
+          text,
+          action: p?.action ?? null,
+          symbol: p?.symbol ?? null,
+          qty: p?.qty ?? null,
+          confidence: p?.confidence ?? null,
+          thesis: p?.thesis ?? null,
+          agentVersion: AGENT_VERSION,
+        },
+      });
+    } catch (e) {
+      console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
+    }
+  }
+}
+
+/** Fetch the body of the champion's just-written note (e.g. "Game plan", "Intraday Check-in")
+ *  so The Race can show its read beside the challengers'. Best-effort. */
+async function latestNoteBody(titlePrefix: string, since: Date): Promise<string | null> {
+  const n = await prisma.journalEntry
+    .findFirst({ where: { title: { startsWith: titlePrefix }, at: { gte: since } }, orderBy: { at: "desc" } })
+    .catch(() => null);
+  return n?.body ?? null;
+}
+
 export async function runMorningResearch(): Promise<void> {
+  const startedAt = new Date();
   const ctx = await buildContext();
   const prompt = `${ctx}
 
@@ -157,6 +285,15 @@ export async function runMorningResearch(): Promise<void> {
 
 Be selective on sources (3 great beat 10 skimmed) but NOT timid on ideas: the goal of this session is to walk into the day with real setups to deploy into, not reasons to stay in cash. End with a one-paragraph summary of the plan.`;
   await runSession({ label: "morning-research", prompt, model: MODELS.decision, withTools: true, maxTurns: 40 });
+  await runShadow({
+    kind: "morning",
+    decisionKind: "decision",
+    label: `morning ${etDateStr()}`,
+    reason: "Morning research / game plan",
+    sessionAt: startedAt,
+    prompt,
+    championText: await latestNoteBody("Game plan", startedAt),
+  });
 }
 
 /** Startup universe review (D30, Cam 2026-06-17) — the members demote the whole
@@ -378,6 +515,15 @@ Keep it tight: this is a position check, not a research project.`;
   // A held-position trigger is always about ONE name → "holdingChecks", and the note
   // carries that holding (notifyCheckinDecision sets it if the agent left it off).
   await notifyCheckinDecision(startedAt, "holding", sym);
+  await runShadow({
+    kind: "position",
+    decisionKind: "decision",
+    label: `position:${sym ?? reason.slice(0, 30)}`,
+    reason,
+    sessionAt: startedAt,
+    prompt,
+    championText: await latestNoteBody("Position Note", startedAt),
+  });
 }
 
 /** Scheduled / self-scheduled trading check-in — a decision-capable session that
@@ -406,6 +552,15 @@ The market is open. This is a scheduled check-in to ACT on your best read of the
 Keep it tight.`;
   await runSession({ label: `checkin:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 20 });
   await notifyCheckinDecision(startedAt, "scheduled");
+  await runShadow({
+    kind: "checkin",
+    decisionKind: "decision",
+    label: `checkin:${reason.slice(0, 40)}`,
+    reason,
+    sessionAt: startedAt,
+    prompt,
+    championText: await latestNoteBody("Intraday Check-in", startedAt),
+  });
 }
 
 /** Deep single-stock dossier (2.7) — research tools only, never trades.
@@ -493,6 +648,7 @@ async function computeDayStats() {
 }
 
 export async function runEodReport(): Promise<void> {
+  const startedAt = new Date();
   const { pf, trades, rejections, dayPnlCents } = await computeDayStats();
   const ctx = await buildContext();
   const stats = {
@@ -521,9 +677,19 @@ Write the EOD report body in markdown (no top-level title — the dashboard adds
     update: { body, statsJson: JSON.stringify(stats) },
   });
   await alert("info", `EOD report — ${etDateStr()}`, `Day P&L ${stats.day_pnl} · NAV ${stats.nav} · vs XIC ${stats.vs_xic} · ${stats.trades} trade(s)`, { category: "reports" });
+  await runShadow({
+    kind: "eod",
+    decisionKind: "narrative",
+    label: `eod ${etDateStr()}`,
+    reason: "End-of-day report",
+    sessionAt: startedAt,
+    prompt,
+    championText: body,
+  });
 }
 
 export async function runMiddayReport(): Promise<void> {
+  const startedAt = new Date();
   const { pf, trades, rejections, dayPnlCents } = await computeDayStats();
   const ctx = await buildContext();
   const prompt = `${ctx}
@@ -537,6 +703,15 @@ Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: wh
     data: { kind: "RESEARCH", title: `Midday brief — ${etDateStr()}`, body, agentVersion: AGENT_VERSION },
   });
   await alert("info", `Midday brief — ${etDateStr()}`, `Day P&L $${(dayPnlCents / 100).toFixed(2)} · NAV $${(pf.navCents / 100).toFixed(2)}\n${body.slice(0, 1000)}`, { category: "reports" });
+  await runShadow({
+    kind: "midday",
+    decisionKind: "narrative",
+    label: `midday ${etDateStr()}`,
+    reason: "Midday brief",
+    sessionAt: startedAt,
+    prompt,
+    championText: body,
+  });
 }
 
 export async function runWeeklyReview(): Promise<void> {

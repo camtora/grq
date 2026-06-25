@@ -23,6 +23,7 @@ const PRIMARY: NavLink[] = [
 ];
 const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },
+  { href: "/race", label: "The Race" },
   { href: "/settings", label: "Settings" },
 ];
 

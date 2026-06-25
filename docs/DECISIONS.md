@@ -1609,8 +1609,40 @@ new); a cheap in-container Haiku session wrote a real `AgentUsage` row (`in 517 
 was deleted. **Bigger lever still open (not done):** give the agent its *own* `ANTHROPIC_API_KEY` so its burn stops
 competing with Cam's interactive Max quota (a real-cost decision — deferred to Cam).
 
+### D68 — The Race: a multi-model bake-off (Opus live vs Sonnet shadow) on every session (Cam, 2026-06-24)
+**Context:** GRQ runs **Opus 4.8 for every decision and report**. Cam: *"I'd like a second agent on a different
+model — see what different models **choose** to do from the same data, without doing it."* The codebase was already
+~80% shaped for this: every model call funnels through `runSession()`; `buildContext()` is a portable text blob (the
+"same data" artifact); and research already runs on a non-trading toolset (`grqResearchServer`). The one constraint is
+that the agent is built on `@anthropic-ai/claude-agent-sdk` and auths via **Cam's Max OAuth token** — Anthropic-native,
+so a *Claude* challenger (Sonnet) is a config knob, while non-Claude needs a proxy or a hand-rolled loop (Phase 2+).
+**Decision (Cam):** keep **Opus the sole LIVE decision-maker** (it alone trades, through the §6 gate — guardrail #1
+unchanged). At each session, hand the challenger(s) the **EXACT same frozen prompt** the champion ran, **one-shot, with
+NO tools** (the guarantee of "exact same SEED information" + reproducibility — a tool call would diverge from what the
+champion saw), and record what each *would* do. A challenger can never trade: there is no order tool in its path and it
+never reaches the gate. Phase 1 = one challenger, **Sonnet 4.6** (a Claude → same Max token, no new auth), across **all
+five** decision/report sessions: morning plan, intraday check-in, position check (decision → fenced-JSON proposal) +
+midday brief, EOD report (narrative → text). Surfaced on a new **`/race`** page beside Reports. Full design + the
+self-hosted Phase 3 roadmap: **`docs/THE-RACE.md`**.
+**What shipped:** **(a)** New **`ShadowRun`** table — one row per (session, model), joined by `sessionAt`; the champion
+row keeps its written read (its real action lives in `Order`/`Trade`), challenger rows carry the parsed
+action/symbol/qty/confidence + reasoning. **(b)** `RACE` config in `web/agent/policy.ts` (`GRQ_RACE_ENABLED` kills it
+without a deploy; `GRQ_RACE_CHALLENGERS` comma-separated, default `claude-sonnet-4-6`). **(c)** `runShadow()` +
+`parseProposal()` in `web/agent/sessions.ts` — **reuses `runSession`** (same PERSONA, tool-less, `maxTurns:3`) so there's
+no new SDK plumbing and per-run token/cost lands in `AgentUsage` under label `race:…` (so The Race doubles as a
+cost-per-model comparison). Wired into all five sessions; never throws into the live path, never imports a broker/order
+path. **(d)** `web/app/race/page.tsx` + nav — champion vs challenger side-by-side per session, action + a **75%-conviction
+badge**, challenger call distribution, honest "hypothesis not track record" framing. **Verified:** `tsc --noEmit` clean;
+`ShadowRun` pushed to the live DB (additive, no data loss); web + agent rebuilt (fresh-image grep confirmed `/race` +
+`runShadow`, not stale); agent booted clean and did **not** re-trigger the once-per-day startup scan; `/race` returns 200.
+Deployed 2026-06-24 ~23:15 ET — first races populate at the next morning's 9:00 ET plan.
+**Deferred (Phase 1.5+):** the full deterministic **gate dry-run** (refactor a `validateOnly` path out of
+`validateAndPlace` so a shadow BUY gets the *real* verdict, not just the headline 75% bar) → then **outcome scoring** →
+a model leaderboard (reusing the retro/scoreboard machinery); **Phase 2** more models via OpenRouter; **Phase 3**
+self-hosted open-weight (GLM/Qwen/Gemma) — GPU is the blocker, not disk.
+
 ### D69 — Stock-page header + bottom-line/price-targets layout polish (Cam, 2026-06-24)
-*(D68 is "The Race", landing on a separate branch — this entry skips ahead so the two don't collide.)*
+*(D69 was committed first on the working branch while D68 "The Race" was built on its own `feat/the-race` branch — hence the out-of-order numbering; D68 is the entry directly above.)*
 **Context:** Cam walked the `/stocks/[symbol]` page and called out a stack of alignment/hierarchy nits: the live price
 floated centred against the whole hero (lower than, then higher than, the ticker), the "watched by" badge was a
 different shape/height than the chips beside it, the action buttons weren't anchored, the bottom-line verdict panel was

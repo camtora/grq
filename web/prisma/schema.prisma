@@ -758,3 +758,37 @@ model AgentUsage {
   @@index([at])
   @@index([label])
 }
+
+// The Race (D68, Cam 2026-06-24) — a multi-model bake-off. At each decision/report session the
+// SAME frozen prompt the live agent (the CHAMPION, Opus) ran on is handed to one or more
+// CHALLENGER models (Phase 1: Sonnet) ONE-SHOT with NO tools — so each challenger sees the exact
+// same SEED information the champion did, and the run is fully reproducible. A challenger can
+// never trade: there is no order tool in its path and it never reaches the §6 gate (guardrail
+// #1). One row per (session, model): the champion row carries what it actually did (its journal
+// note / report body), challenger rows carry the parsed "what I would do" proposal + reasoning.
+// Rows are tied together by sessionAt. Token/cost for each run is logged to AgentUsage (label
+// "race:…"), so The Race doubles as a cost-per-model comparison too.
+model ShadowRun {
+  id           Int      @id @default(autoincrement())
+  at           DateTime @default(now())
+  sessionAt    DateTime // the champion session's start — the join key tying champion + challengers
+  sessionKind  String // "morning" | "checkin" | "midday" | "eod" | "position"
+  label        String // the session label, e.g. "checkin:13:00 ET"
+  reason       String // human reason for the session
+  model        String // the model id that produced this row
+  role         String   @default("challenger") // "champion" | "challenger"
+  // raw output: the champion's journal note / report body, OR the challenger's reasoning + JSON
+  text         String
+  // structured proposal — challengers on DECISION sessions only (null on narrative/report
+  // sessions, on "no trade", and on the champion row, whose real action lives in Order/Trade)
+  action       String? // "BUY" | "SELL" | "HOLD" | "NONE"
+  symbol       String?
+  qty          Int? // whole shares
+  thesis       String?
+  confidence   Int? // 0–100
+  agentVersion String?
+
+  @@index([sessionAt])
+  @@index([sessionKind])
+  @@index([model])
+}

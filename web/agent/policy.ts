@@ -102,3 +102,17 @@ export const MODELS = {
   decision: process.env.GRQ_MODEL_DECISION ?? "claude-opus-4-8",
   triage: process.env.GRQ_MODEL_TRIAGE ?? "claude-haiku-4-5-20251001",
 };
+
+// The Race (D68) — the model bake-off. The CHAMPION (MODELS.decision = Opus) is the only model
+// that ever trades. CHALLENGERS run shadow-only on the exact same frozen prompt, one-shot, NO
+// tools, and record what they WOULD do — they never touch the §6 gate (guardrail #1). Phase 1 =
+// one challenger, Sonnet 4.6 (a Claude → reachable on the same Max token, no new auth). Add more
+// model ids to GRQ_RACE_CHALLENGERS (comma-separated) in Phase 2. Kill without a deploy:
+// GRQ_RACE_ENABLED=false. Humans edit this.
+export const RACE = {
+  enabled: (process.env.GRQ_RACE_ENABLED ?? "true").toLowerCase() !== "false",
+  challengers: (process.env.GRQ_RACE_CHALLENGERS ?? "claude-sonnet-4-6")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean),
+};

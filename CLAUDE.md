@@ -112,10 +112,10 @@ Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), no
   git- and docker-ignored. Container process env wins over Next's .env loading.
 - **React SSR splits dynamic text with `<!-- -->`** — grep rendered HTML loosely
   (e.g. `Welcome back,[^<]*<!-- -->Cam`).
-- **Docker's data-root is `/var/lib/docker` on `/dev/sda5` (mounted `/var`, a 60G volume that
-  runs ~95–100% full)** — NOT on `/` (sda2 is roomy at ~23%). `/home` (sda6) is separate at
-  ~92%. Rebuild marathons fill `/var` faster than the nightly 5AM prune; this took the db down
-  once (2026-06-12). **When `/var` is full a build can silently bake STALE code** — `COPY . .`
+- **Docker's data-root is `/var/lib/docker` on `/dev/sda5` (mounted `/var`, a 60G volume at
+  ~77% as of 2026-06-24)** — NOT on `/` (sda2 is roomy at ~23%). `/home` (sda6) is separate at
+  ~76%. `/var` has headroom now, but **rebuild marathons fill it faster than the nightly 5AM
+  prune** and it has hit 100% before — this took the db down once (2026-06-12). **When `/var` is full a build can silently bake STALE code** — `COPY . .`
   fails to write a new layer and the image keeps old pages (bit us 2026-06-16: a "successful"
   deploy served old code). Always verify a fresh image before trusting a deploy:
   `docker run --rm --entrypoint sh grq_web:latest -c "grep -l <new-string> /app/.next/server/app/.../page.js"`.
