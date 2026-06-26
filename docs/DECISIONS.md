@@ -2089,3 +2089,32 @@ serial until the fix is verified under load; flip to 5 to re-enable. Agent → *
   one-shot server prop that froze between window-boundary refreshes; now polled (`GET /api/admin/usage-window`) so the
   number tracks the live clock. Also: watchlist search bar made as visible as the cards + "find a stock"; redundant
   watchlist sub-header removed; Universe row dropped from Settings → System.
+
+### D87 — Rebaseline contributions + the TSX benchmark to the soak restart (Cam, 2026-06-26)
+**Context:** [D83](#d83) re-anchored `PAPER_INCEPTION` to the 2026-06-26 noon-ET reset and re-funded the paper
+account to a clean **US$50,000**, but it did NOT touch the `Contribution` table — the same gap
+`relaunch-contributions.ts` patched one reset earlier. So `Contribution` still held the **2026-06-25 launch
+baseline (CA$60,585 @ XIC 5570)**. `reconcile()` mirrors broker cash/positions but never writes contributions,
+so the US$50k reset capital read as **phantom P&L**. One stale baseline produced three lies on the live dashboard:
+- `totalPnl = NAV − contributions = +CA$10,571` of fake gain (the "+10,000");
+- the **XIC benchmark was apples-to-oranges** — fund NAV started today, XIC anchored to a pre-reset 5570;
+- and because `PAPER_INCEPTION` is *today*, `app/page.tsx` finds no pre-today NAV snapshot for the day-open and
+  **falls back to `contributionsCents`** (`dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents`, ~L323),
+  so the Today header + `MarketIndices` strip showed a fake **+17.4% "today"** and claimed GRQ was "ahead of every market."
+
+**Decision:** Rebaseline the contributions to the account as it actually sits post-reset, anchored to TODAY's TSX.
+`scripts/rebaseline-soak-restart.ts` (sibling of `relaunch-contributions.ts`) wipes the stale rows and writes the
+restart capital as **US$50,000 (CAD-equiv @ live fx 1.4186 ≈ CA$70,930) + CA$79.61 CAD residual**, both anchored to
+**today's XIC mid (5574)**. NAV history kept (the tape/chart already filter to `PAPER_INCEPTION`). Verified live:
+- contributions **CA$60,585 → CA$71,009.61**, XIC anchor **5570 → 5574**;
+- total P&L **+$10,571 phantom → +$71.28** (real, since the restart); GRQ vs TSX = **+$71.28 since restart** (both start today);
+- `/api/fund-day` `dayPnlPct` **+17.4% → +0.10%**, so the day-vs-all-markets strip now compares GRQ's real move to each index.
+
+**Why a data op, not a code change:** the day-open *fallback* and the benchmark math are both correct — they were
+fed a stale baseline. The contributions table is the source of truth for "money in" and only these one-off scripts
+(+ `seed.ts`) write it; the agent never does, and `reconcile()` deliberately doesn't. Fixing the rows fixes every
+surface at once (`getPortfolio` / `fund-day` / `nav-tape` recompute live; the next `NavSnapshot` stores the corrected
+benchmark). **Honesty caveat (unchanged from the USD-sleeve design):** the CAD baseline is fixed at the reset-day fx
+(1.4186), so future CAD/USD moves on the US$50k sleeve surface as P&L — same convention as [D34](#d34)/the launch baseline,
+not new. **Reversible** — prior values were CA$25k + US$25k @ XIC 5570. **Lesson for the next paper reset: re-run this
+after [D83](#d83)'s re-fund, or the new capital reads as phantom gains.**
