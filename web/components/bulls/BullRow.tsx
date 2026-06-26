@@ -18,7 +18,7 @@ export default function BullRow({ b, rank, color }: { b: BullStanding; rank: num
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-teal-50">
+            <span className="min-w-0 text-sm font-semibold text-teal-50">
               {(() => {
                 const gkey = glossaryKeyForModel(b.model);
                 return gkey ? <Term k={gkey}>{b.label}</Term> : b.label;

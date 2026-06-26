@@ -32,7 +32,7 @@ export default function ModelTile({ s, rank }: { s: ModelStanding; rank: number 
     <Card className={`p-4 ${champ ? "border-teal-400/30 bg-teal-400/[0.04]" : ""} ${idle ? "opacity-45" : ""}`}>
       <div className="flex items-center gap-2">
         <span className="text-xs tabular-nums text-teal-200/40">#{rank}</span>
-        <span className="truncate text-sm font-semibold text-teal-50">{gkey ? <Term k={gkey}>{s.label}</Term> : s.label}</span>
+        <span className="min-w-0 text-sm font-semibold text-teal-50">{gkey ? <Term k={gkey}>{s.label}</Term> : s.label}</span>
         <span className="ml-auto">
           <Chip tone={champ ? "teal" : "dim"}>{champ ? "Champion" : "Shadow"}</Chip>
         </span>
