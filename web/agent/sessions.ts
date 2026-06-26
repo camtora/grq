@@ -16,6 +16,7 @@ import { PERSONA } from "./persona";
 import { alert, heartbeat, sendDiscord } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
+import { commitsInWindow } from "../lib/github";
 
 
 type SessionOpts = {
@@ -812,6 +813,85 @@ Write the EOD report body in markdown (no top-level title — the dashboard adds
     prompt,
     championText: body,
   });
+}
+
+// ----- Daily build diary (3am ET): plain-English "what changed in the app" for Graham -----
+
+const BUILD_DIARY_PERSONA = `You are GRQ's build-diary writer. Each night you summarize the day's engineering work for Graham — one of the fund's two owners. Graham is finance-literate and sharp but NOT a programmer: he uses ChatGPT, gets bored by technical detail, and wants to know what changed in the product and WHY it matters, not how it was coded. Translate everything. NEVER mention file names, function names, commit hashes, branches, frameworks, or jargon ("refactor", "endpoint", "schema", "API", "component", "deploy"). Group related changes into a few themes. Lead with whatever matters most to the fund or to him. Be concrete about what he'd actually notice ("the watchlist now shows both your faces on a stock"), plain about fixes ("fixed a bug where…"), and don't oversell — no hype, no "we crushed it". Warm, clear, lightly dry. The point is that the two of you stay on the same page.`;
+
+// Map a changed file path to a coarse, non-technical "area" — a grouping HINT for the
+// writer (it's told never to name these literally). Keeps the prompt readable without
+// leaking file paths into Graham's report.
+function coarseAreas(files: string[]): string {
+  const set = new Set<string>();
+  for (const f of files) {
+    if (f.startsWith("ios/")) set.add("iOS app");
+    else if (f.startsWith("docs/") || f === "CLAUDE.md" || f === "PROJECT_PLAN.md") set.add("docs");
+    else if (f.startsWith("shared/")) set.add("shared app contract");
+    else if (f.startsWith("web/agent/")) set.add("trading agent");
+    else if (f.startsWith("web/prisma/")) set.add("database");
+    else if (f.startsWith("web/app/")) set.add("website pages");
+    else if (f.startsWith("web/components/")) set.add("website UI");
+    else if (f.startsWith("web/lib/")) set.add("website backend");
+    else set.add("other");
+  }
+  return [...set].slice(0, 6).join(", ");
+}
+
+/** The day's plain-English change report for Graham. Covers commits in the 3am→3am ET
+ *  window ending at ~now (so a late-night build session lands in ONE report), dated the
+ *  day the work belongs to. No-ops if GITHUB_TOKEN isn't set; writes a one-line note on a
+ *  quiet day. Stored as a CHANGE Report; rendered on /how-it-works → Daily report. */
+export async function runDailyChangeReport(): Promise<void> {
+  const now = new Date();
+  const windowEnd = new Date(startOfEtDay(now).getTime() + 3 * 3_600_000); // 3:00 ET today
+  const windowStart = new Date(windowEnd.getTime() - 24 * 3_600_000); // 3:00 ET yesterday
+  const reportDate = startOfEtDay(windowStart); // yesterday 00:00 ET — the day-changer label
+  const dateStr = etDateStr(windowStart);
+
+  const res = await commitsInWindow(windowStart, windowEnd);
+  if (!res.ok) {
+    console.log(`[daily-change-report] ${dateStr}: skipped — ${res.reason}`);
+    return; // no token / API hiccup — leave the day blank rather than write a stub
+  }
+  const commits = res.commits;
+  let body: string;
+  if (commits.length === 0) {
+    body = "_Quiet day — no changes shipped to the app._";
+  } else {
+    const lines = commits
+      .map((c) => {
+        const b = c.body.replace(/\s+/g, " ").trim().slice(0, 400);
+        const areas = coarseAreas(c.files);
+        return `- ${c.subject}${b ? ` — ${b}` : ""}${areas ? ` [${areas}]` : ""}`;
+      })
+      .join("\n");
+    const prompt = `# TASK: Daily build diary — ${dateStr}
+
+Here is everything Cam changed in the GRQ app in the last day (${commits.length} change${commits.length === 1 ? "" : "s"}${res.truncated ? "+, list capped at 100" : ""}). The bracketed [areas] are grouping hints — never name them literally.
+
+Changes:
+${lines}
+
+Write the report for Graham in markdown: a one-line **TL;DR** first, then 2–5 short \`##\` sections grouping related work (each a sentence or three, plain English — what changed and why it matters to the fund or the product). Fold pure behind-the-scenes plumbing into a single short "Under the hood" line at the end, or skip it. Your ENTIRE response is the report body in markdown (no title — the page adds one).`;
+    const out = await runSession({
+      label: "daily-change-report",
+      prompt,
+      model: MODELS.decision,
+      withTools: false,
+      maxTurns: 4,
+      systemPrompt: BUILD_DIARY_PERSONA,
+    });
+    if (!out) return;
+    body = out;
+  }
+
+  await prisma.report.upsert({
+    where: { date_kind: { date: reportDate, kind: "CHANGE" } },
+    create: { date: reportDate, kind: "CHANGE", title: `Build diary — ${dateStr}`, body, statsJson: JSON.stringify({ commits: commits.length }) },
+    update: { body, statsJson: JSON.stringify({ commits: commits.length }) },
+  });
+  await alert("info", `Build diary — ${dateStr}`, `${commits.length} change${commits.length === 1 ? "" : "s"} summarized for Graham.`, { category: "reports" });
 }
 
 export async function runMiddayReport(): Promise<void> {

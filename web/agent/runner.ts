@@ -25,7 +25,7 @@ import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
-import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
+import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport } from "./sessions";
 import { runRaceTick } from "./race/engine";
 
 const broker = getBroker();
@@ -544,6 +544,24 @@ async function maybeScheduledSessions() {
         await prisma.journalEntry.create({
           data: { kind: "SYSTEM", title: marker, body: `Ran the ${hhmm} ET trading check-in.`, agentVersion: AGENT_VERSION },
         });
+      } finally {
+        sessionRunning = false;
+      }
+      return;
+    }
+  }
+
+  // 3:00–3:30 ET daily: the "build diary" — a plain-English summary of the day's app
+  // changes for Graham (D-buildlog). Runs EVERY day (incl. weekends — Cam codes then
+  // too) and covers the 3am→3am window, so it's dated YESTERDAY; guard on a CHANGE
+  // report already written for that day (the −26h lower bound is DST-safe).
+  if (m >= 3 * 60 && m < 3 * 60 + 30) {
+    const prevDayStart = new Date(dayStart.getTime() - 26 * 60 * 60_000);
+    const existing = await prisma.report.count({ where: { kind: "CHANGE", date: { gte: prevDayStart, lt: dayStart } } });
+    if (existing === 0) {
+      sessionRunning = true;
+      try {
+        await runDailyChangeReport();
       } finally {
         sessionRunning = false;
       }

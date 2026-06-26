@@ -46,6 +46,7 @@ enum JournalKind {
 enum ReportKind {
   EOD
   WEEKLY
+  CHANGE // daily plain-English "what changed in the app" report for Graham (3am ET)
 }
 
 model Account {

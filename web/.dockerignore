@@ -3,3 +3,4 @@ node_modules
 .git
 .env
 scripts
+!scripts/gen-change-report.ts

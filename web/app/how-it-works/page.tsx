@@ -15,6 +15,7 @@ import {
   MODELS,
 } from "@/agent/policy";
 import { PERSONA } from "@/agent/persona";
+import { startOfEtDay, etDateStr } from "@/agent/calendar";
 import Md from "@/components/Md";
 import { CHANGELOG, type ChangeTag } from "@/lib/changelog";
 import { getDecisions } from "@/lib/decisions";
@@ -31,17 +32,18 @@ const TAG_TONE: Record<ChangeTag, "teal" | "green" | "dim"> = {
 // Plain-English operating manual for the owners (members only). The factual numbers are
 // pulled LIVE from the same policy the agent obeys, so this page can never quietly drift
 // out of sync with reality. Curated prose covers the philosophy + the changelog.
-export default async function HowItWorks({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function HowItWorks({ searchParams }: { searchParams: Promise<{ tab?: string; d?: string }> }) {
   const session = await getSession();
   // Admin-only: Cam & Graham (owners) only — viewers and non-owner members get a 404.
   if (!session || !isOwner(session.email)) notFound();
   const sp = await searchParams;
-  const tab = sp.tab === "decisions" ? "decisions" : "manual";
+  const tab = sp.tab === "decisions" ? "decisions" : sp.tab === "daily-report" ? "daily-report" : "manual";
 
   const tabBar = (
     <div className="mb-6 flex gap-1 border-b border-teal-400/10">
       {[
         { key: "manual", label: "Manual", href: "/how-it-works" },
+        { key: "daily-report", label: "Daily report", href: "/how-it-works?tab=daily-report" },
         { key: "decisions", label: "Decision log", href: "/how-it-works?tab=decisions" },
       ].map((t) => (
         <Link
@@ -81,6 +83,74 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
             ))}
           </div>
         )}
+      </main>
+    );
+  }
+
+  if (tab === "daily-report") {
+    // Day-changer mirrors the Today page (?d=YYYY-MM-DD). The newest diary covers the
+    // 3am→3am window that just closed, so it's dated YESTERDAY — default to the most
+    // recent one that exists, and don't let the reader walk into the future.
+    const valid = sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d);
+    const latest = await prisma.report.findFirst({ where: { kind: "CHANGE" }, orderBy: { date: "desc" } });
+    const latestStr = latest ? etDateStr(latest.date) : etDateStr(new Date(Date.now() - 86_400_000));
+    const dateStr = valid ? sp.d! : latestStr;
+    const anchor = new Date(`${dateStr}T12:00:00Z`);
+    const start = startOfEtDay(anchor);
+    const end = new Date(start.getTime() + 86_400_000);
+    const report = await prisma.report.findFirst({ where: { kind: "CHANGE", date: { gte: start, lt: end } } });
+    const prev = etDateStr(new Date(start.getTime() - 12 * 3_600_000));
+    const next = etDateStr(new Date(end.getTime() + 12 * 3_600_000));
+    const atLatest = dateStr >= latestStr;
+    const dayLabel = new Date(`${dateStr}T12:00:00Z`).toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC",
+    });
+    let commitCount: number | null = null;
+    try { commitCount = report?.statsJson ? (JSON.parse(report.statsJson).commits ?? null) : null; } catch { /* ignore */ }
+
+    return (
+      <main>
+        <PageHeader
+          title="How GRQ works"
+          sub="The daily build diary — a plain-English rundown of what changed in the app each day, written automatically at 3am ET so the two of us stay on the same page."
+        />
+        {tabBar}
+        <Card className="p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-teal-400/10 pb-3">
+            <div>
+              <div className="text-lg font-bold text-teal-50">{dayLabel}</div>
+              {commitCount != null && (
+                <div className="text-xs text-teal-200/40">{commitCount} change{commitCount === 1 ? "" : "s"} shipped</div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2 text-sm">
+              <Link href={`/how-it-works?tab=daily-report&d=${prev}`} className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+                ← {prev}
+              </Link>
+              {!atLatest && (
+                <Link href="/how-it-works?tab=daily-report" className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+                  latest
+                </Link>
+              )}
+              {!atLatest && (
+                <Link href={`/how-it-works?tab=daily-report&d=${next}`} className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+                  {next} →
+                </Link>
+              )}
+            </div>
+          </div>
+          {report ? (
+            <div className="text-sm leading-relaxed text-teal-100/85">
+              <Md text={report.body} />
+            </div>
+          ) : (
+            <p className="py-10 text-center text-sm text-teal-200/50">
+              {atLatest
+                ? "No diary for this day yet — it's written automatically at 3am ET once the day's work is in."
+                : "No diary for this day — either nothing was shipped, or it predates the build diary."}
+            </p>
+          )}
+        </Card>
       </main>
     );
   }
