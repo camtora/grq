@@ -120,6 +120,12 @@ export default async function Watchlist() {
   const ownerCounts: Record<"all" | OwnerKey, number> = { all: rows.length, cam: 0, graham: 0, agent: 0 };
   for (const r of rows) ownerCounts[ownerKeyFor(r.addedBy)]++;
 
+  // Open on the viewer's OWN watched names by default (Cam 2026-06-25), not everyone's —
+  // but only if they're a member with at least one name; otherwise fall back to "all" so a
+  // viewer (or a member who hasn't watched anything yet) isn't met with an empty list.
+  const myKey = ownerKeyFor(me);
+  const defaultTab: "all" | OwnerKey = (myKey === "cam" || myKey === "graham") && ownerCounts[myKey] > 0 ? myKey : "all";
+
   const running = requests.filter((r) => r.status === "RUNNING");
   const queued = requests.filter((r) => r.status === "QUEUED");
   const recentDone = requests.filter((r) => r.status === "DONE").slice(0, 8);
@@ -152,7 +158,7 @@ export default async function Watchlist() {
         ) : (
           <>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <WatchlistTabs counts={ownerCounts} />
+              <WatchlistTabs counts={ownerCounts} defaultTab={defaultTab} />
               {isMember && (
                 <div className="ml-auto">
                   <AddTicker />

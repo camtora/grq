@@ -5,8 +5,9 @@ import type { OwnerKey } from "@/lib/people";
 
 // Owner tabs for the Watchlist. The table is server-rendered and each <tr> carries
 // data-owner (cam | graham | agent — anything not tagged to a member is "agent");
-// this toggles row visibility, same cheap no-refetch trick as StockFilters. Default
-// "all" (Cam 2026-06-18).
+// this toggles row visibility, same cheap no-refetch trick as StockFilters. Opens on
+// the current member's OWN names by default (`defaultTab` from the server — Cam
+// 2026-06-25); falls back to "all" for viewers or an empty personal list.
 type Tab = { value: "all" | OwnerKey; label: string };
 
 const TABS: Tab[] = [
@@ -16,8 +17,14 @@ const TABS: Tab[] = [
   { value: "agent", label: "Agent" },
 ];
 
-export default function WatchlistTabs({ counts }: { counts: Record<"all" | OwnerKey, number> }) {
-  const [tab, setTab] = useState<Tab["value"]>("all");
+export default function WatchlistTabs({
+  counts,
+  defaultTab = "all",
+}: {
+  counts: Record<"all" | OwnerKey, number>;
+  defaultTab?: "all" | OwnerKey;
+}) {
+  const [tab, setTab] = useState<Tab["value"]>(defaultTab);
 
   useEffect(() => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>("tr.stock-row"));
