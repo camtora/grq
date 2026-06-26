@@ -498,6 +498,7 @@ struct NotificationSettingsView: View {
     private let alwaysOn: [(String, String)] = [
         ("Trades", "Every buy, sell, stop, and take-profit fill."),
         ("Risk & safety", "Kill switch, drawdown halt, and daily-loss pause."),
+        ("Messages", "When the other member sends you a message or shares a stock."),
         ("Critical outages", "Agent crashes and total data-feed failures."),
     ]
 

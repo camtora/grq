@@ -196,7 +196,7 @@ struct NotificationPreferences: Codable, Equatable {
         (\.checkins, "checkins", "Scheduled check-ins", "The agent's hourly fund-level check-ins — its read on the whole portfolio and plan."),
         (\.holdingChecks, "holdingChecks", "Held-position check-ins", "Per-name reads when a holding moves or the agent revisits it — “ATD — no trade”, “IFC — hold”. Gets noisy as the portfolio grows."),
         (\.members, "members", "Member activity", "When the other member blocks, pins, promotes, or demotes a name."),
-        (\.messages, "messages", "Messages", "When the other member sends you a message or shares a stock."),
+        // messages is always-on (forced server-side) — not a toggle; the `messages` field stays for decode compat.
         (\.system, "system", "System health", "Agent restarts and data-feed or broker hiccups (non-critical)."),
         (\.priceTargets, "priceTargets", "Price alerts", "When a stock you set an alert on crosses your target price."),
     ]

@@ -15,7 +15,9 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "Members only." }, { status: 403 });
 
   const row = await prisma.notificationPreference.findUnique({ where: { email: session.email } });
-  return NextResponse.json(prefsFromRow(row));
+  // `messages` is always-on (forced in notify.ts) and no longer a toggle, but we keep it
+  // on the wire = true so older iOS builds (whose Codable struct still expects it) decode.
+  return NextResponse.json({ ...prefsFromRow(row), messages: true });
 }
 
 export async function PUT(req: Request) {
@@ -41,5 +43,7 @@ export async function PUT(req: Request) {
     create: { email: session.email, ...patch },
   });
 
-  return NextResponse.json(prefsFromRow(row));
+  // `messages` is always-on (forced in notify.ts) and no longer a toggle, but we keep it
+  // on the wire = true so older iOS builds (whose Codable struct still expects it) decode.
+  return NextResponse.json({ ...prefsFromRow(row), messages: true });
 }

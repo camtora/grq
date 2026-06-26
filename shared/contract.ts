@@ -123,8 +123,10 @@ export const FundSettings = z.object({
 });
 
 /* ---------- notification preferences (per-user iOS push toggles — D53) ---------- */
-// The toggleable categories only. trades + risk + critical outages are force-on in
-// code (non-toggleable) and never appear here. GET/PUT /api/notifications/preferences.
+// The toggleable categories. trades + risk + fx + messages + critical outages are
+// force-on in code (non-toggleable). `messages` stays in this shape for wire back-compat
+// (the server always returns it true and ignores it on PUT) so older iOS builds still
+// decode — but it's no longer a user toggle. GET/PUT /api/notifications/preferences.
 export const NotificationPreferences = z.object({
   dossiers: z.boolean(), // a requested research dossier is ready
   hunt: z.boolean(), // new hunt names / directed-hunt / smart-money scan
@@ -133,7 +135,7 @@ export const NotificationPreferences = z.object({
   checkins: z.boolean(), // SCHEDULED fund-level check-ins (the hourly clock review)
   holdingChecks: z.boolean(), // per-HOLDING check-ins (a position's move / revisit — "ATD — no trade")
   members: z.boolean(), // the OTHER member's universe/directive actions
-  messages: z.boolean(), // the OTHER member messaged you or shared a stock (D61)
+  messages: z.boolean(), // the OTHER member messaged you or shared a stock (D61) — ALWAYS-ON, kept for wire back-compat
   system: z.boolean(), // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets: z.boolean(), // a price alert you set has crossed (The Wire, Phase 2)
 });

@@ -6,10 +6,10 @@ import { apnsConfigured, sendApns } from "./apns";
 // same events go to each member's registered iOS devices, gated by their per-user
 // NotificationPreference. Configured-or-no-op; failures never take the caller down.
 //
-// "Always-on" (Cam, 2026-06-22): the `trades` and `risk` categories are forced on
+// "Always-on": the `trades`, `risk`, `fx`, and `messages` categories are forced on
 // (non-toggleable), AND any critical-severity alert (agent crash, drawdown halt)
-// pushes regardless of toggles — that's the "system outages" guarantee. Everything
-// else is per-user, default ON.
+// pushes regardless of toggles — that's the "system outages" guarantee. (messages
+// forced on for everyone — Cam 2026-06-25.) Everything else is per-user, default ON.
 
 export type NotifCategory =
   | "trades" // order fills, stops, take-profits — FORCED ON
@@ -22,16 +22,16 @@ export type NotifCategory =
   | "checkins" // SCHEDULED fund-level check-ins (the hourly clock review — note.symbol null)
   | "holdingChecks" // per-HOLDING check-ins (a position's move / revisit — note.symbol set: "ATD — no trade")
   | "members" // the OTHER member's universe/directive/kill actions
-  | "messages" // the OTHER member messaged you or shared a stock (D61)
+  | "messages" // the OTHER member messaged you or shared a stock (D61) — FORCED ON (Cam 2026-06-25)
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
   | "priceTargets"; // a price alert the member set has crossed (Phase 2 — The Wire)
 
 type Severity = "info" | "warning" | "critical";
 
-const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk", "fx"]);
+const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk", "fx", "messages"]);
 
-// Map a category → the NotificationPreference column that gates it. trades/risk
-// are absent on purpose (forced on); the rest line up with the schema booleans.
+// Map a category → the NotificationPreference column that gates it. trades/risk/fx/
+// messages are absent on purpose (forced on); the rest line up with the schema booleans.
 const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   dossiers: "dossiers",
   hunt: "hunt",
@@ -40,7 +40,6 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   checkins: "checkins",
   holdingChecks: "holdingChecks",
   members: "members",
-  messages: "messages",
   system: "system",
   priceTargets: "priceTargets",
 };
