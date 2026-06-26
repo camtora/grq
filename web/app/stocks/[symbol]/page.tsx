@@ -22,7 +22,9 @@ import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import AvatarStack from "@/components/AvatarStack";
 import { watchersFor, isWatching } from "@/lib/watch";
-import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpStockNews, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
+import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
+import { stockNewsCards } from "@/lib/news/queries";
+import { NewsRow } from "@/components/NewsList";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
 import LiveQuote from "@/components/LiveQuote";
@@ -206,7 +208,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       fmpEnabled() ? fmpAnalystTarget(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpPeerComparison(entry.yahoo).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpEarningsReport(entry.yahoo).catch(() => null) : Promise.resolve(null),
-      fmpEnabled() ? fmpStockNews(entry.yahoo, 5).catch(() => []) : Promise.resolve([]),
+      stockNewsCards(symbol, entry.yahoo, 6).catch(() => []),
       fmpEnabled() ? fmpGrades(entry.yahoo).catch(() => null) : Promise.resolve(null),
       fmpEnabled() ? fmpGradeActions(entry.yahoo).catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpGradesTrend(entry.yahoo).catch(() => null) : Promise.resolve(null),
@@ -1090,18 +1092,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           {news.length > 0 ? (
             <Card className="divide-y divide-[color:var(--card-border)]">
               {news.map((n, i) => (
-                <a key={i} href={n.url} target="_blank" rel="noreferrer" className="block px-4 py-2.5 hover:bg-teal-400/[0.04]">
-                  <div className="text-sm text-teal-100/80">{n.title}</div>
-                  <div className="mt-0.5 text-[11px] text-teal-200/40">
-                    {n.publisher} · {n.at}
-                  </div>
-                </a>
+                <NewsRow key={i} n={n} />
               ))}
             </Card>
           ) : (
             <Card className="p-4 text-sm">
               <p className="text-teal-200/40">
-                No recent headlines from FMP for this name
+                No recent headlines for this name
                 {cadListing ? " — news coverage is thinner for TSX-only listings" : ""}.
               </p>
             </Card>

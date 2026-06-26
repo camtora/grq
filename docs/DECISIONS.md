@@ -1954,3 +1954,38 @@ guardrail #1 holds because no model output ever reaches the real gate. Member-on
 verify-bull-fill,verify-bull-context}.ts`. Deployed agent v1.51→v1.52 (menu→tracked universe),
 then v1.53. **Ops:** `scripts/` isn't in the agent image (`.dockerignore`) — seed/verify host-side
 with the roster passed inline from root `.env`.
+
+### D81 — News & events: stop throwing news away, stop flattening macro to one line (Cam, 2026-06-26)
+**Context:** A knowledge-graph evaluation surfaced two more fundamental gaps underneath it. (1) FMP
+news (`fmpNews` general + `fmpStockNews` per-symbol) is fetched on-demand for display (Today, The Wire,
+the stock page) and **never persisted, never summarized, never seen by the agent** — the agent only
+learns "what moved" by spending a `WebSearch` on the one name it's researching that hour. (2) Macro
+(`lib/macro.ts`) feeds the agent only as a single current-**level** string via `macroLine()`; it never
+sees the *event* (rates moved, CPI printed) and has no history or upcoming-event calendar.
+
+**Decision:** Build **one persisted, triaged event layer, fanned out three ways** — agent context, the
+existing human pages (Today / The Wire / stock-page news panel, which stop doing live raw-FMP fetches),
+and a **news-driven wakeup** (the agent reacts to price ±4% and the clock today, but is blind to news
+between sessions; a material headline on a held/watched name should fire a check-in via the existing
+held-position trigger). **No new page** — this is plumbing under the two pages that already exist.
+
+**Cost architecture (the load-bearing part):** three layers — **Capture** (deterministic FMP/macro
+poll, dedup on URL, no LLM, ~free), **Triage** (a batched **Haiku 4.5** structured call: relevance
+0–100, 1-line summary, entity tags, sentiment, category — pennies, only on new rows), **Serve** (Opus
+sees only the bounded digest). **Opus never touches raw news**, so the feature stays off Cam's shared
+Max quota.
+
+**Cadence/volume/sources:** news ~3×/day (pre-open/midday/close) general + held/watched/focus per-symbol
+only; macro keeps the 30-min poll but adds **delta→event** detection (the change is the signal, not the
+level) + the FMP economic calendar for *upcoming* events; WebSearch stays the deep-dive layer. Retention
+~90d news, indefinite `MarketEvent`. Sources are all FMP-tier we already pay for + BoC/FRED.
+
+**Guardrail posture:** like smart money / The Race, news+events are an **INPUT the agent weighs, NEVER
+the gate** — triage output can't place/size/block an order; a wakeup only schedules a check-in; the §6
+validator is untouched.
+
+**Two new tables (additive):** `NewsArticle` (captured + Haiku-triaged) and `MarketEvent` (macro deltas
++ calendar). Shipped as **M1 — macro→events** (small, self-contained) then **M2 — news capture+triage+
+serve+wakeup**. The relationship **knowledge graph** is the explicit follow-on — the events flowing
+through this pipeline are what a `CompanyEdge` set would propagate. Full plan + schema sketch:
+`docs/NEWS-AND-EVENTS.md`.

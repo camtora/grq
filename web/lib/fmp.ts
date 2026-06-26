@@ -172,6 +172,27 @@ export async function fmpNews(limit = 8): Promise<NewsItem[]> {
     .filter((n) => n.title);
 }
 
+export type EconEvent = { date: string; country: string; event: string; impact: string; previous: number | null; estimate: number | null };
+
+// Upcoming high-impact US/CA macro events (FOMC, CPI, jobs, BoC decisions). FMP's
+// global economic calendar is a firehose (every country, every print); we keep only
+// what moves a North-American fund — US/CA, High impact. Forward-looking: feeds the
+// agent's "upcoming catalysts" macro context (D81). Best-effort → [] on any error.
+export async function fmpEconomicCalendar(from: string, to: string): Promise<EconEvent[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`economic-calendar?from=${from}&to=${to}`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((e) => ({
+      date: String(e.date ?? ""),
+      country: String(e.country ?? ""),
+      event: String(e.event ?? ""),
+      impact: String(e.impact ?? ""),
+      previous: typeof e.previous === "number" ? e.previous : null,
+      estimate: typeof e.estimate === "number" ? e.estimate : null,
+    }))
+    .filter((e) => e.date && e.event && (e.country === "US" || e.country === "CA") && e.impact === "High");
+}
+
 export type Mover = { symbol: string; name: string; changePct: number; priceCents: number; exchange: string };
 
 // The day's biggest market movers (gainers) — the Today brief's "top performers".

@@ -10,7 +10,9 @@ import LiveTape from "@/components/LiveTape";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpNews, fmpGainers, fmpIndices, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
+import { fmpEnabled, fmpGainers, fmpIndices, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
+import { todayHeadlines, type NewsCard } from "@/lib/news/queries";
+import { SentimentDot } from "@/components/NewsList";
 import MarketIndices from "@/components/MarketIndices";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveMoverPrice } from "@/components/LiveTableCells";
@@ -269,7 +271,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         orderBy: { at: "desc" },
         take: 40,
       }),
-      fmpEnabled() ? fmpNews(12).catch(() => []) : Promise.resolve([]),
+      isToday ? todayHeadlines(12).catch(() => [] as NewsCard[]) : Promise.resolve([] as NewsCard[]),
       fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpIndices().catch(() => []) : Promise.resolve([]),
       getMacro().catch(() => null),
@@ -569,10 +571,18 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   <div className="flex h-36 w-full items-center justify-center bg-teal-400/5 text-3xl">📰</div>
                 )}
                 <div className="p-3">
-                  <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
-                  <div className="mt-1 text-[11px] text-teal-200/40">
-                    {n.publisher}
-                    {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                  <div className="flex items-start gap-1.5">
+                    <span className="mt-1.5">
+                      <SentimentDot sentiment={n.sentiment} />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
+                      {n.summary ? <div className="mt-1 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
+                      <div className="mt-1 text-[11px] text-teal-200/40">
+                        {n.publisher}
+                        {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </a>
@@ -594,15 +604,23 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                 rel="noreferrer"
                 className="block border-t border-teal-400/10 py-2 hover:bg-teal-400/[0.03]"
               >
-                <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
-                <div className="mt-0.5 text-[11px] text-teal-200/40">
-                  {n.publisher}
-                  {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                <div className="flex items-start gap-1.5">
+                  <span className="mt-1.5">
+                    <SentimentDot sentiment={n.sentiment} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
+                    {n.summary ? <div className="mt-0.5 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
+                    <div className="mt-0.5 text-[11px] text-teal-200/40">
+                      {n.publisher}
+                      {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                    </div>
+                  </div>
                 </div>
               </a>
             ))}
           </div>
-          <p className="mt-2 text-[10px] text-teal-200/40">Latest market headlines via FMP — context, not signals.</p>
+          <p className="mt-2 text-[10px] text-teal-200/40">Headlines captured &amp; summarized by GRQ — context, not signals.</p>
         </section>
       )}
 

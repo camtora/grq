@@ -554,6 +554,69 @@ model InsiderTrade {
   @@index([side])
 }
 
+// Macro events (D81) — discrete deltas detected off the BoC/FRED daily snapshot
+// (a rate decision, a CPI print, a notable yield/FX move), plus forward calendar
+// items (scheduledFor set). An INPUT the agent weighs in context, never the gate.
+// Written once per ET day by lib/macro-events.ts; full plan in docs/NEWS-AND-EVENTS.md.
+model MarketEvent {
+  id           Int       @id @default(autoincrement())
+  detectedAt   DateTime  @default(now())
+  at           DateTime // when observed/occurred (the snapshot day for a delta)
+  scheduledFor DateTime? // forward calendar items (FOMC/CPI dates); null for observed deltas
+  kind         String // RATE_DECISION | CPI_PRINT | YIELD_MOVE | FX_MOVE | CALENDAR
+  region       String // CA | US
+  series       String? // overnightRate | fedFunds | cpiYoY | usCpiYoY | ust10y | goc5yr | usdcad
+  headline     String
+  value        Float?
+  prevValue    Float?
+  source       String // BoC | FRED | FMP
+
+  @@unique([kind, region, series, at]) // idempotent: one delta per series per day
+  @@index([at])
+}
+
+// Daily macro snapshot (D81) — one upserted row per ET day. The most recent prior
+// row is the baseline macro-events.ts diffs the live getMacro() against to detect
+// deltas. Floats (rates/FX), not money, so the int-cents rule doesn't apply here.
+model MacroDaily {
+  date          String   @id // YYYY-MM-DD (ET)
+  usdcad        Float?
+  overnightRate Float?
+  goc5yr        Float?
+  cpiYoY        Float?
+  fedFunds      Float?
+  ust10y        Float?
+  usCpiYoY      Float?
+  at            DateTime @default(now())
+}
+
+// News articles (D81, M2) — FMP general + per-symbol news, captured/deduped (unique URL)
+// and Haiku-TRIAGED into a relevance-scored digest. The agent reads the digest (never raw
+// articles); the human pages read this store instead of live FMP. An INPUT, never the gate.
+// Triage fields are null until the Haiku pass runs. lib/news/* + agent/news-triage.ts.
+model NewsArticle {
+  id          Int       @id @default(autoincrement())
+  fetchedAt   DateTime  @default(now())
+  publishedAt DateTime
+  source      String // "fmp-general" | "fmp-stock"
+  publisher   String
+  title       String
+  url         String    @unique // natural dedupe key
+  imageUrl    String?
+  symbol      String? // primary tagged ticker (null = general market) — the capture-time symbol
+  symbolsJson String? // extra entity tags (JSON array of tickers), Haiku-assigned
+  // --- triage (Haiku; null until triaged) ---
+  summary     String?
+  sentiment   String? // POS | NEU | NEG
+  relevance   Int? // 0–100 materiality to a tracked name / the macro thesis
+  category    String? // EARNINGS | GUIDANCE | MNA | MACRO | LEGAL | PRODUCT | RATING | OTHER
+  triagedAt   DateTime?
+
+  @@index([publishedAt])
+  @@index([symbol])
+  @@index([triagedAt])
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)

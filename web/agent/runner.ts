@@ -15,6 +15,9 @@ import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
+import { runMacroEventScan, refreshEconomicCalendar } from "../lib/macro-events";
+import { runNewsIngest } from "../lib/news/ingest";
+import { triageNews } from "./news-triage";
 import { trackedSymbols, trackedUniverse, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
@@ -43,6 +46,8 @@ let lastWeeklyRefreshDay = "";
 let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
+let lastMacroEventDay = "";
+let lastNewsRun = 0;
 let startupReviewChecked = false;
 let dailyLossAlerted = "";
 let sessionRunning = false;
@@ -656,6 +661,34 @@ async function tick() {
     runSmartMoneyIngest()
       .then((r) => console.log(`[smartmoney] ingest: ${r.congress} congress · ${r.insiders} insider · ${r.portfolios.fresh} fresh 13F`))
       .catch((e) => console.error("[smartmoney] ingest failed:", e instanceof Error ? e.message : e));
+  }
+
+  // Macro events (D81) — once per ET day: diff the live macro snapshot against
+  // yesterday's and record discrete deltas (rate decisions, CPI prints, notable
+  // yield/FX moves) the agent reads in context. An INPUT it weighs, never the gate.
+  if (lastMacroEventDay !== p.dateStr) {
+    lastMacroEventDay = p.dateStr;
+    runMacroEventScan()
+      .then((r) => { if (r.events > 0) console.log(`[macro] ${r.events} event(s) recorded for ${r.date}`); })
+      .catch((e) => console.error("[macro] event scan failed:", e instanceof Error ? e.message : e));
+    refreshEconomicCalendar()
+      .then((r) => { if (r.events > 0) console.log(`[macro] calendar: ${r.events} upcoming US/CA catalyst(s)`); })
+      .catch((e) => console.error("[macro] calendar refresh failed:", e instanceof Error ? e.message : e));
+  }
+
+  // News capture + Haiku triage (D81, M2) — every ~90 min, around the clock: pull
+  // general + held/watched/focus news (cheap, deterministic), then triage only the NEW
+  // rows with one batched Haiku call. Background (must NOT block the tick); the digest
+  // feeds the agent context — Opus never sees raw articles, so this stays off the quota.
+  if (Date.now() - lastNewsRun > 90 * 60_000) {
+    lastNewsRun = Date.now();
+    runNewsIngest()
+      .then(async (r) => {
+        if (r.captured > 0) console.log(`[news] captured ${r.captured} new across ${r.symbols} names`);
+        const t = await triageNews();
+        if (t.triaged > 0) console.log(`[news] triaged ${t.triaged}`);
+      })
+      .catch((e) => console.error("[news] ingest/triage failed:", e instanceof Error ? e.message : e));
   }
 
   await maybeScheduledSessions();

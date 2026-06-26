@@ -7,6 +7,8 @@ import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreb
 import { fmpEnabled, fmpEarnings } from "../lib/fmp";
 import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { getMacro, macroLine } from "../lib/macro";
+import { recentMacroEvents, upcomingEvents } from "../lib/macro-events";
+import { recentNewsDigest } from "../lib/news/queries";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
 
 function money(c: number): string {
@@ -16,7 +18,7 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, wakeups, agenda] =
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -28,6 +30,9 @@ export async function buildContext(): Promise<string> {
       superficialLossWindows().catch(() => []),
       getScoreboard().catch(() => []),
       getMacro().catch(() => null),
+      recentMacroEvents().catch(() => []),
+      upcomingEvents().catch(() => []),
+      recentNewsDigest().catch(() => []),
       prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } }),
       prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "asc" } }),
     ]);
@@ -207,6 +212,28 @@ ${smartLines.length === 0 ? "  (none disclosed on holdings or focus)" : smartLin
 
 ## Macro (Bank of Canada + US Fed/Treasury via FRED — live structured feeds; rate-sensitive names move on this)
 ${macro ? `  ${macroLine(macro)} (as of ${macro.asOf})` : "  (unavailable)"}
+${
+  macroEvents.length === 0
+    ? "  Recent moves: (none notable in the last ~10 days)"
+    : "  Recent moves:\n" + macroEvents.map((e) => `    [${e.at.toISOString().slice(0, 10)}] ${e.headline}`).join("\n")
+}
+${
+  upcoming.length === 0
+    ? "  Upcoming catalysts: (none scheduled)"
+    : "  Upcoming catalysts (size & time around these):\n" + upcoming.map((e) => `    [${e.at.toISOString().slice(0, 10)}] ${e.headline}`).join("\n")
+}
+
+## What moved (recent triaged news — market + your names; an INPUT you weigh, NEVER the gate; WebSearch any item to go deeper)
+${
+  news.length === 0
+    ? "  (no material news triaged in the last ~36h)"
+    : news
+        .map(
+          (n) =>
+            `  [${n.publishedAt.toISOString().slice(0, 10)}] ${n.symbol ? `${n.symbol} · ` : ""}${n.sentiment ?? "NEU"}·rel${n.relevance ?? 0} — ${n.summary || n.title}`,
+        )
+        .join("\n")
+}
 
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}

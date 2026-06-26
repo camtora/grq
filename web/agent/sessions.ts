@@ -25,7 +25,10 @@ type SessionOpts = {
   withTools: boolean;
   toolset?: "full" | "research"; // default full
   maxTurns: number;
+  systemPrompt?: string; // defaults to PERSONA; overridden for non-trading utility calls (e.g. news triage)
 };
+
+export type { SessionOpts };
 
 export async function runSession(opts: SessionOpts): Promise<string | null> {
   console.log(`[session] ${opts.label} starting (model=${opts.model})`);
@@ -36,7 +39,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
       prompt: opts.prompt,
       options: {
         model: opts.model,
-        systemPrompt: PERSONA,
+        systemPrompt: opts.systemPrompt ?? PERSONA,
         maxTurns: opts.maxTurns,
         permissionMode: "bypassPermissions",
         settingSources: [],
