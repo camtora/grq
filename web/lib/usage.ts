@@ -188,6 +188,29 @@ export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboar
   };
 }
 
+// Live burn for just the CURRENT 5h window — a cheap, sum-only query for the panel's poll so the
+// token number tracks the same window the clock is showing (instead of the page's one-shot prop,
+// which froze between window-boundary refreshes — the "drift when updated" bug).
+export async function getCurrentWindowBurn(now = new Date()): Promise<{
+  window: { start: Date; reset: Date } | null;
+  anchorResetAt: Date | null;
+  tokensBurned: number;
+  calls: number;
+  generatedAt: Date;
+}> {
+  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { maxWindowResetAt: true } });
+  const anchor = settings?.maxWindowResetAt ?? null;
+  const win = currentWindow(anchor, now);
+  const windowStart = win ? win.start : new Date(now.getTime() - FIVE_H_MS);
+  const rows = await prisma.agentUsage.findMany({
+    where: { at: { gte: windowStart } },
+    select: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
+  });
+  let tokensBurned = 0;
+  for (const r of rows) tokensBurned += r.inputTokens + r.outputTokens + r.cacheCreationTokens + r.cacheReadTokens;
+  return { window: win, anchorResetAt: anchor, tokensBurned, calls: rows.length, generatedAt: now };
+}
+
 // Aggregate an arbitrary window (used by the CLI report).
 export async function getUsageWindow(since: Date): Promise<{ totals: Totals; byGroup: GroupAgg[]; rows: UsageRow[] }> {
   const rows = (await prisma.agentUsage.findMany({ where: { at: { gte: since } }, orderBy: { at: "desc" } })) as UsageRow[];

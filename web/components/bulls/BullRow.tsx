@@ -2,6 +2,7 @@ import { Chip, Pnl } from "@/components/ui";
 import Term from "@/components/Term";
 import { money } from "@/lib/money";
 import Sparkline from "@/components/race/Sparkline";
+import BullMark from "@/components/bulls/BullMark";
 import { glossaryKeyForModel } from "@/lib/race/models";
 import { dialTone, type BullStanding } from "@/lib/race/bulls";
 
@@ -15,7 +16,7 @@ export default function BullRow({ b, rank, color }: { b: BullStanding; rank: num
     <details className="rounded-xl border border-teal-400/10 bg-teal-400/[0.02]">
       <summary className="flex cursor-pointer list-none items-center gap-3 p-3">
         <span className="w-5 text-center text-sm font-bold tabular-nums text-teal-200/50">{rank}</span>
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+        <BullMark color={color} className="h-4 w-6 shrink-0" title={b.label} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="min-w-0 text-sm font-semibold text-teal-50">

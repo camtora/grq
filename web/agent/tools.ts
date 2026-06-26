@@ -7,6 +7,7 @@ import { universeEntry, activeSymbols, yahooForListing, bareTicker } from "../li
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
 import { createFxRequest } from "../lib/fx-requests";
+import { usdCadRate } from "../lib/fx";
 import { notifyOut } from "./alerts";
 import { computeSignals, overallSignal } from "./signals";
 import { fmpProfile } from "../lib/fmp";
@@ -346,24 +347,44 @@ const promoteToUniverseTool = tool(
 
 const requestFxTool = tool(
   "request_fx",
-  "Ask a member to convert CAD→USD so the fund can buy a US-listed name it can't currently fund. The fund holds CAD and USD as SEPARATE cash, mirroring the broker; a USD buy must be covered by USD cash (no auto-FX, no margin). You CANNOT convert currency yourself — this raises a request a member approves (or rejects) on the Settings page, and money only moves on their OK. Use this when propose_order rejected a US buy for 'Insufficient USD'. Ask for the USD you need (amountUsdCents) plus a one-line reason and the symbol you're funding. Treat a US name like a Canadian one — request whatever you'd genuinely deploy; the member is the gate. One pending request per symbol; you can't buy the name until a member approves and the USD lands.",
+  "Ask a member to convert currency — EITHER direction — so the fund can buy a name it can't currently fund. The fund holds CAD and USD as SEPARATE cash, mirroring the broker; a buy must be covered by that listing's OWN currency (no auto-FX, no margin): US-listed buys need USD, Canadian buys need CAD. You CANNOT convert currency yourself — this raises a request a member approves (or rejects) on the Settings page, and money only moves on their OK. Use it when a buy is blocked for insufficient currency AND the OTHER sleeve has cash to spare: direction='CAD_TO_USD' funds a US name from the CAD sleeve; direction='USD_TO_CAD' funds a Canadian name from the USD sleeve (bringing money home). amountToCents is how much of the DESTINATION currency you want to end up with — USD cents for CAD_TO_USD, CAD cents for USD_TO_CAD. Add a one-line reason and the symbol you're funding. Treat the funded name like any other — request whatever you'd genuinely deploy; the member is the gate. One pending request per symbol; you can't buy the name until a member approves and the cash lands.",
   {
-    amountUsdCents: z.number().int().min(100),
+    direction: z.enum(["CAD_TO_USD", "USD_TO_CAD"]),
+    amountToCents: z.number().int().min(100),
     reason: z.string().min(10).max(500),
     symbol: z.string().optional(),
   },
   async (args) => {
-    const r = await createFxRequest({ amountUsdCents: args.amountUsdCents, reason: args.reason, symbol: args.symbol });
+    const toCad = args.direction === "USD_TO_CAD";
+    const fromCurrency = toCad ? "USD" : "CAD";
+    const toCurrency = toCad ? "CAD" : "USD";
+    const rate = await usdCadRate(); // 1 USD = rate CAD
+    if (!rate || rate <= 0) return text("SKIP: no USD/CAD rate available (BoC) to size the conversion — try again next check-in.");
+    // createFxRequest stores the USD leg in amountUsdCents and the CAD leg in estCadCents
+    // regardless of direction. amountToCents is the DESTINATION leg (exact); size the other at rate.
+    const usdCents = toCad ? Math.round(args.amountToCents / rate) : args.amountToCents;
+    const cadCents = toCad ? args.amountToCents : Math.round(args.amountToCents * rate);
+    const r = await createFxRequest({
+      amountUsdCents: usdCents,
+      estCadCents: cadCents,
+      reason: args.reason,
+      symbol: args.symbol,
+      fromCurrency,
+      toCurrency,
+    });
     if (!r.ok) return text(`SKIP: ${r.reason}`);
     const sym = args.symbol?.toUpperCase();
+    const line = toCad
+      ? `~US$${(usdCents / 100).toFixed(2)} → $${(cadCents / 100).toFixed(2)} CAD`
+      : `~$${(cadCents / 100).toFixed(2)} CAD → US$${(usdCents / 100).toFixed(2)}`;
     await notifyOut(
       "warning",
-      `FX approval needed: ~$${(r.estCadCents / 100).toFixed(2)} CAD → US$${(args.amountUsdCents / 100).toFixed(2)}${sym ? ` to fund ${sym}` : ""}`,
+      `FX approval needed: ${line}${sym ? ` to fund ${sym}` : ""}`,
       `${args.reason}\n\nApprove or reject on the Settings page.`,
       { category: "fx", symbol: sym },
     ).catch(() => {});
     return text(
-      `REQUESTED FX #${r.id}: ~$${(r.estCadCents / 100).toFixed(2)} CAD → US$${(args.amountUsdCents / 100).toFixed(2)}${sym ? ` for ${sym}` : ""}. A member must approve it on Settings before the USD lands — you can't buy ${sym ?? "the US name"} until then.`,
+      `REQUESTED FX #${r.id}: ${line}${sym ? ` for ${sym}` : ""}. A member must approve it on Settings before the cash lands — you can't buy ${sym ?? "the name"} until then.`,
     );
   },
 );

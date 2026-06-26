@@ -165,6 +165,9 @@ docker-compose build web && docker-compose up -d web
 #   - a major re-architecture of the agent → major +1, reset minor (→ v2.0-phaseN)
 #   - a new PROJECT_PLAN §9 phase → update the -phaseN suffix
 #   Edit the constant in the SAME build so the stamp on new trades/journal/Settings is honest.
+# ⚠️ CHECK-IN TIMING (Cam, 2026-06-26): NEVER rebuild/redeploy the agent within 10 min of a scheduled
+#   check-in (CHECKIN_TIMES_ET hourly slots 10:00–15:00 ET) UNLESS explicitly told to — a restart kills
+#   any in-flight session and the 5-min warm-up makes it miss/delay the slot. Wait until the check-in has run.
 docker-compose build agent chat && docker-compose up -d agent chat
 docker image prune -f   # after any heavy build — Docker root is on / and fills fast
 

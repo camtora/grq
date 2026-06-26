@@ -12,7 +12,8 @@ export const SOAK_TOTAL_REQUIRED_DAYS = 28; // 4 weeks total (sim + paper)
 export const SOAK_PAPER_REQUIRED_DAYS = 14; // 2 weeks on IBKR paper
 
 // Total soak day 1 = the sim soak start (2026-06-12); override with GRQ_SOAK_START.
-// Paper soak day 1 = PAPER_INCEPTION (IBKR paper went live 2026-06-17, D33).
+// Paper soak day 1 = PAPER_INCEPTION. NB the paper soak RESTARTED 2026-06-26 (noon ET)
+// after a member balance-reset the paper account — PAPER_INCEPTION now points there.
 const SOAK_TOTAL_START = (() => {
   const env = process.env.GRQ_SOAK_START ? new Date(process.env.GRQ_SOAK_START) : null;
   return env && !isNaN(env.getTime()) ? env : new Date("2026-06-12T13:30:00Z");

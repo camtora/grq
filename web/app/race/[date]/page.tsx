@@ -34,23 +34,24 @@ export default async function RaceDayPage({ params }: { params: Promise<{ date: 
       <PageHeader
         title={`The Race — ${date}`}
         sub="Every mind's call on the same frozen prompt, session by session. Click a cell to read its full reasoning."
+        right={
+          <div className="flex items-center gap-3 text-xs">
+            <Link href={`/race/${prev}`} className="text-teal-300 hover:underline">
+              ← {prev}
+            </Link>
+            {!isToday && (
+              <Link href={`/race/${todayStr}`} className="text-teal-200/50 hover:underline">
+                today
+              </Link>
+            )}
+            {date < todayStr && (
+              <Link href={`/race/${next}`} className="text-teal-300 hover:underline">
+                {next} →
+              </Link>
+            )}
+          </div>
+        }
       />
-
-      <div className="mb-6 flex items-center gap-3 text-xs">
-        <Link href={`/race/${prev}`} className="text-teal-300 hover:underline">
-          ← {prev}
-        </Link>
-        {!isToday && (
-          <Link href={`/race/${todayStr}`} className="text-teal-200/50 hover:underline">
-            today
-          </Link>
-        )}
-        {date < todayStr && (
-          <Link href={`/race/${next}`} className="text-teal-300 hover:underline">
-            {next} →
-          </Link>
-        )}
-      </div>
 
       {!detail.hasData ? (
         <EmptyState title="No races this day" body="No sessions ran on this date — try the previous day." />

@@ -62,20 +62,21 @@ export default function AddTicker() {
 
   return (
     <div>
-      {/* Compact pill group matching the watchlist owner tabs (All/Graham/Cam/Agent) — Cam 2026-06-18. */}
-      <div className="inline-flex items-center gap-1 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-1">
+      {/* As present as the watchlist cards themselves — solid card bg + the card border
+          (was near-invisible teal/[0.02] · Cam 2026-06-26). */}
+      <div className="inline-flex items-center gap-1 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
-          placeholder="watch a stock — name or ticker"
-          aria-label="Watch a new stock"
-          className="w-52 rounded-xl bg-transparent px-3 py-1.5 text-sm text-teal-50 outline-none placeholder:text-teal-200/30 focus:bg-teal-400/5"
+          placeholder="find a stock"
+          aria-label="Find a stock"
+          className="w-52 rounded-xl bg-transparent px-3 py-1.5 text-sm text-teal-50 outline-none placeholder:text-teal-200/50 focus:bg-teal-400/10"
         />
         <button
           onClick={search}
           disabled={searching || !q.trim()}
-          className="rounded-xl px-3 py-1.5 text-sm font-semibold text-teal-200/60 transition-colors hover:text-teal-100 disabled:opacity-40"
+          className="rounded-xl px-3 py-1.5 text-sm font-semibold text-teal-200/80 transition-colors hover:text-teal-100 disabled:opacity-40"
         >
           {searching ? "searching…" : "Search"}
         </button>

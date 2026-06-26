@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, Chip, Pnl } from "@/components/ui";
 import Term from "@/components/Term";
 import Sparkline from "./Sparkline";
@@ -61,6 +62,24 @@ export default function ModelTile({ s, rank }: { s: ModelStanding; rank: number 
           {s.counts.BUY} buy · {s.counts.SELL} sell · {s.counts.HOLD} hold · {s.counts.NONE} stand-down
         </div>
       )}
+
+      {s.positions.length > 0 ? (
+        <div className="mt-3 border-t border-teal-400/10 pt-2">
+          <div className="mb-1.5 text-[10px] uppercase tracking-wider text-teal-200/40">Positions (its BUY calls)</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+            {s.positions.slice(0, 8).map((p) => (
+              <span key={p.symbol} className="inline-flex items-center gap-1 text-xs tabular-nums">
+                <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-100 hover:text-teal-50 hover:underline">
+                  {p.symbol}
+                </Link>
+                {p.calls > 1 ? <span className="text-[10px] text-teal-200/30">×{p.calls}</span> : null}
+                <Pnl cents={p.pnlCadCents} className="text-[10px]" />
+              </span>
+            ))}
+            {s.positions.length > 8 ? <span className="text-[10px] text-teal-200/40">+{s.positions.length - 8} more</span> : null}
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

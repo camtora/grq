@@ -52,6 +52,16 @@ let startupReviewChecked = false;
 let dailyLossAlerted = "";
 let sessionRunning = false;
 
+// The research queue drains up to N dossiers CONCURRENTLY (Cam 2026-06-26). Dossiers are
+// independent units — each reads market data → writes ONE JournalEntry, no trades, no
+// cross-dossier deps — so a bounded pool turns a big refresh batch (weekly/daily/Saturday
+// enqueue dozens) from a ~2h one-per-tick crawl into 5-wide bursts. The pool is still held
+// under `sessionRunning` for the duration of each batch, so it NEVER overlaps a decision /
+// check-in session — the agent does one *kind* of thing at a time, dossiers just go N-wide.
+// Each batch is capped at N so a huge queue doesn't starve check-ins (next tick grabs the
+// next N). Tunable via RESEARCH_CONCURRENCY; 1 = the old strictly-sequential behavior.
+const RESEARCH_CONCURRENCY = Math.max(1, Math.floor(Number(process.env.RESEARCH_CONCURRENCY ?? 5)) || 1);
+
 // --- Persisted ad-hoc decision budget (AgentState) ---------------------------
 // The count of ad-hoc decision sessions used today (held-position escalations +
 // self-scheduled wakeups). Auto-resets when the ET date rolls over.
@@ -628,7 +638,17 @@ async function tick() {
           { category: "trades", symbol: f.symbol },
         );
       }
-      await (broker as IBKRBroker).reconcile().catch((e) => alert("warning", "IBKR reconcile failed", String(e), { category: "system" }));
+      const frozen = await (broker as IBKRBroker)
+        .reconcile()
+        .catch((e) => { alert("warning", "IBKR reconcile failed", String(e), { category: "system" }); return [] as string[]; });
+      if (frozen.length) {
+        await alert(
+          "critical",
+          `Suspected account reset — reconcile frozen (${frozen.length})`,
+          `${frozen.join(", ")} vanished from IBKR with no sell on record. The mirror is FROZEN to avoid a false drawdown/kill-switch trip. Verify the account, then re-anchor + force a reconcile.`,
+          { category: "risk" },
+        );
+      }
     }
     const swept = await broker.sweepPendingOrders();
     if (swept > 0) await alert("info", `Resting orders filled: ${swept}`, "", { category: "trades" });
@@ -826,16 +846,12 @@ async function maybeDailyRefreshEnqueue() {
 // Work the research queue one dossier at a time. Uncapped (Cam removed the daily
 // ceiling 2026-06-13 and the on-demand cap 2026-06-15); the weekly-refresh size
 // is the only remaining upstream bound.
-async function processResearchQueue() {
-  if (sessionRunning) return;
-  const next = await prisma.researchRequest.findFirst({
-    where: { status: "QUEUED" },
-    orderBy: { at: "asc" },
-  });
-  if (!next) return;
+type ResearchRow = NonNullable<Awaited<ReturnType<typeof prisma.researchRequest.findFirst>>>;
 
+// Run ONE dossier and reconcile its queue row. Always resolves (never throws) — it owns its
+// own try/catch so a parallel batch's Promise.all can't be torpedoed by one failure.
+async function runOneDossier(next: ResearchRow): Promise<void> {
   await prisma.researchRequest.update({ where: { id: next.id }, data: { status: "RUNNING" } });
-  sessionRunning = true;
   const startedAt = new Date();
   try {
     const result = await runStockDossier(next.symbol, next.requestedBy);
@@ -880,6 +896,27 @@ async function processResearchQueue() {
       data: { status: "FAILED", error: e instanceof Error ? e.message : String(e) },
     });
     await alert("warning", `Dossier failed: ${next.symbol}`, e instanceof Error ? e.message : String(e), { category: "dossiers", symbol: next.symbol });
+  }
+}
+
+async function processResearchQueue() {
+  if (sessionRunning) return;
+  // Grab up to RESEARCH_CONCURRENCY queued dossiers and drain them in parallel. The whole
+  // batch is held under `sessionRunning` so it never overlaps a decision/check-in session;
+  // capping at N per tick keeps a huge queue from monopolizing the agent (next tick grabs N more).
+  const batch = await prisma.researchRequest.findMany({
+    where: { status: "QUEUED" },
+    orderBy: { at: "asc" },
+    take: RESEARCH_CONCURRENCY,
+  });
+  if (batch.length === 0) return;
+
+  sessionRunning = true;
+  try {
+    if (batch.length > 1) {
+      console.log(`[research] draining ${batch.length} dossiers in parallel: ${batch.map((b) => b.symbol).join(", ")}`);
+    }
+    await Promise.all(batch.map((req) => runOneDossier(req)));
   } finally {
     sessionRunning = false;
   }

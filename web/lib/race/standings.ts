@@ -67,6 +67,7 @@ export type ModelStanding = {
   totalCalls: number; // all decision rows for the model
   avgConfidence: number | null;
   spark: number[]; // cumulative CAD P&L per scored call, chronological
+  positions: { symbol: string; pnlCadCents: number; calls: number }[]; // distinct BUY-called names, marked-to-now
 };
 
 export type DayRollup = {
@@ -145,6 +146,7 @@ function computeStandings(
     let confSum = 0;
     let confN = 0;
     const spark: number[] = [];
+    const bySym = new Map<string, { pnlCadCents: number; calls: number }>(); // BUY "positions", accreted per name
 
     const sorted = [...mrows].sort((a, b) => a.sessionAt.getTime() - b.sessionAt.getTime());
     for (const r of sorted) {
@@ -155,6 +157,14 @@ function computeStandings(
       }
       const mark = r.symbol ? marks.get(r.symbol.toUpperCase()) ?? null : null;
       const sc = scoreCall(r, mark);
+      // A BUY call = a name the model is "in" — accrete per symbol (add scored P&L when markable).
+      if (r.action === "BUY" && r.symbol) {
+        const sym = r.symbol.toUpperCase();
+        const e = bySym.get(sym) ?? { pnlCadCents: 0, calls: 0 };
+        e.calls++;
+        if (sc) e.pnlCadCents += toCadCents(sc.pnlNativeCents, r.entryCurrency, fx);
+        bySym.set(sym, e);
+      }
       if (!sc) continue;
       pnlCadCents += toCadCents(sc.pnlNativeCents, r.entryCurrency, fx);
       scored++;
@@ -182,6 +192,7 @@ function computeStandings(
       totalCalls: mrows.length,
       avgConfidence: confN ? Math.round(confSum / confN) : null,
       spark,
+      positions: [...bySym.entries()].map(([symbol, v]) => ({ symbol, pnlCadCents: v.pnlCadCents, calls: v.calls })).sort((a, b) => b.pnlCadCents - a.pnlCadCents),
     });
   }
   return standings;
@@ -239,6 +250,7 @@ function emptyStanding(model: string, role: "champion" | "challenger"): ModelSta
     totalCalls: 0,
     avgConfidence: null,
     spark: [],
+    positions: [],
   };
 }
 

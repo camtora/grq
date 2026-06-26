@@ -97,7 +97,7 @@ export async function buildContext(): Promise<string> {
   // is its own account, its cash measured against THAT account's NAV (its cash + its positions,
   // native units) — never summed. Surface each leg's cash %, the floor/ceiling, and a ⚠ flag so
   // the agent deploys the idle leg (preference a real stock; index-ETF ballast only with no
-  // conviction; no FX — each leg deploys in its own currency).
+  // conviction; FX is a member-approved request_fx escape hatch, EITHER direction, not the default).
   const cadPosCents = pf.positions.filter((x) => x.currency === "CAD").reduce((s, x) => s + x.marketValueCadCents, 0);
   const usdPosCents = pf.positions.filter((x) => x.currency === "USD").reduce((s, x) => s + x.marketValueCents, 0); // native USD
   const cadAcctNav = pf.cadCashCents + cadPosCents;
@@ -116,7 +116,7 @@ export async function buildContext(): Promise<string> {
       ? `Cash by currency — floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% apply PER currency-account (its cash ÷ its own sleeve), NOT summed${fxNote}:
   CA$ ${(pf.cadCashCents / 100).toFixed(2)} = ${cadCashPct.toFixed(1)}% of the CAD sleeve (CA$${(cadAcctNav / 100).toFixed(0)})${cashFlag(cadCashPct, cadAcctNav > 0)}
   US$ ${(pf.usdCashCents / 100).toFixed(2)} = ${usdCashPct.toFixed(1)}% of the USD sleeve (US$${(usdAcctNav / 100).toFixed(0)})${cashFlag(usdCashPct, usdAcctNav > 0)}
-  The US$ leg funds US-listed buys directly (NOT idle CAD); only CA$ funds CAD buys. No FX — deploy each leg in its own currency (US names or a US index ETF for USD; CA names or XIC for CAD).`
+  The US$ leg funds US-listed buys directly (NOT idle CAD); only CA$ funds CAD buys. Prefer deploying each leg in its own currency (US names or a US index ETF for USD; CA names or XIC for CAD). But if one sleeve is dry while the other is flush and you have a genuine buy you can't otherwise fund, you CAN raise a member-approved request_fx to convert EITHER way — CAD_TO_USD to fund a US name, or USD_TO_CAD to bring money home for a Canadian name. It needs a member's OK, so it's the escape hatch, not the default.`
       : `Cash: ${money(pf.cashCents)}, all CAD = ${cadCashPct.toFixed(1)}% of the CAD sleeve, floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}%${cashFlag(cadCashPct, cadAcctNav > 0)}.`;
 
   // Upcoming earnings on holdings + focus (Tier 6 awareness) — a catalyst to size

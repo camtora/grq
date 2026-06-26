@@ -211,7 +211,21 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
         const shortUsd = usdCost - pf.usdCashCents;
         return refuse(
           `Insufficient USD: ${symbol} needs US$${(usdCost / 100).toFixed(2)}, the fund holds US$${(pf.usdCashCents / 100).toFixed(2)}. ` +
-            `Use request_fx to ask a member to convert ~US$${(shortUsd / 100).toFixed(2)} CAD→USD — the agent can't move money between currencies itself (no auto-FX, no USD margin).`,
+            `Use request_fx (direction CAD_TO_USD) to ask a member to convert ~US$${(shortUsd / 100).toFixed(2)} from CAD — the agent can't move money between currencies itself (no auto-FX, no USD margin).`,
+        );
+      }
+    }
+    // CAD funding: symmetrically, a Canadian buy must be covered by actual CAD cash. The combined
+    // CAD-equiv floor above can't catch a CAD shortfall masked by a flush USD sleeve (the broker
+    // holds the two separately and won't auto-convert) — so point at the FX escape hatch
+    // (request_fx USD→CAD) here, instead of letting the order fail downstream at the broker.
+    if (posCcy === "CAD") {
+      const cadCost = order.qty * estPrice + commIn; // native CAD cents
+      if (cadCost > pf.cadCashCents) {
+        const shortCad = cadCost - pf.cadCashCents;
+        return refuse(
+          `Insufficient CAD: ${symbol} needs $${(cadCost / 100).toFixed(2)} CAD, the fund holds $${(pf.cadCashCents / 100).toFixed(2)} CAD. ` +
+            `If the USD sleeve has room, use request_fx (direction USD_TO_CAD) to ask a member to convert ~$${(shortCad / 100).toFixed(2)} CAD's worth — the agent can't move money between currencies itself (no auto-FX, no CAD margin).`,
         );
       }
     }

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { PageHeader, EmptyState } from "@/components/ui";
 import ModelTile from "@/components/race/ModelTile";
-import DayCard from "@/components/race/DayCard";
 import { loadStandings } from "@/lib/race/standings";
+import { etDateStr } from "@/agent/calendar";
 
 // The Race (D68) — the model bake-off. Every decision/report session, the live agent (the CHAMPION,
 // Opus, the only model that trades) and the shadow CHALLENGERS get the EXACT same frozen prompt; the
@@ -11,7 +11,8 @@ import { loadStandings } from "@/lib/race/standings";
 export const dynamic = "force-dynamic";
 
 export default async function RacePage() {
-  const { models, days, fxUsdCad } = await loadStandings();
+  const { models, fxUsdCad } = await loadStandings();
+  const today = etDateStr();
 
   return (
     <main>
@@ -19,8 +20,8 @@ export default async function RacePage() {
         title="The Race"
         sub="Same data, different minds. Each session every model gets the EXACT same frozen prompt — only Opus trades, the rest call it shadow-only. Every BUY/SELL is snapshotted and marked to the live price. Who'd be ahead?"
         right={
-          <Link href="/bulls" className="rounded-lg border border-teal-400/20 bg-teal-400/5 px-2.5 py-1 text-xs font-semibold text-teal-300 hover:bg-teal-400/10">
-            Bull Races →
+          <Link href={`/race/${today}`} className="rounded-lg border border-teal-400/20 bg-teal-400/5 px-2.5 py-1 text-xs font-semibold text-teal-300 hover:bg-teal-400/10">
+            Today&apos;s Race →
           </Link>
         }
       />
@@ -37,7 +38,7 @@ export default async function RacePage() {
               <ModelTile key={s.model} s={s} rank={i + 1} />
             ))}
           </div>
-          <details open className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How The Race works</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li>
@@ -70,13 +71,6 @@ export default async function RacePage() {
               </li>
             </ul>
           </details>
-
-          <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Races by day</h2>
-          <div className="space-y-2">
-            {days.map((d) => (
-              <DayCard key={d.date} d={d} />
-            ))}
-          </div>
         </>
       )}
     </main>

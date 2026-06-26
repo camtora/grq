@@ -5,7 +5,6 @@ import { USERS, isOwner } from "@/lib/users";
 import { getSession } from "@/lib/session";
 import { soakStatus } from "@/lib/soak";
 import { ACCOUNT_TYPE } from "@/agent/policy";
-import { getBroker } from "@/lib/broker";
 import Link from "next/link";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import RiskDial from "@/components/RiskDial";
@@ -27,9 +26,8 @@ const ROADMAP = [
 ];
 
 export default async function Settings() {
-  const [settings, symbols, session, cookieStore, pf, fxReqs] = await Promise.all([
+  const [settings, session, cookieStore, pf, fxReqs] = await Promise.all([
     prisma.settings.findUnique({ where: { id: 1 } }),
-    getBroker().listSymbols(),
     getSession(),
     cookies(),
     getPortfolio(),
@@ -176,10 +174,6 @@ export default async function Settings() {
                       : "Non-registered (taxable) — gains are capital gains"}
                   <span className="block text-[11px] text-teal-200/40">the agent factors this in · set via GRQ_ACCOUNT_TYPE</span>
                 </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-teal-200/50">Universe ({symbols.length})</dt>
-                <dd className="text-right text-teal-100/70">{symbols.join(" · ")}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Reset sim</dt>

@@ -17,7 +17,7 @@ import { watchersFor } from "@/lib/watch";
 
 export const dynamic = "force-dynamic";
 
-const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "position", "unrealized", "researched", "watcher"];
+const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "conf", "position", "unrealized", "researched", "watcher"];
 // Researched tab is a lean catalogue — call + the dossier's confidence + when it was
 // last researched (no per-name quote/signal fetches).
 const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "researched"];

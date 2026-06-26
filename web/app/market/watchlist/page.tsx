@@ -141,13 +141,6 @@ export default async function Watchlist() {
       <PageHeader title="Watchlist" sub="The names you're watching — GRQ researches each one, and they stay here even after they're promoted into the Universe." />
 
       <section className="mb-8">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Watchlist — {tracked.length} tracked</h2>
-          <p className="text-xs text-teal-200/40">
-            Names being researched plus your in-Universe names. Faces show who&apos;s watching; filter by watcher. Any member can promote a candidate into the Universe.
-          </p>
-        </div>
-
         {rows.length === 0 ? (
           <>
             {isMember && (

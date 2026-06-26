@@ -418,13 +418,13 @@ export class IBKRBroker implements BrokerAdapter {
   /** Mirror IBKR positions + cash into our DB so the dashboards, NAV snapshots
    *  and realized-P&L math read broker truth. Called by the runner each tick and
    *  right after a fill. Writes a SYSTEM journal note when it corrects drift. */
-  async reconcile(): Promise<void> {
+  async reconcile(): Promise<string[]> {
     // Never reconcile against a half-up session: a failed positions read would look
     // like a flat account and WIPE the mirror — which on 2026-06-17 briefly dropped
     // our holding, cratered NAV to cash-only and tripped a false daily-loss pause.
     // It's a mirror; skipping a tick is harmless, the next one catches up.
     const auth = await this.authStatus();
-    if (!auth.authenticated || !auth.connected) return;
+    if (!auth.authenticated || !auth.connected) return [];
 
     // Warm the conid→symbol map for EVERY active symbol so holdings resolve —
     // including names promoted AFTER boot. The old once-only `size===0` warm meant
@@ -447,6 +447,7 @@ export class IBKRBroker implements BrokerAdapter {
     const brokerBy = new Map((brokerPositions ?? []).map((p) => [p.symbol, p]));
 
     let drift = 0;
+    let frozen: string[] = [];
     // Only touch positions when the read was trustworthy (a real array). null =
     // failed/non-array → leave the mirror exactly as-is; NEVER delete on it. A
     // successful empty array still flows through and correctly clears a flat account.
@@ -463,8 +464,32 @@ export class IBKRBroker implements BrokerAdapter {
         }
       }
       // Positions IBKR no longer reports → closed; drop them (only on a trusted read).
-      for (const dp of dbPositions) {
-        if (!brokerBy.has(dp.symbol)) {
+      // RESET-DETECTION GUARD (v2.1): a manual/external paper-account BALANCE RESET
+      // removes positions with no sale and no proceeds — which on 2026-06-25/26 cratered
+      // the mirror's NAV and false-tripped the drawdown kill switch. A genuine close always
+      // leaves a SELL trade, so if 2+ positions vanish in one tick with NO recent SELL to
+      // explain them, treat it as a suspected reset / bad read: FREEZE them (don't delete),
+      // and let the runner alert a human instead of auto-cratering NAV. Explained closes
+      // (a real sell on record) still mirror normally.
+      const missing = dbPositions.filter((dp) => !brokerBy.has(dp.symbol));
+      const sellSince = new Date(Date.now() - 48 * 60 * 60_000);
+      const recentSells = await prisma.trade.findMany({ where: { side: "SELL", at: { gte: sellSince } }, select: { symbol: true } });
+      const sold = new Set(recentSells.map((t) => t.symbol));
+      const unexplained = missing.filter((dp) => !sold.has(dp.symbol));
+      if (unexplained.length >= 2) {
+        frozen = unexplained.map((dp) => dp.symbol);
+        for (const dp of missing) {
+          if (sold.has(dp.symbol)) { await prisma.position.delete({ where: { symbol: dp.symbol } }).catch(() => {}); drift++; }
+        }
+        await prisma.journalEntry.create({
+          data: {
+            kind: "SYSTEM",
+            title: `[CRITICAL] Suspected external account reset — froze ${frozen.length} position(s)`,
+            body: `IBKR reported ${frozen.join(", ")} gone with NO sell on record. NOT deleting them from the mirror: a balance reset removes shares with no proceeds and would false-crater NAV → a phantom drawdown halt (the 2026-06-25/26 incident). A human should verify the account, then re-anchor + force a reconcile. Frozen until reviewed.`,
+          },
+        });
+      } else {
+        for (const dp of missing) {
           await prisma.position.delete({ where: { symbol: dp.symbol } }).catch(() => {});
           drift++;
         }
@@ -522,6 +547,7 @@ export class IBKRBroker implements BrokerAdapter {
         },
       });
     }
+    return frozen;
   }
 
   /** No-op for IBKR: resting limits live at the broker (GTC), not our sweeper. */

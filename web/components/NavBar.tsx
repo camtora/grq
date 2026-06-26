@@ -24,6 +24,7 @@ const PRIMARY: NavLink[] = [
 const SECONDARY: NavLink[] = [
   { href: "/reports", label: "Reports" },
   { href: "/race", label: "The Race" },
+  { href: "/bulls", label: "Bulls" },
 ];
 
 export default function NavBar({

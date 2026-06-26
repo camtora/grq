@@ -2012,6 +2012,24 @@ and is **dated the day the work belongs to** (yesterday at generation time). The
 `CHANGE` report already existing for that day (DB-count, like the EOD guard) so a restart can't re-run it.
 Quiet days get a one-line note; a missing token no-ops cleanly (the day stays blank).
 
+### D83 — Paper soak RESTARTED from a clean US$50,000 baseline after an IBKR paper reset (Cam, 2026-06-26)
+**Context:** On 2026-06-25 a member balance-reset the IBKR paper account (DUQ779121) to set up a USD sleeve.
+IBKR's "balance reset" — despite its *"shares will not be sold"* disclaimer — CLEARED every open position on its
+**overnight cycle**: an administrative removal with no sale and no proceeds (cash unchanged, shares gone). The
+2026-06-26 morning reconcile mirrored the wipe → NAV cratered → the drawdown guard auto-engaged the kill switch.
+Diagnosed as NOT the agent, NOT the Bull Race (simulated), NOT a forced FX liquidation — the reset itself.
+
+**Decision:** Treat it as a clean restart rather than reconstruct the old book (the CAD had been deliberately moved
+to USD). TSM sold flat (order #29); account re-funded to 71,050 CAD → converted to **US$50,000.00** (FxRequest #11). Then:
+- **Re-anchor:** `PAPER_INCEPTION` → **2026-06-26 noon ET** (now `GRQ_PAPER_INCEPTION`-overridable, no rebuild to retune);
+  a fresh NAV baseline snapshot ($71,099.61 CAD-equiv) — a new high-water mark, so the drawdown math self-clears.
+- **Reset-detection guard:** `reconcile()` now FREEZES the mirror + alerts (risk) instead of mass-deleting + false-cratering
+  NAV when ≥2 positions vanish in one tick with NO sell on record (the reset / bad-read signature).
+- **Honesty over erasure:** prior buys stay as real history; each cleared name got a per-stock `SYSTEM` note (why + entry +
+  current price; most were UP when cleared — e.g. ATD +13%) + a fund-level `LESSON` so the weekend retro excludes these
+  closures from attribution. No fabricated sells, no wiped ledger.
+- **Stamp:** agent → **v2.1-phase4**; a `DECISION` journal entry records the restart. Soak day 1 = 2026-06-26.
+
 **Why GitHub API (not a git mount or host cron):** keeps it in the existing runner/agent scheduler with
 **no host-filesystem coupling and no git binary in the container** — just one read-only secret. (Considered
 a read-only `.git` bind-mount and a standalone host cron; the PAT was the cleanest separation. Cam's call.)

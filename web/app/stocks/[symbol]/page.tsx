@@ -402,7 +402,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               {/* The verdict word, with the bull/bear bar (the same call) directly under
                   it. Technicals are an input below, not a competing verdict. */}
               <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
-                <Term k="agent-call">GRQ&apos;s call</Term>
+                {stance ? <Term k="agent-call">GRQ&apos;s call</Term> : "Technical signal"}
               </div>
               {stance ? (
                 <>
@@ -434,7 +434,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 </>
               ) : recMeta ? (
                 <>
-                  <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[recMeta.tone].text}`}>{recMeta.label}</span>
+                  <span className="text-2xl font-bold leading-tight text-teal-100/70">{recMeta.label}</span>
                   <div className="mt-3 w-full max-w-xs">
                     <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} mascots hideLabel className="w-full" />
                   </div>

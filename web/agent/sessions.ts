@@ -379,16 +379,26 @@ async function latestNoteBody(titlePrefix: string, since: Date): Promise<string 
  *  brief) supersedes it. Discord-only (no 6am phone push); surfaces on Reports. */
 export async function runPremorningRead(): Promise<void> {
   const ctx = await buildContext();
+  // Yesterday's build diary (the latest CHANGE report) so the morning leads with "what changed yesterday".
+  const diary = await prisma.report.findFirst({ where: { kind: "CHANGE" }, orderBy: { date: "desc" } });
+  const diaryBlock = diary
+    ? `Title: "${diary.title}" — LINK: /how-it-works?tab=daily-report&d=${etDateStr(diary.date)}\n${diary.body.slice(0, 1600)}`
+    : "(no build diary for yesterday — a quiet build day.)";
   const prompt = `${ctx}
 
 # TASK: Pre-morning read (6:00 ET, ${etDateStr()})
 
-It's early — hours before the open and before your 9:00 game plan. Two jobs:
+It's early — hours before the open and before your 9:00 game plan. Your write-up has TWO parts: first "what changed yesterday," then "the day ahead."
 
-1. SCAN what changed overnight. WebSearch (and WebFetch a promising article or two) for anything that moved while the market was closed and touches your holdings or focus names: post-market / pre-market EARNINGS, guidance, M&A, downgrades, a notable gap, or a macro print due at 8:30 ET. Be quick and selective — you're triaging, not writing theses.
+0. WHAT CHANGED YESTERDAY (the product). Below is yesterday's "build diary" — the plain-English changelog of what Cam shipped to GRQ. OPEN your read with a ONE–TWO sentence recap of it in your own words, and INCLUDE THE LINK so Cam & Graham can read the full thing. If there's no diary, just say it was a quiet build day.
+--- yesterday's build diary ---
+${diaryBlock}
+--- end build diary ---
+
+1. SCAN what changed overnight (the market). WebSearch (and WebFetch a promising article or two) for anything that moved while the market was closed and touches your holdings or focus names: post-market / pre-market EARNINGS, guidance, M&A, downgrades, a notable gap, or a macro print due at 8:30 ET. Be quick and selective — you're triaging, not writing theses.
 2. REFRESH research only where something genuinely changed. For any name whose overnight news could change your call, request_research it so a fresh dossier lands before 9:00. Do NOT refresh the whole book — only names with a real overnight catalyst. If nothing changed, queue nothing.
 
-Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Keep it BRIEF — 3–5 tight sentences or a few bullets. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
+Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Structure it as **What changed yesterday** (your 1–2 sentence recap of the build diary + the LINK) then **The day ahead** (the overnight read + shape of the day). Keep it BRIEF — a few tight sentences or bullets per part. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: what shipped yesterday (with the link), the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
   await runSession({ label: "premorning-read", prompt, model: MODELS.decision, withTools: true, maxTurns: 18 });
   const body = await latestNoteBody("Pre-morning read", new Date(Date.now() - 30 * 60_000));
   if (body) await sendDiscord("info", `Pre-morning read — ${etDateStr()}`, body.slice(0, 1500));

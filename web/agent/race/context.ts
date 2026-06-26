@@ -52,6 +52,11 @@ export async function buildBullContext(e: EntrantLite, startingStakeCents: numbe
   const navCad = e.cashCents + positionsCad;
   const retPct = startingStakeCents > 0 ? ((navCad - startingStakeCents) / startingStakeCents) * 100 : 0;
   const cashPct = navCad > 0 ? (e.cashCents / navCad) * 100 : 100;
+  // Concrete CAD limits so a no-tools bull can SIZE its order to fit instead of guessing the % math
+  // (over-sized BUYs were the #1 auto-reject — e.g. proposing a TSM stake > the position cap).
+  const maxPosCad = Math.round((dial.maxPositionPct / 100) * navCad);
+  const cashFloorCad = Math.round((dial.cashFloorPct / 100) * navCad);
+  const deployableCad = Math.max(0, e.cashCents - cashFloorCad);
 
   const positionsBlock =
     posViews.length === 0
@@ -59,7 +64,9 @@ export async function buildBullContext(e: EntrantLite, startingStakeCents: numbe
       : posViews
           .map(({ x, lastNative, mvCad, unrealCad }) => {
             const wt = navCad > 0 ? ((mvCad / navCad) * 100).toFixed(1) : "0.0";
-            return `  ${x.symbol}: ${x.qty} sh @ avg ${money(x.avgCostCents)} ${x.currency}, last ${money(lastNative)} → ${money(mvCad)} CAD = ${wt}% of NAV, unrealized ${money(unrealCad)} CAD`;
+            const room = maxPosCad - mvCad;
+            const roomStr = room > 0 ? `room to add ${money(room)} before the ${dial.maxPositionPct}% cap` : `AT/OVER the ${dial.maxPositionPct}% cap — cannot add`;
+            return `  ${x.symbol}: ${x.qty} sh @ avg ${money(x.avgCostCents)} ${x.currency}, last ${money(lastNative)} → ${money(mvCad)} CAD = ${wt}% of NAV, unrealized ${money(unrealCad)} CAD · ${roomStr}`;
           })
           .join("\n");
 
@@ -103,7 +110,8 @@ ${positionsBlock}
 ${signalsBlock}
 
 ## Your risk dial — ${e.dial} (HARD: calls that violate are auto-rejected by the race gate)
-Max position ${dial.maxPositionPct}% of YOUR NAV · keep ≥ ${dial.cashFloorPct}% cash · max ${dial.maxNewTradesPerWeek} new buys / rolling week · prefer tiers ${dial.tiers.join("+")}.
+Max position ${dial.maxPositionPct}% of NAV = **${money(maxPosCad)} per name** — a NEW name can take up to ${money(maxPosCad)}; for a name you already hold, only add up to its "room" shown above. SIZE each BUY to fit (an order over this in one name is auto-rejected, and the round is wasted).
+Keep ≥ ${dial.cashFloorPct}% cash (${money(cashFloorCad)}) → deployable right now: **${money(deployableCad)}**. Max ${dial.maxNewTradesPerWeek} new buys / rolling week · prefer tiers ${dial.tiers.join("+")}.
 No shorting, no margin: a BUY must fit your cash; a SELL only trims a name you hold.
 
 ## GRQ's researched library (your menu — pick BUYs from here; "GRQ:" is our dossier call (stance/confidence), an INPUT to weigh, NOT a rule; you may also SELL anything you hold)

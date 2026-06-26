@@ -200,7 +200,7 @@ function RowDetail({ r }: { r: StockRow }) {
       <div className="grid gap-x-6 gap-y-3 md:grid-cols-3">
       <div>
         <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-          <Term k="agent-call">GRQ&apos;s call</Term>
+          {tech ? "Technical signal" : <Term k="agent-call">GRQ&apos;s call</Term>}
         </div>
         {m ? (
           <>
@@ -209,7 +209,7 @@ function RowDetail({ r }: { r: StockRow }) {
           </>
         ) : tech ? (
           <>
-            <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[tech.tone].text}`}>{tech.label}</span>
+            <span className="text-3xl font-bold leading-tight text-teal-100/70">{tech.label}</span>
             <p className="mt-1 text-xs text-teal-200/45">technical lean only — GRQ hasn&apos;t filed a call yet</p>
           </>
         ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 // Live view of the agent's rolling 5-hour Max window. The Max plan resets on a 5h window that the
@@ -75,6 +75,11 @@ export default function RollingWindowPanel({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // The burn number is polled live (see below) so it tracks the current window instead of freezing
+  // at the page's one-shot render value. Seed from the server prop, then the poll is authoritative.
+  const [burn, setBurn] = useState(tokensBurned);
+  const [liveServerStart, setLiveServerStart] = useState<string | null>(serverWindowStart);
+
   const anchorMs = anchorAt ? new Date(anchorAt).getTime() : null;
   const [time, setTime] = useState(() =>
     anchorMs !== null ? etClock(rollWindow(anchorMs, Date.now()).reset) : "",
@@ -85,18 +90,40 @@ export default function RollingWindowPanel({
     return () => clearInterval(id);
   }, []);
 
-  const win = anchorMs !== null ? rollWindow(anchorMs, now) : null;
-  const serverStartMs = serverWindowStart ? new Date(serverWindowStart).getTime() : null;
+  // Poll the current window's burn so the token bar stays in lockstep with the live clock. The
+  // endpoint computes the window from the same anchor, so the number and the bounds always agree.
+  const fetchBurn = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/usage-window", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.tokensBurned === "number") setBurn(data.tokensBurned);
+      if (typeof data.windowStart === "string" || data.windowStart === null) setLiveServerStart(data.windowStart);
+    } catch {
+      /* keep last good value */
+    }
+  }, []);
 
-  // When the live clock rolls past the window the server rendered, the token count is for the OLD
-  // window — pull a fresh server render so both bars reflect the new window. Comparing against the
-  // (refreshed) prop, not a mount value, avoids a refresh loop.
   useEffect(() => {
-    if (win && serverStartMs !== null && win.start > serverStartMs) router.refresh();
-  }, [win?.start, serverStartMs, router]);
+    const id = setInterval(fetchBurn, 20_000);
+    return () => clearInterval(id);
+  }, [fetchBurn]);
+
+  const win = anchorMs !== null ? rollWindow(anchorMs, now) : null;
+  const serverStartMs = liveServerStart ? new Date(liveServerStart).getTime() : null;
+
+  // When the live clock rolls past the window the poll last reported, refetch the burn immediately
+  // (so the new, near-empty window's number lands at once) and refresh the page so the rest of the
+  // server-rendered stats re-sync too. Comparing against the live start avoids a refresh loop.
+  useEffect(() => {
+    if (win && serverStartMs !== null && win.start > serverStartMs) {
+      fetchBurn();
+      router.refresh();
+    }
+  }, [win?.start, serverStartMs, router, fetchBurn]);
 
   const timePct = win ? Math.min(100, Math.max(0, ((now - win.start) / FIVE_H_MS) * 100)) : null;
-  const tokenPct = maxFiveH ? Math.min(100, Math.max(0, (tokensBurned / maxFiveH) * 100)) : null;
+  const tokenPct = maxFiveH ? Math.min(100, Math.max(0, (burn / maxFiveH) * 100)) : null;
   const leftMs = win ? win.reset - now : null;
 
   // Pacing read: tokens ahead of the clock = burning faster than the window refills.
@@ -133,7 +160,7 @@ export default function RollingWindowPanel({
           <div className="mb-1 flex items-baseline justify-between text-xs">
             <span className="font-semibold uppercase tracking-wider text-teal-200/50">Tokens</span>
             <span className="tabular-nums text-teal-200/60">
-              {fmtTokens(tokensBurned)}
+              {fmtTokens(burn)}
               {maxFiveH ? ` / ~${fmtTokens(maxFiveH)} est.` : ""}
               {tokenPct !== null ? ` · ${Math.round(tokenPct)}%` : ""}
             </span>

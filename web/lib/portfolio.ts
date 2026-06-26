@@ -3,11 +3,17 @@ import { getQuotes } from "./broker/quotes";
 import { benchmarkValueCents } from "./broker/sim";
 import { toCadCents, usdCadRate } from "./fx";
 
-// The fund's real track record begins at the IBKR-paper open (2026-06-17, 9:30 ET
-// = 13:30 UTC). The sim run before that was a rehearsal on a different (5k) account,
-// so performance views — the NAV chart, day-open baselines — reference this inception,
-// not the sim history (which stays in the DB). See docs/DECISIONS.md D33.
-export const PAPER_INCEPTION = new Date("2026-06-17T13:30:00Z");
+// The fund's real track record begins at the IBKR-paper inception. The original
+// paper soak opened 2026-06-17, but on 2026-06-26 a member balance-reset the paper
+// account (cleared all positions; see the reset gotcha + DECISIONS) and we RESTARTED
+// the soak from a clean $50k USD baseline at noon ET. Performance views — the NAV
+// chart, day-open baselines, the soak clock — reference this inception, not the prior
+// run (which stays in the DB as honest history). Override with GRQ_PAPER_INCEPTION
+// (env change + --force-recreate, no rebuild) once the restart anchor is finalized.
+export const PAPER_INCEPTION = (() => {
+  const env = process.env.GRQ_PAPER_INCEPTION ? new Date(process.env.GRQ_PAPER_INCEPTION) : null;
+  return env && !isNaN(env.getTime()) ? env : new Date("2026-06-26T16:00:00Z");
+})();
 
 export type PositionView = {
   symbol: string;
