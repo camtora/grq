@@ -14,6 +14,7 @@ import {
 } from "./fmp";
 import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
+import { watchersFor } from "./watch";
 import { personByName, ownerKeyFor } from "./people";
 import { userForEmail } from "./users";
 import { stanceMeta } from "./stance";
@@ -249,11 +250,12 @@ export async function marketResponse() {
   const tracked = all.filter((r) => r.status !== "RETIRED");
   const symbols = tracked.map((r) => r.symbol);
 
-  const [quotes, directives, stances, sigList] = await Promise.all([
+  const [quotes, directives, stances, sigList, watchersMap] = await Promise.all([
     getQuotes(symbols),
     prisma.symbolDirective.findMany(),
     stanceMap(symbols),
     Promise.all(symbols.map((s) => contractSignals(s).catch(() => null))),
+    watchersFor(symbols),
   ]);
   const dirBy = new Map(directives.map((d) => [d.symbol, d.directive as string]));
   const sigBy = new Map(symbols.map((s, i) => [s, sigList[i]]));
@@ -272,6 +274,8 @@ export async function marketResponse() {
       signals: sigBy.get(r.symbol) ?? null,
       logoUrl: r.logoUrl ?? null,
       rating: ratingFor(stances.get(r.symbol)),
+      // Members watching this name (D78) — key+name only (iOS picks the bundled avatar).
+      watchers: (watchersMap.get(r.symbol) ?? []).map((w) => ({ key: w.key, name: w.name })),
     };
   };
 
@@ -992,6 +996,9 @@ export async function dossierResponse(symbol: string) {
   const entry = all.find((u) => u.symbol === sym);
   if (!entry) return null;
 
+  // Members watching this name (D78) — key+name only (iOS picks the bundled avatar).
+  const stockWatchers = ((await watchersFor([sym])).get(sym) ?? []).map((w) => ({ key: w.key, name: w.name }));
+
   const y = entry.yahoo;
   const cadListing = /\.(TO|V|NE|CN)$/i.test(y);
   const fmp = fmpEnabled();
@@ -1226,5 +1233,6 @@ export async function dossierResponse(symbol: string) {
     currentRead: currentReadEntry
       ? { title: currentReadEntry.title, body: currentReadEntry.body, at: currentReadEntry.at.toISOString(), sources: parseSources(currentReadEntry.sourcesJson) }
       : null,
+    watchers: stockWatchers,
   };
 }

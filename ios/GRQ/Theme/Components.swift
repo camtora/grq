@@ -678,3 +678,40 @@ struct GlossarySheet: View {
         .presentationDetents([.height(300), .medium])
     }
 }
+
+/// Overlapping faces of the members watching a stock (D78). `key` ("cam"/"graham")
+/// picks the bundled avatar; an unknown key falls back to an initial chip. Each face
+/// carries a card-coloured ring so the stack reads against the card it sits on.
+/// Renders nothing for an empty list, so callers can drop it in unconditionally.
+struct WatcherStack: View {
+    @Environment(\.colorScheme) private var scheme
+    let watchers: [Watcher]
+    var size: CGFloat = 22
+
+    var body: some View {
+        let p = Theme.palette(scheme)
+        if !watchers.isEmpty {
+            HStack(spacing: -(size * 0.34)) {
+                ForEach(watchers) { w in
+                    face(w)
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(p.cardBg, lineWidth: 2))
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Watching: " + watchers.map(\.name).joined(separator: ", "))
+        }
+    }
+
+    @ViewBuilder private func face(_ w: Watcher) -> some View {
+        if w.key == "cam" || w.key == "graham" {
+            Image(w.key).resizable().scaledToFill()
+        } else {
+            Circle().fill(Theme.brandGradient).overlay(
+                Text(String(w.name.first.map(String.init) ?? "?").uppercased())
+                    .font(.system(size: size * 0.42, weight: .black))
+                    .foregroundStyle(Color.black.opacity(0.8)))
+        }
+    }
+}

@@ -253,6 +253,13 @@ extension Dictionary where Key == String, Value == LiveQuote {
 
 // MARK: - Market names (universe / watchlist)
 
+/// A member watching a stock (D78). `key` ("cam"/"graham") picks the bundled avatar image.
+struct Watcher: Codable, Identifiable {
+    let key: String
+    let name: String
+    var id: String { key }
+}
+
 struct MarketName: Codable, Identifiable {
     let symbol: String
     let name: String
@@ -265,6 +272,7 @@ struct MarketName: Codable, Identifiable {
     let signals: Signals?
     var logoUrl: String? = nil     // A2
     var rating: Rating? = nil      // A6 — else derived from agentCall
+    var watchers: [Watcher]? = nil // D78 — members watching this name (face stack)
 
     /// GRQ's call, preferring the live rating, falling back to the legacy call word.
     var resolvedRating: Rating? {
@@ -343,6 +351,7 @@ struct Dossier: Codable, Identifiable {
     var trades: [TradeRow]? = nil
     var smartMoney: DossierSmartMoney? = nil
     var currentRead: CurrentRead? = nil
+    var watchers: [Watcher]? = nil // D78 — members watching this name (face stack)
 
     var resolvedRating: Rating? { rating ?? Stance.resolve(label: ratingLabel, call: call)?.rating }
     var id: String { symbol }

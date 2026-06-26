@@ -138,6 +138,9 @@ struct StockDetailView: View {
                         Text(d.symbol).font(.caption).foregroundStyle(p.textMuted)
                     }
                     Spacer()
+                    if let ws = d.watchers, !ws.isEmpty {
+                        WatcherStack(watchers: ws, size: 26)
+                    }
                 }
                 // Live price overlay: prefer the polled quote, fall back to the dossier's
                 // delayed snapshot. The day-move badge lights up once a poll lands (the

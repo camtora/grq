@@ -100,7 +100,7 @@ struct MarketsView: View {
     private func promote(_ n: MarketName) async {
         guard await BiometricGate.confirm("Confirm it's you to promote \(n.symbol).") else { return }
         let res = await APIClient.shared.universeAction(n.symbol, "promote")
-        actionNote = res.error ?? "\(n.symbol): promotion requested — needs the other member too."
+        actionNote = res.error ?? "\(n.symbol): promoted into the universe."
         await load()
     }
 
@@ -143,6 +143,9 @@ struct MarketRow: View {
                 }
             }
             .buttonStyle(.plain)
+            if let ws = name.watchers, !ws.isEmpty {
+                WatcherStack(watchers: ws, size: 18)
+            }
             Spacer(minLength: 8)
             if cents > 0 {
                 VStack(alignment: .trailing, spacing: 2) {

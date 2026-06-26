@@ -271,6 +271,13 @@ GRQ-JWT) but are **currently blocked at the edge** — see A9.
   New contract shapes. Admit for Bearer.
 - **A11 — push (optional, P6)**: an APNs device-token registration route + the agent emitting pushes on
   kill-switch/fill/hunt events.
+- **A12 — watchers (D78, SHIPPED 2026-06-26 — web LIVE + iOS distributed to TestFlight):** `MarketName` +
+  `Dossier` carry a `watchers: Watcher[]` (`{ key: "cam"|"graham", name }`, `.default([])`) — the members
+  watching the name, independent of `inUniverse`. Built in `lib/feed.ts` via `watchersFor()`. iOS: `Watcher`
+  struct + `var watchers: [Watcher]? = nil` on both models, the `WatcherStack` view (`Theme/Components.swift`,
+  bundled `Image(key)` faces, no new file → no pbxproj edit) on the Market row + Stock header, and
+  single-actor promote copy. The two-person promote flow is gone (any member promotes). Mobile
+  watchlist/universe split stays status-based for now (watch-driven mobile = a later follow-up).
 
 > Parity note: as `lib/feed.ts` already builds from the same Prisma source the web pages read, these
 > are mostly *serializers over existing queries*, not new logic. Keep `shared/contract.ts` and

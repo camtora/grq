@@ -169,6 +169,12 @@ export const Signals = z.object({
   macd: z.string().nullable(),
 });
 
+/* ---------- a member watching a stock (D78) — key drives the bundled avatar ---------- */
+export const Watcher = z.object({
+  key: z.string(), // "cam" | "graham" — picks the bundled avatar image on iOS
+  name: z.string(), // "Cam" | "Graham"
+});
+
 /* ---------- market: a tracked name (universe or watchlist candidate) — v0 ---------- */
 export const MarketName = z.object({
   symbol: z.string(),
@@ -182,6 +188,9 @@ export const MarketName = z.object({
   agentCall: AgentCall.nullable(),
   directive: Directive.nullable(), // member pin / no-fly
   signals: Signals.nullable(),
+  // Members watching this name (D78) — shown as a stack of faces; [] = nobody.
+  // Independent of inUniverse (a name can be watched AND in the universe).
+  watchers: z.array(Watcher).default([]),
 });
 export const MarketResponse = z.object({
   universe: z.array(MarketName),
@@ -410,6 +419,8 @@ export const Dossier = z.object({
   trades: z.array(TradeRow).default([]),
   smartMoney: DossierSmartMoney.nullable().default(null),
   currentRead: CurrentRead.nullable().default(null),
+  // Members watching this name (D78) — a stack of faces on the stock header; [] = nobody.
+  watchers: z.array(Watcher).default([]),
 });
 
 /* ---------- today / The Daily — v0 (sections per docs/NEWSPAPER.md) ---------- */

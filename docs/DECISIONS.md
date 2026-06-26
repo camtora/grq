@@ -1885,8 +1885,16 @@ authorised it.
 `promote`), `components/{WatchButton,AvatarStack,UniverseActions,StockTable,WatchlistTabs}.tsx`
 (+ hunt components), `app/market/{watchlist,browse}/page.tsx`, `app/universe/page.tsx`,
 `app/stocks/[symbol]/page.tsx`, `lib/glossary.ts`, `agent/validator.ts` error copy. Deleted
-`components/hunt/WatchedBy.tsx`. iOS (`shared/contract.ts` watchers array + native AvatarStack)
-is a deliberate **second phase**, after the web ships.
+`components/hunt/WatchedBy.tsx`.
+
+**iOS phase (A12) — SHIPPED 2026-06-26.** Additive contract: a `Watcher {key,name}` shape + a
+`watchers: Watcher[]` (`.default([])`) on `MarketName` + `Dossier` in `shared/contract.ts`, populated in
+`lib/feed.ts` (`watchersFor()`), verified live (`/api/market`, `/api/dossier`). Native: `Watcher` struct +
+`var watchers: [Watcher]? = nil` on both Swift models, a `WatcherStack` view in `Theme/Components.swift`
+(overlapping bundled `Image(key)` faces — no new file, so no pbxproj edit) wired into the Market row +
+Stock header, and single-actor promote copy. Member photos on iOS are bundled assets keyed by cam/graham,
+so the wire carries `key`, not a photo path. Distributed to TestFlight 2026-06-26. The mobile
+watchlist/universe split stays status-based for now (watch-driven mobile is a later follow-up).
 
 ### D79 — The Race gains scoring + an overview/day-matrix (per-call, mark-to-now) (Cam, 2026-06-25)
 **Context:** Phase 1/2 of The Race (D68) produced rows but `/race` was a flat reverse-chron list of
