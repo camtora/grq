@@ -1,12 +1,12 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
-import { personByName } from "@/lib/people";
+import { watchedByMember, watchersFor, type WatcherView } from "@/lib/watch";
 import { prisma } from "@/lib/db";
 import { Card, PageHeader } from "@/components/ui";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
-import WatchedBy from "@/components/hunt/WatchedBy";
+import AvatarStack from "@/components/AvatarStack";
 import SortableTable from "@/components/SortableTable";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveLastCell } from "@/components/LiveTableCells";
@@ -90,19 +90,22 @@ const selectCls =
 export default async function Browse({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const [sp, session, universe] = await Promise.all([searchParams, getSession(), allUniverse()]);
   const isMember = session?.role === "member";
-  // Membership by canonical (suffix-stripped) symbol → Watch button state.
-  const statusBy = new Map(universe.map((u) => [u.symbol.toUpperCase(), u.status]));
-  const watchState = (sym: string): WatchState => {
-    const s = statusBy.get(stripSuffix(sym).toUpperCase());
-    return s === "ACTIVE" ? "universe" : s === "CANDIDATE" ? "watching" : "none";
-  };
-  // Tracking tile (Cam 2026-06-25): is this name already in the universe / on the watchlist,
-  // and who put it there (the member who added it; agent/seed/migration adds resolve to null).
+  // Membership by canonical (suffix-stripped) symbol.
   const entryBy = new Map(universe.map((u) => [u.symbol.toUpperCase(), u]));
-  const trackingOf = (sym: string): { state: WatchState; watcher: ReturnType<typeof personByName> } => {
+  // Personal watches (D-watch): everyone watching each tracked name (avatar stack),
+  // plus the CURRENT member's own set for the row Watch toggle. Independent of status.
+  const watchersMap = await watchersFor(universe.map((u) => u.symbol));
+  const myWatched = isMember && session ? await watchedByMember(session.email) : new Set<string>();
+  const amWatching = (sym: string): boolean => {
     const u = entryBy.get(stripSuffix(sym).toUpperCase());
-    if (!u || u.status === "RETIRED") return { state: "none", watcher: null };
-    return { state: u.status === "ACTIVE" ? "universe" : "watching", watcher: personByName(u.addedBy) };
+    return u ? myWatched.has(u.symbol.toUpperCase()) : false;
+  };
+  // Tracking tile (Cam 2026-06-25; D-watch): whether the name is in the universe /
+  // tracked, and which members watch it (stacked avatars) — the two are independent.
+  const trackingOf = (sym: string): { state: WatchState; watchers: WatcherView[] } => {
+    const u = entryBy.get(stripSuffix(sym).toUpperCase());
+    if (!u || u.status === "RETIRED") return { state: "none", watchers: [] };
+    return { state: u.status === "ACTIVE" ? "universe" : "watching", watchers: watchersMap.get(u.symbol) ?? [] };
   };
 
   const { q = "", exchange = "", sector = "", country = "", cap = "" } = sp;
@@ -274,20 +277,22 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <LiveLastCell symbol={r.symbol} initialCents={r.priceCents} currency={r.currency} />
                   <td className="px-4 py-2.5">
                     {(() => {
-                      const { state, watcher } = trackingOf(r.symbol);
-                      if (state === "none") return <span className="text-teal-200/30">—</span>;
+                      const { state, watchers } = trackingOf(r.symbol);
+                      if (state === "none" && watchers.length === 0) return <span className="text-teal-200/30">—</span>;
                       return (
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span
-                            className={
-                              state === "universe"
-                                ? "rounded-full border border-teal-400/30 bg-teal-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-200"
-                                : "rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200"
-                            }
-                          >
-                            {state === "universe" ? "Universe" : "Watchlist"}
-                          </span>
-                          {watcher && <WatchedBy name={watcher.name} pill />}
+                          {state !== "none" && (
+                            <span
+                              className={
+                                state === "universe"
+                                  ? "rounded-full border border-teal-400/30 bg-teal-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-200"
+                                  : "rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200"
+                              }
+                            >
+                              {state === "universe" ? "Universe" : "Tracked"}
+                            </span>
+                          )}
+                          <AvatarStack people={watchers} />
                         </div>
                       );
                     })()}
@@ -295,7 +300,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
                       <ResearchButton symbol={bareTicker(r.symbol)} state={researchState(r.symbol)} canResearch={isMember} />
-                      {isMember && <WatchButton symbol={stripSuffix(r.symbol)} exchange={r.exchange ?? undefined} state={watchState(r.symbol)} />}
+                      {isMember && <WatchButton symbol={stripSuffix(r.symbol)} exchange={r.exchange ?? undefined} watching={amWatching(r.symbol)} />}
                     </div>
                   </td>
                 </tr>
@@ -308,7 +313,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
       <p className="mt-3 text-xs text-teal-200/40">
         Powered by FMP. Prices are in each listing&apos;s native currency. <b>Research</b> queues a full dossier without
         adding the name anywhere — once it lands, <b>View dossier</b> opens it. <b>Watch</b> adds it to your watchlist;
-        trading it still needs both members to promote it into the universe.
+        trading it still needs it promoted into the universe (any member can, once it clears the liquidity screen).
       </p>
     </main>
   );

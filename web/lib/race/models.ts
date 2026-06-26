@@ -32,6 +32,22 @@ export function shortModelLabel(id: string): string {
   return modelLabel(id).replace(/\s+\d.*$/, "").trim() || modelLabel(id);
 }
 
+/** Map a model id → its glossary key (lib/glossary.ts) so a label can render as a tap-to-explain
+ *  <Term> for Graham. Null when there's no entry (Term then falls back to the agent explainer). */
+export function glossaryKeyForModel(id: string): string | null {
+  const s = id.toLowerCase();
+  if (s.includes("opus")) return "opus";
+  if (s.includes("sonnet")) return "sonnet";
+  if (s.includes("haiku")) return "haiku";
+  if (s.includes("gpt")) return "gpt";
+  if (s.includes("gemini")) return "gemini";
+  if (s.includes("glm")) return "glm";
+  if (s.includes("deepseek")) return "deepseek";
+  if (s.includes("grok")) return "grok";
+  if (s.includes("llama")) return "llama";
+  return null;
+}
+
 /** A challenger ends its prose with a fenced ```json decision block — we already parse that into
  *  the action/P&L, so strip the trailing block from the text we display. Handles a closed fence
  *  and an unclosed trailing one; no-op when there's no such block (e.g. the champion's note). */

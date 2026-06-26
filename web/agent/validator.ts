@@ -125,7 +125,7 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     const entry = await universeEntry(symbol);
     if (!entry || entry.status !== "ACTIVE") {
       return refuse(
-        `${symbol} is not in the ACTIVE universe${entry ? ` (status: ${entry.status} — promotion needs both members)` : ""}.`,
+        `${symbol} is not in the ACTIVE universe${entry ? ` (status: ${entry.status} — promote it first)` : ""}.`,
       );
     }
     if (!entry.tier || !dial.tiers.includes(entry.tier)) {

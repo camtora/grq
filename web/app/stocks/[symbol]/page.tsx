@@ -6,6 +6,7 @@ import { fmpLogo } from "@/lib/logos";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
 import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
+import { isMarketOpen } from "@/agent/calendar";
 import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName } from "@/lib/session";
@@ -19,8 +20,8 @@ import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
-import WatchedBy from "@/components/hunt/WatchedBy";
-import { personByName } from "@/lib/people";
+import AvatarStack from "@/components/AvatarStack";
+import { watchersFor, isWatching } from "@/lib/watch";
 import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpStockNews, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
@@ -221,11 +222,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const dial = DIALS[settings?.riskLevel ?? "BALANCED"];
 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
-  // Who's watching: the member who put this name on the watchlist (UniverseMember.addedBy),
-  // resolved to a real person so agent/seed/migration adds don't surface a pill. Only while
-  // it's actually on the watchlist (tracked & not retired) — same rule as the Watchlist page.
-  const watcher =
-    tracked && entry.status !== "RETIRED" ? personByName(entry.addedBy) : null;
+  // Who's watching this name (D-watch): the human watcher stack, independent of universe
+  // status — a name stays watched after promotion, so show every watcher whenever there
+  // is one. `iWatch` is the CURRENT member's own watch, driving the personal toggle.
+  const stockWatchers = tracked ? (await watchersFor([symbol])).get(symbol.toUpperCase()) ?? [] : [];
+  const iWatch = isMember && session ? await isWatching(symbol, session.email) : false;
   // When the agent last researched this name (latest dossier / research entry) — shown
   // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
@@ -327,7 +328,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 {tracked && entry.status === "ACTIVE" && <Chip tone="green">in universe</Chip>}
                 {tracked && entry.status === "RETIRED" && <Chip tone="dim">retired</Chip>}
                 {watch && <Chip tone="teal">agent watching</Chip>}
-                {watcher && <WatchedBy name={watcher.name} pill />}
+                <AvatarStack people={stockWatchers} />
               </div>
             </div>
             {/* Live price, right-justified onto the ticker's baseline; the $/% move (sized to the
@@ -361,7 +362,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   researchInFlight={researchInFlight}
                 />
               )}
-              {isMember && !tracked && <WatchButton symbol={symbol} state="none" />}
+              {isMember && <WatchButton symbol={symbol} watching={iWatch} />}
               <DirectiveButtons
                 symbol={symbol}
                 current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
@@ -386,6 +387,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             currency={entry.currency}
             heightClass="h-28"
             defaultRange="1D"
+            live={isMarketOpen()}
           />
         </div>
       )}

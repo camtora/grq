@@ -11,6 +11,7 @@ import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
 import { MODELS, RACE, AGENT_VERSION, SELF_INVEST } from "./policy";
 import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
+import { parseProposal, SHADOW_DECISION_SUFFIX, SHADOW_NARRATIVE_SUFFIX } from "./race/shadow";
 import { PERSONA } from "./persona";
 import { alert, heartbeat, sendDiscord } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
@@ -126,53 +127,7 @@ async function recordUsage(opts: SessionOpts, rm: any, result: string | null): P
 // ----- The Race (D68): shadow-run the challenger model(s) on the SAME frozen prompt -----
 
 type ShadowKind = "morning" | "checkin" | "midday" | "eod" | "position";
-type Proposal = { action: string; symbol: string | null; qty: number | null; confidence: number | null; thesis: string | null };
-
-const ACTIONS = new Set(["BUY", "SELL", "HOLD", "NONE"]);
-
-/** Pull the structured decision out of a challenger's reply — the LAST JSON object in the text
- *  (we ask it to end with a ```json block). Tolerant: returns null if nothing parseable. */
-function parseProposal(text: string): Proposal | null {
-  if (!text) return null;
-  // Prefer a fenced ```json block; fall back to the last {...} in the text.
-  const fences = [...text.matchAll(/```json\s*([\s\S]*?)```/gi)].map((m) => m[1]);
-  const candidates = fences.length ? [fences[fences.length - 1]] : [];
-  const lastBrace = text.lastIndexOf("{");
-  if (!candidates.length && lastBrace >= 0) candidates.push(text.slice(lastBrace, text.lastIndexOf("}") + 1));
-  for (const c of candidates) {
-    try {
-      const o = JSON.parse(c.trim());
-      const action = String(o.action ?? "").toUpperCase();
-      if (!ACTIONS.has(action)) continue;
-      const qty = Number.isFinite(Number(o.qty)) ? Math.trunc(Number(o.qty)) : null;
-      const confidence = Number.isFinite(Number(o.confidence)) ? Math.trunc(Number(o.confidence)) : null;
-      return {
-        action,
-        symbol: o.symbol ? String(o.symbol).toUpperCase().replace(/[^A-Z0-9.\-]/g, "") || null : null,
-        qty: qty && qty > 0 ? qty : null,
-        confidence: confidence != null ? Math.max(0, Math.min(100, confidence)) : null,
-        thesis: o.thesis ? String(o.thesis).slice(0, 800) : null,
-      };
-    } catch {
-      /* try the next candidate */
-    }
-  }
-  return null;
-}
-
-const SHADOW_DECISION_SUFFIX = `
-
----
-SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). You have NO tools and you place NO orders; the live agent (the champion) acts, you only state what YOU would do given the EXACT same information above. Do your normal reasoning briefly, then END your reply with a single fenced JSON block and nothing after it:
-\`\`\`json
-{"action":"BUY|SELL|HOLD|NONE","symbol":"TICKER or null","qty":<whole shares or null>,"confidence":<0-100 or null>,"thesis":"one or two sentences on why"}
-\`\`\`
-If you'd place several orders, put your single highest-conviction one in the JSON and describe the rest in your reasoning. action: BUY/SELL = a trade you'd place now · HOLD = stay in current positions, no change · NONE = nothing actionable / stay in cash. Use the SAME ≥75% conviction discipline the champion is held to.`;
-
-const SHADOW_NARRATIVE_SUFFIX = `
-
----
-SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). Write the SAME piece the task asks for, based ONLY on the information given above (you have no tools). Your ENTIRE response is that piece — no preamble about being a challenger.`;
+// parseProposal + the shadow suffixes now live in ./race/shadow (shared with the Bull-Race engine).
 
 type ChampionCall = {
   action: string; // BUY | SELL | NONE
@@ -487,7 +442,7 @@ export async function runStartupUniverseReview(): Promise<void> {
 
 # TASK: Startup universe review (${etDateStr()})
 
-The members RESET the universe — everything is on the WATCHLIST now (candidates, not tradeable). Your job: decide which of these you would genuinely invest in, and BUILD the tradeable universe yourself.
+The members RESET the universe — everything is a CANDIDATE now (tracked & researched, not tradeable). Your job: decide which of these you would genuinely invest in, and BUILD the tradeable universe yourself.
 
 ## Watchlist candidates (${candidates.length})
 ${rows.join("\n")}

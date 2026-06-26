@@ -1,7 +1,7 @@
 // Agent self-investing (D30) — the agent promotes a CANDIDATE it has researched
 // and has conviction on into the tradeable universe, bounded by deterministic
-// rules. This is a NEW path that sits ALONGSIDE the human watchlist→universe
-// promotion (two-person), which is unchanged. The §6 order gate and the
+// rules. This sits alongside the human promotion path, which is ALSO single-actor
+// (D78) — same liquidity screen, no second approver. The §6 order gate and the
 // block/demote/kill overrides always still apply on top. Every promotion fires a
 // distinct Discord so the members see each autonomous add and can veto it.
 

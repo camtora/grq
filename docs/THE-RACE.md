@@ -231,6 +231,126 @@ kill) is a `--force-recreate`, no rebuild.
 
 ---
 
+## Scoring + Overview (Phase 1.5) — SHIPPED 2026-06-25 (D79)
+
+Phase 1/2 produced rows; this turned `/race` into a **scoreboard**. Locked design decisions (Cam):
+
+- **Champion races on its parsed proposal**, not its executed trades — so all lanes are scored on
+  identical hypothetical terms (apples-to-apples with shadows that can't reach the gate). The
+  champion's *real* fund NAV stays separate. Its "call" = its strongest `TradeProposal` that
+  session (`championCall()` in `sessions.ts`; the proposal's `priceCents` is the exact entry).
+- **Scoring = mark-to-now**: every BUY/SELL call's price is snapshotted at call time and marked to
+  the **live** price. **Per-call** (Cam's choice): each session's call is its own scored bet — a
+  name re-called across check-ins counts each time (repeated conviction), NOT collapsed into a
+  position. A SELL is scored **directionally** (profits when the price falls).
+- **A "race" = one ET trading day.** History navigates day-by-day (Today-style).
+- **Tiles show:** cumulative paper P&L (CAD) · hit rate · vs-XIC · activity + conviction.
+
+**Substrate (additive schema):** `ShadowRun.entryPriceCents` + `entryCurrency` (price snapshot at
+call time, native ccy). Champion entry = `TradeProposal.priceCents` (ask/bid); challenger entry =
+`getQuote` mid, snapshotted in `writeChallengerRow`. USD calls convert to CAD for the board via
+`usdCadRate`/`toCadCents` (`lib/fx.ts`); benchmark = `BENCHMARK` (XIC) closes.
+
+**Code:** `lib/race/score.ts` (pure `scoreCall` + `benchmarkReturnBps`), `lib/race/standings.ts`
+(server loader: live marks via `getQuotes`, per-model standings + per-day rollups + the day matrix),
+`lib/race/models.ts` (`modelLabel` + `glossaryKeyForModel`). UI: `/race` overview (one
+**`ModelTile`** per model — responsive grid, leader-first, champion flagged, **full roster shown**
+incl. not-yet-raced models faded "Awaiting first session") + a **`DayCard`** list; `/race/[date]`
+day detail = a **`SessionMatrix`** (per-session call matrix, one expandable cell per model — scales
+to 8) + day standings + prev/today/next nav. Model labels are glossary `<Term>` chips (literacy).
+
+**Backfill** (`scripts/backfill-shadow-entry.ts`): priced existing history. **Bug found + fixed:**
+the first pass derived champion calls from proposals in a wide forward window, stamping one late
+proposal onto every earlier session — fixed by bounding each session's window by the NEXT champion
+session (the LIVE capture was always correct; only the backfill was wrong).
+
+---
+
+## Bull Races — each model runs its own paper account — SHIPPED 2026-06-25 (D80)
+
+> Cam: *"these 8 are the 8 bulls in the bull race. Pick some or all, set each's parameters, run a
+> race — it plays out over time, keeping their own P&L, executing paper trades."*
+
+Where the always-on `/race` asks *"what would each model do with the champion's book?"* (judgment),
+**Bull Races** asks *"who manages money best?"* — each model is a **bull** with its OWN virtual
+paper account (cash, positions, trades, P&L) competing over time. The two **coexist** as separate
+lenses (Cam): `/race` stays; Bull Races lives at **`/bulls`**.
+
+### Non-negotiable: total isolation from the real fund
+A pure sandbox. Its own tables + a small engine that **reuses the sim fill MATH** but **never**
+touches the real `Account`/`Position`/`Trade`, the §6 validator, or the broker — satisfying
+guardrail #1 and ensuring a bug here can't corrupt the live book (proven by
+`scripts/verify-bull-fill.ts`: the real fund is byte-identical after a fill). **"Level field"
+falls out for free** — every bull runs seed-only/no-tools, so Opus has no tool edge in the
+sandbox; its real tooled fund is shown only as a reference line.
+
+### Data model (all NEW tables — `web/prisma/schema.prisma`)
+`Race` (name, status RUNNING|PAUSED|ENDED, cadence daily|hourly, startingStakeCents) · `RaceEntrant`
+(a bull: model, **dial** CAUTIOUS|BALANCED|AGGRESSIVE, **persona**, label, cashCents) · `RacePosition`
+(entrantId+symbol unique, native avgCost+currency) · `RaceTrade` · `RaceCall` (per-session decision
+audit: action/symbol/qty/confidence/thesis/text/filled/rejectReason) · `RaceNavSnapshot` (the P&L
+time series). Books are **CAD-denominated**; a US-name buy debits CAD at the live FX rate (positions
+held native, NAV marked to CAD).
+
+### The engine (`web/agent/race/`)
+At each race session, for each RUNNING race × ACTIVE bull (`runRaceTick()` → `runBullSession`):
+1. **`buildBullContext(entrant)`** (`context.ts`) — the bull's frozen prompt from ITS OWN book +
+   ITS OWN dial. **Menu = the TRACKED universe** (ACTIVE+CANDIDATE = the whole researched library,
+   ~81 names, 45 CA + 32 US — NOT just the 21 tradeable ACTIVE) **with GRQ's dossier call**
+   (stance/confidence) per name, sorted by conviction (an input, not a rule).
+2. **Run one-shot, no tools** — `runSession` (Claude, free on Max) or `chatComplete` (OpenRouter,
+   metered). Parse with `parseProposal` (shared `race/shadow.ts`).
+3. **`applyRaceFill`** — a **light race gate** (NOT §6): quote exists · cash sufficient · no
+   shorting · position ≤ `dial.maxPositionPct` of the bull's NAV · `dial.cashFloorPct` floor ·
+   `dial.maxNewTradesPerWeek`. Fill reuses `ibkrFixedCommissionCents` + the ACB formula from
+   `lib/broker/sim.ts`. Writes `RaceTrade`, updates `RacePosition` + entrant cash; rejections land
+   on `RaceCall.rejectReason`. The race gate deliberately does **not** enforce universe membership
+   — bulls pick freely (so CAD is the *book* currency, never a CA-only rule).
+4. **`snapshotBullNav`** — mark to live, append a `RaceNavSnapshot`.
+
+**Cadence + cost:** `runRaceTick()` runs in the BACKGROUND (self-guarded, must not block the 60s
+tick/heartbeat), **market-hours only**, one race per tick. Default **daily** cadence (~8 model
+calls/day) keeps Max-quota + OpenRouter $ sane; metered bull spend folds into the existing
+`RACE.maxUsdPerDay` cap.
+
+### Phase A — engine + standing House Race + `/bulls` (SHIPPED)
+The engine above + a seeded **House Race** (8 bulls @ BALANCED, CA$25k each;
+`scripts/seed-house-race.ts`). `/bulls`: leaderboard (NAV, return %, dial badge, sparkline), a
+multi-line return chart (`BullChart`), per-bull expand (holdings + recent calls; `BullRow`), and
+the real Opus fund as a reference. `/race` ↔ `/bulls` cross-linked.
+
+### Phase B — the configurable hub (SHIPPED, web-only)
+`/bulls` became a hub — a **race switcher** (`?race=<id>`), the selected race's detail +
+**member-only controls**, and a **new-race form**. The engine already loops over all RUNNING races,
+so new races need no redeploy.
+- **`NewRaceForm`** — name, cadence, per-bull stake, a free list of entrant rows (model × dial ×
+  persona; add a model twice for **versions**). **`RaceControls`** — start/pause/reset/delete.
+- **Routes** (member-only via `memberFromRequest`, viewer → 403): `POST /api/bulls` (create race +
+  entrants) · `POST /api/bulls/[id]` `{op: start|pause|end|reset|delete}` (reset wipes
+  positions/trades/calls/nav + restores each bull's cash to stake; delete cascades).
+- **Lib:** `listRaces()` (leader from latest nav snapshot) + `loadBullRace(raceId?)`.
+
+### Per-bull risk (the "tweak each bull" goal)
+`RaceEntrant.dial` reuses the fund's `DIALS` (position cap, cash floor, weekly-buy cap, tiers — see
+`policy.ts`), woven into both the bull's prompt and the race gate; `persona` is free-text style
+("momentum, high turnover") for "aggressive in different ways." So "Cautious Gemini vs Aggressive
+Grok" is measurable in their own books.
+
+### Operational notes
+- **Agent change → rebuild `agent` + bump `AGENT_VERSION`** (D77). Mind the startup-scan token guard.
+- **`scripts/` is NOT in the agent image** (`.dockerignore`) — run seed/verify host-side. The host's
+  `web/.env` lacks `GRQ_RACE_CHALLENGERS`, so pass the roster inline from the root `.env` or the
+  seed only sees opus + the default sonnet.
+- **Verify scripts:** `verify-bull-fill.ts` (fill + isolation), `verify-bull-context.ts` (the menu).
+
+### Deferred / Phase C ideas
+Mid-race roster edits (add/swap a bull without a full reset) · per-bull **USD sleeve + real FX** ·
+wiring the dials' **stops/take-profits** into the race engine · the **MU.US-style bad-quote** clean
+-up (a wide menu surfaces quote-layer glitches). **Tools-for-all** races (the "best agent" question)
+remain explicitly out — expensive (a provider-agnostic tool loop) and a different question.
+
+---
+
 ## Resolved / open questions
 
 1. ✅ **Scope:** all five decision/report sessions (Cam wanted morning, intraday, midday, EOD —

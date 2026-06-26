@@ -269,7 +269,8 @@ unacceptable in accounting; int covers ±$21M (D7).
 
 | Model | Purpose |
 |---|---|
-| `UniverseMember` | CANDIDATE → ACTIVE (requires both members + auto screen) → RETIRED. The agent may only BUY ACTIVE symbols |
+| `UniverseMember` | CANDIDATE → ACTIVE (single-actor promote — any member or the agent — gated by the auto liquidity screen; D78) → RETIRED. The agent may only BUY ACTIVE symbols |
+| `StockWatch` | Who personally watches a name `(symbol, email)` — many-to-many, independent of universe status (D78). Drives the watchlist + watcher avatar stacks |
 | `ResearchRequest` | Queue for on-demand and scheduled dossiers: QUEUED → RUNNING → DONE / FAILED |
 | `Watchlist` | Agent's current candidates — managed by `set_watchlist` tool |
 | `SymbolDirective` | PINNED (always on watchlist; agent can't remove) or BLOCKED (agent can never buy; member veto) |

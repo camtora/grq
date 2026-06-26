@@ -1,8 +1,11 @@
+import { memberKeyForEmail } from "@/lib/users";
+
 // The fund's two members — photos + plain-text career summaries. Kept as
 // markdown strings on purpose ("AI-readable"): they're the single source for the
 // watchlist "watched by" avatars, the Reports "about us" badges, and anything we
-// later feed the agent. addedBy / displayName stores the short `name` ("Cam",
-// "Graham"), so personByName() maps a watcher back to their photo + bio.
+// later feed the agent. The StockWatch table keys watchers by stable EMAIL, so
+// personByEmail() is the primary resolver (D-watch); personByName() stays for the
+// legacy addedBy/displayName ("Cam"/"Graham") provenance fields.
 
 export type Person = {
   key: "cam" | "graham";
@@ -63,6 +66,15 @@ BY_NAME.set("cameron tora", PEOPLE[0]);
 export function personByName(name: string | null | undefined): Person | null {
   if (!name) return null;
   return BY_NAME.get(name.trim().toLowerCase()) ?? null;
+}
+
+const BY_KEY = new Map<string, Person>(PEOPLE.map((p) => [p.key, p]));
+
+/** Resolve a member email (the StockWatch identity) to a member, or null. The
+ *  primary watcher resolver — watches are stored by email, not display name. */
+export function personByEmail(email: string | null | undefined): Person | null {
+  const key = memberKeyForEmail(email);
+  return key ? (BY_KEY.get(key) ?? null) : null;
 }
 
 export type OwnerKey = "cam" | "graham" | "agent";

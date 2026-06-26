@@ -9,7 +9,7 @@ import DismissButton from "@/components/DismissButton";
 import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
-import WatchedBy from "@/components/hunt/WatchedBy";
+import AvatarStack from "@/components/AvatarStack";
 import { wordCount } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
 
@@ -66,8 +66,8 @@ export default function HuntHero({ find, isMember, toName }: { find: HuntFind; i
               full dossier →
             </Link>
             {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
-            {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} />}
-            {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" />}
+            {isMember && find.watchers.length > 0 && <AvatarStack people={find.watchers} />}
+            {isMember && find.watch === "none" && <WatchButton symbol={find.sym} />}
             {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
             {isMember && <DismissButton symbol={find.sym} name={find.name} />}
           </div>

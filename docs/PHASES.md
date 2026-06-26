@@ -208,7 +208,8 @@ night (directives end-to-end, scoreboard aggregation math, context blocks).
 
 ## Phase 2.7 — Universe pipeline & research dossiers ✅ (shipped 2026-06-12)
 
-Defaults blessed by Cam; **promotion requires both members** (his call). Verified end-to-end
+Defaults blessed by Cam; promotion required both members at ship time (**superseded by D78,
+2026-06-25: promotion is now single-actor — any member or the agent**). Verified end-to-end
 same night: GSY added (probe found GSY.TO, 252 bars backfilled, dossier queued) → Cam
 requested promotion → Cam's self-approval refused → Graham's approval ran the screen →
 ACTIVE → demoted → retired with history kept. /stocks regrouped: 📌 pinned (with the

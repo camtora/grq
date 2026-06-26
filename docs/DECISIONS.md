@@ -98,6 +98,9 @@ amortizes overhead, it does not raise ROI %. Advisory only — money moves only 
 keeps it off the LAN.
 
 ### D16 — Universe is UI-managed with a two-person promotion rule (2026-06-12)
+> **Superseded by D78 (2026-06-25):** promotion is now SINGLE-ACTOR — any member or the
+> agent may promote, gated only by the automated screen. The rest of D16 stands.
+
 **Context:** Cam wanted stocks added/researched/promoted through the UI, not code commits.
 **Decision:** `UniverseMember` lifecycle CANDIDATE → ACTIVE → RETIRED; anyone adds
 candidates (researched, signal-tracked, never tradeable; cap 20); **promotion to ACTIVE
@@ -182,8 +185,8 @@ with no page/signals/call. **Decisions (with Cam):**
   exactly one state — **watchlist** (CANDIDATE) → promote → **universe** (ACTIVE) → or nothing.
 - **Watch = candidate.** One "Watch" action everywhere creates a CANDIDATE (the agent dossiers
   it); the standalone flat watchlist and the separate "+research" button are gone. Promotion to
-  tradeable still needs **both members + the liquidity screen**; non-Canadian listings are
-  research-only until multi-currency.
+  tradeable needs the liquidity screen (single-actor since D78 — any member or the agent; was
+  two-person); non-Canadian listings are research-only until multi-currency.
 - **The `Watchlist` table was the agent's working memory, not redundant** — its rows are the
   agent's entry-trigger setups on ACTIVE names, injected into every decision session. Renamed
   the Prisma model **`Watchlist` → `AgentFocus`** (kept the physical table via `@@map`, so
@@ -1836,3 +1839,110 @@ booted clean + ticking. Ran `buildContext()` live — Positions block renders we
 **Not backfilled (deliberate):** historical `Trade`/`JournalEntry` rows keep their `v1.0-phase2` stamp — that's correct provenance; those records *were* authored by that version. Only the live Settings "on duty" value (rewritten by `runner.ts` on every boot) and all future stamps move to `v1.48-phase4`.
 **Changed:** `agent/policy.ts` (the constant + the explainer comment); the two `@default("v1.48-phase4")` columns in `schema.prisma` (`Settings`, `Trade`) via `prisma db push`; the rarely-hit fallback in `lib/broker/sim.ts`.
 **Verified:** no `v1.0-phase2` refs remain in the tree; `tsc --noEmit` clean; `db push` applied; web + agent rebuilt and swapped; agent boot logged `[grq-agent] v1.48-phase4 up`, wrote `v1.48-phase4` to `Settings`, and **skipped the startup universe scan** (today's marker present → no Max-quota burn); Settings page renders `v1.48-phase4 — on duty`; `/var` 84% after prune.
+
+---
+
+### D78 — Watchlist is many-to-many "who's watching"; promotion is single-actor (2026-06-25)
+**Context:** The old model overloaded one field — `UniverseMember.status` — to mean both
+"who's tracking this" (via a single `addedBy` string) and "is it tradeable" (CANDIDATE vs
+ACTIVE). That conflation forced three awkward behaviours: only one person could "watch" a
+name, a name couldn't be both watched and in the universe (promotion = `CANDIDATE→ACTIVE`,
+which mechanically left the watchlist filter), and there was even a workaround to *hide* the
+watcher pill once promoted ("a promoted name isn't being watched anymore"). Cam wanted the
+watchlist to be a genuine personal-interest list, and promotion to stop requiring two people.
+
+**Decision:** Split the two axes that were conflated.
+- **`StockWatch(symbol, email)` join table** = *personal interest*, per-member, many-to-many.
+  Multiple members can watch one name; the UI shows their faces as an overlapping
+  `AvatarStack` on the Watchlist, Universe, Browse, the Hunt, and the stock-page banner.
+  Watching is **independent of universe status** — a name stays watched after promotion, and
+  un-watching (`unwatch` action) removes only *your* watch, never stopping research.
+- **Watchers are humans only** — the agent's interest lives in the universe / `AgentFocus`,
+  not here (keeps the avatar stack meaningful).
+- **Watching still implies tracking** — watching an untracked name still creates a CANDIDATE
+  `UniverseMember` + queues a dossier (unchanged), so the agent researches everything watched.
+- **The Watchlist page is watch-driven** — it shows names with ≥1 human watcher (per-member
+  tabs: All / Cam / Graham, a name can appear under both). Agent-tracked-but-unwatched
+  candidates live on the Universe / Hunt / Browse pages, not the personal watchlist.
+- **Promotion is single-actor** — any member *or* the agent can promote a researched candidate;
+  the automated liquidity screen is the only gate. The old two-person request/approve flow
+  (`promotionRequestedBy/At`, `proposedTier`) is retired in code (columns kept for
+  expand/contract; drop later).
+
+**Why it's safe:** The agent never reads watch state — it gates buys purely on
+`status === "ACTIVE"`, so decoupling watch from universe is invisible to its logic. The real
+money guardrail — the **§6 order gate refuses any BUY unless the name is ACTIVE**, enforced in
+code — is **unchanged**. Dropping two-person promotion only loosens *who may promote*
+(governance), not *what protects money*; it also brings the human path in line with the agent
+self-promote path (D30/D32), which has been single-actor since it shipped. Cam (an owner)
+authorised it.
+
+**Migration:** `scripts/backfill-watches.ts` seeded `StockWatch` from the legacy `addedBy`
+(Cam/Graham only; agent/seed/null skipped) — 35 watches across 81 tracked names.
+
+**Changed (web):** `schema.prisma` (`StockWatch`), `lib/watch.ts`, `lib/people.ts`
+(`personByEmail`), `app/api/universe/route.ts` (watch on add, new `unwatch`, single-actor
+`promote`), `components/{WatchButton,AvatarStack,UniverseActions,StockTable,WatchlistTabs}.tsx`
+(+ hunt components), `app/market/{watchlist,browse}/page.tsx`, `app/universe/page.tsx`,
+`app/stocks/[symbol]/page.tsx`, `lib/glossary.ts`, `agent/validator.ts` error copy. Deleted
+`components/hunt/WatchedBy.tsx`. iOS (`shared/contract.ts` watchers array + native AvatarStack)
+is a deliberate **second phase**, after the web ships.
+
+### D79 — The Race gains scoring + an overview/day-matrix (per-call, mark-to-now) (Cam, 2026-06-25)
+**Context:** Phase 1/2 of The Race (D68) produced rows but `/race` was a flat reverse-chron list of
+side-by-side lanes — no way to see who's winning, no history, no scoring. It needed a scoreboard.
+
+**Decision:** Score every model's calls and turn `/race` into an overview.
+- **Champion races on its parsed PROPOSAL, not its executed trades** — so all lanes are scored on
+  identical hypothetical terms (apples-to-apples with shadows that never reach the gate). Its call =
+  its strongest `TradeProposal` that session; the real fund NAV stays a separate, honest number.
+- **Mark-to-now, PER-CALL** (Cam chose per-call over collapsing repeats into a position): each
+  session's BUY/SELL is its own scored bet from an entry snapshot to the live price; a name
+  re-called across check-ins counts each time (repeated conviction). SELL scored directionally.
+- **A "race" = one ET trading day**; history navigates day-by-day (Today-style).
+- **Overview** = one tile per model (the FULL configured roster, not-yet-raced ones faded), tiles
+  show paper P&L / hit rate / vs-XIC / activity+conviction; **day detail** = a per-session call
+  matrix (scales to 8 models) + day standings + date nav.
+
+**Why it's safe:** Read-only analytics over the existing `ShadowRun` shadow data — the §6 gate, the
+kill switch, and the real fund are untouched. Additive schema only (`entryPriceCents`/`entryCurrency`).
+
+**Changed (web):** `ShadowRun.entryPriceCents`+`entryCurrency`; `agent/sessions.ts` (champion-call
+capture + entry snapshots, `parseProposal`/suffixes extracted to `agent/race/shadow.ts`);
+`lib/race/{score,standings,models}.ts`; `lib/universe.ts currencyForSymbol`; `app/race/page.tsx`
+rewrite + `app/race/[date]/page.tsx`; `components/race/*`; `scripts/backfill-shadow-entry.ts`
+(one-time; a window-attribution bug in the champion backfill was found + fixed — bound each session
+by the next). Deployed agent v1.50→v1.51.
+
+### D80 — Bull Races: each model runs its own isolated paper account (Cam, 2026-06-25)
+**Context:** The always-on `/race` measures *judgment* — every model reacts to the champion's book.
+Cam wanted a second, richer thing: each model as a "bull" running its OWN account (cash, positions,
+P&L), to answer "is Opus the right model?" on a level field and eventually tweak each bull's risk
+and run/reset/spin-up configurable competitions ("8 bulls in the bull race").
+
+**Decision:** A new `/bulls` feature that **coexists** with `/race` (Cam).
+- **Total isolation:** its own tables (`Race`/`RaceEntrant`/`RacePosition`/`RaceTrade`/`RaceCall`/
+  `RaceNavSnapshot`) + a small engine that reuses the sim fill MATH (`ibkrFixedCommissionCents` +
+  ACB) but NEVER touches the real `Account`/`Position`/`Trade`, the §6 validator, or the broker.
+- **Level field by construction:** every bull runs seed-only/no-tools, so Opus has no tool edge in
+  the sandbox; the real tooled fund is a reference line only.
+- **Per-bull risk = the goal:** `RaceEntrant.dial` reuses the fund's `DIALS` + a free-text
+  `persona`; a LIGHT race gate (position cap, cash floor, weekly-buy cap, no-short — NOT the §6
+  gate, and NOT universe-restricted) enforces them. CAD is the book currency, not a CA-only rule —
+  bulls can buy any quotable US name (fills at live FX).
+- **Menu = the whole RESEARCHED library** (tracked universe, ~81 names, with GRQ's dossier call per
+  name), not just the 21 tradeable ACTIVE — the no-tools bulls allocate against the real research.
+- **Phase A:** the engine + a standing House Race (8 bulls @ BALANCED, CA$25k) + `/bulls`
+  leaderboard/chart/per-bull. **Phase B:** the configurable hub — member-only create / pick bulls /
+  set dials+personas / start-pause-reset-delete / multiple concurrent races + versions.
+
+**Why it's safe:** A pure sandbox proven byte-isolated from the real fund (`verify-bull-fill.ts`);
+guardrail #1 holds because no model output ever reaches the real gate. Member-only mutations
+(viewer → 403). Cost-bounded (daily cadence + the existing OpenRouter cap).
+
+**Changed (web):** `schema.prisma` (6 Race* tables); `agent/race/{engine,context,shadow}.ts`;
+`agent/runner.ts` (`runRaceTick` hook); `lib/race/bulls.ts`; `app/bulls/page.tsx`;
+`app/api/bulls/{route,[id]/route}.ts`; `components/bulls/*`; `scripts/{seed-house-race,
+verify-bull-fill,verify-bull-context}.ts`. Deployed agent v1.51→v1.52 (menu→tracked universe),
+then v1.53. **Ops:** `scripts/` isn't in the agent image (`.dockerignore`) — seed/verify host-side
+with the roster passed inline from root `.env`.

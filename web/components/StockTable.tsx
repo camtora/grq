@@ -16,8 +16,8 @@ import SortableTable, { type SortableColumn, type SortableRow } from "@/componen
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveLastCell, LiveDayCell } from "@/components/LiveTableCells";
 import RowExtras from "@/components/RowExtras";
-import Avatar from "@/components/Avatar";
-import { personByName, ownerKeyFor } from "@/lib/people";
+import AvatarStack from "@/components/AvatarStack";
+import { type WatcherView } from "@/lib/watch";
 
 // One table for both the Universe (the tradeable set) and the Watchlist (candidates)
 // — same look, different column list + manage buttons (Cam 2026-06-16). Columns are
@@ -36,7 +36,7 @@ export type StockRow = {
   exchange: string | null;
   sector: string | null;
   marketCapM: number | null;
-  addedBy?: string | null; // who watched it (watchlist only; null on legacy/agent rows)
+  watchers?: WatcherView[]; // members watching it (avatar stack; D-watch). [] = nobody.
   lastCents: number | null;
   dayBps: number | null;
   signals: Signals | null;
@@ -86,7 +86,7 @@ function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendatio
 
 const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   tier: { label: "Tier", align: false },
-  watcher: { label: "Added by", align: false },
+  watcher: { label: "Watching", align: false },
   last: { label: "Last", align: true },
   day: { label: "Day", align: true },
   signals: { label: "Signals", align: false },
@@ -122,13 +122,13 @@ function Cell({ col, r }: { col: StockColumn; r: StockRow }) {
         </td>
       );
     case "watcher": {
-      const p = personByName(r.addedBy);
-      // Cam/Graham → their photo; everything else (the agent, hunt finds, seed/legacy
-      // adds) → the GRQ bull. Every row gets a face — no empty "—" (Cam 2026-06-18).
+      // Who's watching (D-watch): a stack of every member's face, or a dash if no
+      // human watches it yet (the agent isn't a watcher — its interest is the universe).
+      const watchers = r.watchers ?? [];
       return (
         <td className="px-4 py-2.5">
           <div className="flex justify-center">
-            <Avatar src={p?.photo ?? "/bull-splash.png"} name={p?.name ?? "Agent"} />
+            {watchers.length > 0 ? <AvatarStack people={watchers} /> : <span className="text-teal-200/25">—</span>}
           </div>
         </td>
       );
@@ -289,7 +289,7 @@ function sortValues(r: StockRow): Record<string, string | number | null> {
     symbol: r.symbol,
     name: r.name,
     tier: r.tier,
-    watcher: r.addedBy ?? null,
+    watcher: (r.watchers ?? []).map((w) => w.name).join(", ") || null,
     last: r.lastCents,
     day: r.dayBps,
     signals: (r.rec ? stanceMeta(r.rec.label)?.pos : null) ?? null,
@@ -345,7 +345,9 @@ export default function StockTable({
                 "data-exchange": r.exchange ?? "",
                 "data-sector": r.sector ?? "",
                 "data-cap": capTier(r.marketCapM) ?? "",
-                "data-owner": ownerKeyFor(r.addedBy),
+                // Multi-watcher (D-watch): comma-joined member keys, so the Watchlist
+                // tabs can show a row under EACH member who watches it.
+                "data-owners": (r.watchers ?? []).map((w) => w.key).join(","),
               }}
               colSpan={colSpan}
               detail={expandable ? <RowDetail r={r} /> : null}

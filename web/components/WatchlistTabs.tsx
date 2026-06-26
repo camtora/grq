@@ -1,35 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { OwnerKey } from "@/lib/people";
 
-// Owner tabs for the Watchlist. The table is server-rendered and each <tr> carries
-// data-owner (cam | graham | agent — anything not tagged to a member is "agent");
-// this toggles row visibility, same cheap no-refetch trick as StockFilters. Opens on
-// the current member's OWN names by default (`defaultTab` from the server — Cam
-// 2026-06-25); falls back to "all" for viewers or an empty personal list.
-type Tab = { value: "all" | OwnerKey; label: string };
+// Member tabs for the Watchlist (D-watch). The table is server-rendered and each
+// <tr> carries data-owners — a comma-joined list of the member keys watching that
+// name — so a stock both members watch shows under Cam AND Graham. This toggles row
+// visibility (the cheap no-refetch trick from StockFilters). Opens on the current
+// member's OWN watches by default (`defaultTab` from the server); falls back to "all"
+// for viewers or an empty personal list. The agent isn't a watcher, so there's no
+// Agent tab — unwatched names live on the Universe / Hunt / Browse pages.
+type TabValue = "all" | "cam" | "graham";
 
-const TABS: Tab[] = [
+const TABS: { value: TabValue; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "graham", label: "Graham" },
   { value: "cam", label: "Cam" },
-  { value: "agent", label: "Agent" },
+  { value: "graham", label: "Graham" },
 ];
 
 export default function WatchlistTabs({
   counts,
   defaultTab = "all",
 }: {
-  counts: Record<"all" | OwnerKey, number>;
-  defaultTab?: "all" | OwnerKey;
+  counts: Record<TabValue, number>;
+  defaultTab?: TabValue;
 }) {
-  const [tab, setTab] = useState<Tab["value"]>(defaultTab);
+  const [tab, setTab] = useState<TabValue>(defaultTab);
 
   useEffect(() => {
     const rows = Array.from(document.querySelectorAll<HTMLElement>("tr.stock-row"));
     for (const row of rows) {
-      const ok = tab === "all" || row.dataset.owner === tab;
+      const owners = (row.dataset.owners ?? "").split(",").filter(Boolean);
+      const ok = tab === "all" || owners.includes(tab);
       row.hidden = !ok;
       // Keep an open expansion row in lockstep with its parent (it's the next sibling).
       const detail = row.nextElementSibling;

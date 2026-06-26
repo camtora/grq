@@ -15,6 +15,7 @@ export type Section =
   | "Research"
   | "Stock"
   | "Reports"
+  | "Race"
   | "Settings"
   | "Chat"
   | "Journal"
@@ -38,6 +39,7 @@ export function sectionForPath(pathRaw: string): Section {
   if (path === "/universe" || path.startsWith("/universe/")) return "Universe";
   if (path === "/stocks" || path.startsWith("/stocks/")) return "Stock";
   if (path === "/reports" || path.startsWith("/reports/")) return "Reports";
+  if (path === "/race" || path.startsWith("/race/")) return "Race";
   if (path === "/settings" || path.startsWith("/settings/")) return "Settings";
   if (path === "/chat" || path.startsWith("/chat/")) return "Chat";
   if (path === "/journal" || path.startsWith("/journal/")) return "Journal";

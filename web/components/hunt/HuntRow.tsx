@@ -10,7 +10,8 @@ import Sparkline from "@/components/Sparkline";
 import Md from "@/components/Md";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import HeatMeter from "@/components/hunt/HeatMeter";
-import WatchedBy from "@/components/hunt/WatchedBy";
+import AvatarStack from "@/components/AvatarStack";
+import { type WatcherView } from "@/lib/watch";
 import { OBSCURITY_LABEL, previewText, wordCount } from "@/components/hunt/shared";
 
 // One Hunt find as a Direction-A "Heat Board" row (design handoff). Leads-not-verdicts:
@@ -31,7 +32,7 @@ export type HuntFind = {
   obscurity: number | null;
   rank: number;
   watch: WatchState;
-  watchedBy: string | null; // who's watching it (the candidate's addedBy); null unless a member watches it
+  watchers: WatcherView[]; // members watching it (avatar stack); [] unless someone watches it
   body: string;
 };
 
@@ -148,9 +149,9 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
         >
           full dossier →
         </Link>
-        {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
-        {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} />}
-        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" />}
+        {/* who's watching it (independent of universe status now — D-watch) */}
+        {isMember && find.watchers.length > 0 && <AvatarStack people={find.watchers} />}
+        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} />}
         {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} compact />}
         {isMember && (
           <div className="flex justify-center">

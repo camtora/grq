@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, EmptyState } from "@/components/ui";
 import ModelTile from "@/components/race/ModelTile";
 import DayCard from "@/components/race/DayCard";
@@ -17,6 +18,11 @@ export default async function RacePage() {
       <PageHeader
         title="The Race"
         sub="Same data, different minds. Each session every model gets the EXACT same frozen prompt — only Opus trades, the rest call it shadow-only. Every BUY/SELL is snapshotted and marked to the live price. Who'd be ahead?"
+        right={
+          <Link href="/bulls" className="rounded-lg border border-teal-400/20 bg-teal-400/5 px-2.5 py-1 text-xs font-semibold text-teal-300 hover:bg-teal-400/10">
+            Bull Races →
+          </Link>
+        }
       />
 
       {models.length === 0 ? (

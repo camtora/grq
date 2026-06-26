@@ -283,13 +283,37 @@ model AgentFocus {
   @@map("Watchlist")
 }
 
-// The universe pipeline (2.7): CANDIDATE = researched, not tradeable;
-// ACTIVE = the agent may buy it (promotion requires BOTH members + the
-// automated screen); RETIRED = stop researching (history is never deleted).
+// The universe pipeline (2.7; reworked D-watch): CANDIDATE = tracked/researched,
+// not tradeable; ACTIVE = the agent may buy it; RETIRED = stop researching
+// (history is never deleted). Promotion is now SINGLE-ACTOR — any member OR the
+// agent may promote (the automated liquidity screen still gates it); the §6 order
+// gate (ACTIVE-required-to-BUY) is unchanged. Status no longer means "watchlist":
+// a personal watch is the separate StockWatch table below, independent of status
+// (a name can be watched AND ACTIVE at once). The two-person fields below
+// (promotionRequestedBy/At, proposedTier) are RETIRED in code — kept on the model
+// for expand/contract safety; drop in a follow-up migration.
 enum UniverseStatus {
   CANDIDATE
   ACTIVE
   RETIRED
+}
+
+// Who personally WATCHES a stock (D-watch). Many-to-many: each (symbol, member)
+// pair is one row, so a name can be watched by several members and shown as a
+// stack of avatars. Independent of UniverseMember.status — watching does not make
+// a name tradeable, and promoting does not un-watch it. Watchers are humans only
+// (the agent's interest lives in the universe/AgentFocus, not here). `email` is
+// the member's stable identity (lib/users.ts), resolved to a face via
+// lib/people.ts personByEmail(). NB the physical "Watchlist" table name is already
+// taken by AgentFocus (@@map above) — this stays the default "StockWatch".
+model StockWatch {
+  symbol  String
+  email   String
+  addedAt DateTime @default(now())
+
+  @@id([symbol, email])
+  @@index([email])
+  @@index([symbol])
 }
 
 model UniverseMember {
@@ -801,4 +825,104 @@ model ShadowRun {
   @@index([sessionAt])
   @@index([sessionKind])
   @@index([model])
+}
+
+// Bull Races (Cam 2026-06-25) — a configurable competition where each model ("bull") runs its OWN
+// virtual paper account: its own cash, positions, trades, P&L. A PURE SANDBOX, fully isolated from
+// the real fund — these tables never touch Account/Position/Trade or the §6 gate (guardrail #1).
+// Every bull runs seed-only/no-tools each race session, so the field is level (no champion tool
+// edge here). Books are CAD-denominated; US names fill at the live FX rate. See docs/THE-RACE.md.
+model Race {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  status             String   @default("RUNNING") // RUNNING | PAUSED | ENDED
+  cadence            String   @default("daily") // daily | hourly — which session slots fire
+  startingStakeCents Int      @default(2500000) // each bull's starting CAD cash (CA$25k)
+  createdAt          DateTime @default(now())
+  startedAt          DateTime?
+  endedAt            DateTime?
+  entrants           RaceEntrant[]
+}
+
+// One "bull": a model running under a risk dial + optional persona. Multiple entrants may share a
+// model (different dials/personas = different versions).
+model RaceEntrant {
+  id        Int      @id @default(autoincrement())
+  raceId    Int
+  race      Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  model     String // e.g. "claude-opus-4-8", "x-ai/grok-4.3"
+  dial      String   @default("BALANCED") // CAUTIOUS | BALANCED | AGGRESSIVE (DIALS in policy.ts)
+  persona   String? // optional style instruction ("momentum, high turnover")
+  label     String // display name, e.g. "Grok · Aggressive"
+  cashCents Int // current CAD cash
+  status    String   @default("ACTIVE") // ACTIVE | RETIRED
+  createdAt DateTime @default(now())
+  positions RacePosition[]
+  trades    RaceTrade[]
+  calls     RaceCall[]
+  navSnaps  RaceNavSnapshot[]
+
+  @@index([raceId])
+}
+
+model RacePosition {
+  id           Int         @id @default(autoincrement())
+  entrantId    Int
+  entrant      RaceEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  symbol       String
+  qty          Int
+  avgCostCents Int // native currency
+  currency     String      @default("CAD")
+  openedAt     DateTime    @default(now())
+
+  @@unique([entrantId, symbol])
+  @@index([entrantId])
+}
+
+model RaceTrade {
+  id               Int         @id @default(autoincrement())
+  entrantId        Int
+  entrant          RaceEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  at               DateTime    @default(now())
+  sessionAt        DateTime
+  symbol           String
+  side             String // BUY | SELL
+  qty              Int
+  priceCents       Int // native fill price
+  currency         String      @default("CAD")
+  commissionCents  Int // native
+  realizedPnlCents Int? // CAD (SELL only)
+
+  @@index([entrantId])
+}
+
+// Per-session decision audit — every bull, every race session (filled or not).
+model RaceCall {
+  id           Int         @id @default(autoincrement())
+  entrantId    Int
+  entrant      RaceEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  sessionAt    DateTime
+  action       String? // BUY | SELL | HOLD | NONE
+  symbol       String?
+  qty          Int?
+  confidence   Int?
+  thesis       String?
+  text         String // full reasoning
+  filled       Boolean     @default(false)
+  rejectReason String? // race-gate rejection (cash, position cap, no quote, no-short, weekly cap)
+
+  @@index([entrantId])
+  @@index([sessionAt])
+}
+
+model RaceNavSnapshot {
+  id                Int         @id @default(autoincrement())
+  entrantId         Int
+  entrant           RaceEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  at                DateTime    @default(now())
+  navCadCents       Int
+  cashCents         Int
+  positionsCadCents Int
+
+  @@index([entrantId, at])
 }

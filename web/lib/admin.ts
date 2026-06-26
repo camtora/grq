@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { userForEmail, isOwner, roleForEmail } from "@/lib/users";
+import { sectionForPath } from "@/lib/sections";
 
 // Aggregations for the owner-only /admin usage dashboard. All read-only over the
 // PageView table. Everything is bounded to a trailing window so the page stays
@@ -19,6 +20,7 @@ const SECTION_ORDER = [
   "Stock",
   "Research",
   "Reports",
+  "Race",
   "Settings",
   "Chat",
   "Journal",
@@ -77,7 +79,7 @@ export async function getUsage(days: number): Promise<Usage> {
       where,
       orderBy: { at: "desc" },
       take: 60,
-      select: { at: true, email: true, section: true, path: true },
+      select: { at: true, email: true, path: true },
     }),
   ]);
 
@@ -147,7 +149,10 @@ export async function getUsage(days: number): Promise<Usage> {
     at: r.at,
     email: r.email,
     name: userForEmail(r.email)?.name ?? null,
-    section: r.section,
+    // Re-derive the section from the path at read time (like role above) so a
+    // re-categorisation — e.g. adding "Race" — reflects on existing rows too,
+    // not only ones logged after the change.
+    section: sectionForPath(r.path),
     path: r.path,
   }));
 

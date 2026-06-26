@@ -48,6 +48,7 @@ export default function PriceChart({
   defaultRange = "1Y",
   windowStart,
   windowEnd,
+  live = false,
 }: {
   data: Pt[];
   symbol?: string; // needed for the "1D" range (lazy intraday fetch)
@@ -57,6 +58,10 @@ export default function PriceChart({
   bare?: boolean;
   heightClass?: string; // plot height — default h-56; the stock page halves it to h-28
   defaultRange?: string; // which range button is selected on first paint (daily mode)
+  // When true AND viewing an intraday session, the resting dot gets a pulsing halo to
+  // mark it as a live, advancing print (the NAV tape today / the stock 1D during hours).
+  // Callers own the liveness decision (market-open, today-vs-archive); we only animate.
+  live?: boolean;
   // Intraday only: pin the x-axis to a FIXED time window (epoch ms) instead of stretching
   // the data edge-to-edge. The NAV tape passes the 9:30→16:00 session so the line sits at
   // its real clock-time and grows rightward into empty space as the day goes on.
@@ -166,6 +171,9 @@ export default function PriceChart({
   // The dot rests on the latest bar (or the hovered one); grey it when that bar is extended-hours.
   const dotIdx = hi ?? (n > 0 ? n - 1 : 0);
   const dotColor = hasData && (pts[dotIdx]?.session ?? "regular") !== "regular" ? EXT_STROKE : stroke;
+  // Pulse the resting dot only on a live intraday session, and only when it's parked on the
+  // latest print (not while hovering a past point — then you're inspecting history).
+  const livePulse = live && isIntra && hi == null;
 
   const longSpan = hasData && pts[n - 1].t - pts[0].t > 200 * 86_400_000;
   const hhmm = (t: number) =>
@@ -263,11 +271,20 @@ export default function PriceChart({
               )}
             </svg>
 
-            {/* A real round dot: on the hovered session, or resting on the latest close. */}
+            {/* A real round dot: on the hovered session, or resting on the latest close.
+                When live, a pinging halo radiates behind it to mark the print as live. */}
             <div
-              className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-              style={{ left: `${(hp ?? xy(n - 1)).x}%`, top: `${(hp ?? xy(n - 1)).y}%`, backgroundColor: dotColor }}
-            />
+              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${(hp ?? xy(n - 1)).x}%`, top: `${(hp ?? xy(n - 1)).y}%` }}
+            >
+              {livePulse && (
+                <span
+                  className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full opacity-75"
+                  style={{ backgroundColor: dotColor }}
+                />
+              )}
+              <span className="relative block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
+            </div>
 
             {hi != null && (
               <div

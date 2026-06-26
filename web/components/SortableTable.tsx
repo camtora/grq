@@ -24,6 +24,7 @@ export type SortableColumn = {
 
 export type SortableRow = {
   key: string;
+  group?: string; // when `groups` is set, rows cluster by this key (a divider sits between clusters)
   sort?: Record<string, string | number | null>;
   node: ReactNode;
 };
@@ -35,6 +36,7 @@ export default function SortableTable({
   footer = null,
   className = "w-full text-sm",
   headRowClassName = "text-center text-xs uppercase tracking-wider text-teal-200/40",
+  groups,
 }: {
   columns: SortableColumn[];
   rows: SortableRow[];
@@ -42,6 +44,10 @@ export default function SortableTable({
   footer?: ReactNode;
   className?: string;
   headRowClassName?: string;
+  // Optional currency-style grouping: rows are partitioned by `row.group` and rendered in
+  // this order, each cluster preceded by a labelled divider row (only when 2+ clusters are
+  // present, so a single-group table looks unchanged). Sorting still applies WITHIN a cluster.
+  groups?: { key: string; label: ReactNode }[];
 }) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(initialSort);
   const numericByKey = new Map(columns.filter((c) => c.key).map((c) => [c.key as string, !!c.numeric]));
@@ -57,6 +63,47 @@ export default function SortableTable({
         return sort.dir === "asc" ? d : -d;
       })
     : rows;
+
+  const renderRow = (r: SortableRow) => <Fragment key={r.key}>{r.node}</Fragment>;
+
+  // Grouped body: keep the sorted order WITHIN each group, lay groups out in `groups`
+  // order, and drop a labelled divider before each (only when 2+ groups have rows). Any
+  // row whose group isn't listed trails at the end, unlabelled (defensive fallback).
+  let body: ReactNode;
+  if (groups && groups.length) {
+    const present = groups.filter((g) => ordered.some((r) => r.group === g.key));
+    const showDividers = present.length > 1;
+    const matched = new Set<string>();
+    const blocks = groups.map((g) => {
+      const gRows = ordered.filter((r) => r.group === g.key);
+      if (!gRows.length) return null;
+      gRows.forEach((r) => matched.add(r.key));
+      return (
+        <Fragment key={`grp-${g.key}`}>
+          {showDividers && (
+            <tr className="border-t border-teal-400/15 bg-teal-400/[0.02]">
+              <td
+                colSpan={columns.length}
+                className="px-5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-200/40"
+              >
+                {g.label}
+              </td>
+            </tr>
+          )}
+          {gRows.map(renderRow)}
+        </Fragment>
+      );
+    });
+    const leftover = ordered.filter((r) => !matched.has(r.key));
+    body = (
+      <>
+        {blocks}
+        {leftover.map(renderRow)}
+      </>
+    );
+  } else {
+    body = ordered.map(renderRow);
+  }
 
   const toggle = (col: SortableColumn) => {
     if (!col.key) return;
@@ -109,9 +156,7 @@ export default function SortableTable({
         </tr>
       </thead>
       <tbody>
-        {ordered.map((r) => (
-          <Fragment key={r.key}>{r.node}</Fragment>
-        ))}
+        {body}
         {footer}
       </tbody>
     </table>

@@ -12,10 +12,12 @@ import UniverseActions from "@/components/UniverseActions";
 import UniverseTabs from "@/components/UniverseTabs";
 import Term from "@/components/Term";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
+import AvatarStack from "@/components/AvatarStack";
+import { watchersFor } from "@/lib/watch";
 
 export const dynamic = "force-dynamic";
 
-const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "position", "unrealized", "researched"];
+const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "position", "unrealized", "researched", "watcher"];
 // Researched tab is a lean catalogue — call + the dossier's confidence + when it was
 // last researched (no per-name quote/signal fetches).
 const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "researched"];
@@ -59,6 +61,9 @@ export default async function Universe() {
 
   const allSyms = [...active.map((u) => u.symbol), ...demoted.map((u) => u.symbol)];
   const quotes = await getQuotes(allSyms);
+  // Who's watching each name (D-watch) — independent of universe membership, so an
+  // ACTIVE name can still carry its watchers' faces.
+  const watchersMap = await watchersFor(allSyms);
 
   const stanceRows = await prisma.journalEntry.findMany({
     where: { stance: { not: null }, symbol: { not: null } },
@@ -112,6 +117,7 @@ export default async function Universe() {
       exchange: u.exchange,
       sector: u.sector,
       marketCapM: u.marketCapM,
+      watchers: watchersMap.get(u.symbol) ?? [],
       lastCents: q?.midCents ?? null,
       dayBps: q?.dayChangeBps ?? null,
       signals: sig,
@@ -274,6 +280,7 @@ export default async function Universe() {
                       demoted{info.by ? ` by ${info.by}` : ""} · {fmtWhen(info.at)}
                     </span>
                   )}
+                  <AvatarStack people={watchersMap.get(u.symbol) ?? []} />
                   {isMember && (
                     <div className="ml-auto">
                       <UniverseActions symbol={u.symbol} status="CANDIDATE" pendingBy={u.promotionRequestedBy} proposedTier={u.proposedTier} currentUser={me} hideResearch />

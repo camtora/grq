@@ -11,6 +11,7 @@ import {
   isTradeable,
 } from "@/lib/universe";
 import { promotionScreen } from "@/lib/screen";
+import { watch, unwatch } from "@/lib/watch";
 import { probeYahooSymbol } from "@/lib/broker/yahoo";
 import { refreshQuotesFor } from "@/lib/broker/quotes";
 import { refreshBars } from "@/lib/bars";
@@ -83,7 +84,13 @@ export async function POST(req: Request) {
       }
     }
     const keyed = await universeEntry(key);
-    if (keyed && keyed.status !== "RETIRED") return bad(`${keyed.name} (${keyed.yahoo}) is already tracked (${keyed.status}).`);
+    // Already tracked (CANDIDATE or ACTIVE): watching is independent of status, so
+    // just record THIS member's personal watch — no re-track, no error. A watched
+    // name can also be ACTIVE (D-watch). Idempotent.
+    if (keyed && keyed.status !== "RETIRED") {
+      await watch(keyed.symbol, session.email);
+      return NextResponse.json({ ok: true, status: keyed.status, symbol: keyed.symbol, watching: true });
+    }
 
     if (!keyed) {
       const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
@@ -118,16 +125,27 @@ export async function POST(req: Request) {
       await refreshQuotesFor([key]).catch(() => 0);
       await refreshBars([key], "1y").catch(() => 0);
       await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });
-      await journal(key, `${who} added ${key} to research`, `${pickName ?? resolved.name ?? bare} (${resolved.yahoo}${pickCurrency ? `, ${pickCurrency}` : ""}) is now a CANDIDATE — researched, not tradeable. Dossier queued. Promotion to the universe requires both members + the automated screen.`);
-      await notifyOut("info", `${who} added ${key} to research`, `${pickName ?? resolved.name ?? ""} — dossier queued.`, { category: "members", actorEmail: session.email, symbol: key });
-      return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key, yahoo: resolved.yahoo, name: pickName ?? resolved.name });
+      await watch(key, session.email);
+      await journal(key, `${who} is watching ${key}`, `${pickName ?? resolved.name ?? bare} (${resolved.yahoo}${pickCurrency ? `, ${pickCurrency}` : ""}) is now a CANDIDATE — tracked & researched, not tradeable. Dossier queued. Any member or the agent can promote it into the universe once it clears the liquidity screen.`);
+      await notifyOut("info", `${who} is watching ${key}`, `${pickName ?? resolved.name ?? ""} — dossier queued.`, { category: "members", actorEmail: session.email, symbol: key });
+      return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key, yahoo: resolved.yahoo, name: pickName ?? resolved.name, watching: true });
     }
-    // revive (same listing, was retired)
+    // revive (same listing, was retired) + record the caller's watch
     await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: who } });
     invalidateUniverseCache();
+    await watch(key, session.email);
     await journal(key, `${who} re-opened research on ${key}`, "Back to CANDIDATE — history was kept.");
     await notifyOut("info", `${who} re-opened research on ${key}`, "", { category: "members", actorEmail: session.email, symbol: key });
-    return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key });
+    return NextResponse.json({ ok: true, status: "CANDIDATE", symbol: key, watching: true });
+  }
+
+  // ---------- unwatch (drop ONLY this member's personal watch) ----------
+  // Independent of tracking: the name stays a CANDIDATE/ACTIVE UniverseMember and
+  // keeps any other members' watches. To stop research entirely, use retire/demote.
+  if (action === "unwatch") {
+    const key = entry?.symbol ?? bareTicker(symbol);
+    await unwatch(key, session.email);
+    return NextResponse.json({ ok: true, watching: false, symbol: key });
   }
 
   // ---------- dismiss (a hunt proposal we don't want → RETIRED so it can't resurface) ----------
@@ -175,31 +193,19 @@ export async function POST(req: Request) {
 
   if (!entry) return bad(`${symbol} is not tracked — add it first.`, 404);
 
-  // ---------- promote: two-person rule ----------
+  // ---------- promote (single-actor: any member OR the agent; the screen still gates) ----------
   if (action === "promote") {
     if (entry.status !== "CANDIDATE") return bad(`${symbol} is ${entry.status} — only candidates get promoted.`);
     // Tradeable only in a currency the fund holds — CAD or USD (D34; IBKR carries
     // both). Other currencies stay research-only. Ties the gate to the actual money
     // constraint, not the exchange suffix (D24).
     if (!isTradeable(entry.currency, entry.yahoo)) {
-      return bad(`${symbol} is a ${entry.currency ?? "non-CAD/USD"} listing (${entry.yahoo}) — the fund trades CAD and USD only. It stays on the watchlist.`, 422);
+      return bad(`${symbol} is a ${entry.currency ?? "non-CAD/USD"} listing (${entry.yahoo}) — the fund trades CAD and USD only. It stays a candidate.`, 422);
     }
     const tier = typeof body.tier === "string" && (TIERS as readonly string[]).includes(body.tier) ? body.tier : entry.proposedTier;
     if (!tier) return bad("Pick a tier (etf | large | mid).");
-
-    if (!entry.promotionRequestedBy) {
-      await prisma.universeMember.update({
-        where: { symbol },
-        data: { promotionRequestedBy: who, promotionRequestedAt: new Date(), proposedTier: tier },
-      });
-      invalidateUniverseCache();
-      await journal(symbol, `${who} requested promotion of ${symbol}`, `Proposed tier: ${tier}. Awaiting the other member's approval — universe additions take both of you.`);
-      await notifyOut("info", `${who} wants ${symbol} in the universe (${tier})`, "Needs the other member's approval on the Research tab.", { category: "members", actorEmail: session.email, symbol });
-      return NextResponse.json({ ok: true, pending: who });
-    }
-    if (entry.promotionRequestedBy === who) {
-      return bad(`You already requested this — it needs the other member's approval.`);
-    }
+    // Single-actor (D-watch): any member can promote directly — the deterministic
+    // liquidity screen is the gate, and every BUY still clears the §6 order gate.
     const failures = await promotionScreen(symbol);
     if (failures.length > 0) return bad(`Screen failed: ${failures.join("; ")}.`, 422);
     await prisma.universeMember.update({
@@ -207,8 +213,8 @@ export async function POST(req: Request) {
       data: { status: "ACTIVE", tier, promotionRequestedBy: null, promotionRequestedAt: null, proposedTier: null },
     });
     invalidateUniverseCache();
-    await journal(symbol, `${symbol} promoted to the universe`, `Approved by ${entry.promotionRequestedBy} + ${who} (tier: ${tier}). Screen passed. The agent may now trade it within all guardrails.`);
-    await notifyOut("info", `🟢 ${symbol} joined the universe (${tier})`, `${entry.promotionRequestedBy} + ${who} — screen passed.`, { category: "members", actorEmail: session.email, symbol });
+    await journal(symbol, `${symbol} promoted to the universe`, `Promoted by ${who} (tier: ${tier}). Screen passed. The agent may now trade it within all guardrails — anyone watching it keeps it on their watchlist.`);
+    await notifyOut("info", `🟢 ${symbol} joined the universe (${tier})`, `${who} promoted it — screen passed.`, { category: "members", actorEmail: session.email, symbol });
     return NextResponse.json({ ok: true, status: "ACTIVE" });
   }
 

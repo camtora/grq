@@ -38,8 +38,9 @@ they meet in the database (orders, journal, reports, settings).
   large/mid caps + broad ETFs per risk dial); store as config, not DB.
   **Governance (revised 2026-06-12, Phase 2.7):** the universe is DB-backed and
   **UI-managed**: anyone can add a research CANDIDATE (researched, never tradeable);
-  promotion to ACTIVE requires **both members** plus the automated screen (price ≥ $2,
-  20d ADV ≥ 100k, bar history); demote/retire is single-member (risk reduction). Every
+  promotion to ACTIVE is **single-actor** (D78, 2026-06-25) — any member, or the agent
+  under code rules, can promote — gated by the automated screen (price ≥ $2, 20d ADV ≥
+  100k, bar history); demote/retire is single-member (risk reduction). Every
   change is journaled + Discord-alerted; history is never deleted. The agent still cannot
   change membership — it may only propose in weekly reviews.
 - Research sources (Cam, 2026-06-11): the 9:00 session works through a **seed source list**

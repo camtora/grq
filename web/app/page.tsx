@@ -317,6 +317,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   // Flat on non-trading days — NAV is frozen at the last close, so "today" is $0 rather than
   // the prior session's last-snapshot→close drift shown as a phantom move (Cam, 2026-06-21).
   const marketDay = isMarketDay(anchor);
+  const marketOpenNow = isMarketOpen(); // for the live badge — only meaningful on the live "today" view
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
   const dayPnl = marketDay ? pf.navCents - dayOpenNav : 0;
   const dayPnlPct = marketDay && dayOpenNav > 0 ? dayPnl / dayOpenNav : 0;
@@ -471,6 +472,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             </div>
           </div>
           <div className="text-right text-sm">
+            {isToday && (
+              <div className="mb-1 flex items-center justify-end gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${marketOpenNow ? "animate-pulse bg-emerald-400" : "bg-teal-200/30"}`} />
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${marketOpenNow ? "text-emerald-300/80" : "text-teal-200/50"}`}
+                >
+                  {marketOpenNow ? "Market open" : "Market closed"}
+                </span>
+              </div>
+            )}
             {marketDay ? (
               <>
                 <Pnl cents={dayPnl} />{" "}

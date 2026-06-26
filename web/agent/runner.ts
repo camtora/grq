@@ -23,6 +23,7 @@ import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin } from "./sessions";
+import { runRaceTick } from "./race/engine";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -662,6 +663,9 @@ async function tick() {
   await maybeSaturdayHeldRefreshEnqueue();
   await maybeDailyRefreshEnqueue();
   await processResearchQueue();
+
+  // Bull Races (background — ~8 model calls; self-guarded against overlap, must NOT block the tick).
+  runRaceTick().catch((e) => console.error("[bullrace] tick error", e instanceof Error ? e.message : e));
 }
 
 // Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every

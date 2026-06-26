@@ -146,7 +146,7 @@ export default function IdeaCard({
           {isMember && idea.watch === "universe" ? (
             <span className="text-[11px] font-semibold text-emerald-300/70">✓ universe</span>
           ) : isMember ? (
-            <WatchButton symbol={idea.sym} state={idea.watch} />
+            <WatchButton symbol={idea.sym} watching={idea.watch === "watching"} />
           ) : null}
         </div>
       </Card>
@@ -239,7 +239,7 @@ export default function IdeaCard({
             {isMember && idea.watch === "universe" ? (
               <span className="text-[11px] font-semibold text-emerald-300/70">✓ in your universe</span>
             ) : isMember ? (
-              <WatchButton symbol={idea.sym} state={idea.watch} />
+              <WatchButton symbol={idea.sym} watching={idea.watch === "watching"} />
             ) : null}
           </div>
         </div>

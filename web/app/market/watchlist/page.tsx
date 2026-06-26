@@ -9,16 +9,10 @@ import AddTicker from "@/components/AddTicker";
 import UniverseActions from "@/components/UniverseActions";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 import WatchlistTabs from "@/components/WatchlistTabs";
-import { ownerKeyFor, type OwnerKey } from "@/lib/people";
+import { allWatches } from "@/lib/watch";
+import { memberKeyForEmail } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
-
-// addedBy carries system sentinels for non-member adds (DB seed / migration
-// backfill) — only surface it when it's an actual person who watched the name.
-function watchedBy(addedBy: string | null): string | null {
-  if (!addedBy || addedBy === "migration" || addedBy.startsWith("seed")) return null;
-  return addedBy;
-}
 
 // The watchlist table carries the at-a-glance numbers inline (call, indicators,
 // target upside, manage actions); clicking a row expands it for GRQ's call blurb +
@@ -39,10 +33,15 @@ export default async function Watchlist() {
   ]);
   const me = displayName(session);
   const isMember = session?.role === "member";
-  // Watchlist shows everything still in play: candidates being researched AND names
-  // already promoted into the Universe — so members see the stocks they added even
-  // after promotion (Cam 2026-06-18). Owner tabs filter to "your" names.
-  const tracked = universe.filter((u) => u.status !== "RETIRED");
+  // The watchlist is WATCH-driven (D-watch): the names a member personally watches —
+  // candidates being researched AND names already in the Universe (promotion no longer
+  // un-watches a name). Tabs filter to each member's own watches. Agent-tracked names
+  // nobody watches live on the Universe / Hunt / Browse pages, not here.
+  const watchMap = await allWatches(); // symbol -> members watching it
+  const bySym = new Map(universe.map((u) => [u.symbol, u]));
+  const tracked = [...watchMap.keys()]
+    .map((sym) => bySym.get(sym))
+    .filter((u): u is (typeof universe)[number] => !!u && u.status !== "RETIRED");
   const retired = universe.filter((u) => u.status === "RETIRED");
 
   // Rich data for the watchlist tracked.
@@ -89,7 +88,7 @@ export default async function Watchlist() {
         exchange: c.exchange,
         sector: c.sector,
         marketCapM: c.marketCapM,
-        addedBy: watchedBy(c.addedBy),
+        watchers: watchMap.get(c.symbol) ?? [],
         lastCents: cur,
         dayBps: q?.dayChangeBps ?? null,
         signals: sig,
@@ -116,15 +115,21 @@ export default async function Watchlist() {
     // Pinned (priority) names sort to the top; the rest alphabetical.
     .sort((a, b) => (a.pinnedBy ? -1 : b.pinnedBy ? 1 : a.symbol.localeCompare(b.symbol)));
 
-  // Per-owner tab counts (All / Graham / Cam / Agent — anything untagged is "agent").
-  const ownerCounts: Record<"all" | OwnerKey, number> = { all: rows.length, cam: 0, graham: 0, agent: 0 };
-  for (const r of rows) ownerCounts[ownerKeyFor(r.addedBy)]++;
+  // Per-member tab counts (All / Cam / Graham). A name both members watch counts under
+  // BOTH — watching is many-to-many now (D-watch).
+  const ownerCounts: Record<"all" | "cam" | "graham", number> = { all: rows.length, cam: 0, graham: 0 };
+  for (const r of rows) {
+    const keys = new Set((r.watchers ?? []).map((w) => w.key));
+    if (keys.has("cam")) ownerCounts.cam++;
+    if (keys.has("graham")) ownerCounts.graham++;
+  }
 
-  // Open on the viewer's OWN watched names by default (Cam 2026-06-25), not everyone's —
-  // but only if they're a member with at least one name; otherwise fall back to "all" so a
-  // viewer (or a member who hasn't watched anything yet) isn't met with an empty list.
-  const myKey = ownerKeyFor(me);
-  const defaultTab: "all" | OwnerKey = (myKey === "cam" || myKey === "graham") && ownerCounts[myKey] > 0 ? myKey : "all";
+  // Open on the viewer's OWN watches by default (Cam 2026-06-25) — but only if they're a
+  // member with at least one watch; otherwise fall back to "all" so a viewer (or a member
+  // who hasn't watched anything yet) isn't met with an empty list.
+  const myKey = memberKeyForEmail(session?.email);
+  const defaultTab: "all" | "cam" | "graham" =
+    (myKey === "cam" || myKey === "graham") && ownerCounts[myKey] > 0 ? myKey : "all";
 
   const running = requests.filter((r) => r.status === "RUNNING");
   const queued = requests.filter((r) => r.status === "QUEUED");
@@ -133,13 +138,13 @@ export default async function Watchlist() {
 
   return (
     <main>
-      <PageHeader title="Watchlist" sub="Everything you and GRQ are tracking — candidates to promote (both members), plus the names you've already moved into the Universe." />
+      <PageHeader title="Watchlist" sub="The names you're watching — GRQ researches each one, and they stay here even after they're promoted into the Universe." />
 
       <section className="mb-8">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Watchlist — {tracked.length} tracked</h2>
           <p className="text-xs text-teal-200/40">
-            Candidates GRQ is researching (promote one — both members) plus your in-Universe names. Filter by who added it.
+            Names being researched plus your in-Universe names. Faces show who&apos;s watching; filter by watcher. Any member can promote a candidate into the Universe.
           </p>
         </div>
 

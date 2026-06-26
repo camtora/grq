@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v1.50-phase4";
+export const AGENT_VERSION = "v1.53-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -48,10 +48,10 @@ export const MAX_PENDING_WAKEUPS = 6;
 
 // Agent self-investing (D30): the agent may promote a CANDIDATE it has RESEARCHED
 // and has conviction on straight into the tradeable universe — bounded by these
-// rules (the deterministic liquidity screen still runs on top). The human
-// watchlist→universe path (two-person) is unchanged; the §6 order gate and the
-// block/demote/kill overrides ALWAYS still apply. Humans edit this; the agent never
-// does (D11). Flip GRQ_AGENT_SELF_PROMOTE=false to disable without a deploy.
+// rules (the deterministic liquidity screen still runs on top). The human promotion
+// path is also single-actor (D78) — same screen, no second approver; the §6 order
+// gate and the block/demote/kill overrides ALWAYS still apply. Humans edit this; the
+// agent never does (D11). Flip GRQ_AGENT_SELF_PROMOTE=false to disable without a deploy.
 export const SELF_INVEST = {
   enabled: (process.env.GRQ_AGENT_SELF_PROMOTE ?? "true").toLowerCase() !== "false",
   allowedStances: ["Strong Buy", "Buy"] as const, // must be a genuine buy call

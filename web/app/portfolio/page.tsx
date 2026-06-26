@@ -90,15 +90,11 @@ export default async function Portfolio() {
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
   const feeFrac = pf.feeBudgetCentsMonth > 0 ? pf.feeSpentMonthCents / pf.feeBudgetCentsMonth : 0;
 
-  // Currency split (D62 — the fund now holds CAD + USD). cashCents is the CAD total;
-  // usdCashCents×fx is folded in, so the USD-in-CAD value = cashCents − cadCashCents.
-  const cad = (c: number) => `CA$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Currency split (D62 — the fund now holds CAD + USD). The Cash card shows the raw
+  // CAD and USD balances side by side; usdCashCadCents is the USD cash valued in CAD
+  // (cashCents folds it into the CAD total) — used for the USD cash row's NAV weight.
   const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
-  const usdPositionsCadCents = pf.positions.filter((p) => p.currency === "USD").reduce((s, p) => s + p.marketValueCadCents, 0);
-  const usdExposureCadCents = usdCashCadCents + usdPositionsCadCents;
-  const usdPct = pf.navCents > 0 ? (usdExposureCadCents / pf.navCents) * 100 : 0;
-  const holdsUsd = pf.usdCashCents > 0 || usdPositionsCadCents > 0;
 
   // The main cards, factored out so the layout can be arranged two ways without
   // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
@@ -126,6 +122,10 @@ export default async function Portfolio() {
           className="mt-2 w-full text-sm"
           headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
           initialSort={{ key: "symbol", dir: "asc" }}
+          groups={[
+            { key: "CAD", label: "Canada · CAD" },
+            { key: "USD", label: "United States · USD" },
+          ]}
           columns={[
             { key: "symbol", label: "Symbol", align: "left" },
             { key: "qty", label: "Qty", align: "right", numeric: true },
@@ -137,6 +137,7 @@ export default async function Portfolio() {
           ]}
           rows={pf.positions.map((p) => ({
             key: p.symbol,
+            group: p.currency === "USD" ? "USD" : "CAD",
             sort: {
               symbol: p.symbol,
               qty: p.qty,
@@ -323,34 +324,44 @@ export default async function Portfolio() {
           }
         />
         <StatCard
-          label="Contributions"
+          label="Contributions (CAD)"
           term="contributions"
           value={money(pf.contributionsCents)}
           note="initial commitment"
         />
-        <StatCard
-          label="Fee budget"
-          term="fee-budget"
-          value={`${money(pf.feeSpentMonthCents)} / ${money(pf.feeBudgetCentsMonth)}`}
-          note={
-            <span className="block">
-              <span className="mt-1 block h-1.5 w-full overflow-hidden rounded-full bg-teal-400/10">
-                <span
-                  className={`block h-full rounded-full ${feeFrac > 0.8 ? "bg-red-400" : "bg-teal-400/70"}`}
-                  style={{ width: `${Math.min(100, feeFrac * 100)}%` }}
-                />
-              </span>
-            </span>
-          }
-        />
         <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash (CAD)</div>
-          <div className="mt-2">
-            <div className="text-xl font-semibold tabular-nums text-teal-50">{cad(pf.cashCents)}</div>
+          <div className="text-xs uppercase tracking-wider text-teal-200/50">
+            <Term k="fee-budget">Fee budget</Term>
           </div>
-          {holdsUsd ? (
-            <div className="mt-1 text-xs text-teal-200/40">incl. USD held, at the BoC rate · {usdPct.toFixed(1)}% of NAV in USD</div>
-          ) : null}
+          <div className="mt-2 space-y-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs uppercase tracking-wider text-teal-200/40">Spent</span>
+              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.feeSpentMonthCents)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs uppercase tracking-wider text-teal-200/40">Budget</span>
+              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.feeBudgetCentsMonth)}</span>
+            </div>
+          </div>
+          <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-teal-400/10">
+            <span
+              className={`block h-full rounded-full ${feeFrac > 0.8 ? "bg-red-400" : "bg-teal-400/70"}`}
+              style={{ width: `${Math.min(100, feeFrac * 100)}%` }}
+            />
+          </span>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash</div>
+          <div className="mt-2 space-y-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs uppercase tracking-wider text-teal-200/40">CAD</span>
+              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.cadCashCents)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs uppercase tracking-wider text-teal-200/40">USD</span>
+              <span className="text-xl font-semibold tabular-nums text-teal-50">{usd(pf.usdCashCents)}</span>
+            </div>
+          </div>
         </Card>
       </section>
 

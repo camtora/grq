@@ -7,7 +7,7 @@ import WatchButton from "@/components/WatchButton";
 import ShareStockButton from "@/components/ShareStockButton";
 import Sparkline from "@/components/Sparkline";
 import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
-import WatchedBy from "@/components/hunt/WatchedBy";
+import AvatarStack from "@/components/AvatarStack";
 import { previewText } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
 
@@ -118,8 +118,8 @@ function ScannerRow({ find, isMember, toName }: { find: HuntFind; isMember: bool
           dossier
         </Link>
         {/* in the universe → no watch indicator (it's promoted, not "being watched"). */}
-        {isMember && find.watch === "watching" && <WatchedBy name={find.watchedBy} compact />}
-        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} state="none" iconOnly />}
+        {isMember && find.watchers.length > 0 && <AvatarStack people={find.watchers} size="h-5 w-5" />}
+        {isMember && find.watch === "none" && <WatchButton symbol={find.sym} iconOnly />}
         {isMember && toName && <ShareStockButton symbol={find.sym} toName={toName} iconOnly />}
       </div>
     </div>

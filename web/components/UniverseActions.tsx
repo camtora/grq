@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 type Props = {
   symbol: string;
   status: "CANDIDATE" | "ACTIVE" | "RETIRED";
-  pendingBy: string | null;
-  proposedTier: string | null;
-  currentUser: string;
+  // Deprecated (D-watch): promotion is single-actor now, so the two-person
+  // request/approve fields are unused. Kept on the type so existing callers (which
+  // still pass the vestigial UniverseMember columns) compile without edits.
+  pendingBy?: string | null;
+  proposedTier?: string | null;
+  currentUser?: string;
   researchInFlight?: boolean;
   // Hide the tier picker (it lives on the stock page) — in compact rows the
-  // promotion request just uses the proposed/default tier. (Cam 2026-06-16)
+  // promotion just uses the proposed/default tier. (Cam 2026-06-16)
   hideTierSelect?: boolean;
   // Hide the "Research now" button on the watchlist/universe tables — it belongs
   // on the stock page (where the same component still shows it). (Cam 2026-06-16)
@@ -23,9 +26,7 @@ type Props = {
 export default function UniverseActions({
   symbol,
   status,
-  pendingBy,
   proposedTier,
-  currentUser,
   researchInFlight,
   hideTierSelect,
   hideResearch,
@@ -73,43 +74,28 @@ export default function UniverseActions({
 
       {status === "CANDIDATE" && (
         <>
-          {!pendingBy || pendingBy === currentUser ? (
-            <>
-              {!hideTierSelect && (
-                <select
-                  value={tier}
-                  onChange={(e) => setTier(e.target.value)}
-                  disabled={busy || pendingBy === currentUser}
-                  className="rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-xs text-teal-50 outline-none"
-                >
-                  <option value="etf">etf</option>
-                  <option value="large">large</option>
-                  <option value="mid">mid</option>
-                </select>
-              )}
-              <button
-                disabled={busy || pendingBy === currentUser}
-                onClick={() => act("promote", { tier })}
-                title={
-                  pendingBy === currentUser
-                    ? "You requested this — the other member must approve"
-                    : "Request promotion into the tradeable universe (needs both members)"
-                }
-                className={`${btn} border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10`}
-              >
-                {pendingBy === currentUser ? "Awaiting other member" : "Request promotion"}
-              </button>
-            </>
-          ) : (
-            <button
+          {!hideTierSelect && (
+            <select
+              value={tier}
+              onChange={(e) => setTier(e.target.value)}
               disabled={busy}
-              onClick={() => act("promote", { tier: proposedTier ?? tier })}
-              title={`${pendingBy} requested this (${proposedTier}) — your click makes it tradeable`}
-              className={`${btn} border-emerald-400/50 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20`}
+              className="rounded-lg border border-teal-400/20 bg-(--field-bg) px-2 py-1.5 text-xs text-teal-50 outline-none"
             >
-              Approve — {pendingBy} asked
-            </button>
+              <option value="etf">etf</option>
+              <option value="large">large</option>
+              <option value="mid">mid</option>
+            </select>
           )}
+          {/* Single-actor (D-watch): any member can promote — the liquidity screen is the
+              gate, and every buy still clears the §6 order gate. */}
+          <button
+            disabled={busy}
+            onClick={() => act("promote", { tier })}
+            title="Promote into the tradeable universe — clears the liquidity screen, then the agent may trade it"
+            className={`${btn} border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10`}
+          >
+            Promote
+          </button>
           <button
             disabled={busy}
             onClick={() => window.confirm(`Stop researching ${symbol}? History is kept.`) && act("retire")}

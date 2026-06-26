@@ -104,6 +104,7 @@ export default function LiveTape({
           currency="CAD"
           windowStart={windowStart}
           windowEnd={windowEnd}
+          live={live && marketOpen}
           bare
         />
       ) : hasPos ? (
