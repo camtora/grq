@@ -2074,6 +2074,21 @@ a FRESH server per session (`agent/tools.ts`, `agent/sessions.ts`, `agent/chat-s
 two members chatting at once) never share an instance. Interim safety: `RESEARCH_CONCURRENCY=1` in `.env` keeps it
 serial until the fix is verified under load; flip to 5 to re-enable. Agent → **v2.4**.
 
+**Update (2026-06-26 PM):** a re-attempt at concurrency was reverted again ("concurrent broke, changed it back" — Cam),
+so the per-session-factory fix is **deployed but still UNVERIFIED under load**, and it may not even be sufficient: the
+Agent SDK's `query()` may not support multiple concurrent in-process sessions at all (shared subprocess/transport/auth),
+in which case real parallelism needs separate **worker processes**, not just MCP-instance isolation. Honest post-mortem:
+the original concurrency=5 was **deployed without ever exercising the concurrent path** (tsc + reasoning only), so it
+shipped a silent regression — it failed quietly (FAILED rows + a Discord alert, no crash) and was oversold as "live, 5×".
+Cam's call: low-risk on paper, fine to ship unproven code/mistakes — the alerts caught it.
+**Key economics (why serial may be RIGHT, not just safe):** parallelism does NOT reduce tokens, only the **burn rate**.
+A full-universe refresh is ~**104 names × ~287k ≈ 29M tokens**; serial spreads that across hours / multiple 5h Max
+windows, while 5× slams it into ~1/5 the time → 5× the burn against the window → MORE likely to hit the cap and throttle.
+So 5×'s only payoff is **intraday wall-clock** (a member kicks N dossiers and waits) — for the **overnight** weekly
+full-pool refresh (Sun 02:00 ET) it buys nothing and hurts the quota. **Plan:** keep serial; watch tonight's/this
+weekend's run token cost on `/admin/usage` (the 5h-window panel now polls live); revisit concurrency afterward, likely
+scoped to intraday on-demand only, and only after a REAL concurrency fix + a verified load test.
+
 ### D86 — Chat reaches every researched name; stock-page back link does true browser-back; small web-UX pass (Cam, 2026-06-26)
 - **Chat universe roster (`agent/chat-server.ts`):** the read-only chat only carried held/focus dossiers (`buildContext`),
   so it wrongly told members a CANDIDATE name "hasn't been researched" (e.g. BlackBerry — dossiered as both `BB`/USD and
