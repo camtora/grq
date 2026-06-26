@@ -790,6 +790,12 @@ model ShadowRun {
   qty          Int? // whole shares
   thesis       String?
   confidence   Int? // 0–100
+  // The Race scoring (Cam 2026-06-25) — price snapshot at call time so we can mark every BUY/SELL
+  // to the live price and compute what each model's call WOULD have made. Native currency (the
+  // listing's ccy); entryCurrency lets the standings convert USD calls → CAD for a single board.
+  // Null on HOLD/NONE/narrative rows and on any call we couldn't price (rendered "unpriced").
+  entryPriceCents Int?
+  entryCurrency   String? // "CAD" | "USD"
   agentVersion String?
 
   @@index([sessionAt])

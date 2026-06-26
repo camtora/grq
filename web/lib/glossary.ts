@@ -352,4 +352,72 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "A disclosure might read '$1M–$5M, filed 40 days late' — colour on the well-connected, not a holdings list or a timing signal.",
     related: ["13f", "insider"],
   },
+
+  // ---- The Race: the AI models in GRQ's bake-off (docs/THE-RACE.md) ----
+  llm: {
+    term: "LLM — Large Language Model",
+    def: "An AI trained on vast amounts of text to read, reason, and write. GRQ's agent is an LLM; The Race pits several different ones against the same market data.",
+    example: "Ask one 'should we buy XIC today?' and it works through the fund's data like an analyst would.",
+    related: ["the-race", "opus"],
+  },
+  "the-race": {
+    term: "The Race — GRQ's model bake-off",
+    def: "Each session the same data is handed to several AI models. Only Opus (the 'champion') actually trades; the rest are 'shadow' challengers that just say what they'd do — so we can score who's right without risking a dollar.",
+    example: "At a 1pm check-in Opus buys SHOP while Grok would've held — both calls get logged and marked to the live price.",
+    related: ["llm", "opus", "vs-xic"],
+  },
+  opus: {
+    term: "Claude Opus 4.8 — the champion",
+    def: "Anthropic's most capable model, and the ONLY one in The Race that places real trades. Every other model is shadow-only.",
+    example: "When GRQ actually buys something, it was Opus's call that cleared the gate.",
+    related: ["the-race", "sonnet", "llm"],
+  },
+  sonnet: {
+    term: "Claude Sonnet 4.6",
+    def: "Anthropic's faster, lighter Claude. A shadow challenger in The Race — it proposes, never trades — and runs free on the fund's existing Claude plan.",
+    example: "Sonnet might back Opus's buy, or argue it'd wait for a cleaner entry.",
+    related: ["opus", "the-race", "haiku"],
+  },
+  haiku: {
+    term: "Claude Haiku 4.5",
+    def: "Anthropic's smallest, quickest Claude. GRQ uses it for cheap triage — deciding whether a news event is even worth a full analysis — not for trade decisions.",
+    example: "A routine headline? Haiku says 'ignore' so the expensive model never has to wake up.",
+    related: ["opus", "sonnet", "llm"],
+  },
+  gpt: {
+    term: "GPT-5.1 — OpenAI",
+    def: "OpenAI's flagship model, racing shadow-only. A different lineage from Claude, so it's a genuinely independent second opinion.",
+    example: "Reading the same data, GPT-5.1 might rank a different name as the day's best setup.",
+    related: ["the-race", "gemini", "llm"],
+  },
+  gemini: {
+    term: "Gemini 3.1 Pro — Google",
+    def: "Google's flagship model, racing shadow-only. It 'reasons' visibly before answering — thorough, but the priciest challenger to run.",
+    example: "Gemini may spend a paragraph weighing both sides before settling on HOLD.",
+    related: ["the-race", "gpt", "llm"],
+  },
+  glm: {
+    term: "GLM-4.6 — Z.ai",
+    def: "An open-weight model from Chinese lab Z.ai (Zhipu). A shadow challenger — strong reasoning at a fraction of the frontier price.",
+    example: "GLM-4.6 costs a fraction of the frontier models per call yet still makes a credible call.",
+    related: ["deepseek", "the-race", "llm"],
+  },
+  deepseek: {
+    term: "DeepSeek V3 — DeepSeek",
+    def: "An open-weight model from Chinese lab DeepSeek, known for near-frontier quality at a tiny price. The cheapest challenger in The Race.",
+    example: "DeepSeek weighs in on every session for cents a day.",
+    related: ["glm", "the-race", "llm"],
+  },
+  grok: {
+    term: "Grok 4.3 — xAI",
+    def: "The model from Elon Musk's xAI, and a shadow challenger — it rounds out the field so all four major frontier labs are represented.",
+    example: "Grok 4.3 gets the exact same prompt as Opus and logs what it would have done.",
+    related: ["the-race", "gpt", "llm"],
+  },
+  llama: {
+    term: "Llama 4 Maverick — Meta",
+    def: "Meta's open-weight model and the most widely self-run open model in the West. A shadow challenger — a different lineage again from the frontier labs and the Chinese open-weights.",
+    example: "Reading the same data as Opus, Llama logs the call it would have made.",
+    related: ["deepseek", "glm", "the-race"],
+  },
 };

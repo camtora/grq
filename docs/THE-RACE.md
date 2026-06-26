@@ -111,40 +111,71 @@ faced slippage/fills is a hypothesis, not a track record. Money rules stay un-fu
 
 ## Phased plan
 
-### Phase 1 — Opus (live) vs Sonnet (shadow), on check-ins · **target: tomorrow**
-- `MODELS.challenger = "claude-sonnet-4-6"` in `policy.ts` (Tier A — no new auth, uses the Max
-  token alongside Opus).
-- New `ShadowProposal` table (schema below) + `proposeShadowOrderTool`.
-- `runScheduledCheckin` (and optionally `runPositionCheck`) build the context once, run Opus
-  live as today, then run a Sonnet shadow on the frozen context with the propose-only toolset.
-- The Race page renders champion vs challenger per check-in. Dry-run the validator on each
-  shadow proposal for the "would clear gate" badge.
-- **Exit criteria:** a full trading day where every check-in shows both models' calls with
-  receipts, and nothing the shadow does touches a real order or the gate.
+### Phase 1 — Opus (live) vs Sonnet (shadow) · **SHIPPED & PROVEN (2026-06-25)**
+- `RACE.challengers` (env `GRQ_RACE_CHALLENGERS`, default `claude-sonnet-4-6`) in `policy.ts`
+  (Tier A — no new auth, rides the Max token alongside Opus).
+- `runShadow()` + `parseProposal()` in `sessions.ts` REUSE `runSession` one-shot/no-tools and
+  write a champion row + N challenger rows to `ShadowRun` (the as-built table — we kept the
+  champion's read in its row rather than the original `ShadowProposal`/propose-tool design).
+- The Race page renders champion vs challenger per session with a 75%-conviction badge.
+- **Status:** live on all five sessions; the DB carries real champion+Sonnet pairs (9/9 by
+  2026-06-25 20:17). Exit criteria met — the shadow path never touches an order or the gate.
+- **Deferred to Phase 1.5:** the full `validator.ts` gate dry-run (`validateOnly`) for a real
+  "would clear gate" verdict, and outcome scoring → a model leaderboard.
 
-### Phase 2 — more models, via OpenRouter (Tier C) · *after Phase 1 proves out against 2*
-- Add a small provider-agnostic shadow runner (OpenRouter, one key) so a check-in can fan out
-  to GPT, Gemini, GLM, etc. in parallel on the same frozen context.
-- These are **metered $** — gate behind a config list of enabled challengers and a per-day cap.
-- Side-benefit worth noting: moving heavy *research* (the ~3.8M-token boot scan that drains
-  Cam's Max quota — see CLAUDE.md / D67) onto a metered model would stop agent dev from eating
-  Cam's interactive Claude quota. That alone may justify a `MODELS.research` split early.
+### Phase 2 — more models via OpenRouter (Tier C) · **SHIPPED 2026-06-25**
+Phase 1 proved out against two models, so this is unblocked. The key realization that shrinks
+it: **Phase 1 already made the shadow path one-shot/no-tools**, so a non-Claude challenger is a
+single chat *completion* — NOT the function-calling loop Tier C originally imagined. ~40 lines of
+`fetch`, no MCP, no SDK, **no schema change** (`ShadowRun.model` / `AgentUsage.model` are already
+free-form strings → no `prisma db push`).
 
-### Phase 3 — self-hosted open-weight · *exploration*
-Cam wants to explore running open-weight models (GLM, Qwen, Gemma, DeepSeek) on **our own
-hardware**. Notes:
-- **Disk is not the blocker.** `/var` (the Docker root, sda5) is at **~77%** today, and Cam has
-  **other drives with more space** — model weights can live off the cramped volume.
-- **GPU is the real question.** Serious open-weight agentic models (GLM-4.6, Qwen-class,
-  DeepSeek) want a capable GPU; CPU-only inference is too slow for an intraday check-in cadence.
-  Confirm what GPU (if any) is available on the host or an adjacent box.
-- **Serving:** Ollama (easiest) or vLLM (faster, better concurrency) behind an OpenAI-compatible
-  endpoint → reuse the Tier C runner unchanged (point it at the local endpoint instead of
-  OpenRouter).
-- **Tool reliability caveat:** frontier closed models drive multi-tool loops well; smaller
-  open-weight models are shakier at strict tool-call JSON. GLM-4.6 / Qwen / DeepSeek are the
-  credible agentic open picks; Gemma is better as a one-shot researcher than a tool-driving
-  agent. Expect to validate each model's tool-calling before trusting its proposals.
+- **Dispatch by slug shape** inside `runShadow`'s challenger loop: `claude-*` → existing
+  `runSession` (SDK, Max token, **free**); a slug containing `/` (e.g. `deepseek/deepseek-chat`)
+  → new OpenRouter path (**metered $**). One mixed `GRQ_RACE_CHALLENGERS` list drives both.
+- **`web/agent/openrouter.ts` (new):** `chatComplete({model, system, user, signal})` →
+  `{text, inTokens, outTokens, costUsd}`. Global `fetch` (no new dep), `OPENROUTER_API_KEY` from
+  `.env` (**unquoted** — env_file rule), `usage:{include:true}` for real per-call cost, an
+  AbortController ~60s timeout so a hung provider can't stall the session.
+- **Same `parseProposal()` + `ShadowRun.create`** for both paths; run challengers via
+  `Promise.allSettled` (not the sequential `for`) so a 5-model fan-out doesn't add ~60–75s — and
+  note it only delays the shadow *rows*, never a trade (the champion already acted).
+- **Cost parity:** write an `AgentUsage` row per metered challenger under label `race:<label>`
+  with the returned tokens + `costMicroUsd` (the SDK-shaped `recordUsage` gets a lean HTTP twin).
+- **Guardrail:** `RACE.maxUsdPerDay` (`GRQ_RACE_MAX_USD_PER_DAY`, default **$2**) — before
+  metered challengers run, sum today's `race:` cost from `AgentUsage`; over cap → skip the
+  metered ones (Claude challengers still run free) + log. Missing `OPENROUTER_API_KEY` → metered
+  challengers no-op silently (the configured-or-no-op pattern).
+- **Page:** only `modelLabel()` needs the new friendly names; grouping/rendering is already
+  model-agnostic. Nice-to-have: a per-model cost/latency line from the `race:` `AgentUsage` rows.
+- **The slate (Cam, 2026-06-25) — LIVE in `.env` `GRQ_RACE_CHALLENGERS`:** `claude-sonnet-4-6`
+  (free, Max) · `deepseek/deepseek-chat` · `z-ai/glm-4.6` · `openai/gpt-5.1` ·
+  `google/gemini-3.1-pro-preview` — "same data, five minds." Skipped Qwen. All four metered slugs
+  verified live (real completions + valid fenced JSON + cost reported). **Cap set to $3/day** in
+  `.env` (code default 2) for headroom: gemini/gpt are *reasoning* models so they're the pricey
+  ones; a 5-model day runs ~$1, well under $3. ⚠️ Re-verify slugs/pricing if re-tiered.
+- **Gotcha hit & fixed:** OpenRouter attribution header `X-Title` must be **ASCII** — an em-dash
+  in `"GRQ — The Race"` threw `Cannot convert argument to a ByteString` (HTTP headers are Latin-1).
+  Now `"GRQ - The Race"`. A pre-deploy smoke test caught it.
+- **Out of scope (Cam, 2026-06-25):** the `MODELS.research` split (moving the ~3.8M-token boot
+  scan off the Max quota onto a metered model). Same OpenRouter plumbing would enable it, but it
+  changes a path the agent *acts* on — kept separate; prove the no-risk shadow path first.
+- **Cost reality:** ~7 sessions/day × 4 metered challengers × ~(15k in + 1k out) ≈ **$0.50–$2/day**;
+  DeepSeek/GLM are pennies. The $2 cap is a blowup-guard, not a real constraint.
+- **Deploy:** bump `AGENT_VERSION` v1.48→v1.49 (D77), rebuild `agent` (the page tweak rides the
+  `web` build), no `prisma db push`. Env-only tuning afterward (`GRQ_RACE_CHALLENGERS`,
+  `GRQ_RACE_MAX_USD_PER_DAY`, kill) is `--force-recreate`, no rebuild.
+- **Exit criteria:** a full trading day where every session shows all five models' calls with
+  receipts, metered cost lands in `AgentUsage` under `race:`, the daily cap holds, and nothing a
+  challenger does touches a real order or the gate.
+
+### Phase 3 — self-hosted open-weight · **NO-GO (Cam, 2026-06-25)**
+**Killed: the hardware isn't there.** The host has no usable GPU (only Intel UHD 630 integrated;
+i5-8400, ~12GB free RAM on a busy shared box), and CPU-only inference is far too slow for the big
+frozen-context check-in cadence. Cam decided it's not worth buying a GPU. So self-hosting is OFF —
+the open-weights stay in The Race as **OpenRouter shadow challengers** (DeepSeek · GLM · Llama),
+which is the end state, not a stepping stone. If hardware ever changes, the Tier C runner could
+point at a local Ollama/vLLM endpoint unchanged — but that's not planned.
 
 ---
 

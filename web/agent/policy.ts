@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v1.48-phase4";
+export const AGENT_VERSION = "v1.50-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -133,14 +133,21 @@ export const MODELS = {
 
 // The Race (D68) — the model bake-off. The CHAMPION (MODELS.decision = Opus) is the only model
 // that ever trades. CHALLENGERS run shadow-only on the exact same frozen prompt, one-shot, NO
-// tools, and record what they WOULD do — they never touch the §6 gate (guardrail #1). Phase 1 =
-// one challenger, Sonnet 4.6 (a Claude → reachable on the same Max token, no new auth). Add more
-// model ids to GRQ_RACE_CHALLENGERS (comma-separated) in Phase 2. Kill without a deploy:
-// GRQ_RACE_ENABLED=false. Humans edit this.
+// tools, and record what they WOULD do — they never touch the §6 gate (guardrail #1).
+//   Phase 1 — a Claude challenger (Sonnet 4.6) reachable on the same Max token, no new auth, FREE.
+//   Phase 2 — non-Claude challengers via OpenRouter (`vendor/model` slugs in GRQ_RACE_CHALLENGERS),
+//             metered $ on OPENROUTER_API_KEY. Routing is by slug shape (see agent/openrouter.ts).
+// Kill the whole thing without a deploy: GRQ_RACE_ENABLED=false. Humans edit this.
 export const RACE = {
   enabled: (process.env.GRQ_RACE_ENABLED ?? "true").toLowerCase() !== "false",
   challengers: (process.env.GRQ_RACE_CHALLENGERS ?? "claude-sonnet-4-6")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean),
+  // Phase 2 spend guard: a per-ET-day USD ceiling on the METERED (OpenRouter) challengers only.
+  // Claude challengers ride the Max token for free and are NOT counted. When the day's metered
+  // spend reaches this, the metered challengers skip for the rest of the day — the champion and any
+  // free (Claude) challengers are unaffected. Env-tunable; the default is a blowup-guard, not a
+  // real constraint (a normal day's 5-model slate is well under a dollar).
+  maxUsdPerDay: Number(process.env.GRQ_RACE_MAX_USD_PER_DAY ?? "2") || 2,
 };

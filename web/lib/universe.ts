@@ -117,6 +117,18 @@ export async function toYahoo(symbol: string): Promise<string> {
   return symbol.trim().toUpperCase();
 }
 
+/** The native currency a symbol trades in — CAD or USD. Prefers the universe row's
+ *  currency; otherwise infers from the resolved Yahoo listing (a Canadian suffix ⇒ CAD,
+ *  a bare/US ticker ⇒ USD). Used to tag Race entry-price snapshots so the standings can
+ *  convert USD calls to a single CAD board. Free-form symbols (a model's call on a name
+ *  we don't track) resolve via the suffix heuristic and never throw. */
+export async function currencyForSymbol(symbol: string): Promise<"CAD" | "USD"> {
+  const e = await universeEntry(symbol);
+  if (e?.currency) return e.currency.trim().toUpperCase() === "USD" ? "USD" : "CAD";
+  const y = (await toYahoo(symbol)).toUpperCase();
+  return /\.(TO|V|NE|CN)$/.test(y) ? "CAD" : "USD";
+}
+
 // Exchange (FMP shortName) → Yahoo suffix. US venues are bare; Canadian venues
 // carry a suffix. This is what lets the add flow resolve the EXACT listing the
 // user picked instead of blindly trying ".TO" (the SPCX collision — D24).

@@ -2,7 +2,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
-import { universeEntry, allUniverse, isTradeable } from "../lib/universe";
+import { universeEntry, allUniverse, isTradeable, currencyForSymbol } from "../lib/universe";
 import { setBootstrapMode } from "./promote";
 import { queueDossiers } from "../lib/hunt";
 import { startOfEtDay, etDateStr } from "./calendar";
@@ -10,6 +10,7 @@ import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, grqResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
 import { MODELS, RACE, AGENT_VERSION, SELF_INVEST } from "./policy";
+import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
 import { PERSONA } from "./persona";
 import { alert, heartbeat, sendDiscord } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
@@ -173,6 +174,39 @@ const SHADOW_NARRATIVE_SUFFIX = `
 ---
 SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). Write the SAME piece the task asks for, based ONLY on the information given above (you have no tools). Your ENTIRE response is that piece — no preamble about being a challenger.`;
 
+type ChampionCall = {
+  action: string; // BUY | SELL | NONE
+  symbol: string | null;
+  qty: number | null;
+  confidence: number | null;
+  thesis: string | null;
+  entryPriceCents: number | null;
+  entryCurrency: string | null;
+};
+
+/** The champion's "call" for a decision session = its strongest TradeProposal logged during the
+ *  session (highest tradeConfidence; latest as tiebreak), scored on the PROPOSAL (gate outcome
+ *  ignored, same as a challenger). priceCents on the proposal is the entry snapshot — exact, no
+ *  extra fetch. No proposal this session ⇒ a NONE/stand-down call. Best-effort; never throws. */
+async function championCall(sessionAt: Date): Promise<ChampionCall | null> {
+  const props = await prisma.tradeProposal
+    .findMany({ where: { at: { gte: sessionAt } }, select: { symbol: true, side: true, qty: true, tradeConfidence: true, priceCents: true, at: true } })
+    .catch(() => [] as { symbol: string; side: string; qty: number; tradeConfidence: number | null; priceCents: number | null; at: Date }[]);
+  if (props.length === 0) return { action: "NONE", symbol: null, qty: null, confidence: null, thesis: null, entryPriceCents: null, entryCurrency: null };
+  props.sort((a, b) => (b.tradeConfidence ?? -1) - (a.tradeConfidence ?? -1) || b.at.getTime() - a.at.getTime());
+  const pick = props[0];
+  const entryCurrency = pick.priceCents != null ? await currencyForSymbol(pick.symbol).catch(() => null) : null;
+  return {
+    action: pick.side === "SELL" ? "SELL" : "BUY",
+    symbol: pick.symbol,
+    qty: pick.qty,
+    confidence: pick.tradeConfidence ?? null,
+    thesis: null, // the champion's reasoning is its full note (the row's text); no separate thesis line
+    entryPriceCents: pick.priceCents ?? null,
+    entryCurrency,
+  };
+}
+
 /** Run the configured challenger model(s) on the EXACT prompt the champion ran, one-shot and
  *  tool-less, and record both sides to ShadowRun for The Race. Never throws into the caller and
  *  never touches a broker/order path — a challenger can only ever produce text. No-op unless the
@@ -188,7 +222,11 @@ async function runShadow(opts: {
 }): Promise<void> {
   if (!RACE.enabled || RACE.challengers.length === 0) return;
   try {
-    // Champion row first — its real action lives in Order/Trade; here we keep its written read.
+    // Champion row first — keep its written read AND, on decision sessions, its own "call" so it
+    // races on the same hypothetical terms as the challengers. The champion has no JSON proposal
+    // (it uses tools); its call is its strongest TradeProposal this session (D37), with that
+    // proposal's quoted price as the entry snapshot. Its REAL fund P&L stays separate (NAV).
+    const call = opts.decisionKind === "decision" ? await championCall(opts.sessionAt) : null;
     await prisma.shadowRun.create({
       data: {
         sessionAt: opts.sessionAt,
@@ -198,6 +236,13 @@ async function runShadow(opts: {
         model: MODELS.decision,
         role: "champion",
         text: opts.championText ?? "(champion produced no written output)",
+        action: call?.action ?? null,
+        symbol: call?.symbol ?? null,
+        qty: call?.qty ?? null,
+        confidence: call?.confidence ?? null,
+        thesis: call?.thesis ?? null,
+        entryPriceCents: call?.entryPriceCents ?? null,
+        entryCurrency: call?.entryCurrency ?? null,
         agentVersion: AGENT_VERSION,
       },
     });
@@ -206,37 +251,153 @@ async function runShadow(opts: {
   }
 
   const suffix = opts.decisionKind === "decision" ? SHADOW_DECISION_SUFFIX : SHADOW_NARRATIVE_SUFFIX;
-  for (const model of RACE.challengers) {
-    try {
-      const text = await runSession({
-        label: `race:${opts.label}`,
-        prompt: opts.prompt + suffix,
-        model,
-        withTools: false, // shadow = frozen seed only; a tool call would diverge from what the champion saw
-        maxTurns: 3,
-      });
-      if (text == null) continue;
-      const p = opts.decisionKind === "decision" ? parseProposal(text) : null;
-      await prisma.shadowRun.create({
-        data: {
-          sessionAt: opts.sessionAt,
-          sessionKind: opts.kind,
-          label: opts.label,
-          reason: opts.reason,
-          model,
-          role: "challenger",
-          text,
-          action: p?.action ?? null,
-          symbol: p?.symbol ?? null,
-          qty: p?.qty ?? null,
-          confidence: p?.confidence ?? null,
-          thesis: p?.thesis ?? null,
-          agentVersion: AGENT_VERSION,
-        },
-      });
-    } catch (e) {
-      console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
+  const fullPrompt = opts.prompt + suffix;
+  const isDecision = opts.decisionKind === "decision";
+
+  // Split the slate: Claude challengers ride the Max-token SDK (free); the rest are metered
+  // OpenRouter slugs. Guard the metered ones behind the daily $ cap + a present API key — the
+  // champion and free challengers always run regardless.
+  const claudeModels = RACE.challengers.filter((m) => !isOpenRouterModel(m));
+  let meteredModels = RACE.challengers.filter((m) => isOpenRouterModel(m));
+  if (meteredModels.length) {
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.log(`[race] OPENROUTER_API_KEY unset — skipping metered ${meteredModels.join(", ")}`);
+      meteredModels = [];
+    } else {
+      const spent = await meteredSpentTodayUsd();
+      if (spent >= RACE.maxUsdPerDay) {
+        console.log(`[race] metered cap hit ($${spent.toFixed(2)} ≥ $${RACE.maxUsdPerDay}) — skipping ${meteredModels.join(", ")} today`);
+        meteredModels = [];
+      }
     }
+  }
+
+  // Run every challenger concurrently — the champion already acted, so shadow latency only delays
+  // the ShadowRun rows, never a trade. allSettled so one model's failure can't sink the others.
+  const tasks: Promise<void>[] = [];
+  for (const model of claudeModels) {
+    tasks.push(
+      (async () => {
+        try {
+          const text = await runSession({
+            label: `race:${opts.label}`,
+            prompt: fullPrompt,
+            model,
+            withTools: false, // shadow = frozen seed only; a tool call would diverge from what the champion saw
+            maxTurns: 3,
+          });
+          if (text != null) await writeChallengerRow({ ...opts, model, text, isDecision });
+        } catch (e) {
+          console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
+        }
+      })(),
+    );
+  }
+  for (const model of meteredModels) {
+    tasks.push(
+      (async () => {
+        try {
+          const r = await chatComplete({ model, system: PERSONA, user: fullPrompt });
+          if (r && r.text) {
+            await writeChallengerRow({ ...opts, model, text: r.text, isDecision });
+            await recordOpenRouterUsage(`race:${opts.label}`, model, r);
+          }
+        } catch (e) {
+          console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
+        }
+      })(),
+    );
+  }
+  await Promise.allSettled(tasks);
+}
+
+/** Persist one challenger's ShadowRun row (champion's row is written separately by the caller). */
+async function writeChallengerRow(opts: {
+  model: string;
+  text: string;
+  isDecision: boolean;
+  sessionAt: Date;
+  kind: ShadowKind;
+  label: string;
+  reason: string;
+}): Promise<void> {
+  const p = opts.isDecision ? parseProposal(opts.text) : null;
+
+  // Snapshot the live price for a directional call, so The Race can mark it to the live price
+  // later (same getQuote path the agent trades on → entry & mark stay consistent). Unpriceable
+  // symbol → leave null; that call renders "unpriced" and is excluded from scoring.
+  let entryPriceCents: number | null = null;
+  let entryCurrency: string | null = null;
+  if (p && (p.action === "BUY" || p.action === "SELL") && p.symbol) {
+    try {
+      const q = await getQuote(p.symbol);
+      if (q && q.midCents > 0) {
+        entryPriceCents = q.midCents;
+        entryCurrency = await currencyForSymbol(p.symbol);
+      } else {
+        console.log(`[race] no quote to snapshot ${opts.model} ${p.action} ${p.symbol}`);
+      }
+    } catch (e) {
+      console.error(`[race] entry snapshot failed ${opts.model} ${p.symbol}`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  await prisma.shadowRun.create({
+    data: {
+      sessionAt: opts.sessionAt,
+      sessionKind: opts.kind,
+      label: opts.label,
+      reason: opts.reason,
+      model: opts.model,
+      role: "challenger",
+      text: opts.text,
+      action: p?.action ?? null,
+      symbol: p?.symbol ?? null,
+      qty: p?.qty ?? null,
+      confidence: p?.confidence ?? null,
+      thesis: p?.thesis ?? null,
+      entryPriceCents,
+      entryCurrency,
+      agentVersion: AGENT_VERSION,
+    },
+  });
+}
+
+/** Today's (ET) metered shadow spend in USD — only OpenRouter rows (model contains "/"); Claude
+ *  challengers are free on the Max token and excluded. Drives the daily cap. Best-effort → 0. */
+async function meteredSpentTodayUsd(): Promise<number> {
+  const since = startOfEtDay(new Date());
+  const rows = await prisma.agentUsage
+    .findMany({
+      where: { at: { gte: since }, label: { startsWith: "race:" }, model: { contains: "/" } },
+      select: { costMicroUsd: true },
+    })
+    .catch(() => [] as { costMicroUsd: number }[]);
+  return rows.reduce((s, r) => s + (r.costMicroUsd || 0), 0) / 1e6;
+}
+
+/** Log a metered challenger's tokens + real $ to AgentUsage under a `race:` label — the same table
+ *  runSession writes to, so The Race doubles as a cost-per-model board. Never throws into the run. */
+async function recordOpenRouterUsage(label: string, model: string, r: ChatResult): Promise<void> {
+  console.log(`[race] ${label} ${model} — in ${r.inTokens} out ${r.outTokens} · ~$${r.costUsd.toFixed(4)}`);
+  try {
+    await prisma.agentUsage.create({
+      data: {
+        label,
+        model,
+        status: "success",
+        numTurns: 1,
+        durationMs: 0,
+        inputTokens: r.inTokens,
+        outputTokens: r.outTokens,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        costMicroUsd: Math.round(r.costUsd * 1e6),
+        agentVersion: AGENT_VERSION,
+      },
+    });
+  } catch (e) {
+    console.error(`[usage-log] openrouter ${label} failed:`, e instanceof Error ? e.message : e);
   }
 }
 

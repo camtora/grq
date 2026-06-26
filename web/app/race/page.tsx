@@ -1,188 +1,77 @@
-import { prisma } from "@/lib/db";
-import { fmtWhen } from "@/lib/money";
-import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
-import CollapsibleMd from "@/components/CollapsibleMd";
+import { PageHeader, EmptyState } from "@/components/ui";
+import ModelTile from "@/components/race/ModelTile";
+import DayCard from "@/components/race/DayCard";
+import { loadStandings } from "@/lib/race/standings";
 
-// The Race (D68) — the model bake-off. Every decision/report session, the live agent (the
-// CHAMPION, Opus) and one or more CHALLENGER models (Phase 1: Sonnet) are handed the EXACT same
-// frozen prompt. The champion acts; the challengers only say what they WOULD do (shadow-only,
-// no tools, never touches the §6 gate). This page shows the two reads side by side.
+// The Race (D68) — the model bake-off. Every decision/report session, the live agent (the CHAMPION,
+// Opus, the only model that trades) and the shadow CHALLENGERS get the EXACT same frozen prompt; the
+// challengers only say what they WOULD do (no tools, never touch the §6 gate). This overview ranks
+// every mind on its calls, marked to the live price. Each day links to that day's call matrix.
 export const dynamic = "force-dynamic";
 
-const KIND_LABEL: Record<string, string> = {
-  morning: "Morning plan",
-  checkin: "Intraday check-in",
-  midday: "Midday brief",
-  eod: "EOD report",
-  position: "Position check",
-};
-const DECISION_KINDS = new Set(["morning", "checkin", "position"]);
-
-// Pretty model names; fall back to the raw id for anything unmapped.
-function modelLabel(id: string): string {
-  if (id.includes("opus")) return "Opus 4.8";
-  if (id.includes("sonnet")) return "Sonnet 4.6";
-  if (id.includes("haiku")) return "Haiku 4.5";
-  return id;
-}
-
-// A challenger ends its prose with a fenced ```json decision block — but we already parse that
-// into the action chip + summary line above, so strip the trailing block from the text we show.
-// Handles a closed fence and an unclosed trailing one; no-op when there's no such block.
-function stripDecisionBlock(text: string): string {
-  return text
-    .replace(/\s*```(?:json)?\s*\{[\s\S]*?\}\s*```\s*$/i, "")
-    .replace(/\s*```(?:json)?\s*\{[\s\S]*?\}\s*$/i, "")
-    .trimEnd();
-}
-
-type Row = {
-  id: number;
-  sessionAt: Date;
-  sessionKind: string;
-  label: string;
-  reason: string;
-  model: string;
-  role: string;
-  text: string;
-  action: string | null;
-  symbol: string | null;
-  qty: number | null;
-  confidence: number | null;
-  thesis: string | null;
-};
-
-function ActionChip({ action, confidence }: { action: string | null; confidence: number | null }) {
-  if (!action) return <span className="text-xs text-teal-200/30">no proposal parsed</span>;
-  const tone = action === "BUY" ? "green" : action === "SELL" ? "red" : "dim";
-  return (
-    <Chip tone={tone as "green" | "red" | "dim"}>
-      {action}
-      {confidence != null ? ` · ${confidence}%` : ""}
-    </Chip>
-  );
-}
-
-// The headline conviction bar only — BUYs need ≥75% (HARD.minBuyConfidence). The full §6 gate
-// (universe, cash floor, fee edge, rate limits…) is a deterministic dry-run we add next.
-function GateBadge({ action, confidence }: { action: string | null; confidence: number | null }) {
-  if (action !== "BUY") return null;
-  if (confidence == null) return <Chip tone="dim">no confidence</Chip>;
-  return confidence >= 75 ? <Chip tone="green">clears 75% gate</Chip> : <Chip tone="red">below 75% gate</Chip>;
-}
-
-function Lane({ row }: { row: Row }) {
-  const isChampion = row.role === "champion";
-  const decision = DECISION_KINDS.has(row.sessionKind);
-  return (
-    <div className="rounded-lg border border-teal-400/10 bg-teal-400/[0.02] p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip tone={isChampion ? "teal" : "dim"}>{isChampion ? "Champion · live" : "Challenger · shadow"}</Chip>
-        <span className="text-sm font-semibold text-teal-50">{modelLabel(row.model)}</span>
-        {!isChampion && decision && (
-          <span className="ml-auto flex items-center gap-2">
-            <ActionChip action={row.action} confidence={row.confidence} />
-            <GateBadge action={row.action} confidence={row.confidence} />
-          </span>
-        )}
-      </div>
-      {!isChampion && decision && row.symbol && (
-        <p className="mt-2 text-sm text-teal-100/70">
-          <span className="font-semibold text-teal-50">
-            {row.action} {row.qty ?? ""} {row.symbol}
-          </span>
-          {row.thesis ? ` — ${row.thesis}` : ""}
-        </p>
-      )}
-      <div className="mt-2">
-        <CollapsibleMd text={isChampion ? row.text : stripDecisionBlock(row.text)} threshold={420} />
-      </div>
-    </div>
-  );
-}
-
 export default async function RacePage() {
-  const rows = (await prisma.shadowRun.findMany({ orderBy: { sessionAt: "desc" }, take: 240 })) as Row[];
-
-  // Group by the session join key. Each group = one session: a champion + its challengers.
-  const groups = new Map<string, Row[]>();
-  for (const r of rows) {
-    const k = r.sessionAt.toISOString();
-    let arr = groups.get(k);
-    if (!arr) {
-      arr = [];
-      groups.set(k, arr);
-    }
-    arr.push(r);
-  }
-  const sessions = [...groups.values()].sort((a, b) => b[0].sessionAt.getTime() - a[0].sessionAt.getTime());
-
-  // Summary: how trigger-happy the challengers are vs the champion (whose real trades live in
-  // Order/Trade — scoring against outcomes is the next phase; this is the side-by-side for now).
-  const challengerRows = rows.filter((r) => r.role === "challenger");
-  const dist = { BUY: 0, SELL: 0, HOLD: 0, NONE: 0 } as Record<string, number>;
-  for (const r of challengerRows) if (r.action && r.action in dist) dist[r.action]++;
-  const models = [...new Set(challengerRows.map((r) => modelLabel(r.model)))];
+  const { models, days, fxUsdCad } = await loadStandings();
 
   return (
     <main>
       <PageHeader
         title="The Race"
-        sub="Same data, different minds. Every session the live agent (Opus) and the challenger(s) get the EXACT same frozen prompt — the champion trades, the challengers only say what they'd do. Receipts, side by side."
+        sub="Same data, different minds. Each session every model gets the EXACT same frozen prompt — only Opus trades, the rest call it shadow-only. Every BUY/SELL is snapshotted and marked to the live price. Who'd be ahead?"
       />
 
-      {sessions.length === 0 ? (
+      {models.length === 0 ? (
         <EmptyState
           title="No races yet"
-          body="The next morning plan, intraday check-in, midday brief, and EOD report will each run the challenger on the same data and land here. First entries appear on the next market session."
+          body="The next morning plan, intraday check-in, and EOD report will each run the challengers on the same data and land here. First entries appear on the next market session."
         />
       ) : (
-        <div className="space-y-4">
-          <Card className="p-5">
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              <span>
-                <span className="text-xs uppercase tracking-wider text-teal-200/40">Sessions raced</span>{" "}
-                <span className="font-semibold tabular-nums text-teal-50">{sessions.length}</span>
-              </span>
-              <span>
-                <span className="text-xs uppercase tracking-wider text-teal-200/40">Challenger(s)</span>{" "}
-                <span className="font-semibold text-teal-50">{models.join(", ") || "—"}</span>
-              </span>
-              <span>
-                <span className="text-xs uppercase tracking-wider text-teal-200/40">Challenger calls</span>{" "}
-                <span className="font-semibold tabular-nums text-teal-50">
-                  {dist.BUY} buy · {dist.SELL} sell · {dist.HOLD} hold · {dist.NONE} stand-down
-                </span>
-              </span>
-            </div>
-            <p className="mt-3 text-xs text-teal-200/40">
-              Honest framing: a shadow pick never faced a real fill or slippage, so it&apos;s a hypothesis, not a track record.
-              Scoring the calls against what actually happened (and a full guardrail dry-run) comes next — for now this is the
-              side-by-side read.
-            </p>
-          </Card>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {models.map((s, i) => (
+              <ModelTile key={s.model} s={s} rank={i + 1} />
+            ))}
+          </div>
+          <details open className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How The Race works</summary>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
+              <li>
+                <span className="font-semibold text-teal-50">Same data, every mind.</span> At each session — the morning plan, the
+                hourly check-ins, the EOD — every model gets the EXACT same frozen prompt. Only Opus (the champion) actually trades;
+                the rest are shadow-only and never touch the trade gate.
+              </li>
+              <li>
+                <span className="font-semibold text-teal-50">A “call” is a decision to act now</span> — buy / sell / hold /
+                stand-down — not a conditional “I’d buy if X happens.” The champion’s call is the order it actually places (whether or
+                not the gate lets it through), so it’s measured the same way as a shadow that can never reach the gate.
+              </li>
+              <li>
+                <span className="font-semibold text-teal-50">Every session re-asks “what now?”</span> A model that still wants a name
+                re-calls it each check-in, and <span className="font-semibold text-teal-50">every call is scored on its own</span>: its
+                price is snapshotted the moment it’s made and marked to the live price. So the same ticker can appear several times —
+                that’s repeated conviction, counted each time, not one position.
+              </li>
+              <li>
+                <span className="font-semibold text-teal-50">Not a perfectly level field — and we say so.</span> Every model gets the
+                same frozen snapshot, but only the champion (Opus) can use <span className="font-semibold text-teal-50">tools</span>{" "}
+                mid-session — web search, full dossier reads, fresh quotes. The shadows answer from the snapshot alone, one shot. So
+                the race compares <em>judgment on the same seed</em>; the champion also gets to dig deeper.
+              </li>
+              <li>
+                <span className="font-semibold text-teal-50">Hypothetical, and honest about it.</span> No lane faces a real fill,
+                slippage, or commission — even the champion’s here is its <em>proposal</em>, not its executed trade (its real fund
+                P&amp;L lives on the dashboard). A SELL is scored directionally (as if shorted / the move sidestepped); hold and
+                stand-down don’t score. P&amp;L is shown in CAD{fxUsdCad ? `, USD calls converted at ~${fxUsdCad.toFixed(2)} CAD/USD` : ""}.
+              </li>
+            </ul>
+          </details>
 
-          {sessions.map((g) => {
-            const head = g[0];
-            const champion = g.find((r) => r.role === "champion");
-            const challengers = g.filter((r) => r.role === "challenger");
-            return (
-              <Card key={head.sessionAt.toISOString()} className="p-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Chip tone="teal">{KIND_LABEL[head.sessionKind] ?? head.sessionKind}</Chip>
-                  <span className="text-sm text-teal-100/60">{head.reason}</span>
-                  <span className="ml-auto text-xs text-teal-200/40">{fmtWhen(head.sessionAt)}</span>
-                </div>
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  {champion && <Lane row={champion} />}
-                  {challengers.map((c) => (
-                    <Lane key={c.id} row={c} />
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+          <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Races by day</h2>
+          <div className="space-y-2">
+            {days.map((d) => (
+              <DayCard key={d.date} d={d} />
+            ))}
+          </div>
+        </>
       )}
     </main>
   );
