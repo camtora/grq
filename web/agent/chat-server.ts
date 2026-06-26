@@ -11,7 +11,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
-import { grqReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
+import { makeReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
 import { MODELS } from "./policy";
 
 const PORT = Number(process.env.CHAT_PORT ?? 3014);
@@ -115,7 +115,7 @@ ${convo}`;
         maxTurns: 12,
         permissionMode: "bypassPermissions",
         settingSources: [],
-        mcpServers: { grq: grqReadOnlyServer },
+        mcpServers: { grq: makeReadOnlyServer() },
         allowedTools: ["WebSearch", "WebFetch", ...GRQ_READONLY_TOOL_NAMES],
         stderr: (d: string) => console.error(`[chat] ${d.slice(0, 300)}`),
       },

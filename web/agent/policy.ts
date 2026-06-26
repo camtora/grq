@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.2-phase4";
+export const AGENT_VERSION = "v2.4-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import StockBackLink from "@/components/StockBackLink";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { universeEntry, bareTicker, yahooForListing } from "@/lib/universe";
@@ -293,9 +293,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
   return (
     <main>
-      <Link href={tracked ? "/universe" : "/market"} className="text-xs text-teal-300 hover:underline">
-        {tracked ? "← universe" : "← the hunt"}
-      </Link>
+      <StockBackLink fallbackHref={tracked ? "/universe" : "/market"} />
 
       {/* Hero band: the ticker/quote/actions ride the stock's own price tape — the
           per-name "tape" as a faint backdrop so the chart reads as the headline

@@ -2038,3 +2038,54 @@ a read-only `.git` bind-mount and a standalone host cron; the PAT was the cleane
 daily check-ins/EOD. **Changed:** `schema.prisma` (`CHANGE` enum), `lib/github.ts` (new), `agent/sessions.ts`
 (`runDailyChangeReport` + diary persona), `agent/runner.ts` (3am task), `app/how-it-works/page.tsx` (tab +
 day-changer), `scripts/gen-change-report.ts` (manual regen). Owner-only, same as the rest of How GRQ works.
+
+### D84 — Agent FX is bidirectional AND proactive: fund a gate-clearing buy from the idle sleeve (Cam, 2026-06-26)
+**Context:** The fund holds CAD and USD as separate cash (D34/D62). FX was one-directional in the agent's tooling —
+`request_fx` only converted **CAD→USD** to fund a US name; the reverse (USD→CAD) existed in `lib/fx-requests.ts`
+(D65) but was members-only. So when the post-reset book went ~all-USD (US$39k + CA$79.61), the agent treated an
+empty sleeve as a hard wall — "CAD buys need CAD; CAD's empty → skip the CAD name" — and never reached for the
+conversion it had no proactive prompt to use.
+
+**Decision (two layers, both code-gated):**
+- **Bidirectional tool:** `request_fx` now takes `{direction: CAD_TO_USD | USD_TO_CAD, amountToCents}` and sizes the
+  opposite leg at the BoC rate (`agent/tools.ts`). `validator.ts` gained the symmetric native-CAD guard (a CAD buy
+  short on native CAD is refused with a pointer to `request_fx USD_TO_CAD`, instead of failing downstream at the
+  broker — the combined CAD-equiv floor couldn't catch a CAD shortfall masked by a flush USD sleeve).
+- **Proactive, not an escape hatch:** the cash-by-currency context (`context.ts`) + the over-ceiling mandate
+  (`sessions.ts`) now say a thin sleeve is NOT a reason to skip a **gate-clearing (≥Buy/75)** name — size a conversion
+  to the position you'd open (currency needed + fee/slippage buffer) and `request_fx` to fund it (e.g. "want ~CA$3,000
+  of a Canadian name, hold only dust in CAD → request_fx USD_TO_CAD ~CA$3,100, then buy"). Guardrails unchanged: only
+  ≥75 names, a **member approves every conversion**, not for trivial/dust amounts, and every order still clears §6.
+- **Stamp:** agent v2.1→**v2.2** (bidirectional) → **v2.3** (proactive). NB nothing fires while no CAD name clears 75
+  (best was LNR at 74 on 2026-06-26).
+
+### D85 — Parallel dossier research, and the per-session MCP-server bug it exposed (Cam, 2026-06-26)
+**Context:** Dossiers drained strictly one-at-a-time (a global `sessionRunning` mutex + one `findFirst` per tick), so a
+weekly/daily refresh of dozens of names crawled over ~2h. Each dossier is independent (read data → write ONE
+JournalEntry, no trades, no cross-deps), so it's embarrassingly parallel.
+
+**Decision + the bug:** `processResearchQueue()` now grabs up to `RESEARCH_CONCURRENCY` QUEUED rows and runs them via
+`Promise.all` under the session lock (so the pool never overlaps a decision/check-in session). BUT the first run at
+concurrency 5 **dropped research**: 4 dossiers in one batch (ABBV/MU/NEM/AEM, 2026-06-26 18:04) all failed
+"wrote no dossier entry" — the concurrent sessions **shared one module-singleton in-process MCP server**
+(`grqResearchServer`), and the SDK's in-process server isn't safe for concurrent sessions, so `write_journal` clobbered.
+**Fix:** the research + read-only MCP servers are now **factories** (`makeResearchServer()` / `makeReadOnlyServer()`) —
+a FRESH server per session (`agent/tools.ts`, `agent/sessions.ts`, `agent/chat-server.ts`), so parallel dossiers (and
+two members chatting at once) never share an instance. Interim safety: `RESEARCH_CONCURRENCY=1` in `.env` keeps it
+serial until the fix is verified under load; flip to 5 to re-enable. Agent → **v2.4**.
+
+### D86 — Chat reaches every researched name; stock-page back link does true browser-back; small web-UX pass (Cam, 2026-06-26)
+- **Chat universe roster (`agent/chat-server.ts`):** the read-only chat only carried held/focus dossiers (`buildContext`),
+  so it wrongly told members a CANDIDATE name "hasn't been researched" (e.g. BlackBerry — dossiered as both `BB`/USD and
+  `BB.TO`/CAD). It now gets a company-grouped roster of every tracked name + a persona rule to read the dossier by exact
+  ticker before answering and to **ASK which listing** when a name maps to more than one (BB vs BB.TO).
+- **Stock back link (`components/StockBackLink.tsx`):** was hardcoded "← universe"/"← the hunt" regardless of origin.
+  Now a client `router.back()` (with a same-origin/history fallback to the section default) — labeled "← back", it
+  returns to wherever you actually came from (watchlist→watchlist, etc.) for ALL ~40 entry points. Chose browser-back
+  over threading a `?from=` param through every link source.
+- **"GRQ's call" mislabel (`page.tsx`, `StockTable.tsx`):** an unresearched name showed the technical-signal fallback
+  under a "GRQ's call" header → relabeled "Technical signal" + muted, so nothing reads as GRQ's verdict before it's filed.
+- **Token-usage live poll (`lib/usage.ts`, `RollingWindowPanel.tsx`, usage-window route):** the 5h-window burn was a
+  one-shot server prop that froze between window-boundary refreshes; now polled (`GET /api/admin/usage-window`) so the
+  number tracks the live clock. Also: watchlist search bar made as visible as the cards + "find a stock"; redundant
+  watchlist sub-header removed; Universe row dropped from Settings → System.

@@ -506,11 +506,16 @@ export const GRQ_TOOL_NAMES = [
 
 // Read-only variant for the chat (2.5c): no propose_order, no writes —
 // a persuasive chat can never become a trading backdoor.
-export const grqReadOnlyServer = createSdkMcpServer({
-  name: "grq",
-  version: "1.0.0",
-  tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool],
-});
+// FACTORY, not a singleton: each call returns a FRESH in-process MCP server. Concurrent sessions
+// (parallel dossier drains; two members chatting at once) must NOT share one server instance — the
+// SDK's in-process server isn't safe for concurrent sessions and the tool calls clobber each other
+// (write_journal silently failed on parallel dossier batches, 2026-06-26). One server per session.
+export const makeReadOnlyServer = () =>
+  createSdkMcpServer({
+    name: "grq",
+    version: "1.0.0",
+    tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool],
+  });
 
 export const GRQ_READONLY_TOOL_NAMES = [
   "mcp__grq__get_portfolio",
@@ -522,11 +527,14 @@ export const GRQ_READONLY_TOOL_NAMES = [
 
 // Research variant for dossier sessions (2.7): reads + write_journal only —
 // dossiers document, they never trade or touch the focus list.
-export const grqResearchServer = createSdkMcpServer({
-  name: "grq",
-  version: "1.0.0",
-  tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool],
-});
+// FACTORY (see makeReadOnlyServer): a fresh server per dossier session so parallel drains
+// (RESEARCH_CONCURRENCY) don't share one in-process server and drop each other's write_journal.
+export const makeResearchServer = () =>
+  createSdkMcpServer({
+    name: "grq",
+    version: "1.0.0",
+    tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool],
+  });
 
 export const GRQ_RESEARCH_TOOL_NAMES = [
   "mcp__grq__get_quotes",
