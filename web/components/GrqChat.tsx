@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ChatClient from "./ChatClient";
+import StockSearch from "./StockSearch";
 
 /** The "Ask GRQ" floating chat — a bubble pinned to the bottom-right of every page
  *  (members only). Click it to open the read-only agent chat in a floating panel;
@@ -146,6 +147,11 @@ export default function GrqChat({
           </div>
         </section>
       )}
+
+      {/* Jump-to-stock search — sits just above the Ask-GRQ bull. Hidden while the
+          chat is open so it never overlaps the chat panel; the flex column gives it
+          the same gap as the panel↔bull spacing. */}
+      {!open && <StockSearch />}
 
       <button
         onClick={toggle}
