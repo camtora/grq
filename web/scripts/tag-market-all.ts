@@ -6,8 +6,8 @@
 import { tagBatch } from "../lib/market-screen/tag";
 
 const PHASES: { label: string; exchanges: string[] }[] = [
-  { label: "Canada (TSX+TSXV)", exchanges: ["TSX", "TSXV"] },
-  { label: "US (NASDAQ+NYSE)", exchanges: ["NASDAQ", "NYSE"] },
+  { label: "Canada (TSX+TSXV+NEO)", exchanges: ["TSX", "TSXV", "NEO"] },
+  { label: "US (NASDAQ+NYSE+AMEX)", exchanges: ["NASDAQ", "NYSE", "AMEX"] },
 ];
 const BATCH = 40;
 

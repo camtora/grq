@@ -8,14 +8,15 @@ import { prisma } from "../db";
 // Own fetch (vs lib/fmp.ts's wrapper) so it can read isFund + volume for the screen.
 
 const BASE = "https://financialmodelingprep.com/stable";
-const EXCHANGES = ["NASDAQ", "NYSE", "TSX", "TSXV"];
+const EXCHANGES = ["NASDAQ", "NYSE", "AMEX", "TSX", "TSXV", "NEO"];
 const FLOOR_CAP_M = 50; // skip sub-$50M micro-junk
 const FLOOR_PRICE_CENTS = 100; // skip sub-$1 penny stocks
 const FLOOR_DOLLAR_VOL = 50_000; // skip ~dead names (< $50k traded/day)
 
 // Canadian venues are CAD; US venues USD (the raw screener omits currency).
-const CURRENCY_BY_EXCHANGE: Record<string, string> = { TSX: "CAD", TSXV: "CAD", NASDAQ: "USD", NYSE: "USD" };
-const SUFFIX_BY_EXCHANGE: Record<string, string> = { TSX: ".TO", TSXV: ".V" };
+const CA_EXCHANGES = new Set(["TSX", "TSXV", "NEO"]);
+const CURRENCY_BY_EXCHANGE: Record<string, string> = { TSX: "CAD", TSXV: "CAD", NEO: "CAD", NASDAQ: "USD", NYSE: "USD", AMEX: "USD" };
+const SUFFIX_BY_EXCHANGE: Record<string, string> = { TSX: ".TO", TSXV: ".V", NEO: ".NE" };
 
 const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
 
@@ -79,7 +80,7 @@ export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<
       const symbol = suffix && !/\.[A-Z]{1,3}$/i.test(r.symbol) ? `${r.symbol}${suffix}` : r.symbol;
       keep.push({
         symbol, ticker: bareKey(r.symbol), name: r.companyName, exchange: ex,
-        sector: r.sector, country: r.country ?? (ex === "TSX" || ex === "TSXV" ? "CA" : "US"),
+        sector: r.sector, country: r.country ?? (CA_EXCHANGES.has(ex) ? "CA" : "US"),
         marketCapM: capM, priceCents, currency: CURRENCY_BY_EXCHANGE[ex] ?? "USD", screenScore: score,
       });
     }

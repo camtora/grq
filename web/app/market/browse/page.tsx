@@ -15,7 +15,7 @@ import { LiveLastCell } from "@/components/LiveTableCells";
 
 export const dynamic = "force-dynamic";
 
-const EXCHANGES = ["TSX", "TSXV", "NYSE", "NASDAQ"];
+const EXCHANGES = ["TSX", "TSXV", "NEO", "NYSE", "NASDAQ", "AMEX"];
 const SECTORS = [
   "Technology",
   "Financial Services",
