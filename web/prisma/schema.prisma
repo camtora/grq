@@ -990,3 +990,23 @@ model RaceNavSnapshot {
 
   @@index([entrantId, at])
 }
+
+// Knowledge graph — Slice 2 (docs/KNOWLEDGE-GRAPH.md). Persisted company-relationship
+// edges, recomputed by a deterministic nightly batch (lib/graph/edges.ts, no LLM).
+// One row per directed (fromSymbol → toTicker) edge; the scan visits every tracked
+// node so symmetric pairs persist in both directions. Read by the Today "also
+// touches" lane and (Slice 3) the agent context. Never gates an order (§6 untouched).
+model KnowledgeEdge {
+  id         Int      @id @default(autoincrement())
+  fromSymbol String // the universe symbol this edge belongs to ("NVDA", "AMD.US", "RY")
+  toTicker   String // bare ticker of the related name (join key)
+  toSymbol   String? // resolved universe symbol when the related name is tracked, else null
+  weight     Int // 0–100 derived relatedness
+  sources    String // CSV: "peer,coheld,comention,sector"
+  why        String // human-readable provenance
+  computedAt DateTime @default(now())
+
+  @@unique([fromSymbol, toTicker])
+  @@index([fromSymbol])
+  @@index([toTicker])
+}

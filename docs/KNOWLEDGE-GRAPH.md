@@ -132,13 +132,24 @@ agent-runner rebuild** that would re-trigger the ~3.8M-token startup universe sc
 
 ### Slice 2 — persist + Today lane
 
-- `KnowledgeEdge` table — `(symbolA, symbolB, source, weight, why, computedAt)`, stored canonical
-  (`symbolA < symbolB`), queried both directions.
-- A deterministic nightly batch (`lib/graph/edges.ts runGraphScan()`) over tracked names — no LLM. The
-  read API (`relatedFor`) reads the table first, computes-and-caches on miss, so the Slice 1 surface is
-  unchanged. (Scheduling forces an agent-runner touch → AGENT_VERSION bump; batch in with other agent
-  changes.)
-- Today "this story also touches…" lane on `comention` edges.
+**Backbone PREPPED (2026-06-26, not yet wired/deployed):**
+- `KnowledgeEdge` table — `(fromSymbol, toTicker, toSymbol?, weight, sources, why, computedAt)`, one row
+  per directed edge (the scan visits every node, so symmetric pairs persist both ways). Stored, not
+  canonical `a<b` — it matches `relatedFor`'s per-node output and makes `edgesFor(symbol)` a trivial
+  read. **Pushed to live (additive); the running containers ignore it until deploy.**
+- `lib/graph/edges.ts` — `runGraphScan()` (deterministic batch: calls `relatedFor` per tracked name,
+  `STORE_LIMIT=20`, upserts + prunes stale; no LLM) + `edgesFor(symbol)` (the read side) +
+  `buildEdgesForSymbol()`. Verified: 104 nodes → 1258 DB-only edges in 3.6s.
+- `scripts/build-graph.ts` — manual populate (`npx tsx scripts/build-graph.ts [--peers] [--limit=N]`).
+  ⚠️ host tsx doesn't load `FMP_API_KEY` (root `.env`), so `--peers` is a no-op standalone; peer edges
+  populate when the scan runs in-container.
+
+**Remaining (gated):**
+- **Nightly runner hook** — call `runGraphScan({ withPeers: true })` on a daily guard in `agent/runner.ts`.
+  Agent-coupled: forces a rebuild → `AGENT_VERSION` bump + startup-scan window + the 10:00–15:00 ET
+  check-in blackout. Batch with the Slice-3 agent work.
+- **Today "also touches" lane** — web-only, lives in `app/page.tsx`; reads `comention`/the edge table.
+  Deferred while that file is under concurrent edit.
 
 ### Slice 3 — agent input (maybe)
 
