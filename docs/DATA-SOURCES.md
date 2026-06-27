@@ -74,12 +74,13 @@ re-researches the name. The stock page is `dynamic = "force-dynamic"` and `fmpGe
 | **GRQ's call / stance / targets / bottom line** | agent dossier (`JournalEntry`) | **only when (re-)researched** — a new dossier | **YES** |
 | Related names (knowledge graph) | derived from the DB | per load (DB-derived; `docs/KNOWLEDGE-GRAPH.md`) | no |
 
-**UI convention (the live dot):** the pulsing emerald dot — first used beside the price ticker —
-marks panels whose data is **pulled fresh from FMP on each page load** (analyst ratings, price
-targets, earnings, valuation vs peers, institutional). It is *not* placed on research-gated panels
-(GRQ's call / bottom line), historical panels (the record, trades), or store-backed panels (news,
-smart money) — those carry their own dated timestamps so the freshness is honest either way. The
-13F panel's dot is qualified in-tooltip (live fetch, quarterly source data). `components/LiveDot.tsx`.
+**UI convention (the freshness badge):** EVERY stock-page panel carries a top-right freshness badge
+(`components/PanelHeader.tsx`). Panels pulled fresh from FMP on each page load (analyst ratings, price
+targets, earnings, valuation vs peers, institutional) show the **pulsing emerald "live" dot** — the same
+marker first used beside the price ticker. Every other panel shows its **honest cadence instead of faking
+"live"**: GRQ's call/bottom line → "researched Nd ago", news → "~90 min", smart money → "daily", signals →
+"at last close", the record → "journal", graph-derived panels → "this load". The 13F badge is qualified
+in-tooltip (live fetch, quarterly source data). The price ticker keeps its own streaming dot (`<LiveQuote>`).
 
 ### Tier 1 — Price & volume (the foundation)
 Open/high/low/close/volume → trend, momentum, technical indicators (feeds the signals layer).

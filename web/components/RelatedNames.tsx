@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import StockLogo from "@/components/StockLogo";
+import PanelHeader from "@/components/PanelHeader";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import type { RelatedName } from "@/lib/graph/related";
 
@@ -20,9 +21,9 @@ const SCREEN_TAG: Record<string, { label: string; cls: string }> = {
 export default function RelatedNames({ items, cadListing = false }: { items: RelatedName[]; cadListing?: boolean }) {
   return (
     <div className="flex h-full flex-col space-y-2">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+      <PanelHeader fresh="this load" freshTitle="Computed fresh from the knowledge graph on each page load">
         Related names <span className="normal-case tracking-normal text-teal-200/40">· the graph</span>
-      </h2>
+      </PanelHeader>
       <Card className="flex-1 p-5">
         {items.length > 0 ? (
           <ul className="text-sm">

@@ -39,7 +39,7 @@ import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import RelatedNames from "@/components/RelatedNames";
 import { relatedFor } from "@/lib/graph/related";
-import LiveDot from "@/components/LiveDot";
+import PanelHeader from "@/components/PanelHeader";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import Term from "@/components/Term";
 
@@ -415,7 +415,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
       {(stance || rec) && (
         <Card className="mb-6 border-teal-400/30 p-5">
-          <div className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</div>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The bottom line</span>
+            {lastResearched && (
+              <span title="GRQ's own call — only changes when the agent re-researches this name" className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-teal-200/35">
+                researched {agoShort(lastResearched.toISOString().slice(0, 10))}
+              </span>
+            )}
+          </div>
           <div className="grid gap-6 lg:grid-cols-4">
             <div className="lg:col-span-1">
               {/* The verdict word, with the bull/bear bar (the same call) directly under
@@ -608,7 +615,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           peer/valuation table below (Cam 2026-06-19). */}
       <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings <LiveDot /></h2>
+          <PanelHeader live>Analyst ratings</PanelHeader>
           {grades ? (
             <Card className="p-4 text-sm flex-1">
               <div className="mb-2 flex items-baseline justify-between">
@@ -682,9 +689,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
 
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            <Term k="analyst-target">Price targets</Term> <span className="normal-case text-teal-200/40">· Tier 2</span> <LiveDot />
-          </h2>
+          <PanelHeader live>
+            <Term k="analyst-target">Price targets</Term> <span className="normal-case text-teal-200/40">· Tier 2</span>
+          </PanelHeader>
           {analyst ? (
             (() => {
               // The analyst feed keys off the BARE ticker, so for a CDR or cross-listing it
@@ -825,10 +832,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
 
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>{" "}
-            <LiveDot title="Live fetch each load — but 13F filings are quarterly (~45-day lag)" />
-          </h2>
+          <PanelHeader live freshTitle="Live fetch each load — but 13F filings are quarterly (~45-day lag)">
+            Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+          </PanelHeader>
           {institutional ? (
             <Card className="p-4 text-sm flex-1">
               <div className="flex items-baseline justify-between gap-2">
@@ -877,9 +883,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
 
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+          <PanelHeader fresh="at last close" freshTitle="Technical signals computed from price bars; bars refresh nightly (tracked names) / on demand">
             Signals <span className="normal-case text-teal-200/40">· v1</span>
-          </h2>
+          </PanelHeader>
           <Card className="p-4 text-sm flex-1">
             {!signals ? (
               <p className="text-teal-200/40">Insufficient bar history yet.</p>
@@ -908,9 +914,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
 
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Earnings <span className="normal-case text-teal-200/40">· Tier 6</span> <LiveDot />
-          </h2>
+          <PanelHeader live>
+            Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+          </PanelHeader>
           {earnings ? (
             <Card className="p-4 text-sm flex-1">
               {/* Next scheduled date (with the consensus estimate it'll be judged against). */}
@@ -987,7 +993,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       {/* Valuation vs peers · Related names · Smart money — three equal-height panels. */}
       <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-3">
         <div className="flex h-full flex-col space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Valuation vs peers <LiveDot /></h2>
+          <PanelHeader live>Valuation vs peers</PanelHeader>
           <Card className="flex-1 p-5">
           {peers.length > 1 ? (
           <table className="w-full text-sm">
@@ -1048,6 +1054,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               The record ({journal.length})
             </h2>
             {isMember && <AddNote symbol={symbol} />}
+            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-teal-200/35">journal</span>
           </div>
           {journal.length === 0 ? (
             <Card className="p-6 text-sm text-teal-200/40">
@@ -1083,7 +1090,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       </div>
 
         <div className="space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Trades</h2>
+          <PanelHeader fresh="history">Trades</PanelHeader>
           <Card className="p-4">
             {trades.length === 0 ? (
               <p className="text-sm text-teal-200/40">No fills yet.</p>
@@ -1103,16 +1110,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             )}
           </Card>
 
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
+          <PanelHeader fresh="from retros">Scoreboard</PanelHeader>
           <Scoreboard
             rows={symbolScores}
             title=""
             emptyText="No graded calls on this name yet — retros fill this in."
           />
 
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+          <PanelHeader fresh="~90 min" freshTitle="News store, refreshed by the pipeline ~every 90 min (live FMP fallback)">
             Recent news <span className="normal-case text-teal-200/40">· Tier 7</span>
-          </h2>
+          </PanelHeader>
           {news.length > 0 ? (
             <Card className="divide-y divide-[color:var(--card-border)]">
               {news.map((n, i) => (
@@ -1128,7 +1135,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </Card>
           )}
 
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Data coverage</h2>
+          <PanelHeader fresh="this load">Data coverage</PanelHeader>
           <Card className="p-4">
             <ul className="space-y-1.5 text-sm">
               {coverage.map((c) => (

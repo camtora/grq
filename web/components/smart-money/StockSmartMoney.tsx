@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui";
 import Term from "@/components/Term";
+import PanelHeader from "@/components/PanelHeader";
 import SmartMoneyAvatar from "./SmartMoneyAvatar";
 import { fmtUsd } from "@/lib/smart-money/types";
 import type { SymbolSmartMoney } from "@/lib/smart-money/queries";
@@ -24,9 +25,9 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null })
 
   return (
     <div className="flex h-full flex-col space-y-2">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+      <PanelHeader fresh="daily" freshTitle="13F / insider / congress feeds, ingested by the runner daily (13F only on a new filing)">
         Smart money <span className="normal-case tracking-normal text-teal-200/40">· tracked investors</span>
-      </h2>
+      </PanelHeader>
       <Card className="flex-1 p-5">
         {!sm || !sm.hasAny ? (
           <p className="text-sm text-teal-200/40">
