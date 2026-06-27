@@ -1,0 +1,68 @@
+import Link from "next/link";
+import { Card } from "@/components/ui";
+import StockLogo from "@/components/StockLogo";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
+import type { RelatedName } from "@/lib/graph/related";
+
+// "Related names" — the knowledge-graph panel (docs/KNOWLEDGE-GRAPH.md, Slice 1).
+// Sits beside "Valuation vs peers" at half width. Each row is a name this stock is
+// connected to (FMP peer / shared 13F holder / news co-mention / same sector), with
+// honest provenance (`why`) and a 0–100 relatedness weight. Tracked names show GRQ's
+// call + link to their dossier; untracked names are leads that link to a page which
+// kicks off research on open (D46).
+export default function RelatedNames({ items, cadListing = false }: { items: RelatedName[]; cadListing?: boolean }) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+        Related names <span className="normal-case tracking-normal text-teal-200/40">· the graph</span>
+      </h2>
+      <Card className="p-5">
+        {items.length > 0 ? (
+          <ul className="text-sm">
+            {items.map((r) => {
+              const m = stanceMeta(r.stance);
+              const tone = m ? STANCE_TONE_CLASSES[m.tone] : null;
+              const href = `/stocks/${encodeURIComponent(r.symbol ?? r.ticker)}`;
+              return (
+                <li key={r.ticker} className="border-t border-teal-400/10 first:border-0">
+                  <Link href={href} className="flex items-center gap-3 py-2 transition-colors hover:bg-teal-400/[0.04]">
+                    <StockLogo symbol={r.ticker} logoUrl={r.logoUrl} className="h-7 w-7 text-[10px]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-semibold text-teal-100">{r.ticker}</span>
+                        {r.name && r.name !== r.ticker && (
+                          <span className="truncate text-xs text-teal-200/40">{r.name}</span>
+                        )}
+                        {!r.symbol && <span className="shrink-0 text-[10px] uppercase tracking-wide text-teal-200/30">lead</span>}
+                      </div>
+                      <div className="truncate text-[11px] text-teal-200/40">{r.why}</div>
+                    </div>
+                    {m && tone && (
+                      <span
+                        title={`GRQ's call: ${m.label} — ${m.blurb}`}
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}
+                      >
+                        {m.abbr}
+                      </span>
+                    )}
+                    <span title="Relatedness 0–100 (peers · 13F overlap · news co-mention)" className="w-7 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">
+                      {r.weight}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-teal-200/40">
+            No related names yet — the graph builds from shared analysts (peers), the same 13F holders, and
+            news co-mentions{cadListing ? "; coverage is thinner for pure-TSX listings" : ""}.
+          </p>
+        )}
+        <p className="mt-2 text-[11px] text-teal-200/40">
+          Names connected to this one — an input we surface, never a trade signal.
+        </p>
+      </Card>
+    </div>
+  );
+}

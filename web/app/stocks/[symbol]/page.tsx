@@ -35,6 +35,8 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import Sparkline from "@/components/Sparkline";
 import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
+import RelatedNames from "@/components/RelatedNames";
+import { relatedFor } from "@/lib/graph/related";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import Term from "@/components/Term";
 
@@ -218,6 +220,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       getSmartMoneyForSymbol(symbol).catch(() => null),
       prisma.settings.findUnique({ where: { id: 1 } }),
     ]);
+
+  // Knowledge graph — names this stock is connected to (peers · shared 13F holders ·
+  // news co-mentions · sector floor). On-the-fly, no agent, no LLM (docs/KNOWLEDGE-GRAPH.md).
+  const related = await relatedFor({ symbol, yahoo: entry.yahoo, peers, sector: entry.sector, limit: 8 });
+
   // The risk dial sets the deterministic exits (enforceExits): a protective stop
   // stopPct% below ACB and a take-profit takeProfitPct% above it — both enforced in
   // code each tick, so the levels below are the REAL ones, not aspirational (D11).
@@ -957,8 +964,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
       </section>
 
-      <section className="mb-6 grid items-start gap-6 lg:grid-cols-3">
-        <div className="space-y-2 lg:col-span-2">
+      <section className="mb-6 grid items-start gap-6 lg:grid-cols-2">
+        <div className="space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Valuation vs peers</h2>
           <Card className="p-5">
           {peers.length > 1 ? (
@@ -1007,14 +1014,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           </p>
           </Card>
         </div>
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
-          <Scoreboard
-            rows={symbolScores}
-            title=""
-            emptyText="No graded calls on this name yet — retros fill this in."
-          />
-        </div>
+        <RelatedNames items={related.items} cadListing={cadListing} />
       </section>
 
       {/* Smart money on THIS name — tracked investors' positions/trades + faces. */}
@@ -1083,6 +1083,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </ul>
             )}
           </Card>
+
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Scoreboard</h2>
+          <Scoreboard
+            rows={symbolScores}
+            title=""
+            emptyText="No graded calls on this name yet — retros fill this in."
+          />
 
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
             Recent news <span className="normal-case text-teal-200/40">· Tier 7</span>
