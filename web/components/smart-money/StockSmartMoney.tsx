@@ -36,7 +36,7 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null })
         ) : (
           <>
       {hasFaces && (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
           {sm.fundHolders.map((f, i) => (
             <HolderTile key={`${f.slug}-${f.putCall ?? "x"}-${i}`}>
               <SmartMoneyAvatar name={f.name} avatar={f.avatar} accent={f.accent} className="h-9 w-9 text-xs" />

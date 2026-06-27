@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui";
 import Term from "@/components/Term";
+import PanelHeader from "@/components/PanelHeader";
 import type { OptionsDaily } from "@prisma/client";
 
 // Tier 3 — options positioning on the stock page. Horizontal/compact (minimise vertical space):
@@ -25,15 +26,16 @@ function Metric({ label, k, value, note }: { label: string; k: string; value: st
 }
 
 export default function OptionsPanel({ o }: { o: OptionsDaily | null }) {
+  const updated = o
+    ? `updated ${new Date(o.fetchedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET`
+    : undefined;
   return (
-    <Card className="p-4">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-          <Term k="options-positioning">Options positioning</Term>
-        </div>
-        <span className="text-[10px] text-teal-200/30">CBOE delayed · a signal, never traded</span>
-      </div>
-
+    <div className="space-y-2">
+      <PanelHeader fresh={updated} freshTitle="CBOE options data — delayed, refreshed ~hourly. A signal only; the fund never trades options.">
+        <Term k="options-positioning">Options positioning</Term>{" "}
+        <span className="normal-case text-teal-200/40">· Tier 3 · signal only</span>
+      </PanelHeader>
+      <Card className="p-4">
       {!o ? (
         <p className="text-sm text-teal-200/40">
           No listed-options data — this name has a thin or no US options market. (US-listed optionable names only; the
@@ -79,6 +81,7 @@ export default function OptionsPanel({ o }: { o: OptionsDaily | null }) {
           </div>
         </div>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }
