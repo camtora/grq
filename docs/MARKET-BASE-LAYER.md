@@ -1,10 +1,13 @@
 # Market Base Layer — researching the whole market, affordably
 
-**Status (2026-06-27):** **Tiers 0 + 1 SHIPPED** (web deploy, commit 889a135). `MarketScreen` table
-live; Tier-0 deterministic screen = 4,788 real companies ranked on Browse; Tier-1 Haiku tagger built
-(~30 names tagged so far — a full pass is ~$15) and joined into the knowledge-graph Related-names panel.
-Remaining: a full Tier-1 pass + the nightly runner automation (agent-coupled) + Tier-2 retrieval into the
-agent context. Companion to the knowledge graph (`docs/KNOWLEDGE-GRAPH.md`), the retrieval half.
+**Status (2026-06-27):** **Tiers 0 + 1 + 3 SHIPPED.** `MarketScreen` table live; Tier-0 deterministic
+screen = 4,788 real companies ranked on Browse; Tier-1 Haiku tagger — **full pass complete (4,788 tagged,
+194 INTERESTING)** — joined into the knowledge-graph Related-names panel. **Nightly automation** wired
+(`runMarketScreenNightly` in the runner daily block — re-screen + tag new names). **Tier-3 retrieval**
+live in the agent (v2.8-phase4): a "Market screen — fresh finds" context section + hunt anti-saturation
+(avoid recently-surfaced names) + a screen seed, behind `MARKET_BASE_RETRIEVAL` (default on; "off" disables).
+Remaining: tuning + the A/B evaluation (does retrieval change what the agent finds?). Companion to the
+knowledge graph (`docs/KNOWLEDGE-GRAPH.md`), the retrieval half.
 
 **The pitch (Cam, 2026-06-27):** instead of the agent only knowing the ~100 names it tracks, give it a
 *base layer of awareness across the whole investable market* (~10,800 NASDAQ + NYSE + TSX companies,
