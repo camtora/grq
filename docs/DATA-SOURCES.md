@@ -49,6 +49,38 @@ FRED). The fund now trades CAD **and** USD (see `docs/DECISIONS.md` D34)._
 | 8 | Social sentiment | Later | Deliberately late — noisy |
 | 10 | Alternative data | Maybe | Mostly paid; revisit at scale |
 
+## Data freshness & refresh cadence
+
+"Live" above means *the feed is wired*, not *how fresh it is on screen*. Freshness varies by data
+type — and the most important distinction is **live market data vs. GRQ's research-gated judgment**:
+the FMP market panels reflect the market *now*, while GRQ's call only changes when the agent
+re-researches the name. The stock page is `dynamic = "force-dynamic"` and `fmpGet` uses
+`cache: "no-store"` (`lib/fmp.ts`), so the FMP panels are re-fetched on **every page load**.
+
+| Data on the page | Source | How it refreshes | Research-gated? |
+|---|---|---|---|
+| **Price ticker** (on-page) | FMP `/api/quotes` | **Streaming** — client polls ~2.5s, badge goes "stale" if it freezes (`<LiveQuote live>`) | no |
+| Quote for position math | Yahoo delayed | server, DB-cached (`lib/broker/quotes.ts`) | no |
+| **Analyst ratings / price targets** | FMP | **Live — fetched fresh every page load** (no-store) | no |
+| **Earnings** (next/last + estimates) | FMP | **Live — every page load** | no |
+| **Valuation vs peers** | FMP | **Live — every page load** | no |
+| **Institutional / 13F** | FMP | **Live fetch every load**, but 13Fs are filed **quarterly** (~45-day lag) — the *fetch* is live, the *data* is not | no |
+| Signals (technical) | computed from bars | per load, but bars refresh **nightly** (tracked) / on-demand | no |
+| Recent news | `NewsArticle` store (FMP fallback) | news pipeline **~90 min** (`docs/NEWS-AND-EVENTS.md`) | no |
+| Smart money board | FMP 13F/insider/congress + OpenInsider | runner ingest **daily** (13F only on a new filing) | no |
+| Macro strip | BoC Valet + FRED | **30-min** poll + delta→event (`lib/macro.ts`) | no |
+| Stored fundamentals (sector / industry / cap / exchange) | FMP profile | runner backfill, **stale after 7 days**, rolling (`lib/fundamentals.ts`) | no |
+| Market Base Layer (screen + Haiku tag) | FMP screener + Haiku | batch (manual now → nightly planned; `docs/MARKET-BASE-LAYER.md`) | no |
+| **GRQ's call / stance / targets / bottom line** | agent dossier (`JournalEntry`) | **only when (re-)researched** — a new dossier | **YES** |
+| Related names (knowledge graph) | derived from the DB | per load (DB-derived; `docs/KNOWLEDGE-GRAPH.md`) | no |
+
+**UI convention (the live dot):** the pulsing emerald dot — first used beside the price ticker —
+marks panels whose data is **pulled fresh from FMP on each page load** (analyst ratings, price
+targets, earnings, valuation vs peers, institutional). It is *not* placed on research-gated panels
+(GRQ's call / bottom line), historical panels (the record, trades), or store-backed panels (news,
+smart money) — those carry their own dated timestamps so the freshness is honest either way. The
+13F panel's dot is qualified in-tooltip (live fetch, quarterly source data). `components/LiveDot.tsx`.
+
 ### Tier 1 — Price & volume (the foundation)
 Open/high/low/close/volume → trend, momentum, technical indicators (feeds the signals layer).
 **Sources:** [Polygon.io](https://polygon.io), [Alpha Vantage](https://www.alphavantage.co),
