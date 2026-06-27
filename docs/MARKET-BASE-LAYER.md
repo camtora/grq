@@ -1,7 +1,10 @@
 # Market Base Layer — researching the whole market, affordably
 
-**Status (2026-06-27):** PLANNED — design only, nothing built. Companion to the knowledge graph
-(`docs/KNOWLEDGE-GRAPH.md`), which is the retrieval half of this idea.
+**Status (2026-06-27):** **Tiers 0 + 1 SHIPPED** (web deploy, commit 889a135). `MarketScreen` table
+live; Tier-0 deterministic screen = 4,788 real companies ranked on Browse; Tier-1 Haiku tagger built
+(~30 names tagged so far — a full pass is ~$15) and joined into the knowledge-graph Related-names panel.
+Remaining: a full Tier-1 pass + the nightly runner automation (agent-coupled) + Tier-2 retrieval into the
+agent context. Companion to the knowledge graph (`docs/KNOWLEDGE-GRAPH.md`), the retrieval half.
 
 **The pitch (Cam, 2026-06-27):** instead of the agent only knowing the ~100 names it tracks, give it a
 *base layer of awareness across the whole investable market* (~10,800 NASDAQ + NYSE + TSX companies,
