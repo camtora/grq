@@ -1,5 +1,6 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { topScreened } from "@/lib/market-screen/screen";
+import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
 import { watchedByMember, watchersFor, type WatcherView } from "@/lib/watch";
@@ -296,7 +297,11 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               },
               node: (
                 <tr key={`${r.symbol}-${r.exchange}`} className="border-t border-teal-400/10">
-                  <td className="px-4 py-2.5 font-semibold text-teal-200">{r.symbol}</td>
+                  <td className="px-4 py-2.5 font-semibold">
+                    <Link href={`/stocks/${encodeURIComponent(r.symbol)}`} className="text-teal-200 hover:text-teal-100 hover:underline">
+                      {r.symbol}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2.5 text-teal-100/70">
                     <div className="flex items-center gap-1.5">
                       {r.name}

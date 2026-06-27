@@ -27,12 +27,12 @@ function Metric({ label, k, value, note }: { label: string; k: string; value: st
 
 export default function OptionsPanel({ o }: { o: OptionsDaily | null }) {
   return (
-    <div className="space-y-2">
+    <div className="flex h-full flex-col gap-2">
       <PanelHeader fresh="~hourly" freshTitle="CBOE options data — delayed, re-fetched ~hourly intraday. A signal only; the fund never trades options.">
         <Term k="options-positioning">Options positioning</Term>{" "}
         <span className="normal-case text-teal-200/40">· Tier 3 · signal only</span>
       </PanelHeader>
-      <Card className="p-4">
+      <Card className="flex-1 p-4">
       {!o ? (
         <p className="text-sm text-teal-200/40">
           No listed-options data — this name has a thin or no US options market. (US-listed optionable names only; the

@@ -55,6 +55,20 @@ export async function huntAvoidAndSeed(): Promise<{ avoid: string[]; seed: Scree
   return { avoid, seed };
 }
 
+export type ScreenRead = { tag: string; take: string | null; screenScore: number; obscurity: number | null };
+
+/** The screen's first-pass read on ONE name (by bare ticker) — shown on the stock
+ *  page when there's no full dossier yet, so every screened name has SOME GRQ read.
+ *  Highest-score listing wins on a cross-exchange ticker collision. */
+export async function screenReadFor(ticker: string): Promise<ScreenRead | null> {
+  const row = await prisma.marketScreen.findFirst({
+    where: { ticker: bareKey(ticker), tag: { not: null } },
+    orderBy: { screenScore: "desc" },
+    select: { tag: true, take: true, screenScore: true, obscurity: true },
+  });
+  return row ? { tag: row.tag as string, take: row.take, screenScore: row.screenScore, obscurity: row.obscurity } : null;
+}
+
 /** One-line-per-find render for the hunt seed / context. */
 export function findLine(f: ScreenFind): string {
   return `- ${f.ticker} (${f.name}, ${f.exchange}${f.sector ? `, ${f.sector}` : ""})${f.obscurity ? ` · obscurity ${f.obscurity}/5` : ""}${f.take ? ` — ${f.take}` : ""}`;
