@@ -11,7 +11,7 @@ const ITEMS: string[] = [
   "“Know what you own, and know why you own it.” — Peter Lynch",
   "“Risk comes from not knowing what you’re doing.” — Warren Buffett",
   "“The investor’s chief problem — and even his worst enemy — is likely to be himself.” — Benjamin Graham",
-  "Time in the market beats timing the market. The robot keeps a sticky note to that effect.",
+  "Time in the market beats timing the market. Alfred keeps a sticky note to that effect.",
   "Diversification: the art of being wrong in several places at once, comfortably.",
   "A bull market is when your stocks go up; a bear market is when you discover humility.",
   "Why did the trader bring a ladder to work? To buy on the dips.",

@@ -65,7 +65,7 @@ export async function sendDiscord(severity: Severity, title: string, body = ""):
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        content: `${prefix} **GRQ ${severity.toUpperCase()}** — ${title}${body ? `\n${body.slice(0, 1500)}` : ""}`,
+        content: `${prefix} **Alfred · ${severity.toUpperCase()}** — ${title}${body ? `\n${body.slice(0, 1500)}` : ""}`,
       }),
     });
   } catch (e) {

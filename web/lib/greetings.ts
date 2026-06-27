@@ -8,11 +8,11 @@ const LINES: Record<Band, string[]> = {
   soaring: [
     "Welcome back, oh prosperous one.",
     "Welcome back, {name} — Midas mode engaged.",
-    "Welcome back, {name}. The robot requests a raise.",
+    "Welcome back, {name}. Alfred requests a raise.",
   ],
   up: [
     "Welcome back, {name} — green looks good on you.",
-    "Welcome back, {name}. The robot is earning its electricity.",
+    "Welcome back, {name}. Alfred is earning its electricity.",
     "Welcome back, {name}. Rich quick, slowly — as promised.",
   ],
   flat: [
@@ -22,8 +22,8 @@ const LINES: Record<Band, string[]> = {
   ],
   down: [
     "Welcome back, {name}. We don't talk about Tuesday.",
-    "Welcome back, {name}. The robot says drawdowns build character.",
-    "Welcome back, {name}. The robot apologizes in advance.",
+    "Welcome back, {name}. Alfred says drawdowns build character.",
+    "Welcome back, {name}. Alfred apologizes in advance.",
   ],
   rough: [
     "Welcome back, {name}. XIC would like a word.",

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import ChatClient from "./ChatClient";
 import StockSearch from "./StockSearch";
 
-/** The "Ask GRQ" floating chat — a bubble pinned to the bottom-right of every page
+/** The "Ask Alfred" floating chat — a bubble pinned to the bottom-right of every page
  *  (members only). Click it to open the read-only agent chat in a floating panel;
  *  click again (or ✕ / Escape) to close. It stays mounted after the first open so the
  *  thread keeps its scroll + draft. Stock pages open it pre-aimed at a symbol via
@@ -71,7 +71,7 @@ export default function GrqChat({
         >
           <header className="flex items-center gap-2 border-b border-teal-400/15 px-4 py-3">
             <span className="bg-gradient-to-r from-teal-300 to-teal-500 bg-clip-text font-black tracking-tight text-transparent">
-              Ask GRQ
+              Ask Alfred
             </span>
             {symbol && (
               <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-300">
@@ -155,8 +155,8 @@ export default function GrqChat({
 
       <button
         onClick={toggle}
-        aria-label={open ? "Close GRQ chat" : "Ask GRQ"}
-        title="Ask GRQ"
+        aria-label={open ? "Close Alfred chat" : "Ask Alfred"}
+        title="Ask Alfred"
         className="flex h-14 w-14 items-center justify-center rounded-full border border-teal-300/40 bg-slate-900 text-teal-300 shadow-xl shadow-teal-500/30 transition-transform hover:scale-105 active:scale-95"
       >
         {open ? (
