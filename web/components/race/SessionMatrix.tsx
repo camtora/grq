@@ -1,11 +1,10 @@
-"use client";
-
-import { useMemo, useState } from "react";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import { fmtWhen } from "@/lib/money";
+import { fmtWhen, money } from "@/lib/money";
 import { modelLabel, stripDecisionBlock } from "@/lib/race/models";
-import type { SessionView, CellView } from "@/lib/race/standings";
+import type { SessionView, CellView, ModelStanding } from "@/lib/race/standings";
+
+type Position = ModelStanding["positions"][number];
 
 const KIND_LABEL: Record<string, string> = {
   morning: "Morning plan",
@@ -38,7 +37,7 @@ function daySummary(sessions: SessionView[], model: string) {
   return { buys, sells, holds, reads };
 }
 
-function SummaryCard({ model, sessions, champ }: { model: string; sessions: SessionView[]; champ: boolean }) {
+function SummaryCard({ model, sessions, book, champ }: { model: string; sessions: SessionView[]; book: Position[]; champ: boolean }) {
   if (!model) {
     return <div className="rounded-lg border border-teal-400/5 bg-teal-400/[0.01] p-3 text-xs text-teal-200/30">No challenger selected.</div>;
   }
@@ -49,6 +48,7 @@ function SummaryCard({ model, sessions, champ }: { model: string; sessions: Sess
         {champ ? "★ " : ""}
         {modelLabel(model)} — today
       </div>
+      {/* The CALLS — each buy/sell decision (a name can be re-called) */}
       <dl className="mt-2 space-y-1 text-xs">
         <div className="flex gap-2">
           <dt className="w-12 shrink-0 text-teal-200/40">Bought</dt>
@@ -66,6 +66,29 @@ function SummaryCard({ model, sessions, champ }: { model: string; sessions: Sess
           </dd>
         </div>
       </dl>
+      {/* The BOOK — what those buy calls add up to (shares @ weighted-avg price), like the bulls. */}
+      {book.length > 0 && (
+        <div className="mt-2 border-t border-teal-400/10 pt-2">
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/40">Book (what it owns)</div>
+          <div className="space-y-0.5">
+            {book.map((p) => (
+              <div key={p.symbol} className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate">
+                  <span className="font-semibold text-teal-50">{p.symbol}</span>
+                  {p.shares > 0 && p.avgPriceCents != null ? (
+                    <span className="tabular-nums text-teal-200/50">
+                      {" "}
+                      {p.shares} @ {money(p.avgPriceCents)}
+                      {p.currency ? ` ${p.currency}` : ""}
+                    </span>
+                  ) : null}
+                </span>
+                <Pnl cents={p.pnlCadCents} className="shrink-0 text-[10px]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -116,47 +139,34 @@ function ModelCell({ cell, model }: { cell: CellView | undefined; model: string 
   );
 }
 
-/** The day's call matrix as a 1-vs-1 compare: the champion (Opus) is pinned LEFT, a single day-level
- *  picker chooses which challenger fills the RIGHT. A day-summary (what each bought/sold/held) leads,
- *  then the session-by-session calls. Beats stacking all 6–8 models per section. */
-export default function SessionMatrix({ sessions, models }: { sessions: SessionView[]; models: string[] }) {
-  const champion = useMemo(
-    () => models.find((m) => sessions.some((s) => s.cells[m]?.row.role === "champion")) ?? models[0] ?? "",
-    [models, sessions],
-  );
-  const challengers = useMemo(() => models.filter((m) => m !== champion), [models, champion]);
-  const [sel, setSel] = useState<string>(challengers[0] ?? "");
-
+/** The day's call matrix as a 1-vs-1 compare: the champion (Opus) is pinned LEFT, and the RIGHT is
+ *  whichever challenger the member clicked in the day-standings strip above (URL `?vs=MODEL`). A
+ *  day-summary (what each bought/sold/held) leads, then the session-by-session calls. */
+export default function SessionMatrix({
+  sessions,
+  champion,
+  selected,
+  standings,
+}: {
+  sessions: SessionView[];
+  champion: string;
+  selected: string;
+  standings: ModelStanding[];
+}) {
+  const bookFor = (m: string) => standings.find((s) => s.model === m)?.positions ?? [];
   return (
     <div className="space-y-4">
-      {/* Comparison picker — centered */}
-      <div className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-3 py-2 text-xs">
-        <span className="text-teal-200/50">Compare</span>
-        <span className="font-semibold text-teal-50">★ {modelLabel(champion)}</span>
-        <span className="text-teal-200/40">vs</span>
-        <select
-          value={sel}
-          onChange={(e) => setSel(e.target.value)}
-          className="rounded-lg border border-teal-400/20 bg-teal-400/5 px-2.5 py-1 font-semibold text-teal-100 outline-none hover:bg-teal-400/10"
-        >
-          {challengers.length === 0 ? (
-            <option value="">no challengers</option>
-          ) : (
-            challengers.map((m) => (
-              <option key={m} value={m} className="bg-[var(--card-bg)] text-teal-100">
-                {modelLabel(m)}
-              </option>
-            ))
-          )}
-        </select>
-      </div>
-
       {/* Day summary — what each side did across all of today's sessions */}
       <div>
-        <div className="mb-2 text-[10px] uppercase tracking-wider text-teal-200/40">Today so far</div>
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wider text-teal-200/40">
+          <span>Today so far ·</span>
+          <span className="font-semibold text-teal-200/70">★ {modelLabel(champion)}</span>
+          <span>vs</span>
+          <span className="font-semibold text-teal-200/70">{selected ? modelLabel(selected) : "pick a challenger above"}</span>
+        </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <SummaryCard model={champion} sessions={sessions} champ />
-          <SummaryCard model={sel} sessions={sessions} champ={false} />
+          <SummaryCard model={champion} sessions={sessions} book={bookFor(champion)} champ />
+          <SummaryCard model={selected} sessions={sessions} book={bookFor(selected)} champ={false} />
         </div>
       </div>
 
@@ -171,7 +181,7 @@ export default function SessionMatrix({ sessions, models }: { sessions: SessionV
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <ModelCell cell={s.cells[champion]} model={champion} />
-            <ModelCell cell={sel ? s.cells[sel] : undefined} model={sel} />
+            <ModelCell cell={selected ? s.cells[selected] : undefined} model={selected} />
           </div>
         </Card>
       ))}

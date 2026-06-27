@@ -67,7 +67,10 @@ export type ModelStanding = {
   totalCalls: number; // all decision rows for the model
   avgConfidence: number | null;
   spark: number[]; // cumulative CAD P&L per scored call, chronological
-  positions: { symbol: string; pnlCadCents: number; calls: number }[]; // distinct BUY-called names, marked-to-now
+  // The model's "book" from its BUY calls: distinct names with consolidated shares + weighted-avg
+  // entry price (native ccy), # of buy calls, and marked-to-now CAD P&L. shares/avgPriceCents are
+  // null-safe (0/null) when a call lacked a qty/price.
+  positions: { symbol: string; pnlCadCents: number; calls: number; shares: number; avgPriceCents: number | null; currency: string | null }[];
 };
 
 export type DayRollup = {
@@ -146,7 +149,7 @@ function computeStandings(
     let confSum = 0;
     let confN = 0;
     const spark: number[] = [];
-    const bySym = new Map<string, { pnlCadCents: number; calls: number }>(); // BUY "positions", accreted per name
+    const bySym = new Map<string, { pnlCadCents: number; calls: number; shares: number; costNativeCents: number; currency: string | null }>(); // BUY "positions", accreted per name
 
     const sorted = [...mrows].sort((a, b) => a.sessionAt.getTime() - b.sessionAt.getTime());
     for (const r of sorted) {
@@ -160,9 +163,14 @@ function computeStandings(
       // A BUY call = a name the model is "in" — accrete per symbol (add scored P&L when markable).
       if (r.action === "BUY" && r.symbol) {
         const sym = r.symbol.toUpperCase();
-        const e = bySym.get(sym) ?? { pnlCadCents: 0, calls: 0 };
+        const e = bySym.get(sym) ?? { pnlCadCents: 0, calls: 0, shares: 0, costNativeCents: 0, currency: r.entryCurrency };
         e.calls++;
         if (sc) e.pnlCadCents += toCadCents(sc.pnlNativeCents, r.entryCurrency, fx);
+        if (r.qty != null && r.entryPriceCents != null) {
+          e.shares += r.qty;
+          e.costNativeCents += r.qty * r.entryPriceCents;
+        }
+        if (!e.currency) e.currency = r.entryCurrency;
         bySym.set(sym, e);
       }
       if (!sc) continue;
@@ -192,7 +200,16 @@ function computeStandings(
       totalCalls: mrows.length,
       avgConfidence: confN ? Math.round(confSum / confN) : null,
       spark,
-      positions: [...bySym.entries()].map(([symbol, v]) => ({ symbol, pnlCadCents: v.pnlCadCents, calls: v.calls })).sort((a, b) => b.pnlCadCents - a.pnlCadCents),
+      positions: [...bySym.entries()]
+        .map(([symbol, v]) => ({
+          symbol,
+          pnlCadCents: v.pnlCadCents,
+          calls: v.calls,
+          shares: v.shares,
+          avgPriceCents: v.shares > 0 ? Math.round(v.costNativeCents / v.shares) : null,
+          currency: v.currency,
+        }))
+        .sort((a, b) => b.pnlCadCents - a.pnlCadCents),
     });
   }
   return standings;

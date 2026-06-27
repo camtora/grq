@@ -777,3 +777,21 @@ export async function fmpIndices(): Promise<IndexQuote[]> {
     return [{ symbol: d.symbol, label: d.label, price: v.price, change: v.change, changePct: prev !== 0 ? (v.change / prev) * 100 : 0 }];
   });
 }
+
+export type FxQuote = { price: number; change: number; changePct: number };
+
+// Live CAD/USD — the loonie's value in US dollars (~0.73) + today's move, via the same FMP
+// batch-quote endpoint the indices use (forex pairs quote the same way). null if FMP is off or
+// the pair didn't come back. Distinct from the BoC daily rate in the macro line (that's a fixing).
+export async function fmpCadUsd(): Promise<FxQuote | null> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`batch-quote-short?symbols=CADUSD`);
+  if (!Array.isArray(raw)) return null;
+  for (const q of raw) {
+    if (String(q.symbol ?? "") === "CADUSD" && typeof q.price === "number") {
+      const change = typeof q.change === "number" ? q.change : 0;
+      const prev = q.price - change;
+      return { price: q.price, change, changePct: prev !== 0 ? (change / prev) * 100 : 0 };
+    }
+  }
+  return null;
+}

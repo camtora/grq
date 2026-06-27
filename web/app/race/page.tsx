@@ -35,7 +35,7 @@ export default async function RacePage() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {models.map((s, i) => (
-              <ModelTile key={s.model} s={s} rank={i + 1} />
+              <ModelTile key={s.model} s={s} rank={i + 1} today={today} />
             ))}
           </div>
           <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">

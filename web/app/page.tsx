@@ -10,7 +10,7 @@ import LiveTape from "@/components/LiveTape";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
-import { fmpEnabled, fmpGainers, fmpIndices, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
+import { fmpEnabled, fmpGainers, fmpIndices, fmpCadUsd, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
 import { todayHeadlines, type NewsCard } from "@/lib/news/queries";
 import { SentimentDot } from "@/components/NewsList";
 import MarketIndices from "@/components/MarketIndices";
@@ -247,7 +247,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, macro, earnCal] =
+  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, marketCadUsd, macro, earnCal] =
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
@@ -274,6 +274,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       isToday ? todayHeadlines(12).catch(() => [] as NewsCard[]) : Promise.resolve([] as NewsCard[]),
       fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
       fmpEnabled() ? fmpIndices().catch(() => []) : Promise.resolve([]),
+      isToday && fmpEnabled() ? fmpCadUsd().catch(() => null) : Promise.resolve(null),
       getMacro().catch(() => null),
       isToday && fmpEnabled() ? fmpEarningsCalendar(earnFrom, earnTo).catch(() => [] as EarningsCalRow[]) : Promise.resolve([] as EarningsCalRow[]),
     ]);
@@ -526,16 +527,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
       {/* Market indices — live until the close (the screenshot strip). Live data,
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
-      {isToday && <MarketIndices initial={marketIndices} fundDayPct={marketDay ? dayPnlPct : null} />}
-
-      {/* Macro strip — rates/CPI/FX context (moved here from Portfolio, Cam 2026-06-18) */}
-      {isToday && macro && (
-        <div className="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
-          <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
-          <span className="text-teal-100/70">{macroLine(macro)}</span>
-          <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
-        </div>
-      )}
+      {isToday && <MarketIndices initial={marketIndices} initialFx={marketCadUsd} fundDayPct={marketDay ? dayPnlPct : null} />}
 
       {/* The Tape — the day's NAV on a fixed 9:30→16:00 axis, creeping right as the session
           runs (the live "today" view polls it forward). Above the headlines (Cam 2026-06-16) */}
@@ -550,6 +542,15 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         hasPositions={pf.positions.length > 0}
         live={isToday}
       />
+
+      {/* Macro strip — rates/CPI/FX context, below the tape (Cam 2026-06-26) */}
+      {isToday && macro && (
+        <div className="mb-6 mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
+          <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
+          <span className="text-teal-100/70">{macroLine(macro)}</span>
+          <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
+        </div>
+      )}
 
       {/* Headlines — today's news. Live, so today only — archive hides stale headlines (Cam 2026-06-16) */}
       {isToday && marketNews.length > 0 && (

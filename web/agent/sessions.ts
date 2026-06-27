@@ -126,6 +126,45 @@ async function recordUsage(opts: SessionOpts, rm: any, result: string | null): P
   } catch (e) {
     console.error(`[usage-log] failed for ${opts.label}:`, e instanceof Error ? e.message : e);
   }
+  await checkTokenMilestones();
+}
+
+// Notify BOTH members when the day's cumulative agent token burn crosses 40M, then every 10M above
+// (50M, 60M…) — a budget-watch alarm on the shared Claude Max quota (a normal day is ~30M). Fires
+// once per (day, threshold) via a SYSTEM journal marker, so restarts/retries never re-alert. Discord
+// always; iOS push to whoever has the "system" category on. Best-effort — never throws into a session.
+const TOKEN_MILESTONE_STEP = 10_000_000; // every 10M
+const TOKEN_MILESTONE_FLOOR = 40_000_000; // start at 40M/day
+async function checkTokenMilestones(): Promise<void> {
+  try {
+    const dayStart = startOfEtDay(new Date());
+    const agg = await prisma.agentUsage.aggregate({
+      where: { at: { gte: dayStart } },
+      _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
+    });
+    const total =
+      (agg._sum.inputTokens ?? 0) + (agg._sum.outputTokens ?? 0) + (agg._sum.cacheCreationTokens ?? 0) + (agg._sum.cacheReadTokens ?? 0);
+    if (total < TOKEN_MILESTONE_FLOOR) return;
+    const M = (Math.floor(total / TOKEN_MILESTONE_STEP) * TOKEN_MILESTONE_STEP) / 1_000_000; // 47.3M → 40
+    const day = etDateStr();
+    const markerTitle = `Token milestone — ${M}M (${day})`;
+    if ((await prisma.journalEntry.count({ where: { kind: "SYSTEM", title: markerTitle } })) > 0) return;
+    await prisma.journalEntry.create({
+      data: {
+        kind: "SYSTEM",
+        title: markerTitle,
+        body: `The agent has used ${(total / 1e6).toFixed(1)}M tokens of the shared Claude Max quota today (${day}), crossing the ${M}M mark.`,
+      },
+    });
+    await alert(
+      "warning",
+      `⚡ Token burn ${M}M today`,
+      `The agent has used ${(total / 1e6).toFixed(1)}M tokens of Cam's shared Claude Max quota so far today — past the ${M}M mark. A normal day is ~30M. See /tokens.`,
+      { category: "system" },
+    );
+  } catch (e) {
+    console.error("[token-milestone] check failed:", e instanceof Error ? e.message : e);
+  }
 }
 
 // ----- The Race (D68): shadow-run the challenger model(s) on the SAME frozen prompt -----

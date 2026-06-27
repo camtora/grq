@@ -84,6 +84,9 @@ function aggregate(rows: UsageRow[]): { totals: Totals; byGroup: GroupAgg[] } {
 
 export type UsageDashboard = {
   today: { totals: Totals; byGroup: GroupAgg[] };
+  // Per-MODEL breakdown for the viewed day (group = the model id). `costMicroUsd` is real spend for
+  // OpenRouter challengers (slash-named) and the metered-EQUIVALENT for claude-* on the Max plan.
+  byModel: GroupAgg[];
   rolling5h: Totals;
   recent: Array<{
     id: string;
@@ -106,6 +109,9 @@ export type UsageDashboard = {
   window: { start: Date; reset: Date } | null;
   anchorResetAt: Date | null; // the raw owner-set anchor (control pre-fill; agent can't read it)
   generatedAt: Date;
+  // Whether the viewed day IS today. The live rolling-5h window only applies to today; a past
+  // day shows just its own totals/by-type/recent (window/rolling5h are null/empty).
+  isToday: boolean;
 };
 
 // Resolve an ET wall-clock time ("HH:MM") to the occurrence NEAREST to `now` (yesterday, today, or
@@ -140,28 +146,43 @@ export function currentWindow(anchor: Date | null, now = new Date()): { start: D
   return { start: new Date(reset - FIVE_H_MS), reset: new Date(reset) };
 }
 
-export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboard> {
+export async function getUsageDashboard(recentLimit = 60, viewAnchor?: Date): Promise<UsageDashboard> {
   const now = new Date();
-  const dayStart = etDayStart(now);
+  const dayStart = etDayStart(viewAnchor ?? now);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const isToday = dayStart.getTime() === etDayStart(now).getTime();
 
-  const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { maxWindowResetAt: true } });
+  // The rolling 5h window is a LIVE concept — only meaningful for today. A past day shows just
+  // its own [dayStart, dayEnd) totals; no window, no rolling5h.
+  const settings = isToday ? await prisma.settings.findUnique({ where: { id: 1 }, select: { maxWindowResetAt: true } }) : null;
   const anchor = settings?.maxWindowResetAt ?? null;
-  const win = currentWindow(anchor, now);
+  const win = isToday ? currentWindow(anchor, now) : null;
 
-  // Bound the rolling totals to the current 5h window: the anchored fixed block when set, else the
-  // legacy sliding `now − 5h`. Query from whichever start (window vs ET-day) reaches further back.
+  // Today: query from whichever start (window vs ET-day) reaches further back, open-ended.
+  // A past day: bound to exactly that ET day.
   const windowStart = win ? win.start : new Date(now.getTime() - FIVE_H_MS);
-  const queryStart = new Date(Math.min(dayStart.getTime(), windowStart.getTime()));
+  const where = isToday
+    ? { at: { gte: new Date(Math.min(dayStart.getTime(), windowStart.getTime())) } }
+    : { at: { gte: dayStart, lt: dayEnd } };
+  const rows = await prisma.agentUsage.findMany({ where, orderBy: { at: "desc" } });
 
-  const rows = await prisma.agentUsage.findMany({ where: { at: { gte: queryStart } }, orderBy: { at: "desc" } });
+  const dayRows = rows.filter((r) => r.at >= dayStart && r.at < dayEnd);
+  const today = aggregate(dayRows);
+  const rolling5h = isToday ? aggregate(rows.filter((r) => r.at >= windowStart)).totals : emptyTotals();
 
-  const todayRows = rows.filter((r) => r.at >= dayStart);
-  const winRows = rows.filter((r) => r.at >= windowStart);
+  // Per-model breakdown — which models ate the tokens (and $), sorted by cost then tokens.
+  const modelMap = new Map<string, GroupAgg>();
+  for (const r of dayRows) {
+    let agg = modelMap.get(r.model);
+    if (!agg) {
+      agg = { group: r.model, ...emptyTotals() };
+      modelMap.set(r.model, agg);
+    }
+    add(agg, r);
+  }
+  const byModel = [...modelMap.values()].sort((a, b) => b.costMicroUsd - a.costMicroUsd || b.total - a.total);
 
-  const today = aggregate(todayRows);
-  const rolling5h = aggregate(winRows).totals;
-
-  const recent = rows.slice(0, recentLimit).map((r) => ({
+  const recent = dayRows.slice(0, recentLimit).map((r) => ({
     id: r.id,
     at: r.at,
     label: r.label,
@@ -179,12 +200,14 @@ export async function getUsageDashboard(recentLimit = 60): Promise<UsageDashboar
 
   return {
     today,
+    byModel,
     rolling5h,
     recent,
     maxFiveH: MAX_5H_TOKENS,
     window: win,
     anchorResetAt: anchor,
     generatedAt: now,
+    isToday,
   };
 }
 

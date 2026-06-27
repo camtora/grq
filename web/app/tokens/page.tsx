@@ -5,6 +5,9 @@ import { isOwner } from "@/lib/users";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import { getUsageDashboard, fmtTokens, fmtUsd, fmtDuration } from "@/lib/usage";
 import RollingWindowPanel from "@/components/RollingWindowPanel";
+import DateNav from "@/components/DateNav";
+import { etDateStr } from "@/agent/calendar";
+import { modelLabel } from "@/lib/race/models";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +30,16 @@ function etTime(d: Date): string {
   }).format(d);
 }
 
-export default async function AdminUsagePage() {
+export default async function AdminUsagePage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
   const session = await getSession();
   // Same lock as /admin — owner only; everyone else gets a 404.
   if (!session || !isOwner(session.email)) notFound();
 
-  const { today, rolling5h, recent, maxFiveH, window, anchorResetAt, generatedAt } = await getUsageDashboard();
+  const sp = await searchParams;
+  const valid = sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d);
+  const viewAnchor = valid ? new Date(`${sp.d}T12:00:00Z`) : undefined;
+  const { today, byModel, rolling5h, recent, maxFiveH, window, anchorResetAt, generatedAt, isToday } = await getUsageDashboard(60, viewAnchor);
+  const dateStr = etDateStr(viewAnchor ?? new Date());
 
   const dayTotal = today.totals.total || 1; // avoid /0
 
@@ -43,19 +50,20 @@ export default async function AdminUsagePage() {
       </Link>
       <PageHeader
         title="Token usage"
-        sub="What the autonomous agent spends of Cam's shared Claude Max quota."
+        sub={isToday ? "What the autonomous agent spends of Cam's shared Claude Max quota." : `Agent token burn for ${dateStr}.`}
+        right={<DateNav date={dateStr} basePath="/tokens" mode="query" />}
       />
 
       {today.totals.calls === 0 ? (
         <EmptyState
-          title="No agent sessions logged yet today"
-          body="Token logging records one row per Claude session. Once the agent runs a session today (or after the next deploy), totals appear here. Times are Eastern."
+          title={isToday ? "No agent sessions logged yet today" : `No agent sessions logged on ${dateStr}`}
+          body="One row per Claude session (logging started 2026-06-25). Pick another day above, or wait for the agent's next session. Times are Eastern."
         />
       ) : (
         <div className="space-y-8">
           {/* Today's headline numbers */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard label="Tokens today" value={fmtTokens(today.totals.total)} note={`${today.totals.calls} sessions`} />
+            <StatCard label={isToday ? "Tokens today" : "Tokens that day"} value={fmtTokens(today.totals.total)} note={`${today.totals.calls} sessions`} />
             <StatCard label="Fresh input" value={fmtTokens(today.totals.input)} />
             <StatCard label="Output" value={fmtTokens(today.totals.output)} />
             <StatCard
@@ -68,16 +76,20 @@ export default async function AdminUsagePage() {
               value={today.totals.costMicroUsd > 0 ? fmtUsd(today.totals.costMicroUsd) : "—"}
               note={today.totals.costMicroUsd > 0 ? "if metered" : "Max token: unmetered"}
             />
-            <StatCard
-              label="This 5h window"
-              value={fmtTokens(rolling5h.total)}
-              note={`${rolling5h.calls} sessions${window ? "" : " · sliding"}`}
-            />
+            {isToday && (
+              <StatCard
+                label="This 5h window"
+                value={fmtTokens(rolling5h.total)}
+                note={`${rolling5h.calls} sessions${window ? "" : " · sliding"}`}
+              />
+            )}
           </div>
 
           {/* Rolling 5-hour window — the thing that trips the Max limit. Auto-rolls every 5h from
               the owner-set anchor; the panel shows token burn beside time elapsed so you can see
-              whether the agent is spending ahead of the clock. */}
+              whether the agent is spending ahead of the clock. Live-only — a past day has no
+              "current" window, so it shows just that day's totals below. */}
+          {isToday && (
           <Card className="p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
@@ -101,11 +113,12 @@ export default async function AdminUsagePage() {
               subscription.
             </p>
           </Card>
+          )}
 
           {/* Where the day's tokens went, by session type */}
           <Card className="p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              By session type · today
+              By session type · {isToday ? "today" : dateStr}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -136,6 +149,59 @@ export default async function AdminUsagePage() {
                             </div>
                             <span className="w-8 text-right text-xs tabular-nums text-teal-200/50">{pct}%</span>
                           </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Per-model — which models ate the tokens (and $). Real spend = OpenRouter challengers;
+              claude-* are on the Max flat fee so their $ is the metered-equivalent, not a charge. */}
+          <Card className="p-5">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+                By model · {isToday ? "today" : dateStr}
+              </h2>
+              {(() => {
+                const realSpend = byModel.filter((m) => m.group.includes("/")).reduce((s, m) => s + m.costMicroUsd, 0);
+                return realSpend > 0 ? (
+                  <span className="text-xs text-teal-200/50">
+                    real OpenRouter spend: <span className="font-semibold tabular-nums text-teal-100">{fmtUsd(realSpend)}</span>
+                  </span>
+                ) : null;
+              })()}
+            </div>
+            <p className="mb-3 text-xs text-teal-200/40">
+              Claude models run on the shared Max subscription (a flat monthly fee), so their $ is the metered-EQUIVALENT, not
+              a charge. The slash-named challengers (gpt-5.1, gemini…) are billed per token on OpenRouter — that $ is real spend.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+                    <th className="pb-2 font-semibold">Model</th>
+                    <th className="pb-2 text-right font-semibold">Calls</th>
+                    <th className="pb-2 text-right font-semibold">Tokens</th>
+                    <th className="pb-2 text-right font-semibold">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-teal-400/5">
+                  {byModel.map((m) => {
+                    const real = m.group.includes("/"); // OpenRouter challenger → real $; claude-* → Max flat fee
+                    return (
+                      <tr key={m.group}>
+                        <td className="py-2 font-medium text-teal-100">
+                          {modelLabel(m.group)}
+                          <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-200/30">{real ? "OpenRouter" : "Max"}</span>
+                        </td>
+                        <td className="py-2 text-right tabular-nums text-teal-100/70">{m.calls}</td>
+                        <td className="py-2 text-right tabular-nums text-teal-50">{fmtTokens(m.total)}</td>
+                        <td className={`py-2 text-right tabular-nums ${real ? "text-teal-50" : "text-teal-200/40"}`}>
+                          {m.costMicroUsd > 0 ? fmtUsd(m.costMicroUsd) : "—"}
+                          {!real && m.costMicroUsd > 0 ? <span className="ml-1 text-[10px] text-teal-200/30">if metered</span> : null}
                         </td>
                       </tr>
                     );
