@@ -34,9 +34,9 @@ function clampInt(v: unknown, lo: number, hi: number): number | null {
 
 /** Tag the next `limit` highest-score UNTAGGED names. Idempotent-ish: only touches
  *  rows with taggedAt=null, so it walks down the screen across repeated runs. */
-export async function tagBatch(limit = 40): Promise<{ tagged: number }> {
+export async function tagBatch(limit = 40, opts?: { exchanges?: string[] }): Promise<{ tagged: number }> {
   const rows = await prisma.marketScreen.findMany({
-    where: { taggedAt: null },
+    where: { taggedAt: null, ...(opts?.exchanges ? { exchange: { in: opts.exchanges } } : {}) },
     orderBy: { screenScore: "desc" },
     take: limit,
     select: { id: true, ticker: true, name: true, exchange: true, sector: true, marketCapM: true, priceCents: true, currency: true },
