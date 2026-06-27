@@ -2133,3 +2133,40 @@ benchmark). **Honesty caveat (unchanged from the USD-sleeve design):** the CAD b
 (1.4186), so future CAD/USD moves on the US$50k sleeve surface as P&L — same convention as [D34](#d34)/the launch baseline,
 not new. **Reversible** — prior values were CA$25k + US$25k @ XIC 5570. **Lesson for the next paper reset: re-run this
 after [D83](#d83)'s re-fund, or the new capital reads as phantom gains.**
+
+### D88 — Tier 3 options positioning, self-computed from CBOE's free feed (Graham's ask, Cam, 2026-06-27)
+**Context:** Graham wanted options data — the long-dark [tier 3](DATA-SOURCES.md). The fund **never trades options**
+(hard guardrail), so the use is purely a *signal about the underlying* (dealer positioning, fear/greed), fed in like
+everything else — an INPUT it weighs, never the gate. Timed to the fresh post-[D83](#d83) soak so it's part of the
+validated baseline rather than a mid-soak change.
+
+**Sourcing — researched the landscape, chose to self-compute (≈$0):**
+- **FMP (our existing feed) has no options** — probed it directly, every options endpoint 404s.
+- Vendors compared: FlashAlpha (pre-computed GEX/Greeks; free tier only 5 req/day, Basic **$79/mo**), Polygon/"Massive"
+  ($29 but you build GEX yourself + no IV on the cheap tier), ThetaData ($40), Unusual Whales ($250). A premium feed is
+  the *only* thing that would have forced rationing options to held names; Cam (cost-conscious vs the operating hurdle)
+  chose to **self-compute instead.**
+- **Winner: CBOE's free, keyless, exchange-sourced delayed-quotes JSON** (`cdn.cboe.com/.../options/{TICKER}.json`),
+  which carries the full chain INCLUDING per-contract **greeks** (gamma/delta) + IV + OI + volume. So even GEX needs no
+  vendor — we compute everything. No subscription, no rate limit. Verified live (TSM negative/volatile + put-heavy;
+  AAPL positive/pinned + call-heavy; LNR correctly null as a CA name).
+
+**What we compute (`lib/options/signals.ts`):** put/call ratio (OI + volume), net **dealer GEX** + regime, call/put
+**walls**, ~30-day ATM **IV**, 25-delta **skew**. **GEX sign convention** is the standard retail one — calls +, puts −,
+gamma×OI×100×spot²×0.01 over near-money strikes — so *positive* = dealers dampen (range-bound/pinned), *negative* =
+amplify (trendy/volatile). That sign is a modeling **assumption**, not gospel; the regime interpretation hangs on it.
+
+**Architecture:** `lib/options/{cboe,signals,store}.ts`; cache table `OptionsDaily` (one row per name per ET day).
+`refreshOptions()` is cache-through with **hourly freshness** (re-fetch a covered row > ~55 min old) and a **day-scoped
+persisted negative cache** (`covered=false` — a name with no listed options won't grow one intraday, so we remember the
+miss and never re-hit CBOE for it). Wired everywhere it informs a decision: the **dossier prompt** (so the agent weighs
+positioning on ANY US name it researches — the research-input use, not just the universe), the **agent context** (held/
+focus names), and a compact **stock-page panel** + 6 glossary explainers (legible to a non-options reader — the literacy
+pillar). Runner refreshes ~hourly during market hours for held+watched+focus. Coverage map flips tier 3 `none → live`.
+Page layout: the options panel (regime left, 4 metrics in one row) sits above a 3-panel equal-height row (Valuation ·
+Related · Smart money, the last now always-rendered). Agent → **v2.6**.
+
+**Caveats (honest):** CBOE's endpoint is free/unofficial (could change — same risk class as our Yahoo dependency);
+**US-only** (CA single names stay dark — thin/no listed options); ~15-min delayed, daily-to-hourly granularity (OI itself
+only settles overnight, so the OI-based signals are inherently daily; hourly captures IV/spot-driven drift). **iOS
+parity** (the options panel in the mobile dossier response) is a deferred follow-on.

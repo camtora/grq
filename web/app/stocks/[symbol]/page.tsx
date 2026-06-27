@@ -27,6 +27,8 @@ import { stockNewsCards } from "@/lib/news/queries";
 import { NewsRow } from "@/components/NewsList";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
+import OptionsPanel from "@/components/OptionsPanel";
+import { refreshOptions } from "@/lib/options/store";
 import LiveQuote from "@/components/LiveQuote";
 import StockLogo from "@/components/StockLogo";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
@@ -37,6 +39,7 @@ import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import RelatedNames from "@/components/RelatedNames";
 import { relatedFor } from "@/lib/graph/related";
+import LiveDot from "@/components/LiveDot";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import Term from "@/components/Term";
 
@@ -241,6 +244,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
   const dayBps = quote?.dayChangeBps ?? 0;
 
+  // Tier 3 — options positioning (lib/options): cache-or-fetch from CBOE for US optionable names
+  // (null for CA/illiquid). A SIGNAL about the underlying — the fund never trades options.
+  const optionsData = await refreshOptions(symbol).catch(() => null);
+
   // The at-a-glance verdict + the agent's expected return (latest dossier target).
   const rec = signals ? overallSignal(signals) : null;
   const targetEntry = journal.find((j) => j.targetFarCents != null || j.targetNearCents != null);
@@ -292,7 +299,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         ? `${institutional.investorsHolding.toLocaleString()} institutions · ${institutional.investorsHoldingChange >= 0 ? "+" : ""}${institutional.investorsHoldingChange} QoQ`
         : "13F is US-listed holdings — empty for pure-TSX issuers",
     },
-    { tier: 3, name: "Options flow", status: "none", detail: "never traded; flow is US-centric — later" },
+    {
+      tier: 3,
+      name: "Options positioning",
+      status: optionsData ? "live" : "none",
+      detail: optionsData
+        ? `dealer gamma ${optionsData.regime}, put/call ${optionsData.pcOI?.toFixed(2) ?? "?"} — CBOE, a signal (never traded)`
+        : "US-listed optionable names only — no chain for this name",
+    },
     { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
     { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
   ];
@@ -594,7 +608,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           peer/valuation table below (Cam 2026-06-19). */}
       <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Analyst ratings <LiveDot /></h2>
           {grades ? (
             <Card className="p-4 text-sm flex-1">
               <div className="mb-2 flex items-baseline justify-between">
@@ -669,7 +683,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            <Term k="analyst-target">Price targets</Term> <span className="normal-case text-teal-200/40">· Tier 2</span>
+            <Term k="analyst-target">Price targets</Term> <span className="normal-case text-teal-200/40">· Tier 2</span> <LiveDot />
           </h2>
           {analyst ? (
             (() => {
@@ -812,7 +826,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>
+            Institutional <span className="normal-case text-teal-200/40">· Tier 5 (13F)</span>{" "}
+            <LiveDot title="Live fetch each load — but 13F filings are quarterly (~45-day lag)" />
           </h2>
           {institutional ? (
             <Card className="p-4 text-sm flex-1">
@@ -894,7 +909,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-            Earnings <span className="normal-case text-teal-200/40">· Tier 6</span>
+            Earnings <span className="normal-case text-teal-200/40">· Tier 6</span> <LiveDot />
           </h2>
           {earnings ? (
             <Card className="p-4 text-sm flex-1">
@@ -964,10 +979,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
       </section>
 
-      <section className="mb-6 grid items-start gap-6 lg:grid-cols-2">
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Valuation vs peers</h2>
-          <Card className="p-5">
+      {/* Tier 3 — options positioning (dealer gamma / put-call / IV-skew), a signal about the underlying. */}
+      <section className="mb-6">
+        <OptionsPanel o={optionsData} />
+      </section>
+
+      {/* Valuation vs peers · Related names · Smart money — three equal-height panels. */}
+      <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-3">
+        <div className="flex h-full flex-col space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Valuation vs peers <LiveDot /></h2>
+          <Card className="flex-1 p-5">
           {peers.length > 1 ? (
           <table className="w-full text-sm">
             <thead>
@@ -1015,10 +1036,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           </Card>
         </div>
         <RelatedNames items={related.items} cadListing={cadListing} />
+        <StockSmartMoney sm={smartMoney} />
       </section>
-
-      {/* Smart money on THIS name — tracked investors' positions/trades + faces. */}
-      {smartMoney && <StockSmartMoney sm={smartMoney} />}
 
       <section className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">

@@ -17,6 +17,7 @@ import { alert, heartbeat, sendDiscord } from "./alerts";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
 import { commitsInWindow } from "../lib/github";
+import { refreshOptions, optionsLine } from "../lib/options/store";
 
 
 type SessionOpts = {
@@ -744,19 +745,22 @@ Keep it tight.`;
  *  tell a real failure from a success instead of marking everything DONE. */
 export async function runStockDossier(symbol: string, requestedBy: string): Promise<string | null> {
   const sym = symbol.toUpperCase();
-  const [entry, quote, sig, recent, sm] = await Promise.all([
+  const [entry, quote, sig, recent, sm, opt] = await Promise.all([
     universeEntry(sym),
     getQuote(sym).catch(() => null),
     computeSignals(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 5 }),
     getSmartMoneyForSymbol(sym).catch(() => null),
+    refreshOptions(sym).catch(() => null),
   ]);
   const smLine = sm ? smartMoneySummaryLine(sm) : "";
+  const optLine = opt ? optionsLine(opt) : "";
   const prompt = `# STOCK DOSSIER ASSIGNMENT: ${sym}${entry ? ` — ${entry.name} (${entry.status}${entry.tier ? `, ${entry.tier}` : ""})` : ""}
 Requested by: ${requestedBy} · Today: ${etDateStr()}
 Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
 Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
 Smart money (disclosed — weigh it, don't follow blindly): ${smLine || "(none tracked on this name)"}
+Options positioning (a SIGNAL about the underlying — we NEVER trade options): ${optLine || "(no listed options for this name)"}
 Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
 
 Research this stock thoroughly with WebSearch/WebFetch — the business, recent news and

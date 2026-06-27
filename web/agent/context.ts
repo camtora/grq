@@ -9,6 +9,7 @@ import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-mone
 import { getMacro, macroLine } from "../lib/macro";
 import { recentMacroEvents, upcomingEvents } from "../lib/macro-events";
 import { recentNewsDigest } from "../lib/news/queries";
+import { getOptions, optionsLine } from "../lib/options/store";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
 
 function money(c: number): string {
@@ -61,6 +62,8 @@ export async function buildContext(): Promise<string> {
   for (const d of dossierRows) {
     if (d.symbol && !bookDossier.has(d.symbol)) bookDossier.set(d.symbol, { stance: d.stance, confidence: d.confidence, at: d.at });
   }
+  // Tier 3 — cached options positioning for the book's US names (lib/options; a signal, never traded).
+  const optRows = bookSyms.length ? (await Promise.all(bookSyms.map((s) => getOptions(s)))).filter((x): x is NonNullable<typeof x> => !!x) : [];
   const callOf = (sym: string): string => {
     const d = bookDossier.get(sym.toUpperCase());
     return d
@@ -233,6 +236,13 @@ ${
             `  [${n.publishedAt.toISOString().slice(0, 10)}] ${n.symbol ? `${n.symbol} · ` : ""}${n.sentiment ?? "NEU"}·rel${n.relevance ?? 0} — ${n.summary || n.title}`,
         )
         .join("\n")
+}
+
+## Options positioning (held/focus US names — dealer gamma · put/call · IV-skew; a SIGNAL about the underlying, you NEVER trade options)
+${
+  optRows.length === 0
+    ? "  (no listed-options coverage on the book — CA/illiquid names)"
+    : optRows.map((o) => `  ${o.symbol}: ${optionsLine(o)}`).join("\n")
 }
 
 ## Policy — ${dialName} dial (you cannot change any of this)

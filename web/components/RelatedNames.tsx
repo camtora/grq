@@ -19,11 +19,11 @@ const SCREEN_TAG: Record<string, { label: string; cls: string }> = {
 // kicks off research on open (D46).
 export default function RelatedNames({ items, cadListing = false }: { items: RelatedName[]; cadListing?: boolean }) {
   return (
-    <div className="space-y-2">
+    <div className="flex h-full flex-col space-y-2">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
         Related names <span className="normal-case tracking-normal text-teal-200/40">· the graph</span>
       </h2>
-      <Card className="p-5">
+      <Card className="flex-1 p-5">
         {items.length > 0 ? (
           <ul className="text-sm">
             {items.map((r) => {

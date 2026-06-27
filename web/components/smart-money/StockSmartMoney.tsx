@@ -1,4 +1,4 @@
-import { Card, Chip } from "@/components/ui";
+import { Card } from "@/components/ui";
 import Term from "@/components/Term";
 import SmartMoneyAvatar from "./SmartMoneyAvatar";
 import { fmtUsd } from "@/lib/smart-money/types";
@@ -19,17 +19,21 @@ function HolderTile({ children }: { children: React.ReactNode }) {
   return <div className="flex items-center gap-2.5 rounded-lg border border-teal-400/10 bg-teal-400/[0.03] p-2.5">{children}</div>;
 }
 
-export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney }) {
-  if (!sm.hasAny) return null;
-  const hasFaces = sm.fundHolders.length > 0 || sm.people.length > 0;
+export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null }) {
+  const hasFaces = !!sm && (sm.fundHolders.length > 0 || sm.people.length > 0);
 
   return (
-    <Card className="mb-6 p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <Chip tone="teal">smart money</Chip>
-        <span className="text-sm text-teal-200/50">tracked investors in {sm.symbol}</span>
-      </div>
-
+    <div className="flex h-full flex-col space-y-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+        Smart money <span className="normal-case tracking-normal text-teal-200/40">· tracked investors</span>
+      </h2>
+      <Card className="flex-1 p-5">
+        {!sm || !sm.hasAny ? (
+          <p className="text-sm text-teal-200/40">
+            No tracked smart-money activity{sm ? ` on ${sm.symbol}` : ""} — no 13F holders, insider, or congress trades on file.
+          </p>
+        ) : (
+          <>
       {hasFaces && (
         <div className="grid gap-2 sm:grid-cols-2">
           {sm.fundHolders.map((f, i) => (
@@ -108,6 +112,9 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney }) {
       <p className="mt-2 text-[10px] text-teal-200/40">
         Disclosed holdings &amp; trades — <Term k="13f">13F</Term> lags ~45 days; colour, not timing.
       </p>
-    </Card>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }

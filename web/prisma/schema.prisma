@@ -619,6 +619,34 @@ model NewsArticle {
   @@index([triagedAt])
 }
 
+// Tier 3 — Options positioning, computed by us from CBOE's free delayed feed (lib/options/*).
+// One cached row per symbol per ET day. A SIGNAL about the underlying — the fund never trades
+// options. US-listed names only; CA/illiquid names never get a row (no listed options).
+model OptionsDaily {
+  id            Int      @id @default(autoincrement())
+  fetchedAt     DateTime @default(now())
+  symbol        String // the STORED symbol (looked up by the stock page / agent by what they know)
+  date          String // ET YYYY-MM-DD — the cache key (one row per name per day; refreshed ~hourly)
+  covered       Boolean @default(true) // false = a remembered "no listed options" miss (day-scoped negative cache)
+  spotCents     Int
+  netGex        Float // $ dealer gamma per 1% move (calls + / puts −); >0 dampens, <0 amplifies
+  regime        String // "positive" | "negative"
+  callWallCents Int? // heaviest call-gamma strike (resistance/magnet)
+  putWallCents  Int? // heaviest put-gamma strike (support)
+  pcOI          Float? // put/call open-interest ratio
+  pcVol         Float? // put/call volume ratio (today's flow)
+  atmIvBps      Int? // ~30d at-the-money implied vol, bps
+  skewBps       Int? // 25-delta skew (put IV − call IV), bps
+  callOI        Int?
+  putOI         Int?
+  callVol       Int?
+  putVol        Int?
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([fetchedAt])
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)

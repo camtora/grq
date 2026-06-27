@@ -15,6 +15,7 @@ import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
+import { runOptionsRefresh } from "../lib/options/store";
 import { runMacroEventScan, refreshEconomicCalendar } from "../lib/macro-events";
 import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
@@ -46,6 +47,7 @@ let lastWeeklyRefreshDay = "";
 let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
+let lastOptionsMs = 0;
 let lastMacroEventDay = "";
 let lastNewsRun = 0;
 let startupReviewChecked = false;
@@ -699,6 +701,17 @@ async function tick() {
     runSmartMoneyIngest()
       .then((r) => console.log(`[smartmoney] ingest: ${r.congress} congress · ${r.insiders} insider · ${r.portfolios.fresh} fresh 13F`))
       .catch((e) => console.error("[smartmoney] ingest failed:", e instanceof Error ? e.message : e));
+  }
+
+  // Tier 3 — options positioning (Graham's ask): ~HOURLY during market hours, cache CBOE dealer-
+  // gamma / put-call / IV-skew for held+watched+focus US names (lib/options). refreshOptions self-
+  // throttles per name via its 55-min freshness window + a day-scoped negative cache, so this stays
+  // cheap. A SIGNAL the agent weighs (dossiers + context), NEVER traded. Free feed — no rate cost.
+  if (isMarketOpen() && Date.now() - lastOptionsMs > 55 * 60_000) {
+    lastOptionsMs = Date.now();
+    runOptionsRefresh()
+      .then((r) => console.log(`[options] refreshed ${r.covered}/${r.tried} names with listed-options coverage`))
+      .catch((e) => console.error("[options] refresh failed:", e instanceof Error ? e.message : e));
   }
 
   // Macro events (D81) — once per ET day: diff the live macro snapshot against

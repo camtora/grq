@@ -420,4 +420,40 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "Reading the same data as Opus, Llama logs the call it would have made.",
     related: ["deepseek", "glm", "the-race"],
   },
+  "options-positioning": {
+    term: "Options positioning",
+    def: "What the options market reveals about how big traders are betting on a stock. GRQ never trades options — it reads this only as a signal about the underlying stock (where the crowd and the dealers are leaning).",
+    example: "Heavy put buying + dealers positioned to amplify moves can flag a name the market is bracing on.",
+    related: ["gamma-exposure", "put-call-ratio", "implied-volatility"],
+  },
+  "gamma-exposure": {
+    term: "Dealer gamma (GEX)",
+    def: "Market-makers who sold the options must constantly buy/sell the stock to stay hedged. When net gamma is POSITIVE they trade AGAINST moves → the stock gets 'pinned' / range-bound. When NEGATIVE they trade WITH moves → swings get amplified and trendy.",
+    example: "Negative gamma into a selloff means dealers keep selling as it drops — the move feeds on itself.",
+    related: ["call-wall", "put-wall", "options-positioning"],
+  },
+  "put-call-ratio": {
+    term: "Put/Call ratio",
+    def: "Puts divided by calls (by open interest or today's volume). Above 1 = more puts → defensive / bearish lean or hedging; below 1 = call-heavy → bullish or speculative. A crowd-positioning gauge, best read as a contrarian extreme.",
+    example: "A put/call of 1.9 on the day means heavy defensive put flow.",
+    related: ["options-positioning", "volatility-skew"],
+  },
+  "implied-volatility": {
+    term: "Implied volatility (IV)",
+    def: "The size of move the options market is PRICING IN over the next ~month, as an annualized %. High IV = the market expects big swings (fear or a catalyst); low IV = calm expected. It's the market's forecast, not a fact.",
+    example: "50% IV on a stock means options are priced for a much wilder ride than one at 20%.",
+    related: ["volatility-skew", "options-positioning"],
+  },
+  "call-wall": {
+    term: "Call wall / Put wall",
+    def: "The strike prices where dealer hedging is heaviest. The call wall often acts like a ceiling/magnet (resistance); the put wall like a floor (support). Not guarantees — just where options-driven hedging concentrates.",
+    example: "A call wall at $400 can cap a rally as dealers sell into it to stay hedged.",
+    related: ["gamma-exposure"],
+  },
+  "volatility-skew": {
+    term: "Volatility skew (25Δ)",
+    def: "How much more the market pays for downside protection (out-of-the-money puts) than upside (calls), in basis points. A high positive skew = the market is bidding up crash insurance → fear; flat/low skew = complacency.",
+    example: "A 200bp skew means puts are notably 'fearful' versus calls — the market's paying up for protection.",
+    related: ["implied-volatility", "put-call-ratio"],
+  },
 };

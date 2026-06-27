@@ -96,13 +96,19 @@ Modeling Prep. **GRQ lens:** EDGAR is US filings — TSX issuers file on
 **SEDAR+** (sedarplus.ca); cross-listed names (SHOP, ABX…) appear in both. Yahoo's
 quoteSummary modules expose basic fundamentals free as a starting point.
 
-### Tier 3 — Options market data
-Open interest, implied volatility, put/call ratio, unusual activity, gamma exposure →
-institutional positioning, volatility expectations. Graham's example names (NVDA, PLTR,
-AMD) are US-listed. **GRQ lens:** the fund will *never trade options* (hard guardrail) —
-but options flow as a *signal about the underlying* is legitimate input, entering through
-the signals layer like everything else. Relevant mostly once the US market unlocks (Phase 5);
-Canadian single-name options markets are thin.
+### Tier 3 — Options market data — **LIVE (US names) via CBOE (D88, 2026-06-27)**
+Open interest, implied volatility, put/call ratio, gamma exposure → institutional positioning,
+volatility expectations. **GRQ lens:** the fund *never trades options* (hard guardrail) — options
+positioning is a *signal about the underlying*, entering the agent (dossier + context) and the
+stock page as an input it weighs, never the gate.
+**Now wired:** computed by us (`lib/options/*`) from **CBOE's free, keyless, exchange-sourced
+delayed-quotes feed** (full chain incl. per-contract greeks), so even gamma exposure needs no
+vendor — $0/mo (FMP has no options; paid feeds like FlashAlpha/Polygon were rejected on cost). We
+surface **dealer GEX + regime, put/call ratio, call/put walls, ATM IV, 25-delta skew**, cached per
+name per ET day (`OptionsDaily`), refreshed ~hourly during market hours, with a day-scoped negative
+cache for no-coverage names. **US-listed names only** — Canadian single-name options markets are
+thin/absent, so CA names stay dark. ~15-min delayed (fine for a daily/hourly signal); the GEX sign
+convention is the standard retail one (a documented assumption — see D88). See `docs/DECISIONS.md` D88.
 
 ### Tier 4 — Insider activity
 Insider buying/selling, director purchases; **clusters of buying** are the strong signal.
