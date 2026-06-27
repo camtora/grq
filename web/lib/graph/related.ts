@@ -41,6 +41,14 @@ const BASE = { comention: 70, peer: 65, coheld: 60, sector: 25 } as const;
 
 const lastName = (full: string) => full.trim().split(/\s+/).pop() ?? full;
 
+// ETFs aren't companies, so they're noise in a relationship graph — and FMP tags
+// every ETF's sector as "Financial Services", which floods the sector floor of any
+// financial name with index funds. `tier` is unreliable here (VOO is null, VFV is
+// mislabeled "large"), so detect by the issuer brands + the word ETF. Real
+// companies like "S&P Global" or "Berkshire" don't match, so they stay.
+const ETF_RE = /\b(ETF|iShares|Vanguard|SPDR|Invesco|Horizons|ProShares|Direxion|Global X)\b/i;
+const isEtfLike = (tier: string | null, name: string) => tier === "etf" || ETF_RE.test(name);
+
 export async function relatedFor(opts: {
   symbol: string; // the page's universe symbol (for self-exclusion via yahoo)
   yahoo: string;
@@ -152,6 +160,7 @@ export async function relatedFor(opts: {
   if (sector) {
     for (const row of tracked) {
       if (row.sector !== sector) continue;
+      if (isEtfLike(row.tier, row.name)) continue; // FMP files ETFs under "Financial Services" — skip them
       const t = bareKey(row.yahoo);
       if (!t || t === self) continue;
       sectorHits.set(t, { score: BASE.sector, why: `same sector (${sector})`, name: row.name, capM: row.marketCapM });
