@@ -19,10 +19,12 @@ const KIND: Record<StockIndexItem["kind"], { label: string; cls: string }> = {
   watching: { label: "Watching", cls: "border-teal-400/30 bg-teal-400/10 text-teal-300/80" },
   researched: { label: "Researched", cls: "border-sky-400/30 bg-sky-400/10 text-sky-300/80" },
   retired: { label: "Retired", cls: "border-slate-400/25 bg-slate-400/10 text-slate-300/70" },
+  screened: { label: "Screened", cls: "border-teal-400/15 bg-teal-400/[0.04] text-teal-200/45" },
 };
 
 // Higher = surfaces first when match quality and recency are otherwise a tie.
-const KIND_RANK: Record<StockIndexItem["kind"], number> = { active: 3, watching: 2, researched: 1, retired: 0 };
+// Screened (the whole-market first-pass layer) ranks below our curated coverage.
+const KIND_RANK: Record<StockIndexItem["kind"], number> = { active: 4, watching: 3, researched: 2, retired: 1, screened: 0 };
 
 const MAX_RESULTS = 8;
 

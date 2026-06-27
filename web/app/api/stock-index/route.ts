@@ -20,9 +20,11 @@ export const dynamic = "force-dynamic";
 export type StockIndexItem = {
   symbol: string; // the canonical universe key → /stocks/<symbol>
   name: string;
-  kind: "active" | "watching" | "retired" | "researched";
+  kind: "active" | "watching" | "retired" | "researched" | "screened";
   seenAt: number;
 };
+
+const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
 
 export async function GET() {
   const universe = await allUniverse();
@@ -49,6 +51,18 @@ export async function GET() {
     const key = (j.symbol ?? "").toUpperCase();
     if (!key || byKey.has(key)) continue; // a universe row already covers it
     byKey.set(key, { symbol: key, name: j.companyName || key, kind: "researched" });
+  }
+
+  // The Market Base Layer — every screened (non-ETF) company we hold a first-pass
+  // read on (docs/MARKET-BASE-LAYER.md). Deduped by BARE ticker so a screened row
+  // never doubles a universe/researched name (which use their own symbol form).
+  // Routed via the FMP-native symbol (CARR · RY.TO) so CA listings resolve right.
+  const haveBare = new Set([...byKey.keys()].map(bareKey));
+  const screened = await prisma.marketScreen.findMany({ select: { symbol: true, ticker: true, name: true } });
+  for (const m of screened) {
+    if (haveBare.has(m.ticker)) continue; // already covered, or a cross-exchange dup
+    haveBare.add(m.ticker);
+    byKey.set(m.symbol.toUpperCase(), { symbol: m.symbol, name: m.name || m.symbol, kind: "screened" });
   }
 
   // Most-recent view per stock, by anyone — from the existing usage beacon.
