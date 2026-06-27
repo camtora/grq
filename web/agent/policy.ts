@@ -150,4 +150,8 @@ export const RACE = {
   // free (Claude) challengers are unaffected. Env-tunable; the default is a blowup-guard, not a
   // real constraint (a normal day's 5-model slate is well under a dollar).
   maxUsdPerDay: Number(process.env.GRQ_RACE_MAX_USD_PER_DAY ?? "2") || 2,
+  // The shadow virtual book (the /race tiles): every mind replays its BUY/SELL calls through a
+  // fixed virtual portfolio so the book stays BOUNDED — no model can "hold" more than this stake
+  // (the bug that let llama show 659 TSM ≈ $250k). CAD board, cents. Read-time only; never trades.
+  shadowStakeCents: Number(process.env.GRQ_RACE_SHADOW_STAKE_CENTS ?? "5000000") || 5_000_000,
 };

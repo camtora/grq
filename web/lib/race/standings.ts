@@ -7,12 +7,17 @@ import { startOfEtDay, etDateStr } from "@/agent/calendar";
 import { RACE, MODELS } from "@/agent/policy";
 import { modelLabel } from "@/lib/race/models";
 import { scoreCall, benchmarkReturnBps, type CallScore } from "@/lib/race/score";
+import { replayBook } from "@/lib/race/book";
 
 // The Race standings — the server-side engine the overview tiles and the day matrix share.
-// Every model's BUY/SELL calls are marked to the LIVE price (mark-to-now) and converted to a
-// single CAD board via the BoC rate, so all minds are ranked on identical hypothetical terms.
-// Only DECISION sessions carry calls; narrative (midday/eod) rows are kept for the read but
-// never scored.
+// Two readings of the same calls, both on a single CAD board (BoC rate) so every mind is judged on
+// identical terms:
+//   • Decision quality (per call): each BUY/SELL is snapshotted at call time and marked to the live
+//     price → hit rate, avg return, vs-XIC. A re-called name counts each time (repeated conviction).
+//   • The book (portfolio): each model's calls are REPLAYED through a fixed virtual stake
+//     (RACE.shadowStakeCents) into a bounded book — holdings + NAV-based P&L. This is what stops a
+//     model "holding" 659 TSM ≈ $250k on a $50k account. See lib/race/book.ts.
+// Only DECISION sessions carry calls; narrative (midday/eod) rows are kept for the read but never scored.
 
 const DECISION_KINDS = new Set(["morning", "checkin", "position"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -57,7 +62,7 @@ export type ModelStanding = {
   model: string;
   label: string;
   role: "champion" | "challenger";
-  pnlCadCents: number; // cumulative paper P&L, CAD
+  pnlCadCents: number; // the virtual book's P&L (NAV − stake), CAD
   scoredCalls: number; // BUY/SELL with a mark
   greens: number;
   hitRate: number | null; // 0..1
@@ -66,10 +71,10 @@ export type ModelStanding = {
   counts: { BUY: number; SELL: number; HOLD: number; NONE: number };
   totalCalls: number; // all decision rows for the model
   avgConfidence: number | null;
-  spark: number[]; // cumulative CAD P&L per scored call, chronological
-  // The model's "book" from its BUY calls: distinct names with consolidated shares + weighted-avg
-  // entry price (native ccy), # of buy calls, and marked-to-now CAD P&L. shares/avgPriceCents are
-  // null-safe (0/null) when a call lacked a qty/price.
+  spark: number[]; // virtual book P&L (NAV − stake) after each call, chronological
+  // The model's virtual BOOK (lib/race/book.ts): the names it actually HOLDS after replaying its
+  // calls through a fixed stake — bounded shares (no runaway accretion), native ACB per share, the
+  // # of buy calls it made on the name, and marked-to-now unrealized CAD P&L.
   positions: { symbol: string; pnlCadCents: number; calls: number; shares: number; avgPriceCents: number | null; currency: string | null }[];
 };
 
@@ -140,7 +145,6 @@ function computeStandings(
   for (const [model, mrows] of byModel) {
     const role: "champion" | "challenger" = mrows.some((r) => r.role === "champion") ? "champion" : "challenger";
     const counts = { BUY: 0, SELL: 0, HOLD: 0, NONE: 0 };
-    let pnlCadCents = 0;
     let scored = 0;
     let greens = 0;
     let retSum = 0;
@@ -148,33 +152,23 @@ function computeStandings(
     let excessN = 0;
     let confSum = 0;
     let confN = 0;
-    const spark: number[] = [];
-    const bySym = new Map<string, { pnlCadCents: number; calls: number; shares: number; costNativeCents: number; currency: string | null }>(); // BUY "positions", accreted per name
+    const buyCalls = new Map<string, number>(); // BUY calls per name — the "· N calls" badge (each re-call counts)
 
     const sorted = [...mrows].sort((a, b) => a.sessionAt.getTime() - b.sessionAt.getTime());
+    // Per-call DECISION QUALITY: every BUY/SELL marked to now → hit rate, avg return, vs-XIC.
     for (const r of sorted) {
       if (r.action && r.action in counts) counts[r.action as keyof typeof counts]++;
       if (r.confidence != null) {
         confSum += r.confidence;
         confN++;
       }
-      const mark = r.symbol ? marks.get(r.symbol.toUpperCase()) ?? null : null;
-      const sc = scoreCall(r, mark);
-      // A BUY call = a name the model is "in" — accrete per symbol (add scored P&L when markable).
       if (r.action === "BUY" && r.symbol) {
         const sym = r.symbol.toUpperCase();
-        const e = bySym.get(sym) ?? { pnlCadCents: 0, calls: 0, shares: 0, costNativeCents: 0, currency: r.entryCurrency };
-        e.calls++;
-        if (sc) e.pnlCadCents += toCadCents(sc.pnlNativeCents, r.entryCurrency, fx);
-        if (r.qty != null && r.entryPriceCents != null) {
-          e.shares += r.qty;
-          e.costNativeCents += r.qty * r.entryPriceCents;
-        }
-        if (!e.currency) e.currency = r.entryCurrency;
-        bySym.set(sym, e);
+        buyCalls.set(sym, (buyCalls.get(sym) ?? 0) + 1);
       }
+      const mark = r.symbol ? marks.get(r.symbol.toUpperCase()) ?? null : null;
+      const sc = scoreCall(r, mark);
       if (!sc) continue;
-      pnlCadCents += toCadCents(sc.pnlNativeCents, r.entryCurrency, fx);
       scored++;
       if (sc.isGreen) greens++;
       retSum += sc.returnBps;
@@ -183,14 +177,16 @@ function computeStandings(
         excessSum += sc.returnBps - bench;
         excessN++;
       }
-      spark.push(pnlCadCents);
     }
+
+    // The BOOK: replay the calls through a fixed virtual stake → bounded holdings + NAV P&L + curve.
+    const book = replayBook(sorted, marks, fx, RACE.shadowStakeCents);
 
     standings.push({
       model,
       label: modelLabel(model),
       role,
-      pnlCadCents,
+      pnlCadCents: book.pnlCadCents,
       scoredCalls: scored,
       greens,
       hitRate: scored ? greens / scored : null,
@@ -199,15 +195,15 @@ function computeStandings(
       counts,
       totalCalls: mrows.length,
       avgConfidence: confN ? Math.round(confSum / confN) : null,
-      spark,
-      positions: [...bySym.entries()]
-        .map(([symbol, v]) => ({
-          symbol,
-          pnlCadCents: v.pnlCadCents,
-          calls: v.calls,
-          shares: v.shares,
-          avgPriceCents: v.shares > 0 ? Math.round(v.costNativeCents / v.shares) : null,
-          currency: v.currency,
+      spark: book.spark,
+      positions: book.positions
+        .map((p) => ({
+          symbol: p.symbol,
+          pnlCadCents: p.pnlCadCents,
+          calls: buyCalls.get(p.symbol) ?? 1,
+          shares: p.qty,
+          avgPriceCents: p.avgPriceCents,
+          currency: p.currency,
         }))
         .sort((a, b) => b.pnlCadCents - a.pnlCadCents),
     });

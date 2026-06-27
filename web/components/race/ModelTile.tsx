@@ -67,7 +67,7 @@ export default function ModelTile({ s, rank, today }: { s: ModelStanding; rank: 
 
       {s.positions.length > 0 ? (
         <div className="mt-3 border-t border-teal-400/10 pt-2">
-          <div className="mb-1.5 text-[10px] uppercase tracking-wider text-teal-200/40">Book — what its buy calls add up to</div>
+          <div className="mb-1.5 text-[10px] uppercase tracking-wider text-teal-200/40">Book — what it holds on a $50k virtual stake</div>
           <div className="space-y-1">
             {s.positions.slice(0, 6).map((p) => (
               <div key={p.symbol} className="flex items-baseline justify-between gap-2 text-xs">

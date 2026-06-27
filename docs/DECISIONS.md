@@ -2228,3 +2228,22 @@ Reddit script-app `client_id`/`secret` from Cam. **iOS parity** is a deferred fo
   came from thin/young/shotgun-cashtag accounts. `fetchStocktwitsSentiment` now **screens** those out; `buzz` takes an
   **upvotes-per-mention quality haircut** (organic discussion gets upvoted, comment-spam doesn't) and `socialLine` flags
   low-engagement. Still never gates — just a less-gameable signal. Agent → **v2.8**.
+
+### D90 — The Race: shadow standings use a bounded $50k virtual book (2026-06-27)
+
+**Bug (Cam):** the `/race` overview showed llama "holding" **659 TSM ≈ $250k** on what's meant to be a $50k account.
+Root cause in `lib/race/standings.ts`: the shadow race had **no portfolio at all** — it naively summed `qty` across
+*every* BUY call per name (`e.shares += r.qty`). llama made two TSM BUY calls in different check-ins (10 + 649) → 659.
+Worse, `score.ts` weights paper P&L by that ungrounded qty (`pnlNativeCents = move × qty`), so the headline number and
+leaderboard rank were driven by whatever share-count a model happened to blurt — pure noise. (The $50k/`startingStakeCents`
+concept only ever existed in the *separate* Bull Race, `lib/race/bulls.ts`.)
+
+**Fix (read-time only, no schema, web-only deploy):** each mind now **replays its calls through a fixed $50k virtual book**
+(`lib/race/book.ts` `replayBook`, stake = `RACE.shadowStakeCents`, CAD board). Rules, Bull-Race-flavoured: a re-proposed BUY
+of a held name is a **no-op** (re-stated conviction, not a fresh buy — kills the 10+649 accretion); a new BUY can only spend
+the cash on hand (qty capped to fit); SELL closes a held name (no shorting); IBKR commission folded in. **P&L = NAV − stake.**
+The per-call **scorecard** (hit rate / avg return / vs-XIC, all size-agnostic via `returnBps`) is unchanged — re-calls still
+count each time there. `ModelStanding` shape preserved, so `ModelTile`/`SessionMatrix` are untouched bar copy. Verified
+against live data: llama → **10 TSM** (not 659), every model's NAV bounded to ~$50k. Tunable via `GRQ_RACE_SHADOW_STAKE_CENTS`.
+**Known limitation:** no per-name position cap, so a model that over-sizes one call can run ~all-in on a single name within
+its $50k (honest reflection of its sizing; add a cap later if it muddies the read).

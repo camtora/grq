@@ -53,9 +53,16 @@ export default async function RacePage() {
               </li>
               <li>
                 <span className="font-semibold text-teal-50">Every session re-asks “what now?”</span> A model that still wants a name
-                re-calls it each check-in, and <span className="font-semibold text-teal-50">every call is scored on its own</span>: its
-                price is snapshotted the moment it’s made and marked to the live price. So the same ticker can appear several times —
-                that’s repeated conviction, counted each time, not one position.
+                re-calls it each check-in, and for the <span className="font-semibold text-teal-50">scorecard</span> (hit rate, avg
+                return, vs XIC) <span className="font-semibold text-teal-50">every call is scored on its own</span> — snapshotted the
+                moment it’s made and marked to the live price. So the same ticker can appear several times: that’s repeated conviction,
+                counted each time.
+              </li>
+              <li>
+                <span className="font-semibold text-teal-50">The book is a real $50k virtual portfolio.</span> Separately, we replay
+                each mind’s calls through a fixed <span className="font-semibold text-teal-50">$50k stake</span> to get the holdings and
+                P&amp;L you see — bounded, like a real account. A re-called name isn’t bought twice (it’s the same position), a buy can
+                only spend the cash on hand, and there’s no shorting. That’s why a model can’t “hold” more than its stake.
               </li>
               <li>
                 <span className="font-semibold text-teal-50">Not a perfectly level field — and we say so.</span> Every model gets the
@@ -64,10 +71,11 @@ export default async function RacePage() {
                 the race compares <em>judgment on the same seed</em>; the champion also gets to dig deeper.
               </li>
               <li>
-                <span className="font-semibold text-teal-50">Hypothetical, and honest about it.</span> No lane faces a real fill,
-                slippage, or commission — even the champion’s here is its <em>proposal</em>, not its executed trade (its real fund
-                P&amp;L lives on the dashboard). A SELL is scored directionally (as if shorted / the move sidestepped); hold and
-                stand-down don’t score. P&amp;L is shown in CAD{fxUsdCad ? `, USD calls converted at ~${fxUsdCad.toFixed(2)} CAD/USD` : ""}.
+                <span className="font-semibold text-teal-50">Hypothetical, and honest about it.</span> No lane faces real slippage —
+                even the champion’s here is its <em>proposal</em>, not its executed trade (its real fund P&amp;L lives on the
+                dashboard). On the <span className="font-semibold text-teal-50">scorecard</span> a SELL is scored directionally (as if
+                shorted / the move sidestepped) and holds/stand-downs don’t score; the <span className="font-semibold text-teal-50">book</span>{" "}
+                is long-only and books a light IBKR commission. P&amp;L is shown in CAD{fxUsdCad ? `, USD calls converted at ~${fxUsdCad.toFixed(2)} CAD/USD` : ""}.
               </li>
             </ul>
           </details>
