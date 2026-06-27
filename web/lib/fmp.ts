@@ -155,7 +155,7 @@ export async function fmpScreener(opts: {
   }));
 }
 
-export type NewsItem = { title: string; publisher: string; url: string; at: string; image: string };
+export type NewsItem = { title: string; publisher: string; url: string; at: string; image: string; text: string };
 
 // Latest general market news (the Stocks-tab pulse + the Today brief's top stories).
 export async function fmpNews(limit = 8): Promise<NewsItem[]> {
@@ -168,6 +168,7 @@ export async function fmpNews(limit = 8): Promise<NewsItem[]> {
       url: String(n.url ?? ""),
       at: String(n.publishedDate ?? ""),
       image: String(n.image ?? ""),
+      text: String(n.text ?? ""),
     }))
     .filter((n) => n.title);
 }
@@ -368,7 +369,7 @@ export async function fmpEarningsCalendar(from: string, to: string): Promise<Ear
 }
 
 // --- Tier 7: per-stock news ---------------------------------------------------
-export type StockNews = { title: string; publisher: string; url: string; at: string; image: string };
+export type StockNews = { title: string; publisher: string; url: string; at: string; image: string; text: string };
 
 export async function fmpStockNews(symbol: string, limit = 5): Promise<StockNews[]> {
   const raw = await fmpGet<Array<Record<string, unknown>>>(`news/stock?symbols=${encodeURIComponent(stripSuffix(symbol))}&limit=${limit}`);
@@ -380,6 +381,7 @@ export async function fmpStockNews(symbol: string, limit = 5): Promise<StockNews
       url: String(n.url ?? ""),
       at: String(n.publishedDate ?? "").slice(0, 10),
       image: String(n.image ?? ""),
+      text: String(n.text ?? ""),
     }))
     .filter((n) => n.title);
 }

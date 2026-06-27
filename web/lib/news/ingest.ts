@@ -40,7 +40,7 @@ function parsePublished(at: string): Date {
 }
 
 async function persist(
-  items: Array<{ title: string; publisher: string; url: string; at: string; image: string }>,
+  items: Array<{ title: string; publisher: string; url: string; at: string; image: string; text?: string }>,
   source: string,
   symbol: string | null,
 ): Promise<number> {
@@ -53,6 +53,7 @@ async function persist(
       title: n.title.slice(0, 500),
       url: n.url,
       imageUrl: n.image || null,
+      text: n.text ? n.text.slice(0, 2500) : null,
       symbol,
     }));
   if (!rows.length) return 0;

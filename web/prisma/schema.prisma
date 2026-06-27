@@ -604,6 +604,7 @@ model NewsArticle {
   title       String
   url         String    @unique // natural dedupe key
   imageUrl    String?
+  text        String? // article lede/snippet from the source (FMP `text`) — powers the on-page paragraph summary
   symbol      String? // primary tagged ticker (null = general market) — the capture-time symbol
   symbolsJson String? // extra entity tags (JSON array of tickers), Haiku-assigned
   // --- triage (Haiku; null until triaged) ---

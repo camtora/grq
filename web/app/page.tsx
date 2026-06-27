@@ -13,6 +13,7 @@ import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpGainers, fmpIndices, fmpCadUsd, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
 import { todayHeadlines, type NewsCard } from "@/lib/news/queries";
 import { SentimentDot } from "@/components/NewsList";
+import NewsTouches from "@/components/NewsTouches";
 import MarketIndices from "@/components/MarketIndices";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveMoverPrice } from "@/components/LiveTableCells";
@@ -558,8 +559,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <SectionTitle>Headlines · what&apos;s moving the market today</SectionTitle>
           <div className="grid gap-4 sm:grid-cols-3">
             {marketNews.slice(0, 3).map((n, i) => (
+              <div key={i} className="flex flex-col gap-1.5">
               <a
-                key={i}
                 href={n.url || "#"}
                 target="_blank"
                 rel="noreferrer"
@@ -587,6 +588,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   </div>
                 </div>
               </a>
+              <NewsTouches touches={n.touches} />
+              </div>
             ))}
           </div>
         </section>
@@ -598,12 +601,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <SectionTitle>Market pulse · more headlines</SectionTitle>
           <div className="grid gap-x-6 sm:grid-cols-3">
             {marketNews.slice(3, 12).map((n, i) => (
+              <div key={i} className="border-t border-teal-400/10">
               <a
-                key={i}
                 href={n.url || "#"}
                 target="_blank"
                 rel="noreferrer"
-                className="block border-t border-teal-400/10 py-2 hover:bg-teal-400/[0.03]"
+                className="block py-2 hover:bg-teal-400/[0.03]"
               >
                 <div className="flex items-start gap-1.5">
                   <span className="mt-1.5">
@@ -619,6 +622,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   </div>
                 </div>
               </a>
+              {n.touches?.length ? <div className="pb-2"><NewsTouches touches={n.touches} /></div> : null}
+              </div>
             ))}
           </div>
           <p className="mt-2 text-[10px] text-teal-200/40">Headlines captured &amp; summarized by GRQ — context, not signals.</p>
