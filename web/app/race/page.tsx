@@ -17,8 +17,8 @@ export default async function RacePage() {
   return (
     <main>
       <PageHeader
-        title="The Race"
-        sub="Same data, different minds. Each session every model gets the EXACT same frozen prompt — only Opus trades, the rest call it shadow-only. Every BUY/SELL is snapshotted and marked to the live price. Who'd be ahead?"
+        title="Second Opinions"
+        sub="What other minds would do — on the SAME real call. At every decision (morning plan, hourly check-ins, EOD) the live agent (Opus — the only one that trades) and the challenger models get the EXACT same frozen prompt; the challengers are shadow-only — they just say what they WOULD do, snapshotted and marked to the live price. It scores JUDGMENT on the fund's actual decisions — there's no separate portfolio. (For models running their own paper books, see Bull Race.)"
         right={
           <Link href={`/race/${today}`} className="rounded-lg border border-teal-400/20 bg-teal-400/5 px-2.5 py-1 text-xs font-semibold text-teal-300 hover:bg-teal-400/10">
             Today&apos;s Race →
@@ -39,7 +39,7 @@ export default async function RacePage() {
             ))}
           </div>
           <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
-            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How The Race works</summary>
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How Second Opinions works</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li>
                 <span className="font-semibold text-teal-50">Same data, every mind.</span> At each session — the morning plan, the

@@ -25,8 +25,8 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
   return (
     <main>
       <PageHeader
-        title="Bull Races"
-        sub="Eight bulls, eight paper accounts. Each model manages its OWN cash, picks its OWN trades, lives with its OWN P&L — same market, separate books. Pick your bulls, set their dials, run a race."
+        title="Bull Race"
+        sub="Eight bulls, eight paper accounts. Each model actively runs its OWN $50k book — its own trades, its own P&L — same market, separate books, fully isolated from the real fund. It tests which mind compounds best when it has to manage a portfolio itself. Pick your bulls, set their dials, run a race. (To see what models would do on the fund's REAL decisions instead, that's Second Opinions.)"
         right={isMember ? <NewRaceForm roster={roster} /> : null}
       />
 
