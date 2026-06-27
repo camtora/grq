@@ -26,12 +26,9 @@ function Metric({ label, k, value, note }: { label: string; k: string; value: st
 }
 
 export default function OptionsPanel({ o }: { o: OptionsDaily | null }) {
-  const updated = o
-    ? `updated ${new Date(o.fetchedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET`
-    : undefined;
   return (
     <div className="space-y-2">
-      <PanelHeader fresh={updated} freshTitle="CBOE options data — delayed, refreshed ~hourly. A signal only; the fund never trades options.">
+      <PanelHeader fresh="~hourly" freshTitle="CBOE options data — delayed, re-fetched ~hourly intraday. A signal only; the fund never trades options.">
         <Term k="options-positioning">Options positioning</Term>{" "}
         <span className="normal-case text-teal-200/40">· Tier 3 · signal only</span>
       </PanelHeader>
