@@ -101,6 +101,22 @@ export async function universeEntry(symbol: string): Promise<UniverseRow | null>
   return (await load()).find((r) => r.symbol === symbol.toUpperCase()) ?? null;
 }
 
+// Resolve a URL ticker to its CANONICAL universe member — exact stored-symbol match first,
+// else a non-RETIRED member whose bare ticker matches. This is what lets `/stocks/MU` route
+// to the tracked `MU.US` member instead of synthesising a duplicate untracked page (a US name
+// stored as `TICKER.US` would otherwise render at BOTH /stocks/TICKER and /stocks/TICKER.US,
+// double-counting its options/social cache). RETIRED CDR shells share a bare symbol, so they're
+// excluded — they must not shadow a live listing. Returns null when nothing canonical exists.
+export async function canonicalMember(ticker: string): Promise<UniverseRow | null> {
+  const t = ticker.toUpperCase();
+  const rows = await load();
+  const exact = rows.find((r) => r.symbol === t);
+  if (exact) return exact;
+  const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
+  const target = bare(t);
+  return rows.find((r) => r.status !== "RETIRED" && r.symbol !== t && bare(r.symbol) === target) ?? null;
+}
+
 export async function inUniverse(symbol: string): Promise<boolean> {
   return (await universeEntry(symbol)) !== null;
 }

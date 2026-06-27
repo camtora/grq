@@ -9,7 +9,9 @@ import { getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-mone
 import { getMacro, macroLine } from "../lib/macro";
 import { recentMacroEvents, upcomingEvents } from "../lib/macro-events";
 import { recentNewsDigest } from "../lib/news/queries";
+import { screenFinds, findLine } from "../lib/market-screen/retrieval";
 import { getOptions, optionsLine } from "../lib/options/store";
+import { getSocial, socialLine } from "../lib/social/store";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
 
 function money(c: number): string {
@@ -19,7 +21,8 @@ function money(c: number): string {
 /** The stable context block prepended to every decision-capable session.
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda] =
+  const MBL_ON = process.env.MARKET_BASE_RETRIEVAL !== "off"; // Slice-3 retrieval (docs/MARKET-BASE-LAYER.md); set "off" to disable
+  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -36,6 +39,7 @@ export async function buildContext(): Promise<string> {
       recentNewsDigest().catch(() => []),
       prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } }),
       prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "asc" } }),
+      MBL_ON ? screenFinds(6).catch(() => []) : Promise.resolve([]),
     ]);
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const dialName = settings?.riskLevel ?? "BALANCED";
@@ -64,6 +68,8 @@ export async function buildContext(): Promise<string> {
   }
   // Tier 3 — cached options positioning for the book's US names (lib/options; a signal, never traded).
   const optRows = bookSyms.length ? (await Promise.all(bookSyms.map((s) => getOptions(s)))).filter((x): x is NonNullable<typeof x> => !!x) : [];
+  // Tier 8 — cached social buzz for the book's names (lib/social; a crowding/risk signal, on probation).
+  const socRows = bookSyms.length ? (await Promise.all(bookSyms.map((s) => getSocial(s)))).filter((x): x is NonNullable<typeof x> => !!x) : [];
   const callOf = (sym: string): string => {
     const d = bookDossier.get(sym.toUpperCase());
     return d
@@ -238,11 +244,21 @@ ${
         .join("\n")
 }
 
+## Market screen — fresh finds (INTERESTING & not yet tracked — leads from our deterministic + Haiku scan of the whole market; an INPUT to widen the funnel, NEVER the gate; research before acting)
+${marketFinds.length === 0 ? "  (none surfaced — or retrieval disabled)" : marketFinds.map(findLine).join("\n")}
+
 ## Options positioning (held/focus US names — dealer gamma · put/call · IV-skew; a SIGNAL about the underlying, you NEVER trade options)
 ${
   optRows.length === 0
     ? "  (no listed-options coverage on the book — CA/illiquid names)"
     : optRows.map((o) => `  ${o.symbol}: ${optionsLine(o)}`).join("\n")
+}
+
+## Social buzz (held/focus names — Reddit mentions/velocity + Stocktwits mood; a CROWDING/RISK signal, ON PROBATION — noisy & gameable, weigh it lightly, never the gate)
+${
+  socRows.length === 0
+    ? "  (no retail chatter on the book — quiet, which for holdings means no crowd to unwind)"
+    : socRows.map((s) => `  ${s.symbol}: ${socialLine(s)}`).join("\n")
 }
 
 ## Policy — ${dialName} dial (you cannot change any of this)

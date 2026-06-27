@@ -456,4 +456,22 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "A 200bp skew means puts are notably 'fearful' versus calls — the market's paying up for protection.",
     related: ["implied-volatility", "put-call-ratio"],
   },
+  "social-buzz": {
+    term: "Social buzz (0–100)",
+    def: "GRQ's own loudness score for a name on retail forums — how much it's being talked about (Reddit mention volume) and whether that's accelerating. High buzz isn't a buy signal; on a name we hold it's a CROWDING/risk flag (euphoria can reverse hard). A signal we weigh, never a trade.",
+    example: "A holding spiking to buzz 90 means the crowd has piled in — watch for a blow-off, not a green light.",
+    related: ["mention-velocity", "social-sentiment"],
+  },
+  "mention-velocity": {
+    term: "Mention velocity",
+    def: "Today's Reddit mentions for a name divided by its own trailing 7-day average. Above 1 = chatter is heating up; below 1 = cooling off. We measure it against the name's OWN history so a normally-quiet stock suddenly lighting up stands out.",
+    example: "2.0× means twice the usual daily chatter — something just grabbed retail's attention.",
+    related: ["social-buzz", "social-sentiment"],
+  },
+  "social-sentiment": {
+    term: "Social sentiment",
+    def: "The share of retail posts tagged bullish vs bearish (from Stocktwits, where users self-label each message). Noisy and easily gamed — GRQ reads it as crowd mood, not truth, and it earns trust slowly like any source. The fund never trades on it alone.",
+    example: "85% bullish on a name the crowd already owns can mean the easy money's been made.",
+    related: ["social-buzz", "mention-velocity"],
+  },
 };

@@ -45,8 +45,8 @@ FRED). The fund now trades CAD **and** USD (see `docs/DECISIONS.md` D34)._
 | 9 | Macroeconomic | **Now** | **Live (CA + US)** — **Bank of Canada Valet** (overnight rate / 5y GoC / CPI / USD-CAD) **+ US via FRED** (Fed funds `DFF` / 10y Treasury `DGS10` / US CPI YoY `CPIAUCNS`); both in the agent context + macro strip (`lib/macro.ts`, `FRED_API_KEY`) |
 | 5 | Institutional ownership | Mid | **Live (US-listed)** — FMP 13F summary on the stock page; empty for pure-TSX issuers |
 | 4 | Insider activity | Mid | **Live (US) / web-research (CA)** — FMP Form 4 + nightly **OpenInsider** scrape cover US **and cross-listed CA** names (Smart Money board + the stock-page coverage map go green when buys exist). **Pure-TSX has no free structured feed** — canadianinsider = Cloudflare-walled, SEDI = session-gated (confirmed 2026-06-17) — so the agent web-researches those per dossier; INK (paid) deferred |
-| 3 | Options data (as signal only) | Later | Not wired — never-trade; US-centric flow |
-| 8 | Social sentiment | Later | Deliberately late — noisy |
+| 3 | Options data (as signal only) | Later | **Live (US) via CBOE (D88)** — dealer-gamma/put-call/IV-skew; a never-trade signal |
+| 8 | Social sentiment | Later | **Live (US) via Reddit/Stocktwits (D89)** — ApeWisdom mentions+velocity + Stocktwits bull/bear; a **crowding/risk** signal **on probation**; CA/off-radar names dark |
 | 10 | Alternative data | Maybe | Mostly paid; revisit at scale |
 
 ## Data freshness & refresh cadence
@@ -135,11 +135,25 @@ Company news, launches, M&A, regulatory — summarize, score sentiment, detect t
 plus GRQ's seed list (BNN, CBC, NYT, Toronto Star, WSJ, MSNBC). **GRQ lens:** live today
 via web search; the scoring system is what separates the outlets that earn their place.
 
-### Tier 8 — Social sentiment
-[Reddit](https://www.reddit.com), [X](https://x.com), [Stocktwits](https://stocktwits.com) —
-mention volume, sentiment, velocity. **GRQ lens:** deliberately late-tier: noisy, easily
-gamed, and mostly US-name-centric. If added, velocity-of-mentions on *holdings* (risk
-signal) before any buy signal.
+### Tier 8 — Social sentiment — **LIVE (US names) via Reddit + Stocktwits (D89, 2026-06-27)**
+Mention volume, sentiment, velocity. **GRQ lens:** deliberately late-tier — noisy, easily gamed,
+mostly US-name-centric — so it ships as **velocity-of-mentions on *holdings* (a crowding/risk read)
+before any buy signal**, and it enters the source scoreboard **on probation**: it must earn the
+agent's trust before its weight grows. The fund never trades on it alone; like every signal tier it
+informs, it doesn't gate.
+**Now wired:** aggregated by us (`lib/social/*`) from two **free, keyless** feeds — **ApeWisdom**
+(pre-aggregated Reddit mention counts + day-over-day deltas; the "CBOE-equivalent" — someone already
+does the scraping) for the velocity signal, and **Stocktwits** (per-message user-tagged
+Bullish/Bearish) for crowd mood. $0/mo. We surface **Reddit mentions, mention velocity (vs our OWN
+stored ≤7-day average — immune to when we poll), board rank + momentum, Stocktwits bull%, and a
+derived 0–100 "buzz" score**, cached per name per ET day (`SocialDaily`), refreshed ~every 6h
+**around the clock** (retail buzz builds nights/weekends). A **mention floor (≥5/day)** kills the
+1-mention rank-swing noise. Fed into the agent (context + dossier prompt) and the stock-page
+`SocialPanel`. **US-listed/meme names only** — Canadian and off-radar names go dark (`covered=false`),
+which is itself a signal: no crowd to unwind. **Rejected:** FMP social sentiment (its v4 endpoint is
+legacy/dead for post-Aug-2025 keys) and X/Twitter (API ~$100+/mo). A custom **Reddit OAuth client**
+(our own subs incl. CA: r/Canadianinvestor, r/Baystreet) + Haiku sentiment is the planned **8b**
+follow-on. See `docs/DECISIONS.md` D89.
 
 ### Tier 9 — Macroeconomic
 Rates, inflation, unemployment, GDP, money supply. **Sources:**

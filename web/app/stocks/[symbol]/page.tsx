@@ -1,7 +1,7 @@
 import StockBackLink from "@/components/StockBackLink";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { universeEntry, bareTicker, yahooForListing } from "@/lib/universe";
+import { universeEntry, canonicalMember, bareTicker, yahooForListing } from "@/lib/universe";
 import { fmpLogo } from "@/lib/logos";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
@@ -28,7 +28,9 @@ import { NewsRow } from "@/components/NewsList";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
 import OptionsPanel from "@/components/OptionsPanel";
+import SocialPanel from "@/components/SocialPanel";
 import { refreshOptions } from "@/lib/options/store";
+import { refreshSocialOne } from "@/lib/social/store";
 import LiveQuote from "@/components/LiveQuote";
 import StockLogo from "@/components/StockLogo";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
@@ -39,6 +41,7 @@ import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import RelatedNames from "@/components/RelatedNames";
 import { relatedFor } from "@/lib/graph/related";
+import { screenReadFor } from "@/lib/market-screen/retrieval";
 import PanelHeader from "@/components/PanelHeader";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import Term from "@/components/Term";
@@ -49,6 +52,14 @@ import Term from "@/components/Term";
 export const dynamic = "force-dynamic";
 
 const SIG_TONE: Record<string, "green" | "red" | "dim"> = { BUY: "green", SELL: "red", HOLD: "dim" };
+
+// Tag colours for the "GRQ first-pass read" card (the market-screen take, shown when
+// a name has no full dossier yet). docs/MARKET-BASE-LAYER.md.
+const SCREEN_READ_TAG: Record<string, string> = {
+  INTERESTING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+  WATCH: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+  PASS: "border-teal-400/20 bg-teal-400/[0.06] text-teal-200/50",
+};
 
 // Honest empty state for a data panel that has no coverage for this name. Every
 // panel renders on every stock page (CA or US, held or not) — when a feed is dark
@@ -125,6 +136,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const otherEmail = session ? otherMemberEmail(session.email) : null;
   const otherName = otherEmail ? (userForEmail(otherEmail)?.name ?? null) : null;
   const realEntry = await universeEntry(symbol);
+  // Canonicalise: a US name stored as TICKER.US must not also render at /stocks/TICKER as a
+  // separate untracked page (it would double-count its options/social cache under two keys).
+  // If this URL isn't a member but resolves to one by bare ticker, redirect to the canonical URL.
+  if (!realEntry) {
+    const canon = await canonicalMember(symbol);
+    if (canon && canon.symbol !== symbol) redirect(`/stocks/${encodeURIComponent(canon.symbol)}`);
+  }
   let entry = realEntry;
   // Whether the name is actually in the universe. An untracked-but-researched find gets a
   // SYNTHESISED row below so it renders the SAME rich page as a tracked name — the
@@ -242,11 +260,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // When the agent last researched this name (latest dossier / research entry) — shown
   // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
+  // Market-screen first-pass read (docs/MARKET-BASE-LAYER.md) — so every screened name has
+  // SOME GRQ read on its page even before a full dossier. Shown only when there's no dossier.
+  const screenRead = await screenReadFor(entry.yahoo).catch(() => null);
   const dayBps = quote?.dayChangeBps ?? 0;
 
   // Tier 3 — options positioning (lib/options): cache-or-fetch from CBOE for US optionable names
   // (null for CA/illiquid). A SIGNAL about the underlying — the fund never trades options.
   const optionsData = await refreshOptions(symbol).catch(() => null);
+
+  // Tier 8 — social sentiment (lib/social): cache-or-fetch ApeWisdom (Reddit) + Stocktwits for this
+  // name. null = no retail chatter (off-radar). A CROWDING/risk signal — never traded, on probation.
+  const socialData = await refreshSocialOne(symbol).catch(() => null);
 
   // The at-a-glance verdict + the agent's expected return (latest dossier target).
   const rec = signals ? overallSignal(signals) : null;
@@ -307,7 +332,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         ? `dealer gamma ${optionsData.regime}, put/call ${optionsData.pcOI?.toFixed(2) ?? "?"} — CBOE, a signal (never traded)`
         : "US-listed optionable names only — no chain for this name",
     },
-    { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
+    {
+      tier: 8,
+      name: "Social",
+      status: socialData ? "live" : "partial",
+      detail: socialData
+        ? `${socialData.mentions} Reddit mentions${socialData.velocity != null ? `, ${socialData.velocity.toFixed(1)}× 7-day` : ""} — a crowd signal (never traded, on probation)`
+        : "Reddit/Stocktwits wired — no retail chatter on this name (US-centric; CA goes dark)",
+    },
     { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
   ];
   coverage.sort((a, b) => a.tier - b.tier); // show tiers in order T1→T10
@@ -411,6 +443,19 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             live={isMarketOpen()}
           />
         </div>
+      )}
+
+      {!stance && screenRead && (
+        <Card className="mb-6 p-5">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">GRQ first-pass read</span>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${SCREEN_READ_TAG[screenRead.tag] ?? SCREEN_READ_TAG.PASS}`}>{screenRead.tag}</span>
+          </div>
+          {screenRead.take && <p className="text-sm text-teal-100/85">{screenRead.take}</p>}
+          <p className="mt-2 text-[11px] text-teal-200/40">
+            A one-line read from our market-wide screen (deterministic + Haiku) — not a full dossier{isMember ? "; use Research for the deep dive" : ""}.
+          </p>
+        </Card>
       )}
 
       {(stance || rec) && (
@@ -985,9 +1030,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </div>
       </section>
 
-      {/* Tier 3 — options positioning (dealer gamma / put-call / IV-skew), a signal about the underlying. */}
-      <section className="mb-6">
+      {/* Tier 3 + Tier 8 — options positioning + social buzz, side by side, equal height. Both signals, never traded. */}
+      <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-2">
         <OptionsPanel o={optionsData} />
+        <SocialPanel s={socialData} />
       </section>
 
       {/* Valuation vs peers · Related names · Smart money — three equal-height panels. */}

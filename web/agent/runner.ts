@@ -14,8 +14,10 @@ import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
+import { runMarketScreenNightly } from "../lib/market-screen/nightly";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
 import { runOptionsRefresh } from "../lib/options/store";
+import { runSocialRefresh } from "../lib/social/store";
 import { runMacroEventScan, refreshEconomicCalendar } from "../lib/macro-events";
 import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
@@ -48,6 +50,7 @@ let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
 let lastOptionsMs = 0;
+let lastSocialMs = 0;
 let lastMacroEventDay = "";
 let lastNewsRun = 0;
 let startupReviewChecked = false;
@@ -714,6 +717,18 @@ async function tick() {
       .catch((e) => console.error("[options] refresh failed:", e instanceof Error ? e.message : e));
   }
 
+  // Tier 8 — social sentiment (D89): ~every 6h, AROUND THE CLOCK (Reddit buzz builds nights/
+  // weekends, so this isn't gated on market hours). Pull the free ApeWisdom boards + Stocktwits for
+  // held+watched+focus names, compute velocity vs our own history, cache one SocialDaily row per name
+  // per ET day. runSocialRefresh self-throttles (6h freshness gate). A CROWDING/RISK signal the agent
+  // weighs (context + dossiers) — on probation, NEVER traded. Free feeds — no rate cost, no quota.
+  if (Date.now() - lastSocialMs > 6 * 60 * 60_000) {
+    lastSocialMs = Date.now();
+    runSocialRefresh()
+      .then((r) => { if (!r.reused) console.log(`[social] refreshed ${r.covered}/${r.tried} names with retail chatter`); })
+      .catch((e) => console.error("[social] refresh failed:", e instanceof Error ? e.message : e));
+  }
+
   // Macro events (D81) — once per ET day: diff the live macro snapshot against
   // yesterday's and record discrete deltas (rate decisions, CPI prints, notable
   // yield/FX moves) the agent reads in context. An INPUT it weighs, never the gate.
@@ -823,6 +838,12 @@ async function maybeDailyRefreshEnqueue() {
   if (p.minutesSinceMidnight < DAILY_REFRESH_OPEN_MIN || p.minutesSinceMidnight >= DAILY_REFRESH_CLOSE_MIN) return;
   if (lastDailyRefreshDay === p.dateStr) return;
   lastDailyRefreshDay = p.dateStr;
+
+  // Market Base Layer — nightly re-screen (deterministic, ~free; preserves tags) + Haiku-tag
+  // any NEW names. Bounded; background so it never blocks the daily refresh. (docs/MARKET-BASE-LAYER.md)
+  runMarketScreenNightly()
+    .then((r) => console.log(`[market-screen] ${r.kept} screened · ${r.tagged} newly tagged`))
+    .catch((e) => console.error("[market-screen] nightly failed", e));
 
   const [tracked, positions, inFlightRows, quotes] = await Promise.all([
     trackedUniverse(),

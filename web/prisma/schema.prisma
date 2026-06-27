@@ -647,6 +647,33 @@ model OptionsDaily {
   @@index([fetchedAt])
 }
 
+// Tier 8 — Social sentiment, aggregated by us from free keyless feeds (lib/social/*): ApeWisdom
+// (pre-aggregated Reddit mention counts) + Stocktwits (user-tagged Bullish/Bearish). One cached
+// row per symbol per ET day. A RISK/CROWDING signal about the underlying — never gates a trade,
+// and on probation in the source scoreboard (noisy, gameable). Velocity is computed vs OUR stored
+// ≤7-day mention history, not a vendor field. US-centric; CA/off-radar names go dark (covered=false,
+// which is itself a signal: no retail crowding). docs/DATA-SOURCES.md tier 8 + DECISIONS D89.
+model SocialDaily {
+  id         Int      @id @default(autoincrement())
+  fetchedAt  DateTime @default(now())
+  symbol     String // the STORED symbol (looked up by the stock page / agent by what they know)
+  date       String // ET YYYY-MM-DD — the cache key (one row per name per day)
+  covered    Boolean  @default(true) // false = below the mention floor / no chatter (day-scoped)
+  mentions   Int      @default(0) // Reddit mentions today (ApeWisdom rolling 24h)
+  velocity   Float? // today's mentions ÷ our trailing ≤7-day avg (>1 heating up, <1 cooling)
+  rank       Int? // position on the ApeWisdom board (lower = more talked-about)
+  rankPrev   Int? // board rank 24h ago (momentum)
+  upvotes    Int? // aggregate upvotes behind the mentions
+  bullPct    Float? // Stocktwits Bullish ÷ (Bullish+Bearish), null when too few tags to trust
+  bullSample Int? // # of sentiment-tagged Stocktwits messages behind bullPct
+  buzz       Int      @default(0) // derived 0–100 ("how loud, and getting louder?") — level + velocity
+  sources    String   @default("") // which feeds contributed, e.g. "apewisdom,stocktwits"
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([fetchedAt])
+}
+
 // Agent heartbeat — read by /api/health and the dashboard.
 model AgentState {
   id            Int       @id @default(1)

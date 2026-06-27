@@ -106,9 +106,12 @@ export async function fmpProfile(symbol: string): Promise<FmpProfile | null> {
   };
 }
 
-// FMP keys analyst coverage to the US/primary listing, not the .TO ticker, so we
-// strip the exchange suffix before asking.
-export const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN)$/i, "");
+// FMP/CBOE key data to the US/primary listing's bare ticker, not our suffixed storage
+// symbol, so we strip the exchange suffix before asking. **Includes `.US`** — some US
+// names are stored as `TICKER.US` (an internal disambiguation tag), and leaving it on
+// silently broke the options/CBOE lookup for those (e.g. `MU.US` → CBOE 404). This now
+// matches `bareTicker` (lib/news/ingest). No real FMP ticker ends in these suffixes.
+export const stripSuffix = (s: string) => s.replace(/\.(TO|V|NE|CN|US)$/i, "");
 
 export type ScreenerRow = {
   symbol: string;

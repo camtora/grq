@@ -2170,3 +2170,61 @@ Related · Smart money, the last now always-rendered). Agent → **v2.6**.
 **US-only** (CA single names stay dark — thin/no listed options); ~15-min delayed, daily-to-hourly granularity (OI itself
 only settles overnight, so the OI-based signals are inherently daily; hourly captures IV/spot-driven drift). **iOS
 parity** (the options panel in the mobile dossier response) is a deferred follow-on.
+
+### D89 — Tier 8 social sentiment (8a), self-aggregated from free Reddit/Stocktwits feeds (Cam, 2026-06-27)
+**Context:** With options ([D88](#d88)) live, social sentiment was the last *prioritized* dark tier (tier 10 alt-data is
+parked "at scale"). The [data-sources doc's](DATA-SOURCES.md) own steer: ship it as **velocity-of-mentions on holdings —
+a crowding/RISK read — before any buy signal**, and put it in the source scoreboard **on probation** (noisy, easily
+gamed). Like every tier it informs, it **never gates** a trade; the §6 order gate is unchanged. Timed into the fresh
+post-[D83](#d83) soak so it's part of the validated baseline.
+
+**Sourcing — probed the landscape from the host, chose free aggregators (≈$0):**
+- **FMP social sentiment is DEAD** — its v4 endpoints 403 as "Legacy" (only for subscriptions before Aug 31 2025; our key
+  is from 2026-06-15) and `stable` has no replacement (404). So the free-because-we-already-pay path is gone.
+- **X/Twitter rejected on cost** (~$100+/mo basic) — same call as the paid options feeds in D88.
+- **Reddit's old unauthenticated `.json` is blocked** (403 from datacenter IPs — needs OAuth now).
+- **Winners (both free, keyless, verified live):** **ApeWisdom** (`apewisdom.io/api` — pre-aggregated Reddit mention
+  counts + `mentions_24h_ago` velocity + rank deltas; the "CBOE-equivalent" — someone already does the scraping, and it
+  even lists SPCX, whose CDR we hold) for the velocity signal, and **Stocktwits** (`api.stocktwits.com/api/2/streams/
+  symbol/{T}.json` — each message carries a user-tagged `entities.sentiment.basic` Bullish/Bearish) for crowd mood.
+
+**Two design refinements the real-data prototype (`scripts/social-prototype.ts`) surfaced:**
+1. **Mention floor (≥5/day).** At the bottom of a ~1000-name board, a 1-mention name swings rank by 60+; below the floor,
+   velocity is pure noise. Sub-floor names are stored (`covered=false`) but never surfaced.
+2. **Compute velocity vs OUR stored ≤7-day average, not ApeWisdom's 24h field** — immune to *when* we poll (the vendor's
+   rolling window reads "cooling" mid-session for everything). This is the reason to keep our own `SocialDaily` table
+   rather than just proxy the feed live; day-1 falls back to the vendor ratio until history banks.
+
+**Architecture:** `lib/social/{sources,store}.ts`; cache table `SocialDaily` (one row per name per ET day). `runSocialRefresh()`
+pulls the boards once, joins our tracked set (held+watched+focus — same `newsTargets()` the news/options tiers use), adds
+Stocktwits per loud name (concurrency-capped), and upserts mentions/velocity/rank/bull%/a derived **0–100 buzz** score.
+Refreshes **~every 6h around the clock** (retail buzz builds nights/weekends — NOT market-gated), self-throttled by a 6h
+freshness gate. `refreshSocialOne()` is the on-demand single-name path the stock page uses. Wired into the **agent context**
+(held/focus, flagged "ON PROBATION — weigh lightly"), the **dossier prompt** (any researched name), and a **stock-page
+`SocialPanel`** + 3 glossary explainers (buzz/velocity/sentiment — the literacy pillar). Coverage map flips tier 8 `none → live`.
+Agent → **v2.7**.
+
+**Caveats (honest):** **US/meme-centric** — CA and off-radar names go dark (`covered=false`), though "no crowd to unwind"
+is itself a useful read on a holding. Both feeds are free/unofficial (could change — same risk class as Yahoo/CBOE).
+Sentiment is self-tagged and gameable → that's exactly why it's on probation. **8b (the planned follow-on):** our own
+**Reddit OAuth client** scanning custom subs **including Canadian ones** (r/Canadianinvestor, r/Baystreet, r/Wealthsimple
+— closing some of the CA hole no aggregator covers) + Haiku sentiment, layered into the same `SocialDaily` store. Needs a
+Reddit script-app `client_id`/`secret` from Cam. **iOS parity** is a deferred follow-on (same as D88's).
+
+**Follow-up (same day) — two bugs the social work surfaced + a quality hardening (Cam):**
+- **`stripSuffix` ignored `.US`** (`lib/fmp.ts` regex was `(TO|V|NE|CN)` only). Four US names were stored as `TICKER.US`
+  (an inconsistent internal tag — the other 95 US names are bare), so their CBOE/options lookup hit `MU.US` → 404 →
+  **options were silently dark for all four** (and any FMP call routed via the stored symbol rather than `yahoo`). Fixed by
+  adding `US` to the regex (now matches `bareTicker`). No real FMP ticker carries these suffixes, so it's strictly safe.
+- **No URL canonicalization** → `/stocks/MU` (untracked lookup) and `/stocks/MU.US` (the tracked member) rendered as TWO
+  pages, each caching options/social and **auto-queuing research under a different symbol** — a split-brain where the agent
+  (which reads dossiers by the universe symbol) was blind to half its own research on those names. Fixed with
+  `canonicalMember()` (`lib/universe.ts`) + a redirect: a URL that resolves to a member by bare ticker 301s to the canonical.
+- **Resolution (Cam chose "bare + merge"):** renamed the 4 universe rows `.US → bare` to match the other 95 US names and
+  where the agent naturally writes (0 positions/trades on any, so safe), and **merged** the duplicate data — repointed
+  JournalEntry/ResearchRequest/NewsArticle (no symbol-unique) and dedup-renamed Bar/StockWatch; dropped the re-derivable
+  Quote/Social/Options caches to rebuild under bare (`scratchpad/migrate-us-to-bare.sql`). Now `symbol == yahoo` for these.
+- **Bot/quality hardening (the 8a "on probation" made teeth):** the prototype showed ~38% of a name's Stocktwits sentiment
+  came from thin/young/shotgun-cashtag accounts. `fetchStocktwitsSentiment` now **screens** those out; `buzz` takes an
+  **upvotes-per-mention quality haircut** (organic discussion gets upvoted, comment-spam doesn't) and `socialLine` flags
+  low-engagement. Still never gates — just a less-gameable signal. Agent → **v2.8**.

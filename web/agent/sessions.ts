@@ -5,6 +5,7 @@ import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse, isTradeable, currencyForSymbol } from "../lib/universe";
 import { setBootstrapMode } from "./promote";
 import { queueDossiers } from "../lib/hunt";
+import { huntAvoidAndSeed, findLine, type ScreenFind } from "../lib/market-screen/retrieval";
 import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
@@ -18,6 +19,7 @@ import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopB
 import { fmtUsd } from "../lib/smart-money/types";
 import { commitsInWindow } from "../lib/github";
 import { refreshOptions, optionsLine } from "../lib/options/store";
+import { refreshSocialOne, socialLine } from "../lib/social/store";
 
 
 type SessionOpts = {
@@ -524,6 +526,14 @@ Then:
 export async function runDiscoveryHunt(brief?: string): Promise<void> {
   const universe = await allUniverse();
   const have = universe.map((u) => u.symbol).join(", ");
+  // Market Base Layer retrieval (docs/MARKET-BASE-LAYER.md, Slice 3): names we've already
+  // surfaced (anti-saturation) + a screen seed of INTERESTING leads to vet. Set "off" to disable.
+  const mblOn = process.env.MARKET_BASE_RETRIEVAL !== "off";
+  const mbl = mblOn ? await huntAvoidAndSeed().catch(() => ({ avoid: [] as string[], seed: [] as ScreenFind[] })) : { avoid: [] as string[], seed: [] as ScreenFind[] };
+  const avoidLine = mbl.avoid.length ? `\nAlso SKIP names you've surfaced in recent hunts (find NEW ones, or only revisit one if its thesis genuinely changed): ${mbl.avoid.join(", ")}.` : "";
+  const screenBlock = mbl.seed.length
+    ? `\n## Screen shortlist — our market scan already flagged these INTERESTING (vet them and surface the genuine fits — but go BEYOND this list, don't just regurgitate it):\n${mbl.seed.map(findLine).join("\n")}\n`
+    : "";
   const b = brief?.trim();
   const focus = b
     ? `\n## FOCUS — a member briefed this hunt\n«${b}»\n\nTreat this brief as the PRIMARY filter: theme, sector, catalyst, size, and timing all come from it. Everything below still holds (under-the-radar, leads-not-verdicts, North-American-tradeable preferred), but every name you surface must genuinely fit the brief. If it's narrow and you can only find 4–6 real fits, surface those — don't pad with off-brief names.\n`
@@ -534,8 +544,8 @@ You are hunting for stocks Cam & Graham have NOT heard of: under-covered, smalle
 
 REACH: the fund holds CAD + USD and trades both Canadian listings (TSX · TSX-V · CSE · NEO) and US listings (NYSE · Nasdaq) — so range across North America for the best fits. Prefer names the fund could eventually trade; you may surface up to ~2 listed elsewhere if they're clearly the best match, but flag those plainly as leads-only (not tradeable here).
 
-We already track these — do NOT re-suggest them: ${have || "(none)"}.
-
+We already track these — do NOT re-suggest them: ${have || "(none)"}.${avoidLine}
+${screenBlock}
 Use WebSearch (and WebFetch for promising leads) to find ${b ? "as many genuine fits to the brief as you can (aim for 6–12)" : "8–12 genuinely interesting candidates"}: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on.
 
 For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
@@ -745,22 +755,25 @@ Keep it tight.`;
  *  tell a real failure from a success instead of marking everything DONE. */
 export async function runStockDossier(symbol: string, requestedBy: string): Promise<string | null> {
   const sym = symbol.toUpperCase();
-  const [entry, quote, sig, recent, sm, opt] = await Promise.all([
+  const [entry, quote, sig, recent, sm, opt, soc] = await Promise.all([
     universeEntry(sym),
     getQuote(sym).catch(() => null),
     computeSignals(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 5 }),
     getSmartMoneyForSymbol(sym).catch(() => null),
     refreshOptions(sym).catch(() => null),
+    refreshSocialOne(sym).catch(() => null),
   ]);
   const smLine = sm ? smartMoneySummaryLine(sm) : "";
   const optLine = opt ? optionsLine(opt) : "";
+  const socLine = soc ? socialLine(soc) : "";
   const prompt = `# STOCK DOSSIER ASSIGNMENT: ${sym}${entry ? ` — ${entry.name} (${entry.status}${entry.tier ? `, ${entry.tier}` : ""})` : ""}
 Requested by: ${requestedBy} · Today: ${etDateStr()}
 Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
 Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
 Smart money (disclosed — weigh it, don't follow blindly): ${smLine || "(none tracked on this name)"}
 Options positioning (a SIGNAL about the underlying — we NEVER trade options): ${optLine || "(no listed options for this name)"}
+Social buzz (Reddit + Stocktwits — a CROWDING/RISK signal, ON PROBATION, noisy & gameable; weigh lightly, never decisive): ${socLine || "(no retail chatter — off the radar)"}
 Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
 
 Research this stock thoroughly with WebSearch/WebFetch — the business, recent news and

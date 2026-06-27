@@ -991,10 +991,15 @@ function parseSources(json: string | null | undefined): string[] {
 // record + trades, news, and the data-coverage map. Same Prisma/FMP source as the web
 // page, so the app sees identical numbers.
 export async function dossierResponse(symbol: string) {
-  const sym = symbol.toUpperCase();
   const all = await allUniverse();
-  const entry = all.find((u) => u.symbol === sym);
+  // Canonicalise like the web stock page (D89): an exact symbol match first, else a non-RETIRED
+  // member by bare ticker — so a stale `/api/dossier/MU.US` deep-link still resolves to bare `MU`
+  // after the .US→bare rename. (mobile parity for the web /stocks/MU.US → /stocks/MU redirect.)
+  const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
+  const req = symbol.toUpperCase();
+  const entry = all.find((u) => u.symbol === req) ?? all.find((u) => u.status !== "RETIRED" && bare(u.symbol) === bare(req));
   if (!entry) return null;
+  const sym = entry.symbol; // use the CANONICAL symbol for every downstream lookup, not the request
 
   // Members watching this name (D78) — key+name only (iOS picks the bundled avatar).
   const stockWatchers = ((await watchersFor([sym])).get(sym) ?? []).map((w) => ({ key: w.key, name: w.name }));
