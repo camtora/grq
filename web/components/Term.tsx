@@ -7,7 +7,9 @@ import { GLOSSARY } from "@/lib/glossary";
 // (docs/LITERACY.md). Known terms come from the static glossary (instant, on
 // hover). Anything else is explained on demand by the agent via /api/explain
 // (cached), so jargon the agent flags with [[double brackets]] in its prose
-// becomes a tap-to-explain. Dark popover by design — reads the same in either theme.
+// becomes a tap-to-explain. The popover follows the theme: --field-bg is the
+// dark field colour in dark mode and white in light mode, and the teal text
+// utilities flip to dark ink under html[data-theme="light"], so it reads in both.
 export default function Term({
   k,
   children,
@@ -71,7 +73,7 @@ export default function Term({
       {open && (
         <span
           role="tooltip"
-          className={`absolute top-full z-30 mt-1.5 w-64 cursor-default rounded-lg border border-teal-400/25 bg-[#0a1413] p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-teal-100/80 shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute top-full z-30 mt-1.5 w-64 cursor-default rounded-lg border border-[var(--card-border)] bg-[var(--field-bg)] p-3 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-teal-100/80 shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
         >
           <span className="mb-1 block font-semibold text-teal-50">{title}</span>
           {popBody}
