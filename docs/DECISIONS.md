@@ -2247,3 +2247,36 @@ count each time there. `ModelStanding` shape preserved, so `ModelTile`/`SessionM
 against live data: llama → **10 TSM** (not 659), every model's NAV bounded to ~$50k. Tunable via `GRQ_RACE_SHADOW_STAKE_CENTS`.
 **Known limitation:** no per-name position cap, so a model that over-sizes one call can run ~all-in on a single name within
 its $50k (honest reflection of its sizing; add a cap later if it muddies the read).
+
+### D91 — The Options Desk: a sandbox A/B for "champion + an options tool" (Graham's ask, Cam & Graham, 2026-06-27)
+
+**Ask (Cam & Graham):** *"We don't understand options — build another test like the Race/Bulls that pits our champion
+(Opus 4.8) against a version of itself that ALSO has a tool to trade options, and teach us the concepts along the way."*
+First we untangled the misconception baked into the ask: **options are NOT shorting.** A **put** is the defined-risk way to
+bet a stock falls; a **call** is a leveraged bet it rises. The live fund can only buy/hold/sell *shares*, so it literally
+can't profit from a decline — a put gives Opus that for the first time. Full primer + design: **docs/THE-OPTIONS-DESK.md**.
+
+**Decision (scope locked with Cam/Graham):** a **third sibling** to Second Opinions (`/race`) and Bull Races (`/bulls`),
+living at **`/options-desk`** under a new header **"Experiments"** dropdown (Race · Bulls · Options Desk). It's a Bull-style
+SANDBOX with **two arms on the same menu/cadence**: a **control** (Opus, stock-only = the live fund) vs a **treatment**
+(Opus + the power to **BUY** calls/puts). **Buy-to-open ONLY** — never sell/write, never spreads, no shorting → every
+position is defined-risk (max loss = premium). The treatment is a *superset* (stocks + options), so it tests "the champion
+*plus* a new power," not a hobbled options bot.
+
+**Build (Phase 1 SHIPPED + deployed 2026-06-27, agent v2.10-phase4):**
+- **Isolation (guardrail #1):** new `agent/options-desk/engine.ts` mirrors the Bull engine — `applyDeskFill` writes ONLY to
+  the new `OptionsDesk`/`Desk*` tables, NEVER imports `validator.ts`/`placeOrder`/the broker, and never trades a real option
+  (guardrail #3 untouched — it bans options on the *real* path; this is a sandbox like the Bulls). `scripts/verify-options-fill.ts`
+  proves the real fund is byte-identical after a fill, and that the **control arm is hard-blocked from options**.
+- **Pricing (the one real gap):** the D88 CBOE parser dropped bid/ask — `lib/options/cboe.ts` now keeps them, and
+  `lib/options/price.ts` marks a contract by **CBOE delayed mid → last → Black-Scholes-from-IV**, settles expiries to
+  **intrinsic**, and **deterministically picks** the contract (next 30–60-DTE expiry, ATM/slightly-OTM by delta) so the
+  comparison is about judgment, not strike-fiddling (the interpretation-trap control). MODELED, not executable — bannered.
+- **Schema (additive):** `OptionsDesk` + `DeskEntrant`(arm) + `DeskPosition`(polymorphic STOCK|CALL|PUT) + `DeskTrade` +
+  `DeskCall` + `DeskNavSnapshot`. Books CAD; options US-only, filled USD at live FX.
+- **Page + literacy:** `/options-desk` shows both arms (reusing the Bull NAV chart), and every open option renders a
+  **plain-English teaching card** (breakeven, max loss, days-to-expiry, "what this bet means") + a five-terms explainer —
+  the literacy payoff (`docs/LITERACY.md`). Seeded "House Desk" (CA$50k/arm, daily) via `scripts/seed-options-desk.ts`.
+- **Verified live:** the verify priced a real AAPL 2026-07-31 $285 call end-to-end; isolation held; control blocked.
+**Deferred (Phase 2/3):** the auto-updating cards + expiry-settlement card, member desk controls, spreads/premium-selling
+(re-opens unlimited risk — kept off), feeding the desk the D88 GEX/skew signals. Open Qs (name/cadence) in the design doc.

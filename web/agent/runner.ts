@@ -30,6 +30,7 @@ import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport } from "./sessions";
 import { runRaceTick } from "./race/engine";
+import { runDeskTick } from "./options-desk/engine";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -765,6 +766,10 @@ async function tick() {
 
   // Bull Races (background — ~8 model calls; self-guarded against overlap, must NOT block the tick).
   runRaceTick().catch((e) => console.error("[bullrace] tick error", e instanceof Error ? e.message : e));
+
+  // The Options Desk (background — 2 arms; self-guarded against overlap, must NOT block the tick).
+  // Pure sandbox (docs/THE-OPTIONS-DESK.md) — never touches the §6 gate, the broker, or real options.
+  runDeskTick().catch((e) => console.error("[optionsdesk] tick error", e instanceof Error ? e.message : e));
 }
 
 // Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every

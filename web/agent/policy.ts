@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.9-phase4";
+export const AGENT_VERSION = "v2.11-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -154,4 +154,20 @@ export const RACE = {
   // fixed virtual portfolio so the book stays BOUNDED — no model can "hold" more than this stake
   // (the bug that let llama show 659 TSM ≈ $250k). CAD board, cents. Read-time only; never trades.
   shadowStakeCents: Number(process.env.GRQ_RACE_SHADOW_STAKE_CENTS ?? "5000000") || 5_000_000,
+};
+
+// The Options Desk (docs/THE-OPTIONS-DESK.md) — a Bulls-style SANDBOX pitting a CONTROL (Opus,
+// stock-only) vs a TREATMENT (Opus + the power to BUY calls/puts). Like the Bulls, it runs each arm
+// one-shot/no-tools and fills into its OWN DeskEntrant book through the light desk gate — it NEVER
+// touches the §6 gate, the broker, or Account/Position/Trade (guardrail #1), and never trades real
+// options (guardrail #3 untouched). Buy-to-open ONLY → defined risk. Kill without a deploy:
+// GRQ_DESK_ENABLED=false. Humans edit this; the agent never does.
+export const DESK = {
+  enabled: (process.env.GRQ_DESK_ENABLED ?? "true").toLowerCase() !== "false",
+  // Per OPTION position, the premium-at-risk cap as a % of NAV. Options are leveraged, so the size
+  // that matters is the premium paid (the max loss), not notional. A blowup-guard, not a strategy.
+  optionMaxPremiumPctNav: Number(process.env.GRQ_DESK_OPT_PREMIUM_PCT ?? "8") || 8,
+  optionMaxOpenPerWeek: Number(process.env.GRQ_DESK_OPT_PER_WEEK ?? "5") || 5, // new option opens / rolling 7d
+  minDte: 30, // contract-selection window — keeps theta/gamma noise out of the comparison (docs §3.4)
+  maxDte: 60,
 };

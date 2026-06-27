@@ -1097,3 +1097,119 @@ model MarketScreen {
   @@index([ticker])
   @@index([exchange])
 }
+
+// The Options Desk (docs/THE-OPTIONS-DESK.md) — a Bulls-style SANDBOX that pits a CONTROL
+// (Opus, stock-only = the live fund's behaviour) against a TREATMENT (Opus + the power to BUY
+// calls/puts) on the same book/cadence. PURE SANDBOX, fully isolated from the real fund — these
+// tables never touch Account/Position/Trade or the §6 gate (guardrail #1). Buy-to-open ONLY (no
+// selling/writing, no spreads, no shorting) → defined risk. Books are CAD-denominated; options are
+// US-only (CBOE), filled in USD at the live FX rate. Option P&L is MODELED (CBOE delayed mid, or
+// Black-Scholes from IV), never executable. Does NOT violate guardrail #3 (that bans options on the
+// real broker path; this never trades real options, like the Bulls never really buy stock).
+model OptionsDesk {
+  id                 Int            @id @default(autoincrement())
+  name               String
+  status             String         @default("RUNNING") // RUNNING | PAUSED | ENDED
+  cadence            String         @default("daily") // daily | hourly
+  startingStakeCents Int            @default(5000000) // each arm's starting CAD cash (CA$50k, = the shadow stake)
+  createdAt          DateTime       @default(now())
+  startedAt          DateTime?
+  endedAt            DateTime?
+  entrants           DeskEntrant[]
+}
+
+// One player: CONTROL (stock-only) or TREATMENT (stock + buy-to-open options), same model.
+model DeskEntrant {
+  id        Int                @id @default(autoincrement())
+  deskId    Int
+  desk      OptionsDesk        @relation(fields: [deskId], references: [id], onDelete: Cascade)
+  model     String // e.g. "claude-opus-4-8"
+  arm       String // "control" | "treatment"
+  dial      String             @default("BALANCED") // stock-side risk dial (DIALS in policy.ts)
+  label     String // display name, e.g. "Opus · stock-only"
+  cashCents Int // current CAD cash
+  status    String             @default("ACTIVE") // ACTIVE | RETIRED
+  createdAt DateTime           @default(now())
+  positions DeskPosition[]
+  trades    DeskTrade[]
+  calls     DeskCall[]
+  navSnaps  DeskNavSnapshot[]
+
+  @@index([deskId])
+}
+
+// A position is polymorphic: a STOCK leg, or a CALL/PUT option leg. qty = shares (STOCK) or
+// contracts (option, ×100 shares of exposure). avgCostCents/lastMarkCents are PER-SHARE
+// (per-share premium for options). strike/expiry null for STOCK.
+model DeskPosition {
+  id            Int         @id @default(autoincrement())
+  entrantId     Int
+  entrant       DeskEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  kind          String // STOCK | CALL | PUT
+  underlying    String // bare ticker (the stock symbol for STOCK)
+  strikeCents   Int? // option only
+  expiry        String? // option only — YYYY-MM-DD
+  qty           Int // shares (STOCK) or contracts (option)
+  avgCostCents  Int // per-share cost (STOCK price / option premium)
+  currency      String      @default("USD")
+  lastMarkCents Int? // last per-share mark the engine wrote (options); stocks marked live
+  openedAt      DateTime    @default(now())
+
+  @@index([entrantId])
+}
+
+model DeskTrade {
+  id               Int         @id @default(autoincrement())
+  entrantId        Int
+  entrant          DeskEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  at               DateTime    @default(now())
+  sessionAt        DateTime
+  kind             String // STOCK | CALL | PUT
+  underlying       String
+  strikeCents      Int?
+  expiry           String?
+  side             String // BUY | SELL (stock) · BUY_TO_OPEN | SELL_TO_CLOSE | EXPIRE (option)
+  qty              Int // shares or contracts
+  priceCents       Int // per-share fill (premium for options); intrinsic at EXPIRE
+  currency         String      @default("USD")
+  commissionCents  Int // native
+  realizedPnlCents Int? // CAD (close/expire only)
+
+  @@index([entrantId])
+}
+
+// Per-session decision audit — every arm, every desk session (filled or not).
+model DeskCall {
+  id           Int         @id @default(autoincrement())
+  entrantId    Int
+  entrant      DeskEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  sessionAt    DateTime
+  action       String? // BUY | SELL | HOLD | NONE | BUY_OPTION | SELL_OPTION
+  underlying   String? // stock symbol or option underlying
+  right        String? // CALL | PUT (option calls)
+  bias         String? // ATM | SLIGHTLY_OTM (option calls)
+  strikeCents  Int? // resolved contract (option fills)
+  expiry       String? // resolved contract (option fills)
+  qty          Int? // shares or contracts
+  confidence   Int?
+  thesis       String?
+  text         String // full reasoning
+  filled       Boolean     @default(false)
+  rejectReason String?
+
+  @@index([entrantId])
+  @@index([sessionAt])
+}
+
+model DeskNavSnapshot {
+  id                Int         @id @default(autoincrement())
+  entrantId         Int
+  entrant           DeskEntrant @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  at                DateTime    @default(now())
+  navCadCents       Int
+  cashCents         Int
+  positionsCadCents Int
+  optionsCadCents   Int         @default(0) // the option sleeve value (a subset of positions)
+
+  @@index([entrantId, at])
+}

@@ -16,6 +16,11 @@ export type OptContract = {
   volume: number; // today's volume (contracts)
   delta: number; // signed (calls +, puts −)
   gamma: number; // per-share gamma
+  // Per-share premium quotes (cents). Carried for the Options Desk sandbox (docs/THE-OPTIONS-DESK.md)
+  // so it can price/mark a specific contract; the D88 signal layer ignores them. 0 when CBOE omits.
+  bidCents: number;
+  askCents: number;
+  lastCents: number;
 };
 export type OptChain = { spotCents: number; contracts: OptContract[] };
 
@@ -54,6 +59,7 @@ export async function fetchOptionChain(bareTicker: string): Promise<OptChain | n
       const o = raw as Record<string, unknown>;
       const p = parseOcc(String(o.option ?? ""));
       if (!p) continue;
+      const toCents = (v: unknown) => Math.round((Number(v) || 0) * 100);
       contracts.push({
         type: p.type,
         strikeCents: p.strikeCents,
@@ -63,6 +69,9 @@ export async function fetchOptionChain(bareTicker: string): Promise<OptChain | n
         volume: Number(o.volume) || 0,
         delta: Number(o.delta) || 0,
         gamma: Number(o.gamma) || 0,
+        bidCents: toCents(o.bid),
+        askCents: toCents(o.ask),
+        lastCents: toCents(o.last_trade_price),
       });
     }
     if (contracts.length === 0) return null;

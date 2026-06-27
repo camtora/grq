@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import KillSwitch from "./KillSwitch";
 import Avatar from "./Avatar";
 import NotificationBell from "./NotificationBell";
@@ -21,10 +22,12 @@ const PRIMARY: NavLink[] = [
   { href: "/market", label: "The Hunt", exact: true },
   { href: "/market/browse", label: "Browse" },
 ];
-const SECONDARY: NavLink[] = [
-  { href: "/reports", label: "Reports" },
-  { href: "/race", label: "The Race" },
-  { href: "/bulls", label: "Bulls" },
+const SECONDARY: NavLink[] = [{ href: "/reports", label: "Reports" }];
+// The model bake-offs / sandboxes live under one "Experiments" dropdown (Cam & Graham, 2026-06-27).
+const EXPERIMENTS: NavLink[] = [
+  { href: "/race", label: "Second Opinions" },
+  { href: "/bulls", label: "Bull Race" },
+  { href: "/options-desk", label: "Options Desk" },
 ];
 
 export default function NavBar({
@@ -47,6 +50,8 @@ export default function NavBar({
   isOwner?: boolean;
 }) {
   const pathname = usePathname();
+  const [expOpen, setExpOpen] = useState(false);
+  const expActive = EXPERIMENTS.some((l) => pathname.startsWith(l.href));
   const renderLink = (l: NavLink) => {
     const active = l.exact
       ? pathname === l.href
@@ -79,6 +84,42 @@ export default function NavBar({
         <div className="ml-auto flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1">
             {SECONDARY.map(renderLink)}
+            {/* Experiments dropdown — the model bake-offs / sandboxes (Race · Bulls · Options Desk). */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setExpOpen((v) => !v)}
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  expActive || expOpen ? "bg-teal-400/15 font-semibold text-teal-200" : "text-teal-200/60 hover:bg-teal-400/10 hover:text-teal-100"
+                }`}
+                aria-haspopup="menu"
+                aria-expanded={expOpen}
+              >
+                Experiments
+                <span className={`text-[9px] transition-transform ${expOpen ? "rotate-180" : ""}`}>▼</span>
+              </button>
+              {expOpen && (
+                <>
+                  <button type="button" aria-hidden className="fixed inset-0 z-10 cursor-default" onClick={() => setExpOpen(false)} tabIndex={-1} />
+                  <div className="absolute right-0 z-20 mt-1 min-w-[10rem] rounded-lg border border-teal-400/15 bg-(--nav-bg) p-1 shadow-lg backdrop-blur" role="menu">
+                    {EXPERIMENTS.map((l) => {
+                      const active = pathname.startsWith(l.href);
+                      return (
+                        <Link
+                          key={l.href}
+                          href={l.href}
+                          role="menuitem"
+                          onClick={() => setExpOpen(false)}
+                          className={`block rounded-md px-3 py-1.5 text-sm transition-colors ${active ? "bg-teal-400/15 font-semibold text-teal-200" : "text-teal-200/70 hover:bg-teal-400/10 hover:text-teal-100"}`}
+                        >
+                          {l.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
             {/* Settings is now owner-only (Cam & Graham). It hosts the entry links to
                 How GRQ works, Traffic, and Tokens — so there's no separate Admin link.
                 The pages enforce the owner gate; hiding the link is cosmetic. */}
