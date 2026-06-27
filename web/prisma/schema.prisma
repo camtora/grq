@@ -1011,3 +1011,34 @@ model KnowledgeEdge {
   @@index([fromSymbol])
   @@index([toTicker])
 }
+
+// Market Base Layer (docs/MARKET-BASE-LAYER.md) — a wide, cheap awareness layer
+// BELOW the universe: every real (non-ETF) company on NASDAQ/NYSE/TSX/TSXV, with a
+// Tier-0 deterministic screen score and an optional Tier-1 Haiku light-tag. A name
+// can be screened without being a CANDIDATE. The knowledge graph joins on `ticker`
+// (bare) to carry a neighbour's read. An INPUT the agent weighs, never the gate.
+model MarketScreen {
+  id          Int       @id @default(autoincrement())
+  symbol      String // FMP-native symbol (e.g. "NVDA", "RY.TO") — unique per exchange
+  ticker      String // bare ticker (knowledge-graph join key)
+  name        String
+  exchange    String // NASDAQ | NYSE | TSX | TSXV
+  sector      String?
+  country     String?
+  marketCapM  Int?
+  priceCents  Int?
+  currency    String?
+  // Tier 0 — deterministic screen (no LLM)
+  screenScore Int
+  screenedAt  DateTime  @default(now())
+  // Tier 1 — Haiku light-tag (null until tagged)
+  tag         String? // INTERESTING | WATCH | PASS
+  take        String? // one-line "worth a look?" note
+  obscurity   Int? // 1–5
+  taggedAt    DateTime?
+
+  @@unique([symbol, exchange])
+  @@index([screenScore])
+  @@index([ticker])
+  @@index([exchange])
+}

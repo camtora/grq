@@ -1,4 +1,5 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
+import { topScreened } from "@/lib/market-screen/screen";
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
 import { watchedByMember, watchersFor, type WatcherView } from "@/lib/watch";
@@ -45,6 +46,16 @@ function capLabel(m: number | null): string {
 }
 
 type CapDef = (typeof CAPS)[number];
+
+// A Browse row is a screener/search row, optionally enriched with the Market Base
+// Layer's Tier-0 score + Tier-1 Haiku tag (docs/MARKET-BASE-LAYER.md).
+type BrowseRow = ScreenerRow & { screenScore?: number | null; tag?: string | null; take?: string | null };
+
+const TAG_CLS: Record<string, string> = {
+  INTERESTING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
+  WATCH: "border-amber-400/30 bg-amber-400/10 text-amber-300",
+  PASS: "border-teal-400/20 bg-teal-400/[0.06] text-teal-200/50",
+};
 
 // Name/ticker search → the same ScreenerRow shape as the screener, so it drops
 // into the same table. fmpSearch finds the listings; fmpProfile fills in the
@@ -113,7 +124,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
   const capDef = CAPS.find((c) => c.v === cap);
   const hasFilter = !!(query || exchange || sector || country || cap);
 
-  let rows: ScreenerRow[] = [];
+  let rows: BrowseRow[] = [];
   let note = "";
   if (!fmpEnabled()) {
     note = "Market browsing needs the FMP key in .env.";
@@ -121,14 +132,31 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
     // A name/ticker search drives the list; the dropdowns then narrow it.
     rows = (await searchRows(query)).filter((r) => matchesFilters(r, exchange, sector, country, capDef));
   } else {
-    rows = await fmpScreener({
+    // The default view is the Market Base Layer — the whole market, ranked by the
+    // Tier-0 screen score (docs/MARKET-BASE-LAYER.md). Falls back to the live FMP
+    // screener if the table hasn't been populated yet, so Browse never goes blank.
+    const screened = await topScreened({
       exchange: exchange || undefined,
       sector: sector || undefined,
       country: country || undefined,
-      marketCapMoreThan: capDef?.more,
-      marketCapLowerThan: capDef?.less,
+      capMinM: capDef?.more != null ? capDef.more / 1e6 : undefined,
+      capMaxM: capDef?.less != null ? capDef.less / 1e6 : undefined,
       limit: 60,
     });
+    rows = screened.length
+      ? screened.map((s) => ({
+          symbol: s.symbol, name: s.name, priceCents: s.priceCents, marketCapM: s.marketCapM,
+          sector: s.sector, exchange: s.exchange, country: s.country, currency: s.currency,
+          isEtf: false, screenScore: s.screenScore, tag: s.tag, take: s.take,
+        }))
+      : await fmpScreener({
+          exchange: exchange || undefined,
+          sector: sector || undefined,
+          country: country || undefined,
+          marketCapMoreThan: capDef?.more,
+          marketCapLowerThan: capDef?.less,
+          limit: 60,
+        });
   }
 
   // Per-row research state: a dossier already exists (→ "View dossier"), research is in
@@ -242,13 +270,14 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
           <SortableTable
             className="w-full text-sm"
             headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
-            initialSort={{ key: "symbol", dir: "asc" }}
+            initialSort={{ key: "score", dir: "desc" }}
             columns={[
               { key: "symbol", label: "Symbol", align: "left" },
               { key: "name", label: "Name", align: "left" },
               { key: "sector", label: "Sector", align: "left" },
               { key: "exchange", label: "Exch", align: "left" },
               { key: "cap", label: "Cap", align: "right", numeric: true },
+              { key: "score", label: "Score", align: "right", numeric: true },
               { key: "price", label: "Price", align: "right", numeric: true },
               { key: "tracking", label: "Tracking", align: "left" },
               { label: null, align: "left" },
@@ -261,6 +290,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                 sector: r.sector,
                 exchange: r.exchange,
                 cap: r.marketCapM,
+                score: r.screenScore ?? null,
                 price: r.priceCents,
                 tracking: ({ universe: 2, watching: 1, none: 0 } as const)[trackingOf(r.symbol).state],
               },
@@ -268,12 +298,24 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                 <tr key={`${r.symbol}-${r.exchange}`} className="border-t border-teal-400/10">
                   <td className="px-4 py-2.5 font-semibold text-teal-200">{r.symbol}</td>
                   <td className="px-4 py-2.5 text-teal-100/70">
-                    {r.name}
-                    {r.isEtf && <span className="ml-1.5 text-[9px] uppercase tracking-wider text-teal-200/40">etf</span>}
+                    <div className="flex items-center gap-1.5">
+                      {r.name}
+                      {r.isEtf && <span className="text-[9px] uppercase tracking-wider text-teal-200/40">etf</span>}
+                      {r.tag && (
+                        <span
+                          title={r.take ?? undefined}
+                          className={`rounded border px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}
+                        >
+                          {r.tag}
+                        </span>
+                      )}
+                    </div>
+                    {r.take && <div className="mt-0.5 truncate text-[11px] text-teal-200/40">{r.take}</div>}
                   </td>
                   <td className="px-4 py-2.5 text-teal-200/60">{r.sector ?? "—"}</td>
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-teal-100/70">{capLabel(r.marketCapM)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-teal-300/70">{r.screenScore ?? "—"}</td>
                   <LiveLastCell symbol={r.symbol} initialCents={r.priceCents} currency={r.currency} />
                   <td className="px-4 py-2.5">
                     {(() => {

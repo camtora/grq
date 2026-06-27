@@ -4,6 +4,13 @@ import StockLogo from "@/components/StockLogo";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import type { RelatedName } from "@/lib/graph/related";
 
+// Market Base Layer Tier-1 read, shown when a related name has no GRQ call yet (mostly
+// untracked leads). Only the actionable tags — PASS is noise here. (docs/MARKET-BASE-LAYER.md)
+const SCREEN_TAG: Record<string, { label: string; cls: string }> = {
+  INTERESTING: { label: "interesting", cls: "bg-emerald-400/10 text-emerald-300" },
+  WATCH: { label: "watch", cls: "bg-amber-400/10 text-amber-300" },
+};
+
 // "Related names" — the knowledge-graph panel (docs/KNOWLEDGE-GRAPH.md, Slice 1).
 // Sits beside "Valuation vs peers" at half width. Each row is a name this stock is
 // connected to (FMP peer / shared 13F holder / news co-mention / same sector), with
@@ -37,14 +44,21 @@ export default function RelatedNames({ items, cadListing = false }: { items: Rel
                       </div>
                       <div className="truncate text-[11px] text-teal-200/40">{r.why}</div>
                     </div>
-                    {m && tone && (
+                    {m && tone ? (
                       <span
                         title={`GRQ's call: ${m.label} — ${m.blurb}`}
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}
                       >
                         {m.abbr}
                       </span>
-                    )}
+                    ) : r.screenTag && SCREEN_TAG[r.screenTag] ? (
+                      <span
+                        title={r.screenTake ?? undefined}
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${SCREEN_TAG[r.screenTag].cls}`}
+                      >
+                        {SCREEN_TAG[r.screenTag].label}
+                      </span>
+                    ) : null}
                     <span title="Relatedness 0–100 (peers · 13F overlap · news co-mention)" className="w-7 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">
                       {r.weight}
                     </span>

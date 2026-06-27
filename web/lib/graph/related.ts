@@ -30,6 +30,10 @@ export type RelatedName = {
   currency: string | null;
   stance: string | null; // GRQ's call (raw stance string), tracked names only
   capM: number | null; // tiebreaker for the weak sector floor
+  // Market Base Layer Tier-1 read (docs/MARKET-BASE-LAYER.md) — "we have a read on this",
+  // most useful on untracked leads. INTERESTING | WATCH | PASS + the one-line take.
+  screenTag: string | null;
+  screenTake: string | null;
 };
 
 type SourceHit = { score: number; why: string; name?: string; capM?: number | null };
@@ -201,6 +205,8 @@ export async function relatedFor(opts: {
       currency: row?.currency ?? null,
       stance: null,
       capM: row?.marketCapM ?? capM,
+      screenTag: null,
+      screenTake: null,
     });
   }
 
@@ -216,6 +222,24 @@ export async function relatedFor(opts: {
     const stanceBy = new Map<string, string>();
     for (const s of rows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
     for (const r of items) if (r.symbol) r.stance = stanceBy.get(r.symbol) ?? null;
+  }
+
+  // Market Base Layer Tier-1 tags for the related names (the "we have a read on this"
+  // payoff — especially on untracked leads). Highest-score listing wins per bare ticker.
+  const relTickers = items.map((r) => r.ticker);
+  if (relTickers.length > 0) {
+    const screens = await prisma.marketScreen
+      .findMany({ where: { ticker: { in: relTickers }, tag: { not: null } }, select: { ticker: true, tag: true, take: true }, orderBy: { screenScore: "desc" } })
+      .catch(() => []);
+    const screenBy = new Map<string, { tag: string | null; take: string | null }>();
+    for (const s of screens) if (!screenBy.has(s.ticker)) screenBy.set(s.ticker, { tag: s.tag, take: s.take });
+    for (const r of items) {
+      const s = screenBy.get(r.ticker);
+      if (s) {
+        r.screenTag = s.tag;
+        r.screenTake = s.take;
+      }
+    }
   }
 
   return { items };
