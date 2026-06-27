@@ -275,6 +275,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
             columns={[
               { key: "symbol", label: "Symbol", align: "left" },
               { key: "name", label: "Name", align: "left" },
+              { key: "grq", label: "GRQ", align: "left" },
               { key: "sector", label: "Sector", align: "left" },
               { key: "exchange", label: "Exch", align: "left" },
               { key: "cap", label: "Cap", align: "right", numeric: true },
@@ -288,6 +289,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               sort: {
                 symbol: r.symbol,
                 name: r.name,
+                grq: ({ INTERESTING: 3, WATCH: 2, PASS: 1 } as Record<string, number>)[r.tag ?? ""] ?? 0,
                 sector: r.sector,
                 exchange: r.exchange,
                 cap: r.marketCapM,
@@ -306,16 +308,19 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                     <div className="flex items-center gap-1.5">
                       {r.name}
                       {r.isEtf && <span className="text-[9px] uppercase tracking-wider text-teal-200/40">etf</span>}
-                      {r.tag && (
-                        <span
-                          title={r.take ?? undefined}
-                          className={`rounded border px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}
-                        >
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {r.tag ? (
+                      <div className="min-w-0">
+                        <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}>
                           {r.tag}
                         </span>
-                      )}
-                    </div>
-                    {r.take && <div className="mt-0.5 truncate text-[11px] text-teal-200/40">{r.take}</div>}
+                        {r.take && <div className="mt-0.5 max-w-[18rem] truncate text-[11px] text-teal-200/40">{r.take}</div>}
+                      </div>
+                    ) : (
+                      <span className="text-teal-200/30">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-teal-200/60">{r.sector ?? "—"}</td>
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>
