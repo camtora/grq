@@ -146,7 +146,24 @@ export default function NavBar({
               <MessageButton />
             </div>
           )}
-          <Avatar src={photo} name={name} size="h-7 w-7" />
+          {/* The avatar is the door to the member's personal Accounts page
+              (read-only external holdings). Members only. */}
+          {isMember ? (
+            <Link
+              href="/accounts"
+              title="Your accounts"
+              aria-label="Your accounts"
+              className={`rounded-full transition ${
+                pathname.startsWith("/accounts")
+                  ? "ring-2 ring-teal-400/60"
+                  : "ring-1 ring-transparent hover:ring-teal-400/40"
+              }`}
+            >
+              <Avatar src={photo} name={name} size="h-7 w-7" />
+            </Link>
+          ) : (
+            <Avatar src={photo} name={name} size="h-7 w-7" />
+          )}
         </div>
       </div>
     </nav>

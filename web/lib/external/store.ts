@@ -1,0 +1,322 @@
+import "server-only";
+import { prisma } from "@/lib/db";
+import { memberKeyForEmail } from "@/lib/users";
+import { bareTicker } from "@/lib/universe";
+import {
+  type SnaptradePartner,
+  listSnaptradeUsers,
+  readOnlyConnectUrl,
+  listSnaptradeAccounts,
+  listSnaptradePositions,
+} from "./snaptrade";
+
+// ── per-member SnapTrade credentials (Personal keys) ──────────────────────────
+// Cam and Graham each have their OWN SnapTrade *Personal* account, so each member
+// resolves to a distinct set of env values (Graham's suffixed `_GRAHAM`, optional
+// until he sets his up). A Personal key is pre-provisioned with exactly one user
+// (userId = the SnapTrade login email) — we do NOT register users (error 1012).
+// The three values per member: clientId + consumerKey (partner signing) +
+// userSecret (the user's read-scoped data token). userId is auto-discovered via
+// listSnaptradeUsers (or pinned with SNAPTRADE_USER_ID[_GRAHAM]). The userSecret
+// stays in env — never in the DB.
+type MemberCreds = { partner: SnaptradePartner; userSecret: string; userIdOverride: string | null };
+
+function credsFor(email: string): MemberCreds | null {
+  const g = memberKeyForEmail(email) === "graham";
+  const clientId = g ? process.env.SNAPTRADE_CLIENT_ID_GRAHAM : process.env.SNAPTRADE_CLIENT_ID;
+  const consumerKey = g ? process.env.SNAPTRADE_CONSUMER_KEY_GRAHAM : process.env.SNAPTRADE_CONSUMER_KEY;
+  const userSecretEnv = g ? process.env.SNAPTRADE_USER_SECRET_GRAHAM : process.env.SNAPTRADE_USER_SECRET;
+  const userIdOverride = (g ? process.env.SNAPTRADE_USER_ID_GRAHAM : process.env.SNAPTRADE_USER_ID) || null;
+  if (clientId && consumerKey) {
+    // SnapTrade Personal keys: the single auto-provisioned user's read token IS the
+    // consumer secret (verified 2026-06-28 — it pulled Cam's TD TFSA). So the two
+    // keys alone are enough; default the userSecret to the consumer secret unless an
+    // explicit one is set. (A developer/partner key would need a real per-user secret.)
+    return { partner: { clientId, consumerKey }, userSecret: userSecretEnv || consumerKey, userIdOverride };
+  }
+  return null;
+}
+
+/** Is SnapTrade fully configured for THIS member (keys + the user's data token)? */
+export function snaptradeConfiguredFor(email: string): boolean {
+  return credsFor(email) !== null;
+}
+
+/** Resolve the SnapTrade identity to call the API with: the partner (signing
+ *  keys), the userId (env-pinned, cached, or auto-discovered from the Personal
+ *  key's single user), and the userSecret (from env). Caches the userId. */
+async function resolveUser(
+  email: string,
+): Promise<{ partner: SnaptradePartner; userId: string; userSecret: string }> {
+  const creds = credsFor(email);
+  if (!creds) throw new Error("SnapTrade is not configured for this member yet.");
+
+  let userId = creds.userIdOverride;
+  if (!userId) {
+    const cached = await prisma.externalUser.findUnique({ where: { email } });
+    userId = cached?.snaptradeUserId ?? null;
+  }
+  if (!userId) {
+    const users = await listSnaptradeUsers(creds.partner);
+    userId = users[0] ?? null;
+    if (!userId) throw new Error("No SnapTrade user is provisioned for these keys.");
+  }
+  await prisma.externalUser.upsert({
+    where: { email },
+    create: { email, snaptradeUserId: userId },
+    update: { snaptradeUserId: userId },
+  });
+  return { partner: creds.partner, userId, userSecret: creds.userSecret };
+}
+
+// ── small safe getters for SnapTrade's loosely-typed nested JSON ──────────────
+function obj(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+}
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v : null;
+}
+function num(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+/** Dollars (float, as SnapTrade reports) → integer cents. One rounding, at ingest. */
+function toCents(dollars: unknown): number {
+  return Math.round(num(dollars) * 100);
+}
+/** Exact units → a trimmed display string (never math'd downstream). */
+function qtyString(units: number): string {
+  if (Number.isInteger(units)) return String(units);
+  return parseFloat(units.toFixed(6)).toString();
+}
+
+/** Build the read-only Connection Portal URL — used only for the INITIAL brokerage
+ *  connect / a reconnect (the steady state is a backend read). Read-only at the
+ *  source via connectionType "read". */
+export async function buildConnectUrl(email: string, origin: string): Promise<string> {
+  const { partner, userId, userSecret } = await resolveUser(email);
+  const dark = memberKeyForEmail(email) === "graham"; // Graham runs dark theme
+  return readOnlyConnectUrl(partner, {
+    userId,
+    userSecret,
+    customRedirect: `${origin}/accounts?connected=1`,
+    darkMode: dark,
+  });
+}
+
+// ── sync (SnapTrade → DB) ─────────────────────────────────────────────────────
+
+type ParsedHolding = {
+  symbol: string;
+  description: string | null;
+  qty: string;
+  priceCents: number;
+  marketValueCents: number;
+  currency: string;
+  openPnlCents: number | null;
+};
+
+function parsePositions(rows: unknown[], acctCurrency: string): ParsedHolding[] {
+  const out: ParsedHolding[] = [];
+  for (const row of rows) {
+    const p = obj(row);
+    const uni = obj(p.symbol).symbol ? obj(obj(p.symbol).symbol) : obj(p.symbol);
+    const ticker = str(uni.symbol) ?? str(uni.raw_symbol) ?? str(p.symbol);
+    if (!ticker) continue;
+    const currency = str(obj(uni.currency).code) ?? acctCurrency;
+    const units = num(p.units) || num(p.fractional_units);
+    const price = num(p.price);
+    out.push({
+      symbol: ticker.toUpperCase(),
+      description: str(uni.description),
+      qty: qtyString(units),
+      priceCents: toCents(price),
+      marketValueCents: Math.round(price * units * 100),
+      currency,
+      openPnlCents: p.open_pnl == null ? null : toCents(p.open_pnl),
+    });
+  }
+  return out;
+}
+
+/** Pull the member's accounts + holdings from SnapTrade and mirror them locally.
+ *  Read-only end to end. Returns the number of accounts synced. */
+export async function syncMember(email: string): Promise<number> {
+  const { partner, userId, userSecret } = await resolveUser(email);
+  const accounts = await listSnaptradeAccounts(partner, { userId, userSecret });
+
+  const seenIds: string[] = [];
+  for (const raw of accounts) {
+    const a = obj(raw);
+    const id = str(a.id);
+    if (!id) continue;
+    seenIds.push(id);
+
+    const balance = obj(obj(a.balance).total);
+    const currency = str(balance.currency) ?? "CAD";
+    const auth = a.brokerage_authorization;
+    const authorizationId = str(auth) ?? str(obj(auth).id);
+
+    await prisma.externalAccount.upsert({
+      where: { id },
+      create: {
+        id,
+        ownerEmail: email,
+        authorizationId,
+        institution: str(a.institution_name) ?? "Brokerage",
+        name: str(a.name) ?? "Account",
+        numberMasked: str(a.number),
+        accountType: str(obj(a.meta).type) ?? str(a.raw_type),
+        currency,
+        totalValueCents: toCents(balance.amount),
+        cashCents: toCents(a.cash),
+      },
+      update: {
+        authorizationId,
+        institution: str(a.institution_name) ?? "Brokerage",
+        name: str(a.name) ?? "Account",
+        numberMasked: str(a.number),
+        accountType: str(obj(a.meta).type) ?? str(a.raw_type),
+        currency,
+        totalValueCents: toCents(balance.amount),
+        cashCents: toCents(a.cash),
+        syncedAt: new Date(),
+        disabled: false,
+      },
+    });
+
+    // Replace holdings wholesale so closed positions disappear.
+    let positions: unknown[] = [];
+    try {
+      positions = await listSnaptradePositions(partner, { userId, userSecret, accountId: id });
+    } catch {
+      // A disabled/broken connection still returns the account; flag it, keep last holdings.
+      await prisma.externalAccount.update({ where: { id }, data: { disabled: true } });
+      continue;
+    }
+    const holdings = parsePositions(positions, currency);
+    await prisma.$transaction([
+      prisma.externalHolding.deleteMany({ where: { accountId: id } }),
+      ...(holdings.length
+        ? [
+            prisma.externalHolding.createMany({
+              data: holdings.map((h) => ({ ...h, accountId: id })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+  }
+
+  // Drop accounts that vanished from SnapTrade (e.g. disconnected).
+  await prisma.externalAccount.deleteMany({
+    where: { ownerEmail: email, id: { notIn: seenIds.length ? seenIds : ["__none__"] } },
+  });
+
+  return seenIds.length;
+}
+
+/** Sync a member's accounts only if SnapTrade is configured for them. Used by the
+ *  passive auto-sync on page load, so it stays a pure backend read. */
+export async function syncMemberIfConnected(
+  email: string,
+): Promise<{ configured: boolean; count: number }> {
+  if (!snaptradeConfiguredFor(email)) return { configured: false, count: 0 };
+  const count = await syncMember(email);
+  return { configured: true, count };
+}
+
+/** Forget a member's external data locally (privacy / unlink). For Personal keys
+ *  we do NOT delete the SnapTrade user — it's the member's own auto-provisioned
+ *  account and lives independent of GRQ; we just drop our mirror + cached userId. */
+export async function disconnectMember(email: string): Promise<void> {
+  // ExternalAccount + ExternalHolding cascade off ExternalUser.
+  await prisma.externalUser.deleteMany({ where: { email } });
+  await prisma.externalAccount.deleteMany({ where: { ownerEmail: email } });
+}
+
+// ── read model (DB → page) ────────────────────────────────────────────────────
+
+export type HoldingView = {
+  symbol: string;
+  dossierHref: string;
+  description: string | null;
+  qty: string;
+  priceCents: number;
+  marketValueCents: number;
+  currency: string;
+  openPnlCents: number | null;
+};
+
+export type AccountView = {
+  id: string;
+  institution: string;
+  name: string;
+  numberMasked: string | null;
+  accountType: string | null;
+  currency: string;
+  totalValueCents: number;
+  cashCents: number;
+  disabled: boolean;
+  syncedAt: string;
+  holdings: HoldingView[];
+};
+
+export type MemberAccountsView = {
+  email: string;
+  connected: boolean;
+  accounts: AccountView[];
+};
+
+/** A CAD holding links to its `.TO` dossier (so untracked TSX names resolve to a
+ *  Canadian quote), a non-CAD holding to the bare US ticker. Tracked names
+ *  canonicalize either way on the stock page. */
+function dossierHrefFor(symbol: string, currency: string): string {
+  const bare = bareTicker(symbol);
+  const target = currency.toUpperCase() === "CAD" ? `${bare}.TO` : bare;
+  return `/stocks/${encodeURIComponent(target)}`;
+}
+
+/** All members' external accounts (Cam & Graham both see both). `emails` is the
+ *  full member roster; a member with no connection still appears (connected:false). */
+export async function accountsForMembers(emails: string[]): Promise<MemberAccountsView[]> {
+  const users = await prisma.externalUser.findMany({
+    where: { email: { in: emails } },
+    select: { email: true },
+  });
+  const connected = new Set(users.map((u) => u.email));
+
+  const accounts = await prisma.externalAccount.findMany({
+    where: { ownerEmail: { in: emails } },
+    orderBy: [{ institution: "asc" }, { name: "asc" }],
+    include: { holdings: { orderBy: { marketValueCents: "desc" } } },
+  });
+
+  return emails.map((email) => ({
+    email,
+    connected: connected.has(email),
+    accounts: accounts
+      .filter((a) => a.ownerEmail === email)
+      .map((a) => ({
+        id: a.id,
+        institution: a.institution,
+        name: a.name,
+        numberMasked: a.numberMasked,
+        accountType: a.accountType,
+        currency: a.currency,
+        totalValueCents: a.totalValueCents,
+        cashCents: a.cashCents,
+        disabled: a.disabled,
+        syncedAt: a.syncedAt.toISOString(),
+        holdings: a.holdings.map((h) => ({
+          symbol: h.symbol,
+          dossierHref: dossierHrefFor(h.symbol, h.currency),
+          description: h.description,
+          qty: h.qty,
+          priceCents: h.priceCents,
+          marketValueCents: h.marketValueCents,
+          currency: h.currency,
+          openPnlCents: h.openPnlCents,
+        })),
+      })),
+  }));
+}

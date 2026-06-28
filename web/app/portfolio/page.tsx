@@ -9,6 +9,9 @@ import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
+import PersonalLane, { type PersonalRow } from "@/components/PersonalLane";
+import { allUniverse } from "@/lib/universe";
+import { accountsForMembers } from "@/lib/external/store";
 import { etDateStr } from "@/agent/calendar";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
@@ -73,6 +76,60 @@ export default async function Portfolio() {
   ]);
   const hasAgenda = agenda.length > 0;
   const name = session?.user?.name ?? "friend";
+
+  // ── "Yours" lane: the logged-in member's OWN external holdings, stamped with
+  // GRQ's existing call + fund hold/track status. User-specific (Graham sees his,
+  // Cam sees his), members-only, UI-only contrast — the agent never reads these.
+  let personalRows: PersonalRow[] = [];
+  let personalTotal = "";
+  if (session?.role === "member") {
+    const [meView] = await accountsForMembers([session.email]);
+    const holdings = (meView?.accounts ?? []).flatMap((a) =>
+      a.holdings.map((h) => ({ ...h, account: a.name })),
+    );
+    if (holdings.length > 0) {
+      const bareKey = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/, "");
+      // Join personal holdings to GRQ's view by BARE ticker — the universe can carry
+      // both a bare and a `.TO` row for one name, so key on bare and prefer ACTIVE.
+      const uni = (await allUniverse()).filter((u) => u.status !== "RETIRED");
+      const statusByBare = new Map<string, "ACTIVE" | "CANDIDATE">();
+      for (const u of [...uni].sort((a, b) => (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1))) {
+        const k = bareKey(u.symbol);
+        if (!statusByBare.has(k)) statusByBare.set(k, u.status as "ACTIVE" | "CANDIDATE");
+      }
+      const stanceRows = await prisma.journalEntry.findMany({
+        where: { stance: { not: null }, symbol: { not: null } },
+        orderBy: { at: "desc" },
+        select: { symbol: true, stance: true },
+      });
+      const stanceByBare = new Map<string, string>();
+      for (const s of stanceRows) {
+        if (!s.symbol) continue;
+        const k = bareKey(s.symbol);
+        if (!stanceByBare.has(k)) stanceByBare.set(k, s.stance as string);
+      }
+      const fundBare = new Set(pf.positions.map((p) => bareKey(p.symbol)));
+
+      personalRows = holdings.map((h) => {
+        const k = bareKey(h.symbol);
+        return {
+          symbol: h.symbol,
+          dossierHref: h.dossierHref,
+          description: h.description,
+          account: h.account,
+          qty: h.qty,
+          marketValueCents: h.marketValueCents,
+          currency: h.currency,
+          stance: stanceByBare.get(k) ?? null,
+          fundHolds: fundBare.has(k),
+          tracked: statusByBare.get(k) ?? null,
+        };
+      });
+      const byCur = new Map<string, number>();
+      for (const h of holdings) byCur.set(h.currency, (byCur.get(h.currency) ?? 0) + h.marketValueCents);
+      personalTotal = [...byCur.entries()].map(([c, cents]) => money(cents, c)).join(" · ");
+    }
+  }
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
   // the last — morning game plan → midday brief → EOD close → next morning. Show
@@ -407,6 +464,20 @@ export default async function Portfolio() {
               </div>
             </Card>
           </aside>
+        </section>
+      )}
+
+      {personalRows.length > 0 && (
+        <section className="mt-6">
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-teal-100/80">
+              Your accounts
+              <span className="ml-2 font-normal text-teal-200/40">
+                outside the fund · read-only · GRQ can&apos;t trade these
+              </span>
+            </h2>
+          </div>
+          <PersonalLane rows={personalRows} total={personalTotal} />
         </section>
       )}
     </main>

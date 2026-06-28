@@ -1254,3 +1254,70 @@ model DeskNavSnapshot {
 
   @@index([entrantId, at])
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// External accounts — VISIBILITY ONLY (the members' personal TD Direct Investing
+// TFSAs etc., pulled in via SnapTrade so Cam & Graham can see each other's outside
+// holdings beside the fund). HARD GUARDRAIL: the agent and the fund can NEVER
+// trade these. Enforced three ways:
+//   1. SnapTrade connections are created with connectionType="read" — the provider
+//      itself rejects any trade on a read-scoped connection (lib/external).
+//   2. This data lives entirely outside web/lib/broker + web/agent; no order path
+//      (getBroker()/placeOrder) ever touches it. These are display models only.
+//   3. The §6 order gate + kill switch govern the FUND's own orders — unrelated.
+// Money is integer cents (house rule); SnapTrade reports dollars as floats which we
+// round to cents once at ingest. A holding's quantity can be fractional (DRIP /
+// mutual funds), so it is stored as an exact display STRING — we never do float
+// math on it. See docs memory: grq-external-accounts.
+// ───────────────────────────────────────────────────────────────────────────
+
+model ExternalUser {
+  // Caches the SnapTrade userId for a member (Personal keys auto-provision one
+  // user whose id is the SnapTrade login email — we resolve/cache it here). The
+  // userSecret is NOT stored in the DB: it lives in env alongside the partner keys
+  // (SNAPTRADE_USER_SECRET[_GRAHAM]) so the data token never sits in the database.
+  email           String            @id
+  snaptradeUserId String            @unique
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  accounts        ExternalAccount[]
+}
+
+model ExternalAccount {
+  // SnapTrade's account UUID is the natural id.
+  id              String            @id
+  ownerEmail      String // which member this account belongs to
+  owner           ExternalUser      @relation(fields: [ownerEmail], references: [email], onDelete: Cascade)
+  authorizationId String? // the SnapTrade brokerage connection (read-scoped)
+  institution     String // e.g. "TD Direct Investing"
+  name            String // e.g. "TFSA"
+  numberMasked    String? // masked account number
+  accountType     String? // e.g. "TFSA", "RRSP", "Margin"
+  currency        String            @default("CAD")
+  totalValueCents Int               @default(0) // total account value, in `currency` cents
+  cashCents       Int               @default(0)
+  disabled        Boolean           @default(false) // SnapTrade connection broken / needs reconnect
+  syncedAt        DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  holdings        ExternalHolding[]
+
+  @@index([ownerEmail])
+}
+
+model ExternalHolding {
+  id               Int             @id @default(autoincrement())
+  accountId        String
+  account          ExternalAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  symbol           String // raw ticker as the brokerage reports it (e.g. "XIC", "AAPL")
+  description      String? // security name
+  qty              String // exact units as reported (may be fractional) — display only, never math'd
+  priceCents       Int             @default(0) // last price, in `currency` cents
+  marketValueCents Int             @default(0) // position market value, in `currency` cents
+  currency         String          @default("CAD")
+  openPnlCents     Int? // unrealized P&L if the brokerage reports it
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([accountId, symbol])
+  @@index([accountId])
+}
