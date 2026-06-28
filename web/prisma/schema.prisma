@@ -1091,6 +1091,11 @@ model MarketScreen {
   take        String? // one-line "worth a look?" note
   obscurity   Int? // 1–5
   taggedAt    DateTime?
+  // Technical read — the deterministic signal (agent/signals.ts overallSignal), 7-point label
+  // (Strong Buy…Strong Sell). Needs price bars, so computed (stale-first, bounded) only for the
+  // actionable INTERESTING/WATCH names, nightly. Null = not computed (no bars / not actionable).
+  signal      String?
+  signalAt    DateTime?
 
   @@unique([symbol, exchange])
   @@index([screenScore])

@@ -1,5 +1,6 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
 import { topScreened } from "@/lib/market-screen/screen";
+import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
@@ -50,7 +51,7 @@ type CapDef = (typeof CAPS)[number];
 
 // A Browse row is a screener/search row, optionally enriched with the Market Base
 // Layer's Tier-0 score + Tier-1 Haiku tag (docs/MARKET-BASE-LAYER.md).
-type BrowseRow = ScreenerRow & { screenScore?: number | null; tag?: string | null; take?: string | null };
+type BrowseRow = ScreenerRow & { screenScore?: number | null; tag?: string | null; take?: string | null; signal?: string | null };
 
 const TAG_CLS: Record<string, string> = {
   INTERESTING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
@@ -148,7 +149,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
       ? screened.map((s) => ({
           symbol: s.symbol, name: s.name, priceCents: s.priceCents, marketCapM: s.marketCapM,
           sector: s.sector, exchange: s.exchange, country: s.country, currency: s.currency,
-          isEtf: false, screenScore: s.screenScore, tag: s.tag, take: s.take,
+          isEtf: false, screenScore: s.screenScore, tag: s.tag, take: s.take, signal: s.signal,
         }))
       : await fmpScreener({
           exchange: exchange || undefined,
@@ -276,6 +277,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               { key: "symbol", label: "Symbol", align: "left" },
               { key: "name", label: "Name", align: "left" },
               { key: "grq", label: "GRQ", align: "left" },
+              { key: "tech", label: "Technical", align: "left" },
               { key: "sector", label: "Sector", align: "left" },
               { key: "exchange", label: "Exch", align: "left" },
               { key: "cap", label: "Cap", align: "right", numeric: true },
@@ -290,6 +292,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                 symbol: r.symbol,
                 name: r.name,
                 grq: ({ INTERESTING: 3, WATCH: 2, PASS: 1 } as Record<string, number>)[r.tag ?? ""] ?? 0,
+                tech: stanceMeta(r.signal)?.pos ?? -1,
                 sector: r.sector,
                 exchange: r.exchange,
                 cap: r.marketCapM,
@@ -309,18 +312,27 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                       {r.name}
                       {r.isEtf && <span className="text-[9px] uppercase tracking-wider text-teal-200/40">etf</span>}
                     </div>
+                    {r.take && <div className="mt-0.5 max-w-[22rem] truncate text-[11px] text-teal-200/40">{r.take}</div>}
                   </td>
                   <td className="px-4 py-2.5">
                     {r.tag ? (
-                      <div className="min-w-0">
-                        <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}>
-                          {r.tag}
-                        </span>
-                        {r.take && <div className="mt-0.5 max-w-[18rem] truncate text-[11px] text-teal-200/40">{r.take}</div>}
-                      </div>
+                      <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}>
+                        {r.tag}
+                      </span>
                     ) : (
                       <span className="text-teal-200/30">—</span>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {(() => {
+                      const m = stanceMeta(r.signal);
+                      if (!m) return <span className="text-teal-200/30">—</span>;
+                      return (
+                        <span title="Technical signal — the chart's read (a formula, not Alfred's call)" className={`text-xs font-semibold ${STANCE_TONE_CLASSES[m.tone]?.text ?? "text-teal-200/60"}`}>
+                          {m.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-2.5 text-teal-200/60">{r.sector ?? "—"}</td>
                   <td className="px-4 py-2.5 text-teal-200/50">{r.exchange ?? "—"}</td>

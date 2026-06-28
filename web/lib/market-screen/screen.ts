@@ -108,6 +108,7 @@ export type ScreenRow = {
   sector: string | null; country: string | null; marketCapM: number | null;
   priceCents: number | null; currency: string | null; screenScore: number;
   tag: string | null; take: string | null; obscurity: number | null;
+  signal: string | null;
 };
 
 /** Ranked read for Browse — the screened market, best-score first, with the same
@@ -133,6 +134,6 @@ export async function topScreened(opts: {
     symbol: r.symbol, ticker: r.ticker, name: r.name, exchange: r.exchange,
     sector: r.sector, country: r.country, marketCapM: r.marketCapM,
     priceCents: r.priceCents, currency: r.currency, screenScore: r.screenScore,
-    tag: r.tag, take: r.take, obscurity: r.obscurity,
+    tag: r.tag, take: r.take, obscurity: r.obscurity, signal: r.signal,
   }));
 }
