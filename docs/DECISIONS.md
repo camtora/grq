@@ -2280,3 +2280,66 @@ position is defined-risk (max loss = premium). The treatment is a *superset* (st
 - **Verified live:** the verify priced a real AAPL 2026-07-31 $285 call end-to-end; isolation held; control blocked.
 **Deferred (Phase 2/3):** the auto-updating cards + expiry-settlement card, member desk controls, spreads/premium-selling
 (re-opens unlimited risk — kept off), feeding the desk the D88 GEX/skew signals. Open Qs (name/cadence) in the design doc.
+
+### D92 — The Options Desk Phase 2: literacy layer + member controls (Cam, 2026-06-28)
+
+Continuation of D91. Scope locked with Cam (two forks decided): the per-session **push nudge** is its own **muteable**
+category, **default ON** (not in the always-on tier); and the **per-option decay sparkline** gets built (not deferred).
+Four workstreams, all SHIPPED 2026-06-28:
+- **A · Punchline cards (web).** Closed/expired option legs (`SELL_TO_CLOSE`/`EXPIRE`, already carrying `realizedPnlCents`)
+  now render a plain-English retrospective + realized CAD P&L + return %. `lib/options-desk/desk.ts` `closedCard()` +
+  `resolved[]`; `components/desk/DeskRow.tsx` "Resolved options" section. Return % reconstructed cleanly from exit value −
+  realized via the loaded FX rate — no engine change.
+- **B · Member desk controls (web).** `app/api/desk/route.ts` (create — auto-builds the control+treatment pair) +
+  `app/api/desk/[id]/route.ts` (start/pause/end/reset/delete), both `memberFromRequest`-guarded; `DeskControls` +
+  `NewDeskForm`; the page resolves the session, shows a desk switcher when >1, and renders controls member-only. Mirrors the
+  Bull scaffold. Verified: create/pause/start/reset/delete round-trip + a viewer-create 403 + delete cascades clean.
+- **C · Push nudge (agent).** New `optionsDesk` push category (muteable, default ON) across `lib/push/notify.ts`
+  (`NotifCategory`/`PREF_FIELD`/`PrefRow`) + `lib/push/categories.ts` + the `NotificationPreference.optionsDesk` column;
+  the settings UI/API pick it up from the catalog automatically. `agent/options-desk/engine.ts` fires `notifyOut(...,
+  {category:"optionsDesk"})` on a treatment open, a sell-to-close, and an expiry settlement — each best-effort (`.catch`),
+  no symbol deep-link (points the reader at the desk, not a dossier).
+- **D · Decay sparkline (schema+agent+web).** Additive `DeskPositionMark` table (per-session per-open-option premium,
+  cascades on close/expire); `refreshOptionMarks()` appends a row each session; `desk.ts` exposes `decay[]` (mark − entry)
+  per open option; `DeskRow` draws a Sparkline ("premium vs entry — drifting below the line is time decay"). The doc's #1
+  lesson, made visible.
+
+`AGENT_VERSION` → **v2.13-phase4**. One `prisma db push` (the prefs column + the marks table). Pure sandbox — the §6 gate,
+the broker, and guardrail #3 are untouched. The Resolved section + decay sparkline populate as the desk runs live (first
+sessions Mon 2026-06-29). Phase 3 (spreads, premium-selling, tooled arms, GEX/skew, member-briefed desk) stays deferred.
+
+### D93 — Confidence levers: "what would change our mind" on every call (Cam, 2026-06-28)
+
+Cam's ask: we rate stocks with a confidence number — can we surface what would make us *more* confident? "If we had this
+information, that would reframe my confidence." The bottom-line card showed a bare 0–100 with no decomposition of what's
+pinning it below 100. This makes the **epistemic state of each call legible** — and ties straight into the literacy pillar
+(a confidence number we can't explain is, by our own standard, a bug). Scope chosen: **Full v1, structured** (not just
+markdown), so the data can later power a re-rate-on-resolution loop and a research-queue action.
+
+The model — every call's confidence is held down by **two kinds of unknown**:
+- **data-gap** — info that EXISTS but we don't have (read the latest 10-Q, no guidance feed, insider feed dark) →
+  *retrievable*, a research action.
+- **catalyst** — an EVENT that resolves an uncertainty on a known horizon (earnings, an FDA date, a ruling) → *watched*,
+  not retrievable.
+
+Each **lever** is `{gap, direction (up→buy / down→sell / tighten→two-sided), magnitude (small/moderate/large), kind,
+trigger, retrievable}`. Two sources feed the panel:
+1. **Agent-filed levers** (thesis-specific) — the agent commits 2–4 falsifiable levers per dossier via a new
+   `write_journal` field, forced to be specific ("Q3 gross margin > 42%", not "macro clarity"). Stored as
+   `JournalEntry.confidenceLeversJson`; parsed/sorted (largest-magnitude first) by `lib/confidence-levers.ts`.
+2. **Structural gaps** (deterministic, free, no LLM) — the decision-relevant dark/partial tiers (fundamentals, insider,
+   institutional, earnings, news) read straight off the existing 10-tier coverage map.
+
+UI: a new **"What would change our mind"** card (`components/ConfidenceLevers.tsx`) under the bottom line — direction arrow
++ magnitude chip + catalyst/data-gap tag + trigger per lever, then a muted "data we don't have on this name" row. Glossary
+term `confidence-levers` added (literacy). **Pure display — it never touches the order gate.**
+
+**SHIPPED + deployed 2026-06-28 (web + agent).** Web went out in its own build (structural gaps render immediately; a
+transitional empty-levers message shows until the agent fills them). One `prisma db push` (additive nullable
+`confidenceLeversJson` — expand-safe). The **agent half** (tool field + dossier prompt) rode the **same `v2.14-phase4`
+agent deploy as D92** (concurrent Options Desk Phase 2 work on this branch — the boot universe-scan was suppressed, so no
+Max-quota hit) rather than waiting for a separate Sunday rebuild; v2.14 is the shared stamp for the combined deploy. Levers
+populate as names are re-researched (first dossier runs Mon 2026-06-29). **Deferred follow-ons:** wire a per-lever "research
+this" action (data-gaps) to the dossier kick; the
+**re-rate-on-resolution / calibration loop** (when a catalyst date passes or a gap closes, re-run and log the confidence
+delta — "we predicted +15, it moved +18"); and the mobile/contract surface.

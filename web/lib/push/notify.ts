@@ -24,7 +24,8 @@ export type NotifCategory =
   | "members" // the OTHER member's universe/directive/kill actions
   | "messages" // the OTHER member messaged you or shared a stock (D61) — FORCED ON (Cam 2026-06-25)
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
-  | "priceTargets"; // a price alert the member set has crossed (Phase 2 — The Wire)
+  | "priceTargets" // a price alert the member set has crossed (Phase 2 — The Wire)
+  | "optionsDesk"; // the experimental Options Desk opened/settled an option — a nudge to read the card (sandbox)
 
 type Severity = "info" | "warning" | "critical";
 
@@ -42,6 +43,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   members: "members",
   system: "system",
   priceTargets: "priceTargets",
+  optionsDesk: "optionsDesk",
 };
 
 type PrefRow = {
@@ -56,6 +58,7 @@ type PrefRow = {
   messages: boolean;
   system: boolean;
   priceTargets: boolean;
+  optionsDesk: boolean;
 };
 
 // APNs reasons (or a 410) that mean the token is dead and should be pruned.

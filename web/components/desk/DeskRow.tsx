@@ -55,6 +55,36 @@ export default function DeskRow({ a, color }: { a: DeskStanding; color: string }
                     <span>max loss {money(h.maxLossCadCents ?? 0)} CAD</span>
                     <span>{h.daysLeft}d left</span>
                   </div>
+                  {h.decay && h.decay.length >= 2 ? (
+                    <div className="mt-1.5">
+                      <div className="h-6 w-full max-w-[200px] text-teal-200/15">
+                        <Sparkline data={h.decay} />
+                      </div>
+                      <div className="text-[9px] text-teal-200/30">premium vs entry — drifting below the line is time decay at work</div>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        {a.resolved.length > 0 ? (
+          <>
+            <div className="mb-1 font-semibold uppercase tracking-wider text-teal-200/40">Resolved options</div>
+            <div className="mb-3 space-y-2">
+              {a.resolved.map((r, i) => (
+                <div key={i} className="rounded-lg border border-teal-400/10 bg-teal-400/[0.02] p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-teal-50/90">
+                      {r.underlying} {r.expiry} {money(r.strikeCents ?? 0)} {r.kind} <span className="text-teal-200/40">×{r.qty}</span>
+                      <span className="ml-1.5 text-[10px] uppercase tracking-wider text-teal-200/40">{r.side === "EXPIRE" ? "expired" : "closed"}</span>
+                    </span>
+                    <span className="tabular-nums">
+                      <Pnl cents={r.realizedPnlCents ?? 0} className="text-[10px]" /> <span className={`text-[10px] ${retClass(r.returnPct)}`}>{ret(r.returnPct)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 leading-relaxed text-teal-100/60">{r.card}</div>
                 </div>
               ))}
             </div>

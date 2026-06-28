@@ -12,6 +12,7 @@ import FeeBudget from "@/components/FeeBudget";
 import KillSwitch from "@/components/KillSwitch";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationSettings from "@/components/NotificationSettings";
+import DailyQuotesManager from "@/components/DailyQuotesManager";
 import FxPanel, { type FxRequestRow } from "@/components/FxPanel";
 import { prefsFromRow } from "@/lib/push/categories";
 import { getPortfolio } from "@/lib/portfolio";
@@ -270,6 +271,14 @@ export default async function Settings() {
             </Card>
           </div>
         </div>
+
+        {isMember && (
+          <div id="quotes" className="scroll-mt-24">
+            <Card className="p-5">
+              <DailyQuotesManager />
+            </Card>
+          </div>
+        )}
 
       </div>
     </main>

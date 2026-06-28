@@ -1,36 +1,65 @@
+import Link from "next/link";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { money } from "@/lib/money";
 import { etDateStr } from "@/agent/calendar";
-import { loadDesk, ARM_COLORS } from "@/lib/options-desk/desk";
+import { getSession } from "@/lib/session";
+import { loadDesk, listDesks, ARM_COLORS } from "@/lib/options-desk/desk";
 import BullChart from "@/components/bulls/BullChart";
 import DeskRow from "@/components/desk/DeskRow";
+import DeskControls from "@/components/desk/DeskControls";
+import NewDeskForm from "@/components/desk/NewDeskForm";
 
 // The Options Desk — a sandbox A/B: a CONTROL (Opus, stock-only) vs a TREATMENT (Opus + the power to
 // BUY calls/puts). Pure sandbox, fully isolated from the real fund. Also a literacy surface: every
 // option the treatment opens is explained in plain English. docs/THE-OPTIONS-DESK.md.
 export const dynamic = "force-dynamic";
 
-export default async function OptionsDeskPage() {
-  const data = await loadDesk();
+export default async function OptionsDeskPage({ searchParams }: { searchParams: Promise<{ desk?: string }> }) {
+  const sp = await searchParams;
+  const wantId = sp.desk && /^\d+$/.test(sp.desk) ? Number(sp.desk) : undefined;
+  const [session, desks, data] = await Promise.all([getSession(), listDesks(), loadDesk(wantId)]);
+  const isMember = session?.role === "member";
 
   return (
     <main>
       <PageHeader
         title="The Options Desk"
         sub="Same money, same menu, one difference: one Opus can only buy and sell stocks (exactly what the fund does today); the other can ALSO buy call and put options. Which one compounds better? A pure sandbox — and a place to learn how options actually work, on real names."
+        right={isMember ? <NewDeskForm /> : null}
       />
 
       {!data || data.arms.length === 0 ? (
-        <EmptyState title="The desk isn't seeded yet" body="Run scripts/seed-options-desk.ts to set up the control vs treatment arms." />
+        <EmptyState title="No desk yet" body={isMember ? "Spin one up with “New desk” above." : "No desks have been created yet."} />
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-teal-200/50">
-            <span className="font-semibold text-teal-50">{data.desk.name}</span>
-            <span>{data.arms.length} arms</span>
-            <span>{data.desk.cadence} cadence</span>
-            <span>{money(data.desk.startingStakeCents)} stake each</span>
-            <span className={data.desk.status === "RUNNING" ? "text-emerald-300" : "text-amber-300"}>{data.desk.status}</span>
-            {data.desk.startedAt ? <span>since {etDateStr(data.desk.startedAt)}</span> : null}
+          {desks.length > 1 ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {desks.map((d) => {
+                const active = d.id === data.desk.id;
+                return (
+                  <Link
+                    key={d.id}
+                    href={`/options-desk?desk=${d.id}`}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${active ? "border-teal-400/40 bg-teal-400/10 text-teal-100" : "border-teal-400/10 bg-teal-400/[0.03] text-teal-300/70 hover:bg-teal-400/10"}`}
+                  >
+                    {d.name}
+                    <span className="ml-1.5 text-[10px] text-teal-200/40">{d.status === "RUNNING" ? "●" : d.status === "PAUSED" ? "❚❚" : "■"}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-teal-200/50">
+              <span className="font-semibold text-teal-50">{data.desk.name}</span>
+              <span>{data.arms.length} arms</span>
+              <span>{data.desk.cadence} cadence</span>
+              <span>{money(data.desk.startingStakeCents)} stake each</span>
+              <span className={data.desk.status === "RUNNING" ? "text-emerald-300" : "text-amber-300"}>{data.desk.status}</span>
+              {data.desk.startedAt ? <span>since {etDateStr(data.desk.startedAt)}</span> : null}
+            </div>
+            {isMember ? <DeskControls deskId={data.desk.id} status={data.desk.status} /> : null}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -91,7 +120,7 @@ export default async function OptionsDeskPage() {
                 <ul className="mt-1 space-y-1">
                   <li><span className="font-semibold text-teal-50">0 · Design</span> — scope locked: buy-only, control vs treatment. <span className="text-emerald-300/70">done</span></li>
                   <li><span className="font-semibold text-teal-50">1 · Engine + desk + this page</span> — the two-arm sandbox, option pricing, the board + teaching cards. <span className="text-emerald-300/70">live</span></li>
-                  <li><span className="font-semibold text-teal-50">2 · Literacy + controls</span> — auto-updating cards, the expiry &ldquo;punchline&rdquo; card, member desk controls. <span className="text-teal-200/40">next</span></li>
+                  <li><span className="font-semibold text-teal-50">2 · Literacy + controls</span> — the expiry &ldquo;punchline&rdquo; card, a per-option decay sparkline, member desk controls, and an opt-out push nudge. <span className="text-emerald-300/70">live</span></li>
                   <li><span className="font-semibold text-teal-50">3 · Deferred</span> — tooled arms, spreads, an options overlay on the real fund, feeding it dealer-gamma/skew. <span className="text-teal-200/40">maybe, once v1 teaches us something</span></li>
                 </ul>
               </div>

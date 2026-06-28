@@ -40,6 +40,8 @@ import Sparkline from "@/components/Sparkline";
 import PriceChart from "@/components/PriceChart";
 import Scoreboard from "@/components/Scoreboard";
 import RelatedNames from "@/components/RelatedNames";
+import ConfidenceLevers from "@/components/ConfidenceLevers";
+import { parseConfidenceLevers } from "@/lib/confidence-levers";
 import { relatedFor } from "@/lib/graph/related";
 import { screenReadFor } from "@/lib/market-screen/retrieval";
 import PanelHeader from "@/components/PanelHeader";
@@ -290,6 +292,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // bull/bear bar in the bottom line. Pulled off the same entry the bar reflects.
   const stanceConfidence = stanceEntry?.confidence ?? null;
   const stanceConfidenceAt = stanceEntry?.at ?? null;
+  // "What would change our mind" (D — confidence levers): the specific, falsifiable
+  // things that would reframe this call, filed on the latest dossier that carries them.
+  const confidenceLevers = parseConfidenceLevers(journal.find((j) => j.confidenceLeversJson)?.confidenceLeversJson);
   // Fallback rating when GRQ hasn't filed a call: the technical signal lean (tagged
   // as such), so the header always shows the buy→sell slider like the watchlist.
   const recMeta = rec ? stanceMeta(rec.label) : null;
@@ -343,6 +348,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
   ];
   coverage.sort((a, b) => a.tier - b.tier); // show tiers in order T1→T10
+
+  // Structural confidence gaps for the "what would change our mind" panel: the
+  // decision-relevant data tiers that are dark/partial for THIS name, read straight
+  // off the coverage map (free, deterministic, no agent). Limited to fundamentals/
+  // insider/institutional/earnings/news — the signal-only tiers (options, social)
+  // and always-dark alt-data aren't about confidence in the fundamental call.
+  const STRUCTURAL_GAP_TIERS = new Set([2, 4, 5, 6, 7]);
+  const structuralGaps = coverage
+    .filter((c) => c.status !== "live" && STRUCTURAL_GAP_TIERS.has(c.tier))
+    .map((c) => ({ name: c.name, detail: c.detail }));
 
   return (
     <main>
@@ -564,6 +579,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           </div>
         </Card>
       )}
+
+      {/* "What would change our mind" — the confidence levers GRQ filed on this name,
+          plus the structural data gaps read off the coverage map. Decomposes what's
+          pinning the confidence number below 100. Pure display; never gates a trade. */}
+      <ConfidenceLevers levers={confidenceLevers} structuralGaps={structuralGaps} />
 
       {/* The held-position stats ride one dense row on large screens — qty/cost/value/
           P&L + the deterministic bracket (enforceExits) + the dossier targets, the full

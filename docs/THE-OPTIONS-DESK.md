@@ -290,11 +290,55 @@ Scope locked with Cam: **buy-to-open calls & puts only**, control-vs-treatment, 
 - **Exit met:** isolation proven, the board renders both arms, nothing touches the §6 gate or broker.
   The first *live* session lands on the next market open (the tick is market-hours-only).
 
-### Phase 2 — the literacy layer + member controls
-- The five-term explainer + auto-updating teaching cards + the expiry-settlement punchline card.
-- Member-only desk controls (new desk / pause / reset / delete) mirroring `RaceControls`.
-- Optional: a per-session push/Discord one-liner when the treatment opens or settles an option (a nudge
-  to go read the card).
+### Phase 2 — the literacy layer + member controls · **SHIPPED 2026-06-28 (D92, agent v2.13-phase4)**
+
+> **Status: all four workstreams (A–D) built, deployed, verified.** A (punchline cards) + B (member
+> controls) web-only; C (muteable `optionsDesk` push nudge, default on) + D (per-option decay sparkline,
+> new `DeskPositionMark` table) touched the agent + schema and went out in one batch (one `prisma db push`,
+> `AGENT_VERSION`→v2.13-phase4). `tsc` clean; B's routes round-tripped with the viewer-403 guard proven.
+> The Resolved-options section + the decay sparkline populate as the desk runs live (first sessions Mon
+> 2026-06-29). The §6 gate, the broker, and guardrail #3 are untouched. Decision record: `docs/DECISIONS.md` D92.
+
+Phase 1 already gives us most of "auto-updating cards": open-position cards re-mark on every page load
+(`loadDesk` reads live marks) and the engine refreshes marks each session. So Phase 2 is the four
+workstreams below — A and B are **web-only** (no agent rebuild, zero soak impact); C and D touch the
+**agent engine** so they batch into one rebuild (+ `AGENT_VERSION` bump, mind the check-in timing rule).
+
+**A. The expiry / close "punchline" card** *(web-only — the actual missing piece; §8's payoff)*
+Closed/expired options currently have **no surface at all** — `DeskTrade` rows carry `realizedPnlCents`
+for `SELL_TO_CLOSE` and `EXPIRE`, but `DeskRow` never renders them.
+- `lib/options-desk/desk.ts`: a `closedCard()` generator + load resolved option trades into each
+  `DeskStanding` (e.g. a `resolved[]` field).
+- `components/desk/DeskRow.tsx`: a new "Resolved" section — *"expired worthless — the whole $840
+  premium gone; NVDA was right but too slow"* / *"closed at $9.10, +117%"*, with realized $ and %.
+
+**B. Member desk controls** *(web-only — mirror the bulls scaffold)*
+- `app/api/desk/[id]/route.ts` — POST `start|pause|end|reset|delete`, clone of
+  `app/api/bulls/[id]/route.ts` with `race*`→`desk*` tables, guarded by `memberFromRequest`.
+- `app/api/desk/route.ts` — POST create; a new desk is always control+treatment, so the form is simpler
+  than bulls (name · cadence · stake).
+- `components/desk/DeskControls.tsx` + `NewDeskForm.tsx` — clones of `RaceControls` / `NewRaceForm`.
+- `app/options-desk/page.tsx`: pass `isMember` from the session so controls render member-only (the
+  route guards are the real lock; the UI is defense-in-depth).
+
+**C. Push / Discord nudge** *(agent — rebuild + version bump)* — **decision: its own muteable category,
+default ON.**
+- `lib/push/categories.ts`: a new `optionsDesk` category (independently muteable like `holdingChecks`,
+  NOT in the trades/risk always-on tier).
+- `agent/options-desk/engine.ts`: `notifyOut()` on a treatment **open** and on an **expiry/close**,
+  deep-linking to `/options-desk` ("go read the card").
+
+**D. Per-option premium-decay history** *(schema + agent + web)* — **decision: build it.** The doc's #1
+lesson ("watch time decay") needs a value-over-time line, but today only `lastMarkCents` is stored
+(overwritten each session).
+- Schema: a tiny `DeskPositionMark { positionId, at, markCents }` table (one `prisma db push`).
+- `agent/options-desk/engine.ts` `refreshOptionMarks()`: append a mark row each session (not just
+  overwrite `lastMarkCents`).
+- `lib/options-desk/desk.ts` + `DeskRow.tsx`: a small decay **sparkline** per option card — literally
+  watching theta/IV play out on names Cam & Graham already follow.
+
+**Build order:** ship A+B first (web-only, lights up as Monday's live sessions run), then batch C+D into
+one agent rebuild. Assign a D-number in `docs/DECISIONS.md` + a `PROJECT_PLAN.md` §13 line on build.
 
 ### Phase 3 (deferred / maybe-never)
 Vertical spreads · premium-selling (re-opens unlimited risk — keep off) · a treatment that also *reads*
@@ -342,7 +386,7 @@ limit we chose not to fight yet. Read this as the rationale Cam & Graham can poi
 |---|---|---|---|
 | **0 — Design** | This doc; scope locked (buy-only, control-vs-treatment) | ✅ done 2026-06-27 | Agree the *shape* before writing the engine. |
 | **1 — Engine + desk + page** | The two-arm sandbox, options pricing/marking/expiry, the board + teaching cards | ✅ shipped 2026-06-27 (D91) | Prove the mechanism + isolation cheaply; start collecting real sessions. |
-| **2 — Literacy + controls** | Auto-updating cards, expiry-settlement "punchline" card, member desk controls, optional push nudge | next | Only worth polishing the teaching surface once we know the engine behaves. |
+| **2 — Literacy + controls** | Expiry/close "punchline" card, member desk controls, a muteable push nudge (default on), per-option decay sparkline | ✅ shipped 2026-06-28 (D92, v2.13-phase4) | Only worth polishing the teaching surface once we know the engine behaves. |
 | **3 — Deferred / maybe** | Tooled arms (see C below), vertical spreads, an options *overlay* on the real fund, feeding it D88 GEX/skew, member-briefed desk | not started | Each adds cost or a second variable; revisit *after* v1 teaches us something. |
 
 ### What's IN — and why

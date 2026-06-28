@@ -254,7 +254,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "Confidence",
     def: "How sure the agent (or a signal) is about a call, 0–100. A self-assessment, not a probability — and the agent needs ≥75% conviction before the gate will let it buy.",
     example: "The agent can like a name at 60%, but the gate won't let it buy until conviction clears 75%.",
-    related: ["recommendation", "agent-call", "dossier"],
+    related: ["recommendation", "agent-call", "dossier", "confidence-levers"],
+  },
+  "confidence-levers": {
+    term: "What would change our mind",
+    def: "The specific, falsifiable things that would reframe GRQ's call — what's pinning the confidence below 100. Each is either a gap we could close (info that exists but we don't have — read the latest filing, no guidance feed) or a catalyst still to land (an event on a known date — earnings, a ruling). It says which way resolving it would move the call, how much, and how we'd learn it.",
+    example: "A name might be a Hold only because earnings are two weeks out and would confirm or kill the margin thesis — once they land, the call gets re-rated.",
+    related: ["confidence", "agent-call", "dossier"],
   },
   "the-tape": {
     term: "The Tape",

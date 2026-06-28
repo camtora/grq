@@ -308,6 +308,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   }
 
   const funFact = funFactOfDay();
+  const dailyQ = await dailyQuote(anchor);
 
   // GRQ's call per tracked name (latest dossier stance) — shown on movers.
   const stanceRows = await prisma.journalEntry.findMany({
@@ -502,7 +503,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4 border-t border-teal-400/10 pt-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm italic text-teal-200/60">{dailyQuote(anchor)}</p>
+            <p className="text-sm italic text-teal-200/60">{dailyQ}</p>
             <p className="mt-2 text-xs text-teal-100/70">
               <span className="font-semibold uppercase tracking-[0.15em] text-teal-300/70">Did you know?</span>{" "}
               {funFact}

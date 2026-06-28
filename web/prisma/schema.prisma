@@ -80,6 +80,22 @@ model Settings {
   updatedAt           DateTime  @updatedAt
 }
 
+// The GRQ Daily masthead's rotating quote/joke (lib/dailyquote.ts). Moved out of a
+// hardcoded array so members can add/edit/reorder/disable lines from Settings — no
+// deploy. Selection is deterministic per Toronto-day (hash over enabled rows, in
+// sortOrder); `pinnedDate` forces a specific line on a chosen day (overrides the hash).
+model DailyQuote {
+  id         Int      @id @default(autoincrement())
+  text       String   @unique
+  sortOrder  Int      @default(0)
+  enabled    Boolean  @default(true)
+  pinnedDate String? // YYYY-MM-DD (Toronto) — force this line that day; null = normal rotation
+  createdAt  DateTime @default(now())
+  createdBy  String?
+
+  @@index([sortOrder])
+}
+
 // A CAD→USD (or USD→CAD) conversion the agent REQUESTS and a member APPROVES —
 // the FX-approval guardrail (D62). The agent can ask for any amount; money only
 // moves when a member approves, bounded by the Settings fx* dials + the kill switch.
@@ -211,6 +227,12 @@ model JournalEntry {
   // consensus (a technicals formula). One of BUY/ACCUMULATE/HOLD/WATCH/TRIM/AVOID/SELL.
   // Where this diverges from the signal read, that divergence is the point.
   stance          String?
+  // "What would change our mind" (confidence levers): a JSON array of the specific,
+  // falsifiable things that would reframe this call — each a {gap, direction, magnitude,
+  // kind, trigger, retrievable}. Decomposes what's pinning confidence below 100 (a gap we
+  // could close, or a catalyst still to land). Shape + parse in lib/confidence-levers.ts;
+  // shown under the bottom line. Pure display — never touches the order gate. Null = not filed.
+  confidenceLeversJson String?
   // How under-the-radar a hunt find is (D38): the agent's 1–5 read — 5 = a deep cut
   // almost nobody covers, 1 = a well-followed name. Surfaced as the obscurity badge
   // on The Hunt and used to sort obscure-first. Null for non-hunt entries.
@@ -786,6 +808,7 @@ model NotificationPreference {
   messages     Boolean  @default(true) // the OTHER member messages you or shares a stock (D61)
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
+  optionsDesk  Boolean  @default(true) // the experimental Options Desk opened/settled an option (sandbox nudge)
   updatedAt    DateTime @updatedAt
 }
 
@@ -1159,8 +1182,21 @@ model DeskPosition {
   currency      String      @default("USD")
   lastMarkCents Int? // last per-share mark the engine wrote (options); stocks marked live
   openedAt      DateTime    @default(now())
+  marks         DeskPositionMark[]
 
   @@index([entrantId])
+}
+
+// Per-session premium history for an OPEN option leg — powers the decay sparkline (docs §2 Phase 2-D).
+// One row per option position per session; cascades away when the position closes/expires.
+model DeskPositionMark {
+  id         Int          @id @default(autoincrement())
+  positionId Int
+  position   DeskPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  at         DateTime     @default(now())
+  markCents  Int // per-share mark (premium) at this session
+
+  @@index([positionId, at])
 }
 
 model DeskTrade {

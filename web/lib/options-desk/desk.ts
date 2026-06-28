@@ -28,9 +28,23 @@ export type DeskHolding = {
   breakevenCents?: number;
   maxLossCadCents?: number;
   card?: string; // plain-English explainer
+  decay?: number[]; // per-share premium minus entry, over sessions — the decay sparkline (Phase 2-D)
 };
 export type DeskTradeView = { at: Date; side: string; kind: string; underlying: string; strikeCents: number | null; expiry: string | null; qty: number; priceCents: number; currency: string; realizedPnlCents: number | null };
 export type DeskCallView = { sessionAt: Date; action: string | null; underlying: string | null; right: string | null; strikeCents: number | null; expiry: string | null; qty: number | null; confidence: number | null; thesis: string | null; filled: boolean; rejectReason: string | null };
+// A closed/expired option leg — the "punchline" the literacy cards are really for (docs §8).
+export type DeskResolved = {
+  at: Date;
+  kind: "CALL" | "PUT";
+  underlying: string;
+  strikeCents: number | null;
+  expiry: string | null;
+  qty: number;
+  side: "SELL_TO_CLOSE" | "EXPIRE";
+  realizedPnlCents: number | null; // CAD
+  returnPct: number; // return on the premium paid
+  card: string; // plain-English retrospective
+};
 export type DeskStanding = {
   entrantId: number;
   label: string;
@@ -48,6 +62,7 @@ export type DeskStanding = {
   holdings: DeskHolding[];
   trades: DeskTradeView[];
   calls: DeskCallView[];
+  resolved: DeskResolved[];
   navHistory: { at: Date; returnPct: number }[];
 };
 export type DeskView = {
@@ -61,6 +76,20 @@ function optionCard(right: "CALL" | "PUT", underlying: string, strikeCents: numb
   const dir = right === "CALL" ? "rises above" : "falls below";
   const decay = daysLeft > 0 ? ` It has ${daysLeft} day${daysLeft === 1 ? "" : "s"} left — options lose value as expiry nears, so ${underlying} needs to move, not drift.` : " It has expired and will settle to its intrinsic value.";
   return `Bought ${qty} ${underlying} ${expiry} ${money(strikeCents)} ${right.toLowerCase()}${qty === 1 ? "" : "s"} at ${money(avgCostCents)}/share. It's a bet that ${underlying} ${dir} ${money(breakevenCents)} (the strike ${right === "CALL" ? "+" : "−"} the premium) by ${expiry}. The most it can lose is ${money(maxLossCadCents)} CAD — the premium paid, nothing more.${decay}`;
+}
+
+/** The retrospective card for a closed/expired option — the lesson, written after the fact (docs §8). */
+function closedCard(side: string, right: "CALL" | "PUT", underlying: string, strikeCents: number, expiry: string, qty: number, exitValueCadCents: number, realizedCadCents: number, returnPct: number): string {
+  const leg = `${qty} ${underlying} ${expiry} ${money(strikeCents)} ${right.toLowerCase()}${qty === 1 ? "" : "s"}`;
+  const pct = `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(0)}%`;
+  const abs = money(Math.abs(realizedCadCents));
+  if (side === "EXPIRE" && exitValueCadCents <= 0) {
+    return `The ${leg} expired worthless — the entire ${abs} CAD premium is gone (${pct}). ${underlying} never cleared the strike in time, so time decay finished the job. The defined-risk payoff: that premium was the most it could ever lose, no surprises.`;
+  }
+  if (side === "EXPIRE") {
+    return `The ${leg} expired in the money and settled for ${money(exitValueCadCents)} CAD — a ${realizedCadCents >= 0 ? "gain" : "loss"} of ${abs} CAD (${pct}).`;
+  }
+  return `Closed the ${leg} for ${money(exitValueCadCents)} CAD — ${realizedCadCents >= 0 ? "locking in a gain of" : "taking a loss of"} ${abs} CAD (${pct}).`;
 }
 
 export async function listDesks(): Promise<{ id: number; name: string; status: string }[]> {
@@ -87,6 +116,16 @@ export async function loadDesk(deskId?: number): Promise<DeskView | null> {
   ]);
   const stockSyms = [...new Set(positions.filter((p) => p.kind === "STOCK").map((p) => p.underlying))];
   const quotes = stockSyms.length ? await getQuotes(stockSyms) : new Map();
+  const optPosIds = positions.filter((p) => p.kind !== "STOCK").map((p) => p.id);
+  const marks = optPosIds.length
+    ? await prisma.deskPositionMark.findMany({ where: { positionId: { in: optPosIds } }, orderBy: { at: "asc" }, select: { positionId: true, markCents: true } })
+    : [];
+  const marksByPos = new Map<number, number[]>();
+  for (const m of marks) {
+    const arr = marksByPos.get(m.positionId) ?? [];
+    arr.push(m.markCents);
+    marksByPos.set(m.positionId, arr);
+  }
   const stake = desk.startingStakeCents;
   const retOf = (navCents: number) => (stake > 0 ? ((navCents - stake) / stake) * 100 : 0);
 
@@ -127,10 +166,33 @@ export async function loadDesk(deskId?: number): Promise<DeskView | null> {
           breakevenCents,
           maxLossCadCents,
           card: optionCard(right, p.underlying, strikeCents, p.expiry ?? "", p.qty, p.avgCostCents, breakevenCents, daysLeft, maxLossCadCents),
+          decay: (marksByPos.get(p.id) ?? []).map((mk) => mk - p.avgCostCents),
         };
       });
       const navCadCents = e.cashCents + positionsCad;
       const myTrades = trades.filter((t) => t.entrantId === e.id);
+      const resolved: DeskResolved[] = myTrades
+        .filter((t) => (t.kind === "CALL" || t.kind === "PUT") && (t.side === "SELL_TO_CLOSE" || t.side === "EXPIRE"))
+        .slice(0, 12)
+        .map((t) => {
+          const right = t.kind as "CALL" | "PUT";
+          const exitValueCad = toCadCents(t.qty * 100 * t.priceCents, t.currency, fx); // proceeds at close / intrinsic at expiry
+          const realizedCad = t.realizedPnlCents ?? 0;
+          const costBasisCad = exitValueCad - realizedCad; // ≈ premium paid (folds in commissions)
+          const returnPct = costBasisCad > 0 ? (realizedCad / costBasisCad) * 100 : 0;
+          return {
+            at: t.at,
+            kind: right,
+            underlying: t.underlying,
+            strikeCents: t.strikeCents,
+            expiry: t.expiry,
+            qty: t.qty,
+            side: t.side as "SELL_TO_CLOSE" | "EXPIRE",
+            realizedPnlCents: t.realizedPnlCents,
+            returnPct,
+            card: closedCard(t.side, right, t.underlying, t.strikeCents ?? 0, t.expiry ?? "", t.qty, exitValueCad, realizedCad, returnPct),
+          };
+        });
       return {
         entrantId: e.id,
         label: e.label,
@@ -148,6 +210,7 @@ export async function loadDesk(deskId?: number): Promise<DeskView | null> {
         holdings: holdings.sort((a, b) => b.mvCadCents - a.mvCadCents),
         trades: myTrades.slice(0, 14).map((t) => ({ at: t.at, side: t.side, kind: t.kind, underlying: t.underlying, strikeCents: t.strikeCents, expiry: t.expiry, qty: t.qty, priceCents: t.priceCents, currency: t.currency, realizedPnlCents: t.realizedPnlCents })),
         calls: calls.filter((c) => c.entrantId === e.id).slice(0, 14).map((c) => ({ sessionAt: c.sessionAt, action: c.action, underlying: c.underlying, right: c.right, strikeCents: c.strikeCents, expiry: c.expiry, qty: c.qty, confidence: c.confidence, thesis: c.thesis, filled: c.filled, rejectReason: c.rejectReason })),
+        resolved,
         navHistory: navSnaps.filter((n) => n.entrantId === e.id).map((n) => ({ at: n.at, returnPct: retOf(n.navCadCents) })),
       };
     })

@@ -12,6 +12,10 @@ import { PERSONA } from "../persona";
 import { startOfEtDay, isMarketOpen, etParts } from "../calendar";
 import { buildDeskContext, type DeskEntrantLite } from "./context";
 import { parseDeskCall, type DeskCall } from "./parse";
+import { notifyOut } from "../alerts";
+
+const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const usd0 = (cents: number) => `$${Math.round(cents / 100)}`;
 
 // The Options Desk engine — a Bulls-style SANDBOX (docs/THE-OPTIONS-DESK.md). Each session, each arm
 // (control = stock-only, treatment = stock + buy-to-open options) decides one action that fills into
@@ -145,6 +149,13 @@ async function applyOptionOpen(entrant: Lite, call: DeskCall, sessionAt: Date, f
     await tx.deskEntrant.update({ where: { id: entrant.id }, data: { cashCents: { decrement: costCad } } });
     await tx.deskTrade.create({ data: { entrantId: entrant.id, sessionAt, kind: call.right!, underlying: bare, strikeCents: c.strikeCents, expiry: c.expiry, side: "BUY_TO_OPEN", qty: contracts, priceCents: premium, currency: "USD", commissionCents: commission } });
   });
+  const breakeven = call.right === "CALL" ? c.strikeCents + Math.round(premium) : c.strikeCents - Math.round(premium);
+  await notifyOut(
+    "info",
+    `Options Desk — opened ${contracts} ${bare} ${call.right!.toLowerCase()}${contracts === 1 ? "" : "s"}`,
+    `The treatment bought ${contracts} ${bare} ${c.expiry} ${usd0(c.strikeCents)} ${call.right!.toLowerCase()}${contracts === 1 ? "" : "s"} at ${usd(premium)}/share — a bet ${bare} ${call.right === "CALL" ? "rises above" : "falls below"} ${usd(breakeven)} by ${c.expiry}. Max loss is the premium paid. The teaching card is on the Options Desk.`,
+    { category: "optionsDesk" },
+  ).catch(() => {});
   return { filled: true, rejectReason: null, strikeCents: c.strikeCents, expiry: c.expiry };
 }
 
@@ -172,6 +183,12 @@ async function applyOptionClose(entrant: Lite, call: DeskCall, sessionAt: Date, 
     await tx.deskEntrant.update({ where: { id: entrant.id }, data: { cashCents: { increment: proceedsCad } } });
     await tx.deskTrade.create({ data: { entrantId: entrant.id, sessionAt, kind: call.right!, underlying: bare, strikeCents: pos.strikeCents, expiry: pos.expiry, side: "SELL_TO_CLOSE", qty: contracts, priceCents: mark, currency: "USD", commissionCents: commission, realizedPnlCents: realizedCad } });
   });
+  await notifyOut(
+    "info",
+    `Options Desk — closed ${contracts} ${bare} ${call.right!.toLowerCase()}${contracts === 1 ? "" : "s"}`,
+    `The treatment sold to close ${contracts} ${bare} ${call.right!.toLowerCase()}${contracts === 1 ? "" : "s"} at ${usd(mark)}/share — a realized ${realizedCad >= 0 ? "gain" : "loss"} of ${usd(Math.abs(realizedCad))} CAD. The result card is on the Options Desk.`,
+    { category: "optionsDesk" },
+  ).catch(() => {});
   return { filled: true, rejectReason: null, strikeCents: pos.strikeCents ?? undefined, expiry: pos.expiry ?? undefined };
 }
 
@@ -193,6 +210,15 @@ export async function settleExpiries(entrantId: number, fx: number | null, now: 
       if (proceedsCad > 0) await tx.deskEntrant.update({ where: { id: entrantId }, data: { cashCents: { increment: proceedsCad } } });
       await tx.deskTrade.create({ data: { entrantId, sessionAt: now, kind: right, underlying: p.underlying, strikeCents: p.strikeCents, expiry: p.expiry, side: "EXPIRE", qty: p.qty, priceCents: intrinsic, currency: "USD", commissionCents: 0, realizedPnlCents: realizedCad } });
     });
+    const worthless = intrinsic <= 0;
+    await notifyOut(
+      "info",
+      `Options Desk — ${p.underlying} ${right.toLowerCase()} expired ${worthless ? "worthless" : "in the money"}`,
+      worthless
+        ? `The treatment's ${p.qty} ${p.underlying} ${usd0(p.strikeCents ?? 0)} ${right.toLowerCase()}${p.qty === 1 ? "" : "s"} expired worthless — the whole premium is gone, which was the most it could ever lose. The time-decay lesson is now on the Options Desk card.`
+        : `The treatment's ${p.qty} ${p.underlying} ${usd0(p.strikeCents ?? 0)} ${right.toLowerCase()}${p.qty === 1 ? "" : "s"} expired in the money — a realized ${realizedCad >= 0 ? "gain" : "loss"} of ${usd(Math.abs(realizedCad))} CAD. See the Options Desk card.`,
+      { category: "optionsDesk" },
+    ).catch(() => {});
     settled++;
   }
   return settled;
@@ -210,6 +236,7 @@ async function refreshOptionMarks(entrantId: number, now: Date): Promise<void> {
     const c = p.strikeCents != null && p.expiry ? findContract(chain, right, p.strikeCents, p.expiry) : null;
     const mark = c ? markContractCents(c, chain.spotCents, now) : intrinsicCents(right, chain.spotCents, p.strikeCents ?? 0);
     await prisma.deskPosition.update({ where: { id: p.id }, data: { lastMarkCents: mark } });
+    await prisma.deskPositionMark.create({ data: { positionId: p.id, markCents: mark, at: now } }).catch(() => {}); // decay-sparkline history
   }
 }
 
