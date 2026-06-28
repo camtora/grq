@@ -11,7 +11,7 @@ import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import PersonalLane, { type PersonalRow } from "@/components/PersonalLane";
 import { allUniverse } from "@/lib/universe";
-import { accountsForMembers } from "@/lib/external/store";
+import { accountsForMembers, snaptradeConfiguredFor } from "@/lib/external/store";
 import { etDateStr } from "@/agent/calendar";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
@@ -82,6 +82,7 @@ export default async function Portfolio() {
   // Cam sees his), members-only, UI-only contrast — the agent never reads these.
   let personalRows: PersonalRow[] = [];
   let personalTotal = "";
+  const personalConfigured = session?.role === "member" && snaptradeConfiguredFor(session.email);
   if (session?.role === "member") {
     const [meView] = await accountsForMembers([session.email]);
     const holdings = (meView?.accounts ?? []).flatMap((a) =>
@@ -478,6 +479,23 @@ export default async function Portfolio() {
             </h2>
           </div>
           <PersonalLane rows={personalRows} total={personalTotal} />
+        </section>
+      )}
+
+      {session?.role === "member" && !personalConfigured && (
+        <section className="mt-6">
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="text-sm text-teal-200/70">
+              <span className="font-semibold text-teal-100/80">See your own holdings beside the fund.</span>{" "}
+              Link your brokerage read-only and your personal accounts show up here, with GRQ&apos;s call on each name.
+            </div>
+            <Link
+              href="/accounts"
+              className="shrink-0 rounded-lg border border-teal-400/30 px-3 py-1.5 text-xs font-semibold text-teal-200/90 transition hover:bg-teal-400/10"
+            >
+              Connect your accounts →
+            </Link>
+          </Card>
         </section>
       )}
     </main>

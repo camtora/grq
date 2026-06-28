@@ -7,6 +7,7 @@ import { money, fmtWhen } from "@/lib/money";
 import { PageHeader, Card, Chip, EmptyState } from "@/components/ui";
 import Avatar from "@/components/Avatar";
 import MyAccountControls from "@/components/accounts/MyAccountControls";
+import ConnectSplash from "@/components/accounts/ConnectSplash";
 import {
   accountsForMembers,
   snaptradeConfiguredFor,
@@ -108,19 +109,19 @@ function MemberSection({
             )}
           </div>
         </div>
-        {isSelf ? (
+        {isSelf && configured ? (
           <Suspense fallback={null}>
             <MyAccountControls configured={configured} hasAccounts={view.accounts.length > 0} />
           </Suspense>
         ) : null}
       </div>
 
-      {view.accounts.length === 0 ? (
+      {isSelf && !configured ? (
+        <ConnectSplash />
+      ) : view.accounts.length === 0 ? (
         <Card className="p-5 text-sm text-teal-200/50">
           {!configured
-            ? isSelf
-              ? "Add your SnapTrade keys to link your brokerage — then your holdings appear here, read-only."
-              : `${name} hasn't set up SnapTrade yet.`
+            ? `${name} hasn't set up SnapTrade yet.`
             : isSelf
               ? "Link your TD account in SnapTrade (or hit “Connect a brokerage”) and your holdings show up here automatically."
               : `${name} hasn't linked a brokerage yet.`}
