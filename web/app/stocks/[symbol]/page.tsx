@@ -358,6 +358,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const structuralGaps = coverage
     .filter((c) => c.status !== "live" && STRUCTURAL_GAP_TIERS.has(c.tier))
     .map((c) => ({ name: c.name, detail: c.detail }));
+  // Drives the bottom-line layout: when there's anything to say about what would
+  // change our mind, the "Why" shares the row with it half-and-half.
+  const hasConfidenceLevers = confidenceLevers.length > 0 || structuralGaps.length > 0;
 
   return (
     <main>
@@ -557,19 +560,30 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               )}
             </div>
             <div className="lg:col-span-3">
-              {bottomLineEntry?.bottomLine ? (
-                <>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Why</div>
-                  <div className="text-sm text-teal-100/80">
-                    <Md text={bottomLineEntry.bottomLine} />
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-teal-100/80">
-                  The agent&apos;s plain-English &ldquo;why&rdquo; appears here once it files a dossier on this name.
-                  {signals ? ` For now, the technical read: ${signalsOneLine(signals)}.` : ""}
-                </p>
-              )}
+              {/* The "Why" shares this row with "What would change our mind" — half
+                  and half — so the plain-English thesis sits beside what would move
+                  it (Cam 2026-06-28). Falls back to full width when there are no
+                  levers/gaps on file yet. */}
+              <div className={`grid gap-6 ${hasConfidenceLevers ? "lg:grid-cols-2" : ""}`}>
+                <div>
+                  {bottomLineEntry?.bottomLine ? (
+                    <>
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Why</div>
+                      <div className="text-sm text-teal-100/80">
+                        <Md text={bottomLineEntry.bottomLine} />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-teal-100/80">
+                      The agent&apos;s plain-English &ldquo;why&rdquo; appears here once it files a dossier on this name.
+                      {signals ? ` For now, the technical read: ${signalsOneLine(signals)}.` : ""}
+                    </p>
+                  )}
+                </div>
+                {hasConfidenceLevers && (
+                  <ConfidenceLevers embedded levers={confidenceLevers} structuralGaps={structuralGaps} />
+                )}
+              </div>
               {/* The caveat back under the Why (Cam 2026-06-25). */}
               <p className="mt-3 text-[11px] text-teal-200/40">
                 The rating above is <span className="text-teal-200/60">GRQ&apos;s call</span> — its judgment. The technical
@@ -580,10 +594,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         </Card>
       )}
 
-      {/* "What would change our mind" — the confidence levers GRQ filed on this name,
-          plus the structural data gaps read off the coverage map. Decomposes what's
-          pinning the confidence number below 100. Pure display; never gates a trade. */}
-      <ConfidenceLevers levers={confidenceLevers} structuralGaps={structuralGaps} />
+      {/* "What would change our mind" now rides inside the bottom-line card, half-width
+          beside the Why (above). When there's no call yet (no bottom-line card), it falls
+          back to its own standalone card so un-rated names still surface the data gaps.
+          Pure display; never gates a trade. */}
+      {!(stance || rec) && (
+        <ConfidenceLevers levers={confidenceLevers} structuralGaps={structuralGaps} />
+      )}
 
       {/* The held-position stats ride one dense row on large screens — qty/cost/value/
           P&L + the deterministic bracket (enforceExits) + the dossier targets, the full
