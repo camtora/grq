@@ -436,6 +436,7 @@ export const Mover = z.object({
 export const Today = z.object({
   edition: Edition,
   dateISO: z.string(),
+  quote: z.string(),                          // GRQ Daily masthead line (DB-driven, member-editable in Settings)
   navCents: z.number().int(),
   dayPnlCents: z.number().int(),
   dayPnlBps: z.number().int(),

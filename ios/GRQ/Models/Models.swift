@@ -572,6 +572,7 @@ struct IndexQuote: Codable, Identifiable {
 struct Today: Codable {
     let edition: Edition
     let dateISO: String
+    var quote: String? = nil   // GRQ Daily masthead line (server/DB-driven; falls back to bundled content)
     let navCents: Int
     let dayPnlCents: Int
     let dayPnlBps: Int

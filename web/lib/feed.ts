@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import type { Session } from "./session";
 import { getPortfolio } from "./portfolio";
+import { dailyQuote } from "./dailyquote";
 import { soakStatus } from "./soak";
 import { listFxRequests } from "./fx-requests";
 import { getQuotes, getQuote } from "./broker/quotes";
@@ -442,6 +443,7 @@ export async function todayResponse() {
   return {
     edition: editionNow(),
     dateISO: etDateStr(),
+    quote: await dailyQuote(),
     navCents: pf.navCents,
     dayPnlCents: dayPnl,
     dayPnlBps,

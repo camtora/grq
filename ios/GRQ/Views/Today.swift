@@ -102,7 +102,7 @@ struct TodayView: View {
                         Text("today").font(.caption).foregroundStyle(p.textMuted)
                     }
                 }
-                Text(Content.shared.dailyQuote()).font(.callout.italic())
+                Text(t.quote ?? Content.shared.dailyQuote()).font(.callout.italic())
                     .foregroundStyle(p.textMuted).padding(.top, 2)
             }
         }
