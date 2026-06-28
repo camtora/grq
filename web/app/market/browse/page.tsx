@@ -190,7 +190,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
 
   return (
     <main>
-      <PageHeader title="Browse" sub="Search any name or screen the whole market — watch the ones worth a closer look." />
+      <PageHeader title="Browse" sub="The whole investable market — a first-pass automated scan of every non-ETF name (NASDAQ · NYSE · AMEX · TSX · TSXV · NEO), NOT the researched watchlist. The GRQ column here is a quick screen read, not a full dossier. Search or screen, then dig into what's worth a closer look." />
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Browse the whole market</h2>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
@@ -374,11 +374,24 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
           </LiveQuotesProvider>
         </Card>
       )}
-      <p className="mt-3 text-xs text-teal-200/40">
-        Powered by FMP. Prices are in each listing&apos;s native currency. <b>Research</b> queues a full dossier without
-        adding the name anywhere — once it lands, <b>View dossier</b> opens it. <b>Watch</b> adds it to your watchlist;
-        trading it still needs it promoted into the universe (any member can, once it clears the liquidity screen).
-      </p>
+      <div className="mt-3 space-y-2 text-xs text-teal-200/40">
+        <p>
+          <b className="text-teal-200/60">What you&apos;re seeing —</b> a first-pass scan of the WHOLE market, three automated reads per name (not the researched watchlist):{" "}
+          <b className="text-teal-300/70">Score</b> = our quality/liquidity rank (is it a real, tradeable name?);{" "}
+          <b className="text-teal-300/70">GRQ</b> = a one-line first-pass read —{" "}
+          <b className="text-emerald-300/80">INTERESTING</b> (worth a real look) ·{" "}
+          <b className="text-amber-300/80">WATCH</b> (interesting — wait for a catalyst or better entry) ·{" "}
+          <b className="text-teal-200/50">PASS</b> (skip — too big, dull, or no edge);{" "}
+          <b className="text-teal-300/70">Technical</b> = the chart&apos;s signal (a formula, actionable names only).
+          These are a quick triage, <b>not</b> the full <b>GRQ&apos;s call</b> — a name&apos;s real dossier and call live on its stock page.
+          Some names here are already tracked or researched, since this is the entire market.
+        </p>
+        <p>
+          Powered by FMP. Prices are in each listing&apos;s native currency. <b>Research</b> queues a full dossier without
+          adding the name anywhere — once it lands, <b>View dossier</b> opens it. <b>Watch</b> adds it to your watchlist;
+          trading it still needs it promoted into the universe (any member can, once it clears the liquidity screen).
+        </p>
+      </div>
     </main>
   );
 }
