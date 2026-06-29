@@ -1,4 +1,6 @@
-import "server-only";
+// NB: no `import "server-only"` — pulled in (via lib/external/store) by the agent runner's
+// nightly accounts sync, where `server-only` isn't resolvable (it crash-loops the agent).
+// Server-side only by use; the SnapTrade keys are read from process.env, never client-bundled.
 import { Snaptrade } from "snaptrade-typescript-sdk";
 
 // ───────────────────────────────────────────────────────────────────────────

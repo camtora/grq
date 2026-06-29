@@ -1,4 +1,6 @@
-import "server-only";
+// NB: no `import "server-only"` here — the agent runner (a plain tsx process, not Next)
+// imports this for the nightly accounts sync, and `server-only` isn't resolvable there
+// (it crash-loops the agent). This module is still only ever imported server-side.
 import { prisma } from "@/lib/db";
 import { memberKeyForEmail } from "@/lib/users";
 import { bareTicker } from "@/lib/universe";
