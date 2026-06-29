@@ -139,29 +139,34 @@ struct MainTabView: View {
     }
 }
 
-/// Adds the standard GRQ top-bar chrome (notification bell + Ask-Alfred button) to a screen
-/// inside the tab's NavigationStack. Members only — viewers get a read-only app.
-struct GRQChrome: ViewModifier {
+/// The top-bar chrome buttons (notification bell + Ask-Alfred). A plain View, so its body
+/// is a normal @ViewBuilder — the member gate + the two buttons live here, cleanly.
+/// Members only — viewers get a read-only app.
+struct GRQChromeButtons: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var chrome: Chrome
     @EnvironmentObject private var notifs: NotificationsInbox
-    func body(content: Content) -> some View {
-        // One ToolbarItem (no conditional at the ToolbarContent level → no builder
-        // ambiguity); the member gate + the two buttons live inside its ViewBuilder.
-        content.toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if auth.currentUser?.role == .member {
-                    HStack(spacing: 2) {
-                        Button { chrome.showNotifications = true } label: {
-                            Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
-                        }
-                        Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
-                            Image(systemName: "bubble.left.and.text.bubble.right")
-                        }
-                    }
+    var body: some View {
+        if auth.currentUser?.role == .member {
+            HStack(spacing: 2) {
+                Button { chrome.showNotifications = true } label: {
+                    Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
+                }
+                Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
                 }
             }
         }
     }
 }
-extension View { func grqChrome() -> some View { modifier(GRQChrome()) } }
+
+extension View {
+    /// Adds the standard GRQ top-bar chrome to a screen inside the tab's NavigationStack.
+    /// A plain View extension (not a ViewModifier) + a concrete subview in one ToolbarItem
+    /// — avoids the `.toolbar`-in-ViewModifier-with-conditional type-inference trap.
+    func grqChrome() -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarTrailing) { GRQChromeButtons() }
+        }
+    }
+}
