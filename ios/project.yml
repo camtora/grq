@@ -48,6 +48,10 @@ targets:
           - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # Silent (content-available) push wakes the app to clear delivered notifications
+        # (D64). Kept in the yml so `xcodegen generate` doesn't drop it from the plist on regen.
+        UIBackgroundModes:
+          - remote-notification
         # GoogleSignIn: the iOS OAuth client id + its reversed-id URL scheme so
         # Google can redirect back into the app (docs/IOS-PLAN.md).
         GIDClientID: 848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf.apps.googleusercontent.com
