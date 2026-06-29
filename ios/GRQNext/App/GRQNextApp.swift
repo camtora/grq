@@ -52,6 +52,7 @@ final class NextGlossary: ObservableObject {
 struct RootView: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: NextTheme
+    @EnvironmentObject private var glossary: NextGlossary
     @EnvironmentObject private var push: PushManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSplash = true
