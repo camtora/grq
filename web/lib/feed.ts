@@ -16,8 +16,9 @@ import {
 import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
 import { watchersFor } from "./watch";
-import { personByName, ownerKeyFor } from "./people";
-import { userForEmail } from "./users";
+import { personByName, personByEmail, ownerKeyFor } from "./people";
+import { userForEmail, memberEmails } from "./users";
+import { accountsForMembers } from "./external/store";
 import { stanceMeta } from "./stance";
 import { getCloses, refreshBars } from "./bars";
 import { computeHeat } from "./heat";
@@ -951,6 +952,45 @@ function toBullets(primary: string | null | undefined, fallback: string | null |
     .map((s) => (s.length > 150 ? s.slice(0, 147).trimEnd() + "…" : s))
     .filter((s) => s.length > 1)
     .slice(0, max);
+}
+
+// External/personal accounts (SnapTrade — TD TFSA etc.) for the mobile "Accounts" screen.
+// Mirrors the web /accounts page: VISIBILITY ONLY (read-only at source, never traded),
+// the signed-in member first, then the other member. Reuses the same store the web uses
+// (lib/external/store.accountsForMembers) so mobile sees identical holdings.
+export async function accountsResponse(meEmail: string) {
+  const everyone = memberEmails();
+  const ordered = [meEmail, ...everyone.filter((e) => e !== meEmail)];
+  const views = await accountsForMembers(ordered);
+  return {
+    members: views.map((v) => ({
+      email: v.email,
+      name: personByEmail(v.email)?.name ?? v.email,
+      isSelf: v.email === meEmail,
+      connected: v.connected,
+      accounts: v.accounts.map((a) => ({
+        id: a.id,
+        institution: a.institution,
+        name: a.name,
+        numberMasked: a.numberMasked,
+        accountType: a.accountType,
+        currency: a.currency,
+        totalValueCents: a.totalValueCents,
+        cashCents: a.cashCents,
+        disabled: a.disabled,
+        syncedAt: a.syncedAt,
+        holdings: a.holdings.map((h) => ({
+          symbol: h.symbol,
+          description: h.description,
+          qty: h.qty,
+          priceCents: h.priceCents,
+          marketValueCents: h.marketValueCents,
+          currency: h.currency,
+          openPnlCents: h.openPnlCents,
+        })),
+      })),
+    })),
+  };
 }
 
 export async function reportsResponse(limit = 40) {

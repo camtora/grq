@@ -5,8 +5,10 @@ import SwiftUI
 // GET /api/portfolio. (Member actions — kill switch toggle, etc. — land in Phase D; external
 // Accounts need a mobile endpoint and come later.)
 struct PortfolioScreen: View {
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var state: Loadable<Portfolio> = .loading
+    private var isMember: Bool { auth.currentUser?.role == .member }
 
     var body: some View {
         ScreenScaffold(title: "Portfolio", refresh: load) {
@@ -60,6 +62,23 @@ struct PortfolioScreen: View {
                         Chip(text: "Trading live", tone: .pos)
                     }
                 }
+            }
+
+            if isMember {
+                NavigationLink { AccountsScreen() } label: {
+                    GCard {
+                        HStack(spacing: Space.md) {
+                            Image(systemName: "building.columns.fill").foregroundStyle(p.accent).frame(width: 24)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Your accounts").foregroundStyle(p.textPrimary)
+                                Text("Personal holdings outside the fund · read-only").font(.caption2).foregroundStyle(p.textMuted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
             }
 
             PanelSection("Holdings · \(pf.positions.count)") {

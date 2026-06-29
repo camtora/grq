@@ -918,6 +918,49 @@ enum PanelKind: String, CaseIterable {
 
 // MARK: - Reports (A10)
 
+// MARK: - Personal / external accounts (SnapTrade — TD TFSA etc.)
+// Mirrors web/lib/feed.ts accountsResponse → the /accounts page on mobile. Visibility only
+// (read-only at source, never traded). All money is integer cents; qty is a string (may be
+// fractional at the brokerage).
+
+struct ExternalHolding: Codable, Identifiable {
+    let symbol: String
+    var description: String? = nil
+    let qty: String
+    let priceCents: Int
+    let marketValueCents: Int
+    let currency: String
+    var openPnlCents: Int? = nil
+    var id: String { symbol }
+}
+
+struct ExternalAccount: Codable, Identifiable {
+    let id: String
+    let institution: String
+    let name: String
+    var numberMasked: String? = nil
+    var accountType: String? = nil
+    let currency: String
+    let totalValueCents: Int
+    let cashCents: Int
+    let disabled: Bool
+    let syncedAt: String
+    var holdings: [ExternalHolding] = []
+}
+
+struct MemberAccounts: Codable, Identifiable {
+    let email: String
+    let name: String
+    let isSelf: Bool
+    let connected: Bool
+    var accounts: [ExternalAccount] = []
+    var id: String { email }
+}
+
+struct AccountsResponse: Codable {
+    var members: [MemberAccounts] = []
+}
+
 struct ReportSummary: Codable, Identifiable {
     let id: String
     let kind: String        // EOD | WEEKLY | …

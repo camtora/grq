@@ -204,6 +204,7 @@ final class APIClient {
     func refreshHunt(brief: String?) async -> ActionResult { await postResult("hunt/refresh", ["brief": brief ?? ""]) }
     func smartMoney() async -> SmartMoneyResponse? { await get("smart-money") }
     func stockExtras(_ symbol: String) async -> StockExtras? { await get("stock-extras/\(symbol)") }
+    func accounts() async -> AccountsResponse? { await get("accounts") }
     func reportForDay(_ date: String) async -> ReportDetail? { await get("reports/day/\(date)") }
 
     func reports() async -> [ReportSummary] {
