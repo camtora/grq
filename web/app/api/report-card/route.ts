@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { sessionFromRequest } from "@/lib/session";
-import { bullsResponse } from "@/lib/feed";
+import { reportCardResponse } from "@/lib/feed";
 
 export const dynamic = "force-dynamic";
 
-// Mobile read — Bull Race (each model's own paper book). Optional ?id=<raceId>.
+// Mobile read — the Report Card (how GRQ's calls actually did). Any signed-in identity.
 export async function GET(req: Request) {
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Sign in to view this." }, { status: 403 });
-  const id = new URL(req.url).searchParams.get("id");
-  return NextResponse.json(await bullsResponse(id ? Number(id) : undefined));
+  return NextResponse.json(await reportCardResponse());
 }

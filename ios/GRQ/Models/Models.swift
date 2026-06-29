@@ -1004,6 +1004,81 @@ struct ChessBoard: Codable {
     var plays: [ChessPlayView] = []
 }
 
+// MARK: - Experiments: Second Opinions · Bull Race · Options Desk · Report Card
+
+struct RaceModel: Codable, Identifiable {
+    let model: String
+    let label: String
+    let role: String       // champion | challenger
+    let pnlCadCents: Int
+    let scoredCalls: Int
+    let greens: Int
+    var hitRate: Double? = nil
+    var avgReturnBps: Int? = nil
+    var vsBenchmarkBps: Int? = nil
+    let totalCalls: Int
+    var avgConfidence: Double? = nil
+    var spark: [Double] = []
+    var id: String { model }
+}
+struct RaceResponse: Codable { var fxUsdCad: Double? = nil; var models: [RaceModel] = [] }
+
+struct BullHolding: Codable, Identifiable {
+    let symbol: String; let qty: Int; let mvCadCents: Int; let unrealCadCents: Int
+    var id: String { symbol }
+}
+struct BullStanding: Codable, Identifiable {
+    let entrantId: Int; let label: String; let model: String; let dial: String
+    let navCadCents: Int; let returnPct: Double; let cashPct: Double; let tradeCount: Int
+    var holdings: [BullHolding] = []
+    var id: Int { entrantId }
+}
+struct BullRaceSummary: Codable, Identifiable { let id: Int; let name: String; let status: String; var leaderReturnPct: Double? = nil }
+struct BullRaceMeta: Codable { let id: Int; let name: String; let status: String; let startingStakeCents: Int }
+struct BullCurrent: Codable { let race: BullRaceMeta; var realFundReturnPct: Double? = nil; var bulls: [BullStanding] = [] }
+struct BullsResponse: Codable { var races: [BullRaceSummary] = []; var current: BullCurrent? = nil }
+
+struct DeskHolding: Codable, Identifiable {
+    let kind: String          // STOCK | CALL | PUT
+    let underlying: String; let qty: Int; let mvCadCents: Int; let unrealCadCents: Int
+    var strikeCents: Int? = nil; var expiry: String? = nil; var daysLeft: Int? = nil; var card: String? = nil
+    var id: String { kind + underlying + (expiry ?? "") + String(strikeCents ?? 0) }
+}
+struct DeskResolved: Codable, Identifiable {
+    let kind: String; let underlying: String; let returnPct: Double; var realizedPnlCents: Int? = nil; let card: String
+    var id: String { underlying + card }
+}
+struct DeskArm: Codable, Identifiable {
+    let entrantId: Int; let label: String; let arm: String; let returnPct: Double
+    let navCadCents: Int; let openOptionCount: Int; let tradeCount: Int
+    var holdings: [DeskHolding] = []; var resolved: [DeskResolved] = []
+    var id: Int { entrantId }
+}
+struct DeskSummary: Codable, Identifiable { let id: Int; let name: String; let status: String }
+struct DeskMeta: Codable { let id: Int; let name: String; let status: String; let startingStakeCents: Int }
+struct DeskCurrent: Codable { let desk: DeskMeta; var realFundReturnPct: Double? = nil; var arms: [DeskArm] = [] }
+struct DeskResponse: Codable { var desks: [DeskSummary] = []; var current: DeskCurrent? = nil }
+
+struct CardTally: Codable {
+    let graded: Int; let pending: Int; let green: Int
+    var hitRate: Double? = nil; var avgCalledReturnBps: Int? = nil
+}
+struct CardSourceTally: Codable, Identifiable { let source: String; let label: String; let tally: CardTally; var id: String { source } }
+struct CardEffectTally: Codable, Identifiable { let order: Int; let tally: CardTally; var id: Int { order } }
+struct PredRow: Codable, Identifiable {
+    let id: Int; let source: String; let symbol: String; var currency: String? = nil
+    let direction: String; var label: String? = nil; var conviction: Int? = nil; var context: String? = nil
+    let predictedAt: String; let entryPriceCents: Int; var markCents: Int? = nil
+    var calledReturnBps: Int? = nil; var isGreen: Bool? = nil; let ageDays: Int
+}
+struct ReportCardResponse: Codable {
+    let asOf: String
+    let overall: CardTally
+    var bySource: [CardSourceTally] = []
+    var byEffectOrder: [CardEffectTally] = []
+    var rows: [PredRow] = []
+}
+
 // MARK: - Personal / external accounts (SnapTrade — TD TFSA etc.)
 // Mirrors web/lib/feed.ts accountsResponse → the /accounts page on mobile. Visibility only
 // (read-only at source, never traded). All money is integer cents; qty is a string (may be

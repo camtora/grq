@@ -208,6 +208,10 @@ final class APIClient {
     func chessThemes() async -> ChessListResponse? { await get("chess") }
     func chessBoard(_ id: Int) async -> ChessBoard? { await get("chess/\(id)") }
     func briefChess(_ brief: String) async -> ActionResult { await postResult("chess", ["brief": brief]) }
+    func race() async -> RaceResponse? { await get("race") }
+    func bulls(id: Int? = nil) async -> BullsResponse? { await get(id.map { "bulls?id=\($0)" } ?? "bulls") }
+    func desk(id: Int? = nil) async -> DeskResponse? { await get(id.map { "desk?id=\($0)" } ?? "desk") }
+    func reportCard() async -> ReportCardResponse? { await get("report-card") }
     func reportForDay(_ date: String) async -> ReportDetail? { await get("reports/day/\(date)") }
 
     func reports() async -> [ReportSummary] {

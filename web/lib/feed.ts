@@ -21,6 +21,10 @@ import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers } from "./external/store";
 import { parseBoard, buildPlayViews } from "./chess";
 import { parseConfidenceLevers } from "./confidence-levers";
+import { loadStandings } from "./race/standings";
+import { loadBullRace, listRaces } from "./race/bulls";
+import { loadDesk, listDesks } from "./options-desk/desk";
+import { loadReportCard } from "./report-card/load";
 import { stanceMeta } from "./stance";
 import { getCloses, refreshBars } from "./bars";
 import { computeHeat } from "./heat";
@@ -1057,6 +1061,76 @@ export async function chessBoardResponse(id: number) {
       heat: p.heat,
       tracked: p.tracked,
       stance: p.stance,
+    })),
+  };
+}
+
+// --- Experiments: Second Opinions (race) · Bull Race · Options Desk · Report Card ---
+// Compact, mobile-shaped distillations of the web loaders (standings/leaderboards; full
+// trade/call history stays on the web). All sandboxes/research — never the live fund.
+
+export async function raceResponse() {
+  const { models, fxUsdCad } = await loadStandings();
+  return {
+    fxUsdCad,
+    models: models.map((m) => ({
+      model: m.model, label: m.label, role: m.role,
+      pnlCadCents: m.pnlCadCents, scoredCalls: m.scoredCalls, greens: m.greens,
+      hitRate: m.hitRate, avgReturnBps: m.avgReturnBps, vsBenchmarkBps: m.vsBenchmarkBps,
+      totalCalls: m.totalCalls, avgConfidence: m.avgConfidence, spark: m.spark,
+    })),
+  };
+}
+
+export async function bullsResponse(id?: number) {
+  const [races, data] = await Promise.all([listRaces(), loadBullRace(id)]);
+  return {
+    races: races.map((r) => ({ id: r.id, name: r.name, status: r.status, leaderReturnPct: r.leader?.returnPct ?? null })),
+    current: data && {
+      race: { id: data.race.id, name: data.race.name, status: data.race.status, startingStakeCents: data.race.startingStakeCents },
+      realFundReturnPct: data.realFund?.returnPct ?? null,
+      bulls: data.bulls.map((b) => ({
+        entrantId: b.entrantId, label: b.label, model: b.model, dial: b.dial,
+        navCadCents: b.navCadCents, returnPct: b.returnPct, cashPct: b.cashPct, tradeCount: b.tradeCount,
+        holdings: b.holdings.map((h) => ({ symbol: h.symbol, qty: h.qty, mvCadCents: h.mvCadCents, unrealCadCents: h.unrealCadCents })),
+      })),
+    },
+  };
+}
+
+export async function deskResponse(id?: number) {
+  const [desks, data] = await Promise.all([listDesks(), loadDesk(id)]);
+  return {
+    desks: desks.map((d) => ({ id: d.id, name: d.name, status: d.status })),
+    current: data && {
+      desk: { id: data.desk.id, name: data.desk.name, status: data.desk.status, startingStakeCents: data.desk.startingStakeCents },
+      realFundReturnPct: data.realFund?.returnPct ?? null,
+      arms: data.arms.map((a) => ({
+        entrantId: a.entrantId, label: a.label, arm: a.arm, returnPct: a.returnPct,
+        navCadCents: a.navCadCents, openOptionCount: a.openOptionCount, tradeCount: a.tradeCount,
+        holdings: a.holdings.map((h) => ({
+          kind: h.kind, underlying: h.underlying, qty: h.qty, mvCadCents: h.mvCadCents, unrealCadCents: h.unrealCadCents,
+          strikeCents: h.strikeCents ?? null, expiry: h.expiry ?? null, daysLeft: h.daysLeft ?? null, card: h.card ?? null,
+        })),
+        resolved: a.resolved.map((r) => ({ kind: r.kind, underlying: r.underlying, returnPct: r.returnPct, realizedPnlCents: r.realizedPnlCents, card: r.card })),
+      })),
+    },
+  };
+}
+
+export async function reportCardResponse() {
+  const rc = await loadReportCard();
+  const t = (x: typeof rc.overall) => ({ graded: x.graded, pending: x.pending, green: x.green, hitRate: x.hitRate, avgCalledReturnBps: x.avgCalledReturnBps });
+  return {
+    asOf: rc.asOf.toISOString(),
+    overall: t(rc.overall),
+    bySource: rc.bySource.map((s) => ({ source: s.source, label: s.label, tally: t(s.tally) })),
+    byEffectOrder: rc.byEffectOrder.map((e) => ({ order: e.order, tally: t(e.tally) })),
+    rows: rc.rows.slice(0, 60).map((r) => ({
+      id: r.id, source: r.source, symbol: r.symbol, currency: r.currency, direction: r.direction,
+      label: r.label, conviction: r.conviction, context: r.context, predictedAt: r.predictedAt.toISOString(),
+      entryPriceCents: r.entryPriceCents, markCents: r.markCents, calledReturnBps: r.calledReturnBps,
+      isGreen: r.isGreen, ageDays: r.ageDays,
     })),
   };
 }
