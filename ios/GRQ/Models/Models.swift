@@ -202,6 +202,21 @@ struct NotificationPreferences: Codable, Equatable {
     ]
 }
 
+/// One notification-feed row — the wire shape from `lib/notifications.ts
+/// serializeNotification`. Used by APIClient (shared by both app targets), so it lives
+/// here in Models rather than the notification-center view.
+struct NotificationItem: Decodable, Identifiable {
+    let id: Int
+    let at: String
+    let category: String
+    let severity: String   // "info" | "warning" | "critical"
+    let title: String
+    let body: String
+    let symbol: String?    // deep-link target → the dossier
+    let panel: String?     // panel within the dossier (e.g. "analyst")
+    let read: Bool
+}
+
 /// A per-user price alert (The Wire, Phase 2). Set on the stock page; the agent
 /// runner pushes you when the price crosses, then one-shots it (active → false).
 struct PriceAlert: Codable, Identifiable, Equatable {

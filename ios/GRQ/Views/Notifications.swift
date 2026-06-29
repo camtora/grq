@@ -6,18 +6,8 @@ import SwiftUI
 // the other member's actions. The `messages` category is NOT here (the avatar's
 // envelope badge owns Cam↔Graham DMs); the bell owns fund + agent activity.
 
-/// One feed row — the wire shape from `lib/notifications.ts serializeNotification`.
-struct NotificationItem: Decodable, Identifiable {
-    let id: Int
-    let at: String
-    let category: String
-    let severity: String   // "info" | "warning" | "critical"
-    let title: String
-    let body: String
-    let symbol: String?    // deep-link target → the dossier
-    let panel: String?     // panel within the dossier (e.g. "analyst")
-    let read: Bool
-}
+// NotificationItem now lives in Models/Models.swift (a shared wire type used by
+// APIClient, which the GRQ Next target also compiles).
 
 /// Polls the feed for the bell badge + drawer list (like MessagesInbox). Provided at
 /// the tab root so every screen's header bell shares one source of truth.

@@ -73,7 +73,7 @@ struct StockDetailView: View {
         let p = Theme.palette(scheme)
         let cur = d.currency ?? "CAD"
         var items: [PanelItem] = []
-        func add<V: View>(_ id: String, _ title: String, @ViewBuilder _ v: () -> V) {
+        func add<V: View>(_ id: String, _ title: String, @ViewBuilder _ v: @escaping () -> V) {
             items.append(PanelItem(id: id, title: title, view: AnyView(GCard { v() })))
         }
 
