@@ -13,6 +13,7 @@ import UniverseTabs from "@/components/UniverseTabs";
 import Term from "@/components/Term";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 import AvatarStack from "@/components/AvatarStack";
+import PanelHeader from "@/components/PanelHeader";
 import { watchersFor } from "@/lib/watch";
 
 export const dynamic = "force-dynamic";
@@ -229,9 +230,9 @@ export default async function Universe() {
         researched={
           <section>
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+              <PanelHeader>
                 Researched — {researchedRows.length} with a dossier
-              </h2>
+              </PanelHeader>
               <p className="text-xs text-teal-200/40">
                 Every name GRQ has written a dossier on — tradeable or not. Sorted by most recently researched.
               </p>
@@ -247,9 +248,9 @@ export default async function Universe() {
           <>
       <section>
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+          <PanelHeader>
             <Term k="universe">The universe</Term> — {active.length} investable
-          </h2>
+          </PanelHeader>
           <p className="text-xs text-teal-200/40">
             What the agent is allowed to buy. {heldCount > 0 ? `You hold ${heldCount} · ${money(investedCents)} invested.` : "No positions yet."}
           </p>
@@ -260,7 +261,7 @@ export default async function Universe() {
 
       {demoted.length > 0 && (
         <section className="mt-8 border-t border-teal-400/10 pt-6">
-          <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Demoted ({demoted.length})</h2>
+          <div className="mb-1"><PanelHeader>Demoted ({demoted.length})</PanelHeader></div>
           <p className="mb-3 text-xs text-teal-200/40">
             Pulled out of the universe — back on the watchlist, the agent won&apos;t buy them. Re-promote or retire below.
           </p>
@@ -294,7 +295,7 @@ export default async function Universe() {
       )}
 
       <p className="mt-6 text-xs text-teal-200/40">
-        <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
+        <span className="font-semibold text-teal-200/60">Alfred&apos;s call</span> is the rating — its own judgment from its latest dossier.{" "}
         Click any row to read GRQ&apos;s reasoning. quotes delayed ~15 min · the risk dial gates which tiers the agent may buy.
       </p>
           </>

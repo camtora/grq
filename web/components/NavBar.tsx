@@ -19,15 +19,17 @@ const PRIMARY: NavLink[] = [
   { href: "/market/watchlist", label: "Watchlist" },
   { href: "/market/smart-money", label: "Smart Money" },
   { href: "/universe", label: "Universe" },
-  { href: "/market", label: "The Hunt", exact: true },
   { href: "/market/browse", label: "Browse" },
 ];
 const SECONDARY: NavLink[] = [{ href: "/reports", label: "Reports" }];
 // The model bake-offs / sandboxes live under one "Experiments" dropdown (Cam & Graham, 2026-06-27).
+// The Hunt moved in here too (Cam 2026-06-29) — it's an exploratory feed, not core nav.
 const EXPERIMENTS: NavLink[] = [
+  { href: "/market", label: "The Hunt", exact: true },
   { href: "/race", label: "Second Opinions" },
   { href: "/bulls", label: "Bull Race" },
   { href: "/options-desk", label: "Options Desk" },
+  { href: "/chess", label: "Chess Moves" },
 ];
 
 export default function NavBar({
@@ -51,7 +53,7 @@ export default function NavBar({
 }) {
   const pathname = usePathname();
   const [expOpen, setExpOpen] = useState(false);
-  const expActive = EXPERIMENTS.some((l) => pathname.startsWith(l.href));
+  const expActive = EXPERIMENTS.some((l) => (l.exact ? pathname === l.href : pathname.startsWith(l.href)));
   const renderLink = (l: NavLink) => {
     const active = l.exact
       ? pathname === l.href
@@ -103,7 +105,7 @@ export default function NavBar({
                   <button type="button" aria-hidden className="fixed inset-0 z-10 cursor-default" onClick={() => setExpOpen(false)} tabIndex={-1} />
                   <div className="absolute right-0 z-20 mt-1 min-w-[10rem] rounded-lg border border-teal-400/15 bg-(--nav-bg) p-1 shadow-lg backdrop-blur" role="menu">
                     {EXPERIMENTS.map((l) => {
-                      const active = pathname.startsWith(l.href);
+                      const active = l.exact ? pathname === l.href : pathname.startsWith(l.href);
                       return (
                         <Link
                           key={l.href}
@@ -120,10 +122,6 @@ export default function NavBar({
                 </>
               )}
             </div>
-            {/* Settings is now owner-only (Cam & Graham). It hosts the entry links to
-                How GRQ works, Traffic, and Tokens — so there's no separate Admin link.
-                The pages enforce the owner gate; hiding the link is cosmetic. */}
-            {isOwner && renderLink({ href: "/settings", label: "Settings" })}
           </div>
           {!isMember && (
             <span
@@ -138,12 +136,30 @@ export default function NavBar({
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>
-          {/* Notification bell + messages sit between the broker badge and the
-              avatar — members only (the drawer + feed routes are members-only). */}
-          {isMember && (
+          {/* Notification bell + messages + the owner Settings gear sit between the
+              broker badge and the avatar, in one evenly-spaced icon cluster. Bell +
+              messages are members-only; the gear is owner-only. */}
+          {(isMember || isOwner) && (
             <div className="flex items-center gap-0.5">
-              <NotificationBell />
-              <MessageButton />
+              {isMember && <NotificationBell />}
+              {isMember && <MessageButton />}
+              {isOwner && (
+                <Link
+                  href="/settings"
+                  title="Settings"
+                  aria-label="Settings"
+                  className={`rounded-lg p-1.5 transition-colors ${
+                    pathname.startsWith("/settings")
+                      ? "bg-teal-400/15 text-teal-200"
+                      : "text-teal-200/70 hover:bg-teal-400/10 hover:text-teal-100"
+                  }`}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </Link>
+              )}
             </div>
           )}
           {/* The avatar is the door to the member's personal Accounts page

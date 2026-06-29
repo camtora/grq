@@ -157,7 +157,7 @@ export default function GrqChat({
         onClick={toggle}
         aria-label={open ? "Close Alfred chat" : "Ask Alfred"}
         title="Ask Alfred"
-        className="flex h-14 w-14 items-center justify-center rounded-full border border-teal-300/40 bg-slate-900 text-teal-300 shadow-xl shadow-teal-500/30 transition-transform hover:scale-105 active:scale-95"
+        className="flex h-14 w-14 items-center justify-center rounded-full border border-teal-300/40 bg-[var(--card-bg)] text-teal-300 shadow-xl shadow-teal-500/30 transition-transform hover:scale-105 active:scale-95"
       >
         {open ? (
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

@@ -1,11 +1,28 @@
 import { Card } from "@/components/ui";
+import ConnectKeysForm from "./ConnectKeysForm";
 
 const STEP = "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-teal-400/30 bg-teal-400/10 text-xs font-bold text-teal-200";
 
-/** The guided "wire your accounts" splash for a member who hasn't set up SnapTrade.
- *  Keys stay in env, so the last step is "send them to Cam" — he drops them in and
- *  the holdings appear (no rebuild). Read-only throughout. */
-export default function ConnectSplash() {
+/** The guided, fully self-serve "wire your accounts" splash. A member makes a
+ *  SnapTrade Personal account, connects their brokerage there, then pastes their
+ *  two keys straight into GRQ (ConnectKeysForm) — no human in the loop, no env
+ *  edit, no rebuild. Read-only throughout. For ANOTHER member's not-yet-linked
+ *  panel it's just a quiet "not linked yet" note (you can't connect for them). */
+export default function ConnectSplash({
+  name,
+  isSelf = true,
+}: {
+  name?: string;
+  isSelf?: boolean;
+}) {
+  if (!isSelf) {
+    return (
+      <Card className="p-5 text-sm text-teal-200/50">
+        {name ?? "They"} hasn&apos;t linked a brokerage yet.
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-6">
       <div className="flex items-start gap-3">
@@ -14,7 +31,7 @@ export default function ConnectSplash() {
           <h3 className="text-base font-semibold text-teal-50">See your own holdings here</h3>
           <p className="mt-1 max-w-2xl text-sm text-teal-200/60">
             Link your brokerage (TD or any other), <span className="font-semibold text-teal-200/80">read-only</span>,
-            and your personal holdings show up beside the fund — each linked to GRQ&apos;s research, with GRQ&apos;s call
+            and your personal holdings show up beside the fund — each linked to GRQ&apos;s research, with Alfred&apos;s call
             stamped on it. GRQ can <span className="font-semibold text-teal-200/80">never trade these</span>; it&apos;s a
             window, not a hand on the wheel.
           </p>
@@ -48,15 +65,17 @@ export default function ConnectSplash() {
               <span className="pt-0.5 text-teal-100/80">
                 Grab your two keys — a <span className="font-semibold">Client ID</span> starting{" "}
                 <code className="rounded bg-teal-400/10 px-1 text-teal-200">PERS-</code> and a{" "}
-                <span className="font-semibold">Consumer Key</span> — and send them to{" "}
-                <span className="font-semibold text-teal-200/80">Cam</span> privately.
+                <span className="font-semibold">Consumer Key</span> — and paste them below. That&apos;s it: your
+                accounts appear within a few seconds, no one else in the loop.
               </span>
             </li>
           </ol>
 
+          <ConnectKeysForm />
+
           <p className="mt-5 text-xs text-teal-200/40">
-            Cam drops them in and your accounts appear here within a minute — no app update needed. Heads-up: once
-            you&apos;re connected, Cam will see your holdings and you&apos;ll see his — that mutual view is the point.
+            Heads-up: once you&apos;re connected, the other fund member will see your holdings and you&apos;ll see
+            theirs — that mutual view is the point.
           </p>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { MODELS, RACE } from "@/agent/policy";
 import { modelLabel } from "@/lib/race/models";
 import { loadBullRace, listRaces, BULL_COLORS } from "@/lib/race/bulls";
 import BullChart from "@/components/bulls/BullChart";
+import PanelHeader from "@/components/PanelHeader";
 import BullRow from "@/components/bulls/BullRow";
 import NewRaceForm from "@/components/bulls/NewRaceForm";
 import RaceControls from "@/components/bulls/RaceControls";
@@ -66,7 +67,7 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Leaderboard</h2>
+              <div className="mb-2"><PanelHeader>Leaderboard</PanelHeader></div>
               <div className="space-y-2">
                 {data.bulls.map((b, i) => (
                   <BullRow key={b.entrantId} b={b} rank={i + 1} color={BULL_COLORS[i % BULL_COLORS.length]} />
@@ -74,7 +75,7 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
               </div>
             </div>
             <div>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Return over time</h2>
+              <div className="mb-2"><PanelHeader>Return over time</PanelHeader></div>
               <BullChart series={data.bulls.map((b, i) => ({ label: b.label, color: BULL_COLORS[i % BULL_COLORS.length], points: b.navHistory }))} />
             </div>
           </div>
@@ -90,7 +91,8 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
             </Card>
           ) : null}
 
-          <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <Card className="mt-4 p-4">
+          <details>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How Bull Races work</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li>
@@ -104,6 +106,7 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
               </li>
             </ul>
           </details>
+          </Card>
 
           <p className="mt-4 text-xs text-teal-200/40">
             Hypothetical paper accounts — fills are simulated at the live (delayed ~15 min) mid with IBKR-style commission, no real money. US names fill in CAD at the live FX rate.

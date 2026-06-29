@@ -17,7 +17,7 @@ function originFrom(req: Request): string {
 export async function POST(req: Request) {
   const session = memberFromRequest(req);
   if (!session) return NextResponse.json({ error: "Members only — read-only access." }, { status: 403 });
-  if (!snaptradeConfiguredFor(session.email)) {
+  if (!(await snaptradeConfiguredFor(session.email))) {
     return NextResponse.json({ error: "SnapTrade isn't configured for your account yet." }, { status: 503 });
   }
   try {

@@ -35,6 +35,11 @@ export default async function AccountsPage() {
   const everyone = memberEmails();
   const emails = [me, ...everyone.filter((e) => e !== me)];
   const views = await accountsForMembers(emails);
+  // Resolve each member's SnapTrade-configured state up front (now an async,
+  // DB-backed check) so the render stays synchronous.
+  const configuredByEmail = new Map(
+    await Promise.all(emails.map(async (e) => [e, await snaptradeConfiguredFor(e)] as const)),
+  );
 
   return (
     <main>
@@ -63,7 +68,7 @@ export default async function AccountsPage() {
             key={v.email}
             view={v}
             isSelf={v.email === me}
-            configured={snaptradeConfiguredFor(v.email)}
+            configured={configuredByEmail.get(v.email) ?? false}
           />
         ))}
       </div>
@@ -116,15 +121,13 @@ function MemberSection({
         ) : null}
       </div>
 
-      {isSelf && !configured ? (
-        <ConnectSplash />
+      {!configured ? (
+        <ConnectSplash name={name} isSelf={isSelf} />
       ) : view.accounts.length === 0 ? (
         <Card className="p-5 text-sm text-teal-200/50">
-          {!configured
-            ? `${name} hasn't set up SnapTrade yet.`
-            : isSelf
-              ? "Link your TD account in SnapTrade (or hit “Connect a brokerage”) and your holdings show up here automatically."
-              : `${name} hasn't linked a brokerage yet.`}
+          {isSelf
+            ? "Link your TD account in SnapTrade (or hit “Connect a brokerage”) and your holdings show up here automatically."
+            : `${name} hasn't linked a brokerage yet.`}
         </Card>
       ) : (
         <div className="space-y-4">

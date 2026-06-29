@@ -258,7 +258,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   "confidence-levers": {
     term: "What would change our mind",
-    def: "The specific, falsifiable things that would reframe GRQ's call — what's pinning the confidence below 100. Each is either a gap we could close (info that exists but we don't have — read the latest filing, no guidance feed) or a catalyst still to land (an event on a known date — earnings, a ruling). It says which way resolving it would move the call, how much, and how we'd learn it.",
+    def: "The specific, falsifiable things that would reframe Alfred's call — what's pinning the confidence below 100. Each is either a gap we could close (info that exists but we don't have — read the latest filing, no guidance feed) or a catalyst still to land (an event on a known date — earnings, a ruling). It says which way resolving it would move the call, how much, and how we'd learn it.",
     example: "A name might be a Hold only because earnings are two weeks out and would confirm or kill the margin thesis — once they land, the call gets re-rated.",
     related: ["confidence", "agent-call", "dossier"],
   },
@@ -269,7 +269,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     related: ["nav", "day-pnl"],
   },
   "agent-call": {
-    term: "GRQ's call",
+    term: "Alfred's call",
     def: "GRQ's own judgment on a name — buy, accumulate, hold, watch, trim, avoid, or sell — weighing the business, the news, and the price. Distinct from the signal consensus (a technicals formula); when the two disagree, the 'why' below explains it.",
     example: "GRQ can rate a name 'accumulate' even while the technical signal reads neutral — the 'why' explains the gap.",
     related: ["recommendation", "dossier", "price-target"],
@@ -288,7 +288,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   "analyst-target": {
     term: "Analyst consensus target",
-    def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on GRQ's call — when GRQ and the street sharply disagree, it's worth asking who's right.",
+    def: "The average 12-month price target from the Wall Street analysts who cover the stock. A useful outside check on Alfred's call — when GRQ and the street sharply disagree, it's worth asking who's right.",
     example: "If the street's average target is $40 and GRQ's is $28, someone's wrong — worth knowing why before you buy.",
     related: ["price-target", "expected-return"],
   },

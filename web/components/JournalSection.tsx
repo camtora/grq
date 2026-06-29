@@ -75,7 +75,7 @@ export default async function JournalSection({ kind: kindParam }: { kind?: strin
       )}
 
       <details className="mt-10 border-t border-teal-400/10 pt-6">
-        <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wider text-teal-200/50">
           Order ledger — every fill, resting limit, and rejection
         </summary>
         <div className="mt-4">

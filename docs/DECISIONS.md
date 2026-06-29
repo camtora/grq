@@ -2343,3 +2343,30 @@ populate as names are re-researched (first dossier runs Mon 2026-06-29). **Defer
 this" action (data-gaps) to the dossier kick; the
 **re-rate-on-resolution / calibration loop** (when a catalyst date passes or a gap closes, re-run and log the confidence
 delta — "we predicted +15, it moved +18"); and the mobile/contract surface.
+
+### D94 — Chess Moves: thematic / supply-chain reasoning (David Touchette's pitch, Cam, 2026-06-29)
+
+David's experiment: narrow on an industry or an interrelated subset of stocks (a supply chain), *grok* how the pieces
+connect, name the **force in motion**, and forecast the **2nd/3rd-order plays** before the market reprices them — "like
+Buffett would do" (really: supply-chain / second-order thinking). Cam chose **full feature**, in the **Experiments**
+dropdown, **on-demand briefs + a weekly self-picked "board of the week."**
+
+A member briefs a theme/chain in plain English (`ChessBar` → `POST /api/chess` → a PENDING `ChessTheme`); the agent
+(`runChessMoves`, Opus, research-only) maps the value chain, writes the thesis + confidence levers, and enumerates 8–12
+ripple-effect **plays** (each tagged BENEFICIARY/VICTIM and by effect order, heat-ranked via `lib/heat.ts`), saving it all
+through one new `save_chess_board` tool. The runner picks up PENDING themes off-schedule (rate-guarded, off the boot scan)
+and enqueues a `WEEKLY` board Sunday ~12:00 ET. `/chess` (list) + `/chess/[id]` (the board: chain lanes + thesis + levers +
+plays).
+
+**Honesty bar (load-bearing):** there is **no supply-chain data feed** — the chain is the agent's web-researched
+*reasoning*, persisted, framed as probabilistic ripple bets, never imported fact (same leads-not-verdicts discipline as
+D46). **Guardrail #1 untouched:** Chess Moves never trades; a play becomes tradeable only via the normal Research →
+`runStockDossier` → §6 gate path.
+
+**KG tie-in (Slice 2 persist, delivered here):** `save_chess_board` writes the board's chain LINKS into `KnowledgeEdge`
+(new `chain` source, both directions, bare-ticker keyed); `relatedFor` merges them so each play's stock-page **Related
+names** panel surfaces the relationship. The deterministic graph scan is taught to never wipe `chain` edges.
+
+New models `ChessTheme`/`ChessPlay` (one expand-safe `prisma db push`). Config in `policy.ts → CHESS`
+(`GRQ_CHESS_ENABLED`, 3 boards/day, weekly toggle). `AGENT_VERSION` → **v2.15-phase4**. Full spec: `docs/CHESS-MOVES.md`.
+**Deferred:** iOS/contract surface, a force-directed SVG board (v1 is lanes + a links list), a per-stock "in play" badge.

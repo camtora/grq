@@ -9,6 +9,7 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import LiveTape from "@/components/LiveTape";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
+import PanelHeader from "@/components/PanelHeader";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpGainers, fmpIndices, fmpCadUsd, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
 import { todayHeadlines, type NewsCard } from "@/lib/news/queries";
@@ -30,7 +31,13 @@ function dayClass(bps: number): string {
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">{children}</h2>;
+  // Same heading treatment as the stock page's panels (shared PanelHeader), with
+  // Today's section spacing kept below it.
+  return (
+    <div className="mb-3">
+      <PanelHeader>{children}</PanelHeader>
+    </div>
+  );
 }
 
 function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null; stance?: string | null }) {
@@ -47,7 +54,7 @@ function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol:
       {sm && (
         <span
           className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-black ${STANCE_TONE_CLASSES[sm.tone].text} ${STANCE_TONE_CLASSES[sm.tone].border}`}
-          title={`GRQ's call: ${sm.label} — ${sm.blurb}`}
+          title={`Alfred's call: ${sm.label} — ${sm.blurb}`}
         >
           {sm.abbr}
         </span>
@@ -125,7 +132,7 @@ function IdeaRow({ idea }: { idea: Idea }) {
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 text-xs text-teal-200/50">
         {sm && (
-          <span className={`font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
+          <span className={`font-bold ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`Alfred's call: ${sm.blurb}`}>
             {sm.label}
           </span>
         )}
@@ -310,7 +317,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const funFact = funFactOfDay();
   const dailyQ = await dailyQuote(anchor);
 
-  // GRQ's call per tracked name (latest dossier stance) — shown on movers.
+  // Alfred's call per tracked name (latest dossier stance) — shown on movers.
   const stanceRows = await prisma.journalEntry.findMany({
     where: { stance: { not: null }, symbol: { not: null } },
     orderBy: { at: "desc" },

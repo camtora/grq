@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/users";
 import { getUsage } from "@/lib/admin";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +89,8 @@ export default async function AdminPage({
           }
         />
       ) : (
-        <div className="space-y-8">
+        <div className="grid items-start gap-6 lg:grid-cols-3">
+          <div className="space-y-8 lg:col-span-2">
           {/* Summary */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <StatCard label="Page views" value={usage.totalViews.toLocaleString()} note={`last ${windowLabel}`} />
@@ -102,7 +104,7 @@ export default async function AdminPage({
 
           {/* Most-used sections */}
           <Card className="p-6">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-teal-200/60">Most-used sections</h2>
+            <div className="mb-2"><PanelHeader>Most-used sections</PanelHeader></div>
             <div className="mt-4 space-y-2.5">
               {usage.bySection.map((s) => (
                 <div key={s.section} className="flex items-center gap-3">
@@ -124,7 +126,7 @@ export default async function AdminPage({
 
           {/* By person */}
           <Card className="p-6">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-teal-200/60">By person</h2>
+            <div className="mb-2"><PanelHeader>By person</PanelHeader></div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -168,9 +170,7 @@ export default async function AdminPage({
 
           {/* Person × section matrix */}
           <Card className="p-6">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-teal-200/60">
-              Who uses what
-            </h2>
+            <div className="mb-2"><PanelHeader>Who uses what</PanelHeader></div>
             <p className="mt-1 text-xs text-teal-200/40">Views per person, per section.</p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
@@ -213,9 +213,31 @@ export default async function AdminPage({
             </div>
           </Card>
 
-          {/* Recent activity */}
+          {/* What read-only viewers ask Alfred (logged from the chat). */}
           <Card className="p-6">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-teal-200/60">Recent activity</h2>
+            <div className="mb-2"><PanelHeader>Viewer questions</PanelHeader></div>
+            {usage.viewerQuestions.length === 0 ? (
+              <p className="mt-2 text-sm text-teal-200/40">No questions from viewers yet.</p>
+            ) : (
+              <div className="mt-4 space-y-2.5">
+                {usage.viewerQuestions.map((q, i) => (
+                  <div key={i} className="flex items-baseline gap-3 text-sm">
+                    <span className="w-16 shrink-0 text-xs tabular-nums text-teal-200/40">{timeAgo(q.at)}</span>
+                    <span className="w-24 shrink-0 truncate text-teal-100/80">{q.name ?? q.email.split("@")[0]}</span>
+                    {q.symbol ? <Chip tone="dim">{q.symbol}</Chip> : null}
+                    <span className="min-w-0 flex-1 text-teal-100/70">{q.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          </div>
+
+          {/* Recent activity — the live traffic feed, pinned to the right 1/3 rail. */}
+          <aside className="lg:col-span-1">
+          <Card className="p-6">
+            <div className="mb-2"><PanelHeader>Recent activity</PanelHeader></div>
             <div className="mt-4 space-y-1.5">
               {usage.recent.map((r, i) => (
                 <div key={i} className="flex items-baseline gap-3 text-sm">
@@ -229,6 +251,7 @@ export default async function AdminPage({
               ))}
             </div>
           </Card>
+          </aside>
         </div>
       )}
     </main>

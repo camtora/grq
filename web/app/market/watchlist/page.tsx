@@ -9,13 +9,14 @@ import AddTicker from "@/components/AddTicker";
 import UniverseActions from "@/components/UniverseActions";
 import StockTable, { type StockColumn, type StockRow } from "@/components/StockTable";
 import WatchlistTabs from "@/components/WatchlistTabs";
+import PanelHeader from "@/components/PanelHeader";
 import { allWatches } from "@/lib/watch";
 import { memberKeyForEmail } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
 // The watchlist table carries the at-a-glance numbers inline (call, indicators,
-// target upside, manage actions); clicking a row expands it for GRQ's call blurb +
+// target upside, manage actions); clicking a row expands it for Alfred's call blurb +
 // the dossier's plain-English "why" (Cam 2026-06-17). The full long-form dossier
 // (business / bull / bear / sources) still lives one click away on the stock page.
 const COLUMNS: StockColumn[] = ["last", "day", "call", "upside", "conf", "watcher"];
@@ -168,14 +169,14 @@ export default async function Watchlist() {
         )}
 
         <p className="mt-3 text-xs text-teal-200/40">
-          <span className="font-semibold text-teal-200/60">GRQ&apos;s call</span> is the verdict.{" "}
+          <span className="font-semibold text-teal-200/60">Alfred&apos;s call</span> is the verdict.{" "}
           <span className="font-semibold text-teal-200/60">12-mo</span> is the agent&apos;s target upside (hover for near-term).{" "}
           Click a row for GRQ&apos;s reasoning; open a name for the full dossier — business, bull &amp; bear case, sources.
         </p>
       </section>
 
       <section className="mt-10 border-t border-teal-400/10 pt-6">
-        <h2 className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Agent research pipeline</h2>
+        <div className="mb-1"><PanelHeader>Agent research pipeline</PanelHeader></div>
         <p className="mb-4 text-xs text-teal-200/40">What the agent is auto-researching — behind-the-scenes plumbing.</p>
 
         <Card className="mb-6 border-teal-400/30 p-4">
@@ -204,7 +205,7 @@ export default async function Watchlist() {
 
         {retired.length > 0 && (
           <div className="mt-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Retired ({retired.length}) — history kept</h3>
+            <div className="mb-3"><PanelHeader>Retired ({retired.length}) — history kept</PanelHeader></div>
             <div className="space-y-2">
               {retired.map((r) => (
                 <Card key={r.symbol} className="flex flex-wrap items-center gap-4 p-3">

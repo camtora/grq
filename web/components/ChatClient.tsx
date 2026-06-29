@@ -149,7 +149,7 @@ export default function ChatClient({
 
   return (
     <div className={`flex flex-col ${heightClass}`}>
-      <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto pr-1">
+      <div ref={listRef} className="grq-scroll flex-1 space-y-4 overflow-y-auto pr-1">
         {messages.length === 0 && !pending && (
           <p className="pt-10 text-center text-sm text-teal-200/40">
             Ask the agent anything — stocks, the portfolio, &ldquo;defend this position&rdquo;.

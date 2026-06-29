@@ -5,6 +5,7 @@ import { etDateStr } from "@/agent/calendar";
 import { getSession } from "@/lib/session";
 import { loadDesk, listDesks, ARM_COLORS } from "@/lib/options-desk/desk";
 import BullChart from "@/components/bulls/BullChart";
+import PanelHeader from "@/components/PanelHeader";
 import DeskRow from "@/components/desk/DeskRow";
 import DeskControls from "@/components/desk/DeskControls";
 import NewDeskForm from "@/components/desk/NewDeskForm";
@@ -64,16 +65,16 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-teal-200/50">The two arms</h2>
+              <div className="mb-2"><PanelHeader>The two arms</PanelHeader></div>
               <div className="space-y-2">
                 {data.arms.map((a) => (
-                  <DeskRow key={a.entrantId} a={a} color={ARM_COLORS[a.arm] ?? "#5eead4"} />
+                  <DeskRow key={a.entrantId} a={a} color={ARM_COLORS[a.arm] ?? "var(--spark-up)"} />
                 ))}
               </div>
             </div>
             <div>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-teal-200/50">Return over time</h2>
-              <BullChart series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "#5eead4", points: a.navHistory }))} />
+              <div className="mb-2"><PanelHeader>Return over time</PanelHeader></div>
+              <BullChart series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "var(--spark-up)", points: a.navHistory }))} />
             </div>
           </div>
 
@@ -88,7 +89,8 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
             </Card>
           ) : null}
 
-          <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <Card className="mt-4 p-4">
+          <details>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">Options in five terms (for Cam &amp; Graham)</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li><span className="font-semibold text-teal-50">Option.</span> A contract — the right (not obligation) to buy or sell 100 shares at a fixed price by a fixed date. You pay a price for it called the <em>premium</em>. Options are NOT shorting.</li>
@@ -98,8 +100,10 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
               <li><span className="font-semibold text-teal-50">Expiry &amp; time decay.</span> Options expire, and they bleed a little value every day the stock sits still. You can be right on direction and still lose by running out of time — watch this play out in the cards above.</li>
             </ul>
           </details>
+          </Card>
 
-          <details className="mt-3 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <Card className="mt-3 p-4">
+          <details>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How the Options Desk works</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li><span className="font-semibold text-teal-50">Control vs treatment.</span> Both arms are Opus with the same {money(data.desk.startingStakeCents)} stake and the same researched menu. The only difference is the treatment may also <em>buy</em> options — buy-to-open only, never selling/writing, never spreads, so its risk is always defined.</li>
@@ -107,8 +111,10 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
               <li><span className="font-semibold text-teal-50">A pure sandbox.</span> Every fill lands only in this desk&apos;s own book — it never touches the real fund, the order gate, or the broker, and it never trades a real option. The fund&apos;s no-options guardrail is unchanged.</li>
             </ul>
           </details>
+          </Card>
 
-          <details className="mt-3 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <Card className="mt-3 p-4">
+          <details>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">Why the test is built this way — phases &amp; what&apos;s in vs. out</summary>
             <div className="mt-3 space-y-3 text-xs leading-relaxed text-teal-100/70">
               <p>
@@ -146,6 +152,7 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
               </div>
             </div>
           </details>
+          </Card>
 
           <p className="mt-4 text-xs text-teal-200/40">
             Sandbox · option prices are MODELED (CBOE delayed ~15-min mid, or Black-Scholes from implied volatility) — educational, not executable. Options are US-only; CA names have none. Books are CAD; US fills convert at the live FX rate.

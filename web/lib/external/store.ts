@@ -21,25 +21,59 @@ import {
 // stays in env — never in the DB.
 type MemberCreds = { partner: SnaptradePartner; userSecret: string; userIdOverride: string | null };
 
-function credsFor(email: string): MemberCreds | null {
+async function credsFor(email: string): Promise<MemberCreds | null> {
+  // Self-served DB keys win; env is the fallback (Cam's original setup + any
+  // pinned overrides). A member can now connect entirely through the UI.
+  const row = await prisma.externalCredential.findUnique({ where: { email } }).catch(() => null);
   const g = memberKeyForEmail(email) === "graham";
-  const clientId = g ? process.env.SNAPTRADE_CLIENT_ID_GRAHAM : process.env.SNAPTRADE_CLIENT_ID;
-  const consumerKey = g ? process.env.SNAPTRADE_CONSUMER_KEY_GRAHAM : process.env.SNAPTRADE_CONSUMER_KEY;
-  const userSecretEnv = g ? process.env.SNAPTRADE_USER_SECRET_GRAHAM : process.env.SNAPTRADE_USER_SECRET;
+  const clientId = row?.clientId || (g ? process.env.SNAPTRADE_CLIENT_ID_GRAHAM : process.env.SNAPTRADE_CLIENT_ID);
+  const consumerKey = row?.consumerKey || (g ? process.env.SNAPTRADE_CONSUMER_KEY_GRAHAM : process.env.SNAPTRADE_CONSUMER_KEY);
+  const userSecretSrc = row?.userSecret || (g ? process.env.SNAPTRADE_USER_SECRET_GRAHAM : process.env.SNAPTRADE_USER_SECRET);
   const userIdOverride = (g ? process.env.SNAPTRADE_USER_ID_GRAHAM : process.env.SNAPTRADE_USER_ID) || null;
   if (clientId && consumerKey) {
     // SnapTrade Personal keys: the single auto-provisioned user's read token IS the
     // consumer secret (verified 2026-06-28 — it pulled Cam's TD TFSA). So the two
     // keys alone are enough; default the userSecret to the consumer secret unless an
     // explicit one is set. (A developer/partner key would need a real per-user secret.)
-    return { partner: { clientId, consumerKey }, userSecret: userSecretEnv || consumerKey, userIdOverride };
+    return { partner: { clientId, consumerKey }, userSecret: userSecretSrc || consumerKey, userIdOverride };
   }
   return null;
 }
 
-/** Is SnapTrade fully configured for THIS member (keys + the user's data token)? */
-export function snaptradeConfiguredFor(email: string): boolean {
-  return credsFor(email) !== null;
+/** Is SnapTrade fully configured for THIS member (DB keys or env)? */
+export async function snaptradeConfiguredFor(email: string): Promise<boolean> {
+  return (await credsFor(email)) !== null;
+}
+
+/** Save a member's own SnapTrade Personal-key credentials (self-serve, via the UI),
+ *  then pull their accounts so holdings show up immediately. Returns the account
+ *  count, or throws if the keys don't work (so the UI can report it). */
+export async function saveMemberKeys(
+  email: string,
+  clientId: string,
+  consumerKey: string,
+  userSecret?: string,
+): Promise<number> {
+  const data = {
+    clientId: clientId.trim(),
+    consumerKey: consumerKey.trim(),
+    userSecret: userSecret?.trim() || null,
+  };
+  await prisma.externalCredential.upsert({ where: { email }, create: { email, ...data }, update: data });
+  try {
+    return await syncMember(email);
+  } catch (e) {
+    // Keys saved but didn't authenticate — drop them so the member isn't left in a
+    // half-connected state, and surface a CLEAN reason (the SnapTrade SDK error dumps
+    // response headers into .message; take just the first line + a friendly hint).
+    await prisma.externalCredential.delete({ where: { email } }).catch(() => {});
+    await prisma.externalUser.deleteMany({ where: { email } }).catch(() => {});
+    const first = (e instanceof Error ? e.message : "").split("\n")[0].trim();
+    const hint = /401|403|signature|unauthor|invalid/i.test(first)
+      ? "the Client ID or Consumer Key was rejected — double-check both (Consumer Key, not the userId)."
+      : first || "double-check the Client ID and Consumer Key.";
+    throw new Error(`Those keys didn't connect: ${hint}`);
+  }
 }
 
 /** Resolve the SnapTrade identity to call the API with: the partner (signing
@@ -48,7 +82,7 @@ export function snaptradeConfiguredFor(email: string): boolean {
 async function resolveUser(
   email: string,
 ): Promise<{ partner: SnaptradePartner; userId: string; userSecret: string }> {
-  const creds = credsFor(email);
+  const creds = await credsFor(email);
   if (!creds) throw new Error("SnapTrade is not configured for this member yet.");
 
   let userId = creds.userIdOverride;
@@ -220,7 +254,7 @@ export async function syncMember(email: string): Promise<number> {
 export async function syncMemberIfConnected(
   email: string,
 ): Promise<{ configured: boolean; count: number }> {
-  if (!snaptradeConfiguredFor(email)) return { configured: false, count: 0 };
+  if (!(await snaptradeConfiguredFor(email))) return { configured: false, count: 0 };
   const count = await syncMember(email);
   return { configured: true, count };
 }
@@ -229,7 +263,9 @@ export async function syncMemberIfConnected(
  *  we do NOT delete the SnapTrade user — it's the member's own auto-provisioned
  *  account and lives independent of GRQ; we just drop our mirror + cached userId. */
 export async function disconnectMember(email: string): Promise<void> {
-  // ExternalAccount + ExternalHolding cascade off ExternalUser.
+  // ExternalAccount + ExternalHolding cascade off ExternalUser. Also drop any
+  // self-served keys so "Unlink" fully removes the member from the loop.
+  await prisma.externalCredential.deleteMany({ where: { email } });
   await prisma.externalUser.deleteMany({ where: { email } });
   await prisma.externalAccount.deleteMany({ where: { ownerEmail: email } });
 }

@@ -9,6 +9,7 @@ import Term from "@/components/Term";
 import PortfolioCard from "@/components/smart-money/PortfolioCard";
 import CongressCard from "@/components/smart-money/CongressCard";
 import Leaderboard, { type LeaderRow } from "@/components/smart-money/Leaderboard";
+import PanelHeader from "@/components/PanelHeader";
 import { fmtUsd, type WatchOverlap } from "@/lib/smart-money/types";
 import { queueDossiers } from "@/lib/hunt";
 import {
@@ -118,9 +119,8 @@ export default async function SmartMoney() {
       {/* Tracked portfolios — the core: who holds what. Leads the page (Cam). */}
       {(portfolios.length > 0 || members.some((m) => m.trades.length > 0)) && (
         <section className="mb-8">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Chip tone="teal">tracked portfolios</Chip>
-            <span className="text-sm text-teal-200/50">who notable investors hold — tap a card to see the book</span>
+          <div className="mb-3">
+            <PanelHeader right={<span className="text-sm text-teal-200/50">who notable investors hold — tap a card to see the book</span>}>tracked portfolios</PanelHeader>
           </div>
           <div className="grid items-start gap-4 lg:grid-cols-2">
             {portfolios.map((p) => (
@@ -161,10 +161,12 @@ export default async function SmartMoney() {
 
           {clusters.length > 0 && (
             <Card className="mt-4 p-3">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <span className="text-xs font-semibold text-teal-200/60">
+              <div className="mb-2">
+                <PanelHeader>
                   <Term k="cluster-buying">Cluster buys</Term>
-                </span>
+                </PanelHeader>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <span className="text-[11px] text-teal-200/35">multiple insiders, one stock (last 30d):</span>
                 {clusters.map((c) => (
                   <span key={c.symbol} className="inline-flex items-center gap-1 rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[11px]">

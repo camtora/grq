@@ -1081,13 +1081,63 @@ model KnowledgeEdge {
   toTicker   String // bare ticker of the related name (join key)
   toSymbol   String? // resolved universe symbol when the related name is tracked, else null
   weight     Int // 0–100 derived relatedness
-  sources    String // CSV: "peer,coheld,comention,sector"
+  sources    String // CSV: "peer,coheld,comention,sector,chain" (chain = a Chess Moves board link)
   why        String // human-readable provenance
   computedAt DateTime @default(now())
 
   @@unique([fromSymbol, toTicker])
   @@index([fromSymbol])
   @@index([toTicker])
+}
+
+// Chess Moves (docs/CHESS-MOVES.md) — a thematic / supply-chain reasoning EXPERIMENT.
+// A member briefs a theme or value chain ("uranium supply squeeze") — or Alfred self-picks
+// one weekly — and the agent maps the board (who depends on whom), names the force in
+// motion, and enumerates ripple-effect PLAYS (2nd/3rd-order winners & losers). The chain is
+// the agent's web-researched REASONING, persisted — a probabilistic thesis with explicit
+// confidence levers, NOT imported data (there is no supply-chain feed). Every play is a
+// lead → research → §6 gate; this never trades or touches the order guardrail.
+model ChessTheme {
+  id                   Int         @id @default(autoincrement())
+  title                String
+  anchor               String // the theme / chain in a short phrase
+  brief                String? // the member's words; null when Alfred self-picks (weekly)
+  kind                 String      @default("BRIEF") // BRIEF | WEEKLY
+  status               String      @default("PENDING") // PENDING | RUNNING | READY | FAILED | RETIRED
+  thesis               String? // markdown — the force in motion / position read
+  bottomLine           String? // short plain-English summary
+  boardJson            String? // the chain map: { stages:[{key,label,role,items:[…]}], links:[…] }
+  confidenceLeversJson String? // reuse lib/confidence-levers shape (theme-level)
+  requestedBy          String? // display name, or "Alfred" for the weekly self-pick
+  createdAt            DateTime    @default(now())
+  completedAt          DateTime?
+  agentVersion         String?
+  plays                ChessPlay[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// One ranked piece on a ChessTheme board — a ripple-effect lead (never a verdict).
+model ChessPlay {
+  id          Int        @id @default(autoincrement())
+  themeId     Int
+  theme       ChessTheme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+  symbol      String // bare ticker
+  yahoo       String? // resolved listing symbol when known
+  exchange    String? // NYSE | NASDAQ | AMEX | TSX | TSXV | CSE | NEO
+  companyName String?
+  role        String // "upstream supplier", "picks-and-shovels", "downstream OEM"…
+  direction   String     @default("BENEFICIARY") // BENEFICIARY | VICTIM | NEUTRAL
+  effectOrder Int        @default(1) // 1/2/3 = 1st/2nd/3rd-order effect
+  thesis      String // one-line why this piece moves
+  conviction  Int        @default(0) // 0–100
+  obscurity   Int? // 1–5
+  rank        Int        @default(0)
+  createdAt   DateTime   @default(now())
+
+  @@index([themeId])
+  @@index([symbol])
 }
 
 // Market Base Layer (docs/MARKET-BASE-LAYER.md) — a wide, cheap awareness layer
@@ -1281,6 +1331,33 @@ model ExternalUser {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   accounts        ExternalAccount[]
+}
+
+// Self-served SnapTrade Personal-key credentials, entered by a member through the
+// UI (so no human is in the loop putting keys in env). A member's clientId +
+// consumerKey are enough for a Personal key — the userSecret defaults to the
+// consumer secret and the userId is auto-discovered. DB rows WIN over env; env
+// stays as the fallback (Cam's original setup). Secrets live here, server-only.
+model ExternalCredential {
+  email       String   @id
+  clientId    String
+  consumerKey String
+  userSecret  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// What read-only VIEWERS ask Alfred (the chat). Members chat in their own threads
+// (ChatMessage); a viewer gets an isolated thread AND we log the question here so
+// owners can see what viewers are asking, surfaced on the owner-only Traffic page.
+model ViewerQuestion {
+  id      Int      @id @default(autoincrement())
+  at      DateTime @default(now())
+  email   String
+  message String
+  symbol  String?
+
+  @@index([at])
 }
 
 model ExternalAccount {

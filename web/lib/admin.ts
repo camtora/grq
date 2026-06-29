@@ -12,6 +12,7 @@ import { sectionForPath } from "@/lib/sections";
 const SECTION_ORDER = [
   "Today",
   "Portfolio",
+  "Accounts",
   "Watchlist",
   "Smart Money",
   "Universe",
@@ -20,12 +21,16 @@ const SECTION_ORDER = [
   "Stock",
   "Research",
   "Reports",
-  "Race",
+  "Second Opinions",
+  "Bull Race",
+  "Options Desk",
+  "Chess Moves",
   "Settings",
   "Chat",
   "Journal",
   "Activity",
   "Ideas",
+  "How it works",
   "Admin",
   "Other",
 ];
@@ -48,6 +53,7 @@ export type UserStat = {
 };
 export type RecentView = { at: Date; email: string; name: string | null; section: string; path: string };
 export type UsageMatrix = { sections: string[]; rows: { email: string; counts: Record<string, number> }[] };
+export type ViewerQuestionView = { at: Date; email: string; name: string | null; message: string; symbol: string | null };
 
 export type Usage = {
   days: number;
@@ -57,13 +63,14 @@ export type Usage = {
   byUser: UserStat[];
   matrix: UsageMatrix;
   recent: RecentView[];
+  viewerQuestions: ViewerQuestionView[];
 };
 
 export async function getUsage(days: number): Promise<Usage> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const where = { at: { gte: since } };
 
-  const [byUserRole, bySectionUser, recentRows] = await Promise.all([
+  const [byUserRole, bySectionUser, recentRows, viewerQ] = await Promise.all([
     prisma.pageView.groupBy({
       by: ["email", "role"],
       where,
@@ -71,7 +78,7 @@ export async function getUsage(days: number): Promise<Usage> {
       _max: { at: true },
     }),
     prisma.pageView.groupBy({
-      by: ["section", "email"],
+      by: ["path", "email"],
       where,
       _count: { _all: true },
     }),
@@ -80,6 +87,12 @@ export async function getUsage(days: number): Promise<Usage> {
       orderBy: { at: "desc" },
       take: 60,
       select: { at: true, email: true, path: true },
+    }),
+    prisma.viewerQuestion.findMany({
+      where,
+      orderBy: { at: "desc" },
+      take: 50,
+      select: { at: true, email: true, message: true, symbol: true },
     }),
   ]);
 
@@ -98,23 +111,35 @@ export async function getUsage(days: number): Promise<Usage> {
   }
 
   // Per-section totals + unique users, and the person×section matrix + per-user
-  // top section — all from the one (section,email) grouping.
+  // top section. Group by PATH and re-derive the section here (like role + Recent
+  // activity below) so a re-categorisation — e.g. adding "Bull Race" or renaming
+  // "Race" → "Second Opinions" — reclassifies historical rows too, not only ones
+  // logged after the mapping changed. (Multiple paths fold into one section, so
+  // accumulate rather than assign.)
   const sectionTotals = new Map<string, { views: number; users: Set<string> }>();
   const matrixCounts = new Map<string, Record<string, number>>();
-  const userTop = new Map<string, { section: string; views: number }>();
   for (const g of bySectionUser) {
     const n = g._count._all;
-    const st = sectionTotals.get(g.section) ?? { views: 0, users: new Set<string>() };
+    const section = sectionForPath(g.path);
+
+    const st = sectionTotals.get(section) ?? { views: 0, users: new Set<string>() };
     st.views += n;
     st.users.add(g.email);
-    sectionTotals.set(g.section, st);
+    sectionTotals.set(section, st);
 
     const row = matrixCounts.get(g.email) ?? {};
-    row[g.section] = n;
+    row[section] = (row[section] ?? 0) + n;
     matrixCounts.set(g.email, row);
+  }
 
-    const top = userTop.get(g.email);
-    if (!top || n > top.views) userTop.set(g.email, { section: g.section, views: n });
+  // Per-user top section, from the accumulated per-section counts above.
+  const userTop = new Map<string, { section: string; views: number }>();
+  for (const [email, counts] of matrixCounts) {
+    let best: { section: string; views: number } | null = null;
+    for (const [section, views] of Object.entries(counts)) {
+      if (!best || views > best.views) best = { section, views };
+    }
+    if (best) userTop.set(email, best);
   }
 
   const sectionOrder = orderSections([...sectionTotals.keys()]);
@@ -156,6 +181,14 @@ export async function getUsage(days: number): Promise<Usage> {
     path: r.path,
   }));
 
+  const viewerQuestions: ViewerQuestionView[] = viewerQ.map((q) => ({
+    at: q.at,
+    email: q.email,
+    name: userForEmail(q.email)?.name ?? null,
+    message: q.message,
+    symbol: q.symbol,
+  }));
+
   return {
     days,
     totalViews: byUser.reduce((s, u) => s + u.views, 0),
@@ -164,5 +197,6 @@ export async function getUsage(days: number): Promise<Usage> {
     byUser,
     matrix,
     recent,
+    viewerQuestions,
   };
 }

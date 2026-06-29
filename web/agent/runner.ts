@@ -23,12 +23,12 @@ import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
 import { trackedSymbols, trackedUniverse, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
-import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET } from "./policy";
+import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
-import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport } from "./sessions";
+import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
 
@@ -445,6 +445,32 @@ async function maybeScheduledSessions() {
     return;
   }
 
+  // On-demand Chess Moves (docs/CHESS-MOVES.md) — a member briefed a theme (or the
+  // weekly self-pick was queued). Runs off-schedule, any time (research-only; market
+  // needn't be open). Rate-guarded per ET day (Opus is expensive); over the cap the
+  // theme stays PENDING and runs once the day rolls over. Restart-safe (orphaned
+  // RUNNING themes are requeued on boot in main()).
+  if (CHESS.enabled) {
+    const pendingTheme = await prisma.chessTheme.findFirst({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" } });
+    if (pendingTheme) {
+      const ranToday = await prisma.chessTheme.count({ where: { status: { in: ["READY", "FAILED"] }, completedAt: { gte: dayStart } } });
+      if (ranToday < CHESS.maxThemesPerDay) {
+        await prisma.chessTheme.update({ where: { id: pendingTheme.id }, data: { status: "RUNNING" } });
+        sessionRunning = true;
+        try {
+          await runChessMoves({ id: pendingTheme.id, brief: pendingTheme.brief });
+          const done = await prisma.chessTheme.findUnique({ where: { id: pendingTheme.id }, select: { status: true, title: true } });
+          if (done?.status === "READY") {
+            await alert("info", `Chess Moves board ready: ${done.title}`, "A fresh value-chain board is live on Chess Moves.", { category: "hunt" });
+          }
+        } finally {
+          sessionRunning = false;
+        }
+        return;
+      }
+    }
+  }
+
   // 6:00–6:30 pre-morning read on market days (once/day) — a quick early scan, hours
   // before the heavy 9:00 game plan. It catches overnight/post-market moves (earnings,
   // gaps, downgrades), can request_research a fresh dossier on the few names a real
@@ -517,6 +543,21 @@ async function maybeScheduledSessions() {
       } finally {
         sessionRunning = false;
       }
+      return;
+    }
+  }
+
+  // Weekly Chess Moves "board of the week" (docs/CHESS-MOVES.md) — Alfred self-picks a
+  // timely value chain. Sunday ~12:00 ET (market closed). Just ENQUEUES a PENDING WEEKLY
+  // theme; the on-demand pickup above runs it next tick (one code path for running).
+  // Guarded once-per-week by a recent-WEEKLY count (mirrors the smart-money scan).
+  if (CHESS.enabled && CHESS.weeklyEnabled && p.weekday === CHESS.weeklyWeekday && m >= CHESS.weeklyStartMin && m < CHESS.weeklyStartMin + 30) {
+    const recent = await prisma.chessTheme.count({
+      where: { kind: "WEEKLY", createdAt: { gte: new Date(Date.now() - 6 * 24 * 60 * 60_000) } },
+    });
+    if (recent === 0) {
+      await prisma.chessTheme.create({ data: { kind: "WEEKLY", title: "Board of the week", anchor: "", requestedBy: "Alfred" } });
+      await alert("info", "Chess Moves: board of the week queued", "Alfred is about to map a fresh value chain.", { category: "hunt" });
       return;
     }
   }
@@ -972,6 +1013,9 @@ async function main() {
     data: { status: "QUEUED" },
   });
   if (requeued.count > 0) console.log(`[boot] requeued ${requeued.count} orphaned RUNNING dossier(s)`);
+  // Same for a Chess Moves board interrupted mid-map — back to PENDING so it retries.
+  const requeuedChess = await prisma.chessTheme.updateMany({ where: { status: "RUNNING" }, data: { status: "PENDING" } });
+  if (requeuedChess.count > 0) console.log(`[boot] requeued ${requeuedChess.count} orphaned RUNNING chess board(s)`);
   await alert("warning", `Agent restarted (${AGENT_VERSION})`, `Warm-up: no trading for ${HARD.warmupMs / 60_000} minutes. Resuming watch.`, { category: "system" });
   console.log(`[grq-agent] ${AGENT_VERSION} up. Market ${isMarketOpen() ? "OPEN" : "closed"}.`);
 

@@ -52,7 +52,7 @@ export default function PersonalLane({ rows, total }: { rows: PersonalRow[]; tot
             <th className="px-3 py-2 font-medium">Account</th>
             <th className="px-3 py-2 text-right font-medium">Qty</th>
             <th className="px-3 py-2 text-right font-medium">Value</th>
-            <th className="px-5 py-2 font-medium">GRQ&apos;s call</th>
+            <th className="px-5 py-2 font-medium">Alfred&apos;s call</th>
           </tr>
         </thead>
         <tbody>

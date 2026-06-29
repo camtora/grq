@@ -1,9 +1,9 @@
 import { STANCE_TONE_CLASSES } from "@/lib/stance";
 
 // A compact rating slider on a red→amber→green track, driven by a 7-point label
-// (Strong Sell → Strong Buy). Used for GRQ's CALL so the headline rating and its
+// (Strong Sell → Strong Buy). Used for Alfred's CALL so the headline rating and its
 // needle always agree (no signal/call contradiction). `note` tags the source
-// (e.g. "GRQ's call" or "technical lean") so a fallback read is honest.
+// (e.g. "Alfred's call" or "technical lean") so a fallback read is honest.
 //
 // `size="lg"` blows up the label + track for the hero placement on the stock page;
 // `mascots` flanks the track with the bear (sell end) and bull (buy end) — each

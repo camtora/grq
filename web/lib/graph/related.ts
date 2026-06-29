@@ -16,7 +16,7 @@ const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)
 // literacy pillar) and scored 0–100. The agent never reads this — it's a human
 // surface that validates edge quality before we ever pay to feed it upstream.
 
-export type RelatedSource = "peer" | "coheld" | "comention" | "sector";
+export type RelatedSource = "peer" | "coheld" | "comention" | "sector" | "chain";
 
 export type RelatedName = {
   ticker: string; // bare ticker — the join key AND the display label
@@ -28,7 +28,7 @@ export type RelatedName = {
   symbol: string | null; // universe symbol → dossier link + stance key
   logoUrl: string | null;
   currency: string | null;
-  stance: string | null; // GRQ's call (raw stance string), tracked names only
+  stance: string | null; // Alfred's call (raw stance string), tracked names only
   capM: number | null; // tiebreaker for the weak sector floor
   // Market Base Layer Tier-1 read (docs/MARKET-BASE-LAYER.md) — "we have a read on this",
   // most useful on untracked leads. INTERESTING | WATCH | PASS + the one-line take.
@@ -41,7 +41,7 @@ type SourceHit = { score: number; why: string; name?: string; capM?: number | nu
 // Per-source base weights, ordered by the spillover literature: co-mention and
 // peer (connected-firm / shared-coverage) are the strongest, co-holding is strong
 // but sparse, same-sector is the weak floor. Evidence bonuses layer on top.
-const BASE = { comention: 70, peer: 65, coheld: 60, sector: 25 } as const;
+const BASE = { comention: 70, peer: 65, chain: 62, coheld: 60, sector: 25 } as const;
 
 const lastName = (full: string) => full.trim().split(/\s+/).pop() ?? full;
 
@@ -68,6 +68,7 @@ export async function relatedFor(opts: {
   const coheldHits = new Map<string, SourceHit>();
   const comentionHits = new Map<string, SourceHit>();
   const sectorHits = new Map<string, SourceHit>();
+  const chainHits = new Map<string, SourceHit>();
 
   // --- peer: FMP's stock-peers, already fetched on the page. Closer rank → higher. ---
   peers
@@ -171,10 +172,19 @@ export async function relatedFor(opts: {
     }
   }
 
+  // --- chain: persisted Chess Moves board links (docs/CHESS-MOVES.md). The agent's
+  // value-chain reasoning, stored by Chess Moves keyed on the bare ticker (= self). ---
+  const chainRows = await prisma.knowledgeEdge.findMany({ where: { fromSymbol: self, sources: { contains: "chain" } } }).catch(() => []);
+  for (const r of chainRows) {
+    const t = bareKey(r.toTicker);
+    if (!t || t === self) continue;
+    chainHits.set(t, { score: r.weight || BASE.chain, why: r.why });
+  }
+
   // --- merge by ticker: max score per source + a corroboration bonus, stable why order ---
-  const order: RelatedSource[] = ["peer", "coheld", "comention", "sector"];
-  const maps: Record<RelatedSource, Map<string, SourceHit>> = { peer: peerHits, coheld: coheldHits, comention: comentionHits, sector: sectorHits };
-  const tickers = new Set<string>([...peerHits.keys(), ...coheldHits.keys(), ...comentionHits.keys(), ...sectorHits.keys()]);
+  const order: RelatedSource[] = ["peer", "coheld", "comention", "chain", "sector"];
+  const maps: Record<RelatedSource, Map<string, SourceHit>> = { peer: peerHits, coheld: coheldHits, comention: comentionHits, chain: chainHits, sector: sectorHits };
+  const tickers = new Set<string>([...peerHits.keys(), ...coheldHits.keys(), ...comentionHits.keys(), ...chainHits.keys(), ...sectorHits.keys()]);
 
   const merged: RelatedName[] = [];
   for (const ticker of tickers) {
@@ -213,7 +223,7 @@ export async function relatedFor(opts: {
   merged.sort((a, b) => b.weight - a.weight || (b.capM ?? 0) - (a.capM ?? 0) || a.ticker.localeCompare(b.ticker));
   const items = merged.slice(0, limit);
 
-  // GRQ's call for the tracked names that made the cut (one bounded query).
+  // Alfred's call for the tracked names that made the cut (one bounded query).
   const trackedSyms = items.map((r) => r.symbol).filter((s): s is string => !!s);
   if (trackedSyms.length > 0) {
     const rows = await prisma.journalEntry

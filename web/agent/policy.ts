@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.14-phase4";
+export const AGENT_VERSION = "v2.15-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -170,4 +170,19 @@ export const DESK = {
   optionMaxOpenPerWeek: Number(process.env.GRQ_DESK_OPT_PER_WEEK ?? "5") || 5, // new option opens / rolling 7d
   minDte: 30, // contract-selection window — keeps theta/gamma noise out of the comparison (docs §3.4)
   maxDte: 60,
+};
+
+// Chess Moves (docs/CHESS-MOVES.md) — the thematic / supply-chain reasoning EXPERIMENT.
+// On-demand: a member briefs a theme/chain and the agent maps the board + ripple PLAYS.
+// Plus a weekly self-picked "board of the week". Research-only (write_journal + the new
+// save_chess_board tool) — it NEVER trades or touches the §6 gate (guardrail #1); every
+// play is a lead → research → gate. Kill without a deploy: GRQ_CHESS_ENABLED=false.
+// Humans edit this; the agent never does.
+export const CHESS = {
+  enabled: (process.env.GRQ_CHESS_ENABLED ?? "true").toLowerCase() !== "false",
+  maxThemesPerDay: Number(process.env.GRQ_CHESS_MAX_PER_DAY ?? "3") || 3, // on-demand rate guard (Opus is expensive)
+  maxPlaysPerTheme: 12, // anti-sprawl: a board enumerates a focused set of pieces
+  weeklyEnabled: (process.env.GRQ_CHESS_WEEKLY ?? "true").toLowerCase() !== "false",
+  weeklyWeekday: 0, // Sunday (ET) — market closed, low-activity
+  weeklyStartMin: 720, // 12:00 ET ("board of the week")
 };

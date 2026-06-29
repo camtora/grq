@@ -1,5 +1,5 @@
 // Confidence levers (D — "what would make us more confident"): the specific,
-// falsifiable things that would reframe GRQ's call on a name. A dossier's
+// falsifiable things that would reframe Alfred's call on a name. A dossier's
 // confidence is a bare 0–100 number; these decompose what's pinning it below
 // 100 — for each lever: what we don't yet know, which way resolving it would
 // move the call, how much, and how/when we'd learn it. Two kinds:

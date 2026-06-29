@@ -76,7 +76,7 @@ export default function HuntBar() {
           <button
             onClick={go}
             disabled={busy}
-            className="shrink-0 rounded-xl bg-gradient-to-b from-teal-300 to-teal-500 px-6 py-3 text-sm font-bold uppercase tracking-wider text-[#04110d] shadow-lg shadow-teal-400/25 transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="shrink-0 rounded-xl bg-[var(--spark-up)] px-6 py-3 text-sm font-bold uppercase tracking-wider text-teal-950 shadow-lg shadow-teal-400/25 transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {busy ? "hunting…" : "⚡ Hunt"}
           </button>

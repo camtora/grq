@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { isOwner } from "@/lib/users";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import { getUsageDashboard, fmtTokens, fmtUsd, fmtDuration } from "@/lib/usage";
 import RollingWindowPanel from "@/components/RollingWindowPanel";
 import DateNav from "@/components/DateNav";
@@ -91,16 +92,17 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
               "current" window, so it shows just that day's totals below. */}
           {isToday && (
           <Card className="p-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-                Rolling 5-hour window
-              </h2>
-              <span className="text-xs text-teal-200/40">
-                {window
-                  ? "auto-rolling 5h window · burn vs the clock"
-                  : "sliding ~5h window · anchor a reset to track the clock"}
-              </span>
-            </div>
+            <PanelHeader
+              right={
+                <span className="text-xs text-teal-200/40">
+                  {window
+                    ? "auto-rolling 5h window · burn vs the clock"
+                    : "sliding ~5h window · anchor a reset to track the clock"}
+                </span>
+              }
+            >
+              Rolling 5-hour window
+            </PanelHeader>
             <RollingWindowPanel
               anchorAt={anchorResetAt ? anchorResetAt.toISOString() : null}
               serverWindowStart={window ? window.start.toISOString() : null}
@@ -117,9 +119,7 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
 
           {/* Where the day's tokens went, by session type */}
           <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              By session type · {isToday ? "today" : dateStr}
-            </h2>
+            <div className="mb-3"><PanelHeader>By session type · {isToday ? "today" : dateStr}</PanelHeader></div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -161,18 +161,19 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
           {/* Per-model — which models ate the tokens (and $). Real spend = OpenRouter challengers;
               claude-* are on the Max flat fee so their $ is the metered-equivalent, not a charge. */}
           <Card className="p-5">
-            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
+            <div className="mb-1">
+              <PanelHeader
+                right={(() => {
+                  const realSpend = byModel.filter((m) => m.group.includes("/")).reduce((s, m) => s + m.costMicroUsd, 0);
+                  return realSpend > 0 ? (
+                    <span className="text-xs text-teal-200/50">
+                      real OpenRouter spend: <span className="font-semibold tabular-nums text-teal-100">{fmtUsd(realSpend)}</span>
+                    </span>
+                  ) : null;
+                })()}
+              >
                 By model · {isToday ? "today" : dateStr}
-              </h2>
-              {(() => {
-                const realSpend = byModel.filter((m) => m.group.includes("/")).reduce((s, m) => s + m.costMicroUsd, 0);
-                return realSpend > 0 ? (
-                  <span className="text-xs text-teal-200/50">
-                    real OpenRouter spend: <span className="font-semibold tabular-nums text-teal-100">{fmtUsd(realSpend)}</span>
-                  </span>
-                ) : null;
-              })()}
+              </PanelHeader>
             </div>
             <p className="mb-3 text-xs text-teal-200/40">
               Claude models run on the shared Max subscription (a flat monthly fee), so their $ is the metered-EQUIVALENT, not
@@ -213,9 +214,7 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
 
           {/* Every logged call */}
           <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Recent sessions <span className="text-teal-200/30">({recent.length})</span>
-            </h2>
+            <div className="mb-3"><PanelHeader>Recent sessions <span className="text-teal-200/30">({recent.length})</span></PanelHeader></div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

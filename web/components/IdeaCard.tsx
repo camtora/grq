@@ -8,7 +8,7 @@ import CollapsibleMd from "@/components/CollapsibleMd";
 import Term from "@/components/Term";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 
-// The "researched idea" card — GRQ's call + targets + the dossier body. Shared by
+// The "researched idea" card — Alfred's call + targets + the dossier body. Shared by
 // the Discover tab (the hunt + the agent's ideas) AND the Watchlist (a row expands
 // into this — Cam 2026-06-16). `compact` is the small grid tile; the default is the
 // full two-column card.
@@ -112,7 +112,7 @@ export default function IdeaCard({
               )}
             </div>
           ) : sm ? (
-            <span className={`shrink-0 text-sm font-black ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`GRQ's call: ${sm.blurb}`}>
+            <span className={`shrink-0 text-sm font-black ${STANCE_TONE_CLASSES[sm.tone].text}`} title={`Alfred's call: ${sm.blurb}`}>
               {sm.label}
             </span>
           ) : idea.far !== null ? (
@@ -205,7 +205,7 @@ export default function IdeaCard({
 
         <div className="lg:border-l lg:border-teal-400/10 lg:pl-5">
           <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-            {discovery ? "Early look" : <Term k="agent-call">GRQ&apos;s call</Term>}
+            {discovery ? "Early look" : <Term k="agent-call">Alfred&apos;s call</Term>}
           </div>
           {discovery ? (
             <div className="mt-1">

@@ -45,7 +45,7 @@ export default async function ActivityFeed({
           const hasRealized = o.trades.some((t) => t.realizedPnlCents !== null);
           return (
             <li key={o.id} className="px-5 py-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2">
                 <span className={`text-sm font-bold ${o.side === "BUY" ? "text-teal-300" : "text-amber-300"}`}>
                   {o.side}
                 </span>
@@ -55,24 +55,30 @@ export default async function ActivityFeed({
                     {o.symbol}
                   </Link>
                 </span>
-                <Chip tone={STATUS_TONE[o.status] ?? "dim"}>{o.status}</Chip>
+                {/* Timestamp alone, top-right. */}
                 <span className="ml-auto shrink-0 text-xs text-teal-200/40">{fmtWhen(o.createdAt)}</span>
               </div>
-              {o.status === "FILLED" && (
-                <div className="mt-1 text-xs text-teal-100/60">
-                  @ <span className="tabular-nums">{money(o.avgFillPriceCents ?? 0)}</span> · comm{" "}
-                  <span className="tabular-nums">{money(o.commissionCents)}</span>
-                  {hasRealized && (
+              {/* Detail line: fill details (@ price · comm · pnl) left, status pill right. */}
+              <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 flex-1 truncate text-teal-100/60">
+                  {o.status === "FILLED" && (
                     <>
-                      {" · "}
-                      <Pnl cents={realized} className="text-xs" />
+                      @ <span className="tabular-nums">{money(o.avgFillPriceCents ?? 0)}</span> · comm{" "}
+                      <span className="tabular-nums">{money(o.commissionCents)}</span>
+                      {hasRealized && (
+                        <>
+                          {" · "}
+                          <Pnl cents={realized} className="text-xs" />
+                        </>
+                      )}
                     </>
                   )}
-                </div>
-              )}
-              {o.status === "REJECTED" && o.rejectReason && (
-                <div className="mt-1 text-xs text-red-300/80">⛔ {o.rejectReason}</div>
-              )}
+                  {o.status === "REJECTED" && o.rejectReason && (
+                    <span className="text-red-300/80">⛔ {o.rejectReason}</span>
+                  )}
+                </span>
+                <Chip tone={STATUS_TONE[o.status] ?? "dim"}>{o.status}</Chip>
+              </div>
             </li>
           );
         })}

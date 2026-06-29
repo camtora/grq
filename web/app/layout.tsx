@@ -24,12 +24,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const [session, cookieStore] = await Promise.all([getSession(), cookies()]);
   const settings = await prisma.settings.findUnique({ where: { id: 1 } }).catch(() => null);
 
-  // Cookie override wins; otherwise the member's default (Cam light, Graham dark).
+  // Viewers are always light (no override). Members: cookie wins, else their
+  // stored default (Cam light, Graham dark) — dark if unknown.
   const cookieTheme = cookieStore.get("grq-theme")?.value;
   const theme: "light" | "dark" =
-    cookieTheme === "light" || cookieTheme === "dark"
-      ? cookieTheme
-      : (session?.user?.theme ?? "dark");
+    session?.role === "viewer"
+      ? "light"
+      : cookieTheme === "light" || cookieTheme === "dark"
+        ? cookieTheme
+        : (session?.user?.theme ?? "dark");
 
   return (
     <html lang="en" data-theme={theme}>
@@ -52,12 +55,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="mx-auto max-w-[1700px] px-6 py-10">{children}</div>
         {/* Usage beacon — only for an authenticated session (everyone behind SSO). */}
         {session && <Tracker />}
-        {session?.role === "member" && (
-          <>
-            {/* Member↔member messages (header bubble) + the floating Ask-GRQ bubble. */}
-            <MessagesDrawer />
-            <GrqChat meEmail={session.email} members={CHAT_MEMBERS} />
-          </>
+        {/* Member↔member messages (header bubble) — members only. */}
+        {session?.role === "member" && <MessagesDrawer />}
+        {/* The floating bull = jump-search + Ask Alfred, for EVERYONE. Members can
+            toggle into each other's agent threads; a viewer gets search + their OWN
+            isolated thread (members=[] → no toggle, owner = themselves). */}
+        {session && (
+          <GrqChat
+            meEmail={session.email}
+            members={session.role === "member" ? CHAT_MEMBERS : []}
+          />
         )}
         <footer className="mx-auto max-w-[1700px] px-6 pb-10 text-xs text-teal-200/30">
           &ldquo;Get rich quick, slowly, with receipts.&rdquo; · Markets open 9:30–16:00 ET ·

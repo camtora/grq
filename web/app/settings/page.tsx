@@ -7,6 +7,7 @@ import { soakStatus } from "@/lib/soak";
 import { ACCOUNT_TYPE } from "@/agent/policy";
 import Link from "next/link";
 import { Card, PageHeader, Chip } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import RiskDial from "@/components/RiskDial";
 import FeeBudget from "@/components/FeeBudget";
 import KillSwitch from "@/components/KillSwitch";
@@ -142,9 +143,7 @@ export default async function Settings() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              System
-            </div>
+            <div className="mb-3"><PanelHeader>System</PanelHeader></div>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt className="text-teal-200/50">Broker</dt>
@@ -201,9 +200,7 @@ export default async function Settings() {
           </Card>
 
           <Card className="p-5">
-            <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">
-              Road to real money
-            </div>
+            <div className="mb-3"><PanelHeader>Road to real money</PanelHeader></div>
             <ol className="space-y-2">
               {ROADMAP.map((p) => (
                 <li key={p.n} className="flex items-center gap-3 text-sm">

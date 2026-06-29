@@ -6,7 +6,8 @@ import { getSession } from "@/lib/session";
 import { allUniverse, bareTicker } from "@/lib/universe";
 import { watchedByMember, watchersFor, type WatcherView } from "@/lib/watch";
 import { prisma } from "@/lib/db";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, PageHeader, Button } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import WatchButton, { type WatchState } from "@/components/WatchButton";
 import ResearchButton, { type ResearchState } from "@/components/ResearchButton";
 import AvatarStack from "@/components/AvatarStack";
@@ -192,7 +193,9 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
     <main>
       <PageHeader title="Browse" sub="The whole investable market — a first-pass automated scan of every non-ETF name (NASDAQ · NYSE · AMEX · TSX · TSXV · NEO), NOT the researched watchlist. The GRQ column here is a quick screen read, not a full dossier. Search or screen, then dig into what's worth a closer look." />
 
-      <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Browse the whole market</h2>
+      <div className="mb-2">
+        <PanelHeader>Browse the whole market</PanelHeader>
+      </div>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
         <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-teal-200/40">
           Name or ticker
@@ -247,12 +250,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
             ))}
           </select>
         </label>
-        <button
-          type="submit"
-          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-4 py-2 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
-        >
-          {query ? "Search" : "Screen"}
-        </button>
+        <Button type="submit">{query ? "Search" : "Screen"}</Button>
         {hasFilter && (
           <a href="/market/browse" className="text-xs font-semibold text-teal-300 hover:underline">
             clear
@@ -383,7 +381,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
           <b className="text-amber-300/80">WATCH</b> (interesting — wait for a catalyst or better entry) ·{" "}
           <b className="text-teal-200/50">PASS</b> (skip — too big, dull, or no edge);{" "}
           <b className="text-teal-300/70">Technical</b> = the chart&apos;s signal (a formula, actionable names only).
-          These are a quick triage, <b>not</b> the full <b>GRQ&apos;s call</b> — a name&apos;s real dossier and call live on its stock page.
+          These are a quick triage, <b>not</b> the full <b>Alfred&apos;s call</b> — a name&apos;s real dossier and call live on its stock page.
           Some names here are already tracked or researched, since this is the entire market.
         </p>
         <p>

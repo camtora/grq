@@ -62,6 +62,30 @@ export function PageHeader({
   );
 }
 
+// The house button. Matches the header KillSwitch control: compact, uppercase,
+// rounded-lg. `solid` is the accented default; `ghost` is the bordered/quiet
+// variant. Spreads native button props (type, disabled, formAction, …). For
+// links styled as buttons, apply these same classes to an <a>/<Link>.
+export function Button({
+  children,
+  variant = "solid",
+  className = "",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "solid" | "ghost" }) {
+  const variants: Record<string, string> = {
+    solid: "border border-teal-400/30 bg-teal-400/15 text-teal-200 hover:bg-teal-400/25",
+    ghost: "border border-[color:var(--card-border)] text-teal-200/90 hover:bg-teal-400/10",
+  };
+  return (
+    <button
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 ${variants[variant]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function Pnl({ cents, className = "" }: { cents: number; className?: string }) {
   return (
     <span className={`tabular-nums ${pnlClass(cents)} ${className}`}>{signedMoney(cents)}</span>

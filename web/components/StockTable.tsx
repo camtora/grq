@@ -75,10 +75,10 @@ export type StockColumn =
   | "researched";
 
 function StanceCell({ stance, rec }: { stance: string | null; rec: Recommendation | null }) {
-  // The slider shows GRQ's CALL (so headline + needle agree). With no dossier yet,
+  // The slider shows Alfred's CALL (so headline + needle agree). With no dossier yet,
   // fall back to the technical signal — clearly tagged so it reads as an input.
   const m = stance ? stanceMeta(stance) : null;
-  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="GRQ's call" title={`GRQ's call: ${m.blurb}`} />;
+  if (m) return <RatingBar label={m.label} tone={m.tone} pos={m.pos} note="Alfred's call" title={`Alfred's call: ${m.blurb}`} />;
   const sm = rec ? stanceMeta(rec.label) : null;
   if (sm) return <RatingBar label={sm.label} tone={sm.tone} pos={sm.pos} note="technical lean" title="No GRQ call yet — technical signal only (an input, not a verdict)" />;
   return <span className="text-xs text-teal-200/25">— no read yet</span>;
@@ -90,7 +90,7 @@ const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   last: { label: "Last", align: true },
   day: { label: "Day", align: true },
   signals: { label: "Signals", align: false },
-  call: { label: <>GRQ&apos;s call</>, align: false },
+  call: { label: <>Alfred&apos;s call</>, align: false },
   upside: {
     label: (
       <Term k="expected-return" align="right">
@@ -189,7 +189,7 @@ function hasDetail(r: StockRow): boolean {
   return !!(r.stance || r.rec || r.bottomLine || r.upsidePct != null || r.nearPct != null);
 }
 
-// The expansion panel: GRQ's call + its one-line blurb, the plain-English "why"
+// The expansion panel: Alfred's call + its one-line blurb, the plain-English "why"
 // (the dossier's bottomLine), the targets, and a link to the full dossier. Server-
 // rendered and handed to <ExpandableRow> as a prop (Cam 2026-06-17).
 function RowDetail({ r }: { r: StockRow }) {
@@ -200,7 +200,7 @@ function RowDetail({ r }: { r: StockRow }) {
       <div className="grid gap-x-6 gap-y-3 md:grid-cols-3">
       <div>
         <div className="text-[10px] uppercase tracking-wider text-teal-200/50">
-          {tech ? "Technical signal" : <Term k="agent-call">GRQ&apos;s call</Term>}
+          {tech ? "Technical signal" : <Term k="agent-call">Alfred&apos;s call</Term>}
         </div>
         {m ? (
           <>
@@ -281,7 +281,7 @@ const COL_NUMERIC: Record<StockColumn, boolean> = {
   researched: true,
 };
 
-// A flat bag of comparable values for one row — fed to <SortableTable>. GRQ's call
+// A flat bag of comparable values for one row — fed to <SortableTable>. Alfred's call
 // (and the signal lean) sort by the needle position, so Strong Buy → Strong Sell.
 function sortValues(r: StockRow): Record<string, string | number | null> {
   const callPos = (r.stance ? stanceMeta(r.stance)?.pos : r.rec ? stanceMeta(r.rec.label)?.pos : null) ?? null;

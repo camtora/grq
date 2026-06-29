@@ -11,6 +11,8 @@ import { usdCadRate } from "../lib/fx";
 import { notifyOut } from "./alerts";
 import { computeSignals, overallSignal } from "./signals";
 import { fmpProfile } from "../lib/fmp";
+import { upsertChainEdges } from "../lib/graph/edges";
+import { bareChainKey } from "../lib/chess";
 import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
@@ -470,6 +472,125 @@ const resolveAgendaTool = tool(
   },
 );
 
+// Chess Moves (docs/CHESS-MOVES.md) — save the finished board for a thematic session.
+// Research-only (no trades, no §6 gate). Writes the theme (READY) + ranked plays, and
+// persists the chain LINKS into the knowledge graph (source "chain") so each play's
+// stock-page Related panel surfaces the relationship.
+const saveChessBoardTool = tool(
+  "save_chess_board",
+  "Chess Moves: save the finished board for your assigned theme. Call this ONCE, at the very end, after you've mapped the chain and chosen the plays. themeId is the id in your assignment. Provide: title (a punchy board name), anchor (the theme/chain in a short phrase), thesis (markdown — the force in motion and how it ripples), bottomLine (3–5 '- ' bullets, plain-English), board (the value-chain map: stages each with a label/role and items, plus directed links between TICKERS that move together — links must reference the plays' tickers), plays (8–12 ripple-effect leads — each is a LEAD, never a Buy/Hold/Sell verdict), and levers (2–4 falsifiable things that would reframe the whole thesis, same shape as a dossier's confidenceLevers). For EACH play set: symbol (bare ticker), exchange (EXACT — NYSE/NASDAQ/AMEX/TSX/TSXV/CSE/NEO — required to resolve the right company), role (where it sits in the chain), direction (BENEFICIARY/VICTIM/NEUTRAL), effectOrder (1/2/3 = 1st/2nd/3rd-order effect), thesis (one line — why this piece moves), conviction (0–100), obscurity (1–5). Be honest: these are probabilistic ripple bets, not facts — there is no supply-chain data feed, this is your reasoning.",
+  {
+    themeId: z.number().int().positive(),
+    title: z.string().min(3).max(140),
+    anchor: z.string().min(2).max(140),
+    thesis: z.string().min(20).max(8000),
+    bottomLine: z.string().max(2000).optional(),
+    board: z.object({
+      stages: z
+        .array(
+          z.object({
+            label: z.string().min(1).max(80),
+            role: z.string().max(120).optional(),
+            items: z
+              .array(z.object({ symbol: z.string().max(14).optional(), name: z.string().min(1).max(120), note: z.string().max(200).optional() }))
+              .max(20)
+              .default([]),
+          }),
+        )
+        .max(8)
+        .default([]),
+      links: z.array(z.object({ from: z.string().min(1).max(80), to: z.string().min(1).max(80), label: z.string().max(60).optional() })).max(40).default([]),
+    }),
+    plays: z
+      .array(
+        z.object({
+          symbol: z.string().min(1).max(14),
+          exchange: z.enum(["NYSE", "NASDAQ", "AMEX", "TSX", "TSXV", "CSE", "NEO"]),
+          role: z.string().min(2).max(120),
+          direction: z.enum(["BENEFICIARY", "VICTIM", "NEUTRAL"]),
+          effectOrder: z.number().int().min(1).max(3),
+          thesis: z.string().min(10).max(600),
+          conviction: z.number().int().min(0).max(100),
+          obscurity: z.number().int().min(1).max(5).optional(),
+        }),
+      )
+      .min(1)
+      .max(14),
+    levers: z
+      .array(
+        z.object({
+          gap: z.string().min(3).max(200),
+          direction: z.enum(["up", "down", "tighten"]),
+          magnitude: z.enum(["small", "moderate", "large"]),
+          kind: z.enum(["data-gap", "catalyst"]),
+          trigger: z.string().max(160).default(""),
+          retrievable: z.boolean().optional(),
+        }),
+      )
+      .max(5)
+      .optional(),
+    sources: z.array(z.string()).default([]),
+  },
+  async (args) => {
+    const theme = await prisma.chessTheme.findUnique({ where: { id: args.themeId } });
+    if (!theme) return text(`ERROR: no Chess theme #${args.themeId} — was it created? Don't retry blindly.`);
+
+    // Confirm each play's (ticker, exchange) resolves to a real listing + capture its
+    // canonical FMP name (the same identity check write_journal does), best-effort.
+    const resolved = await Promise.all(
+      args.plays.map(async (p) => {
+        const listing = yahooForListing(p.symbol, p.exchange);
+        const companyName = (await fmpProfile(listing).catch(() => null))?.companyName || null;
+        return { ...p, yahoo: listing, companyName };
+      }),
+    );
+
+    await prisma.chessTheme.update({
+      where: { id: args.themeId },
+      data: {
+        status: "READY",
+        title: args.title,
+        anchor: args.anchor,
+        thesis: args.thesis,
+        bottomLine: args.bottomLine,
+        boardJson: JSON.stringify(args.board),
+        confidenceLeversJson: args.levers?.length ? JSON.stringify(args.levers) : undefined,
+        completedAt: new Date(),
+        agentVersion: AGENT_VERSION,
+      },
+    });
+    // Re-runnable: replace any prior plays for this theme.
+    await prisma.chessPlay.deleteMany({ where: { themeId: args.themeId } });
+    await prisma.chessPlay.createMany({
+      data: resolved.map((p, i) => ({
+        themeId: args.themeId,
+        symbol: p.symbol.toUpperCase(),
+        yahoo: p.yahoo,
+        exchange: p.exchange,
+        companyName: p.companyName,
+        role: p.role,
+        direction: p.direction,
+        effectOrder: p.effectOrder,
+        thesis: p.thesis,
+        conviction: p.conviction,
+        obscurity: p.obscurity,
+        rank: i + 1,
+      })),
+    });
+
+    // Persist the chain LINKS into the knowledge graph — but only between tickers that
+    // are actual plays / board items (drop links that reference a stage label or a
+    // name-only node, which aren't real tickers).
+    const valid = new Set<string>();
+    for (const p of resolved) valid.add(bareChainKey(p.symbol));
+    for (const st of args.board.stages) for (const it of st.items) if (it.symbol) valid.add(bareChainKey(it.symbol));
+    const tickerLinks = args.board.links.filter((l) => valid.has(bareChainKey(l.from)) && valid.has(bareChainKey(l.to)));
+    const edges = await upsertChainEdges(args.title, tickerLinks).catch(() => 0);
+
+    return text(`Saved Chess board #${args.themeId} "${args.title}" — ${resolved.length} plays, ${tickerLinks.length} chain links (${edges} graph edges). The board is now live.`);
+  },
+);
+
 export const grqServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
@@ -547,7 +668,7 @@ export const makeResearchServer = () =>
   createSdkMcpServer({
     name: "grq",
     version: "1.0.0",
-    tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool],
+    tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool, saveChessBoardTool],
   });
 
 export const GRQ_RESEARCH_TOOL_NAMES = [
@@ -555,4 +676,5 @@ export const GRQ_RESEARCH_TOOL_NAMES = [
   "mcp__grq__get_journal",
   "mcp__grq__get_signals",
   "mcp__grq__write_journal",
+  "mcp__grq__save_chess_board",
 ];

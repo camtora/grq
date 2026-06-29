@@ -570,6 +570,43 @@ Lead with WHY it matters, not just what the company is. Be honest: smaller names
   // drops ~8–12 redundant Opus research passes per hunt — finds nobody opens cost nothing.
 }
 
+/** Chess Moves (docs/CHESS-MOVES.md) — a thematic / supply-chain reasoning pass. Maps a
+ *  value chain, names the force in motion, and enumerates ripple-effect PLAYS (2nd/3rd-order
+ *  winners & losers) as LEADS, then saves the board via save_chess_board. Research-only;
+ *  never trades. brief present = a member's brief; null = Alfred self-picks a timely board
+ *  (the weekly run). */
+export async function runChessMoves(theme: { id: number; brief: string | null }): Promise<void> {
+  const universe = await allUniverse();
+  const have = universe.map((u) => u.symbol).join(", ");
+  const b = theme.brief?.trim();
+  const focus = b
+    ? `\n## THE BRIEF — a member asked you to map this\n«${b}»\n\nThis is the board. Theme, sector, chain, catalyst, and timing all come from it.\n`
+    : `\n## SELF-PICK — no brief; this is the weekly "board of the week"\nChoose ONE timely, high-interest industry or value chain to map — something with a force VISIBLY in motion right now (a demand shift, a capacity constraint, a new regulation, a big player's move). Prefer a chain where the 2nd/3rd-order names are still under-appreciated.\n`;
+  const prompt = `# TASK: Chess Moves — map the board, predict the next move (${etDateStr()})
+${focus}
+You are doing what a sharp macro / supply-chain analyst does: pick the board (an industry or an interrelated chain of companies), GROK how the pieces depend on each other, name the FORCE already in motion, then trace the 2nd- and 3rd-order plays — the names that move BECAUSE of it, before the market fully reprices them. This is pattern-recognition and forecasting, NOT a stock screen.
+
+Honesty bar (load-bearing): there is no supply-chain data feed — this is YOUR reasoning, web-researched. Treat every ripple as a PROBABILISTIC bet with explicit assumptions, never a fact. Each play is a LEAD (something worth researching), never a Buy/Hold/Sell verdict.
+
+REACH: North America preferred (the fund holds CAD + USD; TSX · TSXV · CSE · NEO + NYSE · Nasdaq), but a board can include the best foreign names as leads-only. We already track these (fine to reference, but the value is in the names we DON'T cover): ${have || "(none)"}.
+
+Use WebSearch (and WebFetch on the best leads) to:
+1. MAP THE BOARD — lay the value chain out end to end: upstream (raw inputs / suppliers), midstream (the core operators), downstream (customers / OEMs), plus the adjacent picks-and-shovels and substitutes. Name the real companies in each stage.
+2. READ THE POSITION — name the single dominant force in motion and exactly how it ripples (the thesis), and what would change your mind (the levers).
+3. CALL THE PLAYS — 8–12 ripple-effect names, each tagged BENEFICIARY / VICTIM / NEUTRAL and by effect order (1 = directly hit, 2/3 = downstream consequence). Favour under-the-radar names (higher obscurity) — the obvious mega-cap is the least interesting play.
+
+Then call **save_chess_board** EXACTLY ONCE with themeId=${theme.id}: the title, anchor, thesis, bottomLine, the board (stages + directed links between the plays' TICKERS), the plays (each with its EXACT exchange — required to resolve the right company), and 2–4 falsifiable levers. The links connect tickers that move together (a supplier → its customer). Don't call any other write tool — the board is the deliverable.`;
+  await runSession({ label: `chess:${theme.id}`, prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 44 });
+
+  // Quiet-fail guard (mirror the dossier queue): if the session didn't flip the theme to
+  // READY, mark it FAILED so the page shows an honest state and the runner moves on.
+  const after = await prisma.chessTheme.findUnique({ where: { id: theme.id }, select: { status: true } });
+  if (after && after.status !== "READY") {
+    await prisma.chessTheme.update({ where: { id: theme.id }, data: { status: "FAILED", completedAt: new Date() } });
+    await alert("warning", `Chess Moves session produced no board (theme #${theme.id})`, "", { category: "system" });
+  }
+}
+
 /** Smart-money read (D27) — the EDITORIAL narrative on top of the structured
  *  data the runner already ingested (FMP congress/insider/13F + OpenInsider) and
  *  the /market/smart-money page already shows. The model synthesizes, it doesn't

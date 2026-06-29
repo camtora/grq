@@ -6,6 +6,7 @@ import { isOwner } from "@/lib/users";
 import { getPortfolio } from "@/lib/portfolio";
 import { usdCadRate } from "@/lib/fx";
 import { PageHeader, Card, Chip } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import {
   DIALS,
   HARD,
@@ -63,6 +64,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
     const decisions = await getDecisions();
     return (
       <main>
+        <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
         <PageHeader title="How GRQ works" sub="The complete engineering decision record — every choice, with its rationale, newest first. This reads the live decision log, so new decisions appear here automatically." />
         {tabBar}
         {decisions.length === 0 ? (
@@ -110,6 +112,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
     return (
       <main>
+        <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
         <PageHeader
           title="How GRQ works"
           sub="The daily build diary — a plain-English rundown of what changed in the app each day, written automatically at 3am ET so the two of us stay on the same page."
@@ -206,6 +209,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
   return (
     <main>
+      <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
       <PageHeader
         title="How GRQ works"
         sub="The plain-English operating manual. The rules and numbers below are pulled live from the same code the agent obeys — so this page can't drift out of sync with reality."
@@ -216,7 +220,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
       <div className="space-y-8">
         {/* The bar */}
         <Card className="p-6">
-          <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">The bar we're aiming at</div>
+          <div className="mb-2"><PanelHeader>The bar we're aiming at</PanelHeader></div>
           <p className="mt-3 text-teal-100/80">
             The goal is <strong className="text-teal-50">not</strong> simply to beat the TSX — anyone can roughly match the
             index with one click. The real bar is clearing the fund&apos;s own running costs: about{" "}
@@ -237,7 +241,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* The money rules */}
         <Card className="p-6">
-          <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">The money rules (the agent can never break these)</div>
+          <div className="mb-2"><PanelHeader>The money rules (the agent can never break these)</PanelHeader></div>
           <ul className="mt-3 space-y-2.5">
             {guardrails.map((g, i) => (
               <li key={i} className="flex gap-3 text-sm text-teal-100/80">
@@ -250,13 +254,14 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* The current dials */}
         <Card className="p-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">The current dials</div>
-            <span className="text-xs text-teal-200/50">
-              Risk setting: <Chip tone="teal">{riskLevel}</Chip> · adjustable on{" "}
-              <Link href="/settings" className="text-teal-300 hover:underline">Settings</Link>
-            </span>
-          </div>
+          <div className="mb-2"><PanelHeader
+            right={
+              <span className="text-xs text-teal-200/50">
+                Risk setting: <Chip tone="teal">{riskLevel}</Chip> · adjustable on{" "}
+                <Link href="/settings" className="text-teal-300 hover:underline">Settings</Link>
+              </span>
+            }
+          >The current dials</PanelHeader></div>
           <div className="mt-4 divide-y divide-teal-400/10">
             {dialRows.map((r) => (
               <div key={r.k} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-baseline sm:gap-4">
@@ -270,7 +275,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* Daily rhythm */}
         <Card className="p-6">
-          <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">The daily rhythm</div>
+          <div className="mb-2"><PanelHeader>The daily rhythm</PanelHeader></div>
           <div className="mt-4 space-y-3">
             {rhythm.map((r) => (
               <div key={r.t} className="flex flex-col gap-1 sm:flex-row sm:gap-4">
@@ -283,7 +288,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* How it learns */}
         <Card className="p-6">
-          <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">How it learns</div>
+          <div className="mb-2"><PanelHeader>How it learns</PanelHeader></div>
           <ul className="mt-3 space-y-2.5">
             {learns.map((l, i) => (
               <li key={i} className="flex gap-3 text-sm text-teal-100/80">
@@ -296,7 +301,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* Changelog */}
         <div>
-          <div className="mb-3 text-sm font-semibold uppercase tracking-wider text-teal-200/50">What&apos;s changed</div>
+          <div className="mb-3"><PanelHeader>What&apos;s changed</PanelHeader></div>
           <div className="space-y-4">
             {CHANGELOG.map((c, i) => (
               <Card key={i} className="p-5">
@@ -314,7 +319,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
         {/* Under the hood */}
         <Card className="p-6">
-          <div className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">Under the hood</div>
+          <div className="mb-2"><PanelHeader>Under the hood</PanelHeader></div>
           <p className="mt-2 text-sm text-teal-200/50">
             The raw materials, for full transparency — exactly what the agent is told and the exact numbers it&apos;s bound by.
           </p>

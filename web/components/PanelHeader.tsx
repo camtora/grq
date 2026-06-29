@@ -11,16 +11,23 @@ export default function PanelHeader({
   live = false,
   fresh,
   freshTitle,
+  right,
 }: {
   children: React.ReactNode;
   live?: boolean;
   fresh?: string;
   freshTitle?: string;
+  /** Optional right-aligned slot (a link or meta line) for pages whose panels
+   *  carry an action instead of a freshness badge. Takes precedence over the
+   *  live/fresh badge when both are somehow set. */
+  right?: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">{children}</h2>
-      {(live || fresh) && (
+      {right ? (
+        <div className="shrink-0 text-xs">{right}</div>
+      ) : (live || fresh) ? (
         <span
           title={freshTitle ?? (live ? "Live — pulled fresh from the market-data feed each time you open this page" : undefined)}
           className={`mt-px inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider ${live ? "text-emerald-400/80" : "text-teal-200/35"}`}
@@ -28,7 +35,7 @@ export default function PanelHeader({
           {live && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />}
           {live ? "live" : fresh}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

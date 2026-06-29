@@ -1,0 +1,133 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { fmtWhen } from "@/lib/money";
+import { Card, Chip, PageHeader } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
+import Md from "@/components/Md";
+import ConfidenceLevers from "@/components/ConfidenceLevers";
+import { parseConfidenceLevers } from "@/lib/confidence-levers";
+import ChessBoard from "@/components/chess/ChessBoard";
+import PlayCard from "@/components/chess/PlayCard";
+import { buildPlayViews, parseBoard, bareChainKey } from "@/lib/chess";
+
+export const dynamic = "force-dynamic";
+
+// One Chess Moves board (docs/CHESS-MOVES.md): the chain map, the thesis + what would
+// change our mind, and the ripple-effect plays heat-ranked. Leads, never verdicts.
+export default async function ChessBoardPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: raw } = await params;
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) notFound();
+
+  const theme = await prisma.chessTheme.findUnique({
+    where: { id },
+    include: { plays: { orderBy: { rank: "asc" } } },
+  });
+  if (!theme || theme.status === "RETIRED") notFound();
+
+  const session = await getSession();
+  const isMember = session?.role === "member";
+
+  const backLink = (
+    <Link href="/chess" className="text-xs text-teal-300 hover:underline">
+      ← chess moves
+    </Link>
+  );
+
+  // In-flight / failed boards: an honest holding state, no board to show yet.
+  if (theme.status !== "READY") {
+    const working = theme.status === "PENDING" || theme.status === "RUNNING";
+    return (
+      <main>
+        {backLink}
+        <div className="mt-2" />
+        <PageHeader title={theme.title} />
+        <Card className="p-6 text-sm text-teal-200/70">
+          {working ? (
+            <>
+              <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-teal-300/30 border-t-teal-300 align-middle motion-reduce:animate-none" aria-hidden />
+              Alfred is mapping this board — the chain and the ripple plays land here in a minute or two.
+            </>
+          ) : (
+            <>This board didn&apos;t come together. {isMember ? "Try briefing it again from Chess Moves." : "Check back soon."}</>
+          )}
+        </Card>
+      </main>
+    );
+  }
+
+  const plays = await buildPlayViews(theme.plays);
+  const board = parseBoard(theme.boardJson);
+  const hrefBySym = new Map(plays.map((p) => [bareChainKey(p.sym), p.href]));
+  const levers = parseConfidenceLevers(theme.confidenceLeversJson);
+
+  return (
+    <main>
+      {backLink}
+      <div className="mt-2" />
+      <PageHeader
+        title={theme.title}
+        sub={`${theme.anchor} · mapped by ${theme.requestedBy ?? "Alfred"} · ${fmtWhen(theme.completedAt ?? theme.createdAt)}`}
+        right={theme.kind === "WEEKLY" ? <Chip tone="dim">board of the week</Chip> : undefined}
+      />
+
+      {/* Bottom line — the plain-English take (agent markdown → Md) */}
+      {theme.bottomLine && (
+        <Card className="mt-5 border-teal-400/20 bg-teal-400/[0.05] p-5">
+          <div className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The take</div>
+          <Md text={theme.bottomLine} />
+        </Card>
+      )}
+
+      {/* The thesis — the force in motion */}
+      {theme.thesis && (
+        <div className="mt-6">
+          <PanelHeader>The position</PanelHeader>
+          <Card className="mt-2 p-5">
+            <Md text={theme.thesis} />
+          </Card>
+        </div>
+      )}
+
+      {/* What would change our mind */}
+      {levers.length > 0 && (
+        <div className="mt-6">
+          <ConfidenceLevers levers={levers} structuralGaps={[]} />
+        </div>
+      )}
+
+      {/* The board — the chain map */}
+      {board.stages.length > 0 && (
+        <div className="mt-6">
+          <PanelHeader>The board</PanelHeader>
+          <div className="mt-2">
+            <ChessBoard board={board} hrefBySym={hrefBySym} />
+          </div>
+        </div>
+      )}
+
+      {/* The plays — heat-ranked ripple-effect leads */}
+      <div className="mt-7">
+        <PanelHeader>
+          The plays <span className="font-normal normal-case text-teal-200/40">· {plays.length} ripple-effect leads, heat-ranked</span>
+        </PanelHeader>
+        {plays.length > 0 ? (
+          <div className="mt-2 space-y-3">
+            {plays.map((p) => (
+              <PlayCard key={p.id} play={p} isMember={isMember} />
+            ))}
+          </div>
+        ) : (
+          <Card className="mt-2 p-5 text-sm text-teal-200/50">No plays on this board.</Card>
+        )}
+      </div>
+
+      <p className="mt-6 text-xs text-teal-200/40">
+        Heat is GRQ&apos;s derived &ldquo;ready to pop&rdquo; read (conviction + recent momentum + how under-the-radar a name is), not a promise. Each play
+        is a LEAD — Alfred can&apos;t trade these; a name becomes tradeable only after a full dossier clears the same guardrails as everything else.
+      </p>
+    </main>
+  );
+}

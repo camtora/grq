@@ -70,7 +70,7 @@ function directiveToContract(d: "PINNED" | "BLOCKED" | string | null | undefined
   return null;
 }
 
-// GRQ's call as the 7-point rating object (mirrors lib/stance.ts `stanceMeta`) — the
+// Alfred's call as the 7-point rating object (mirrors lib/stance.ts `stanceMeta`) — the
 // shape the app's RatingBar renders. Accepts either the new 7-point label or a legacy
 // call word; null when unrated (A6).
 type ContractRating = { label: string; abbr: string; tone: string; pos: number; blurb: string };
@@ -692,7 +692,7 @@ export async function wireResponse(viewerEmail?: string | null, cap = 32) {
 
   // 3) Watches — the SOCIAL lane. Hide the viewer's own watches; show what everyone
   // ELSE is tracking (the other human member first, then the agent). Each is enriched
-  // with the latest research we hold (GRQ's call, bottom line, targets, signals) so the
+  // with the latest research we hold (Alfred's call, bottom line, targets, signals) so the
   // card carries real substance, not just "X is watching." Skip names already shown as
   // a find/dossier so a ticker appears once.
   const shownSyms = new Set([...findSyms, ...dossierPicked.map((d) => d.symbol as string)]);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, EmptyState } from "@/components/ui";
+import { PageHeader, Card, EmptyState } from "@/components/ui";
 import ModelTile from "@/components/race/ModelTile";
 import { loadStandings } from "@/lib/race/standings";
 import { etDateStr } from "@/agent/calendar";
@@ -38,7 +38,8 @@ export default async function RacePage() {
               <ModelTile key={s.model} s={s} rank={i + 1} today={today} />
             ))}
           </div>
-          <details className="mt-4 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4">
+          <Card className="mt-4 p-4">
+          <details>
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-teal-200/50">How Second Opinions works</summary>
             <ul className="mt-3 space-y-2 text-xs leading-relaxed text-teal-100/70">
               <li>
@@ -79,6 +80,7 @@ export default async function RacePage() {
               </li>
             </ul>
           </details>
+          </Card>
         </>
       )}
     </main>

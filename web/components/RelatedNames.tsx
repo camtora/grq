@@ -47,7 +47,7 @@ export default function RelatedNames({ items, cadListing = false }: { items: Rel
                     </div>
                     {m && tone ? (
                       <span
-                        title={`GRQ's call: ${m.label} — ${m.blurb}`}
+                        title={`Alfred's call: ${m.label} — ${m.blurb}`}
                         className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${tone.bg} ${tone.text}`}
                       >
                         {m.abbr}

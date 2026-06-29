@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import JournalSection from "@/components/JournalSection";
 
@@ -9,6 +10,7 @@ export default async function Journal({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   return (
     <main>
+      <Link href="/portfolio" className="text-xs text-teal-300 hover:underline">← portfolio</Link>
       <PageHeader
         title="Journal"
         sub="The agent's working memory — every thesis, decision, trade, retro, and lesson, including the decisions not to trade. The full order ledger is at the bottom."

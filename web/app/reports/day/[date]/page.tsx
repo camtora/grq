@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { startOfEtDay, etDateStr } from "@/agent/calendar";
 import { Card, PageHeader, Chip, EmptyState } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import Md from "@/components/Md";
 import { Stats, parseStats } from "@/components/ReportStats";
 
@@ -79,7 +80,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
             <Card className="p-5">
               <details open className="group">
                 <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The close</h2>
+                  <div className="mb-2"><PanelHeader>The close</PanelHeader></div>
                   <span className="text-xs tabular-nums text-teal-200/40">{etTime(eod.createdAt)} ET</span>
                   <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
                   <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
@@ -94,9 +95,9 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
 
           {/* Intraday updates — newest first, each entry collapsed by default. */}
           <Card className="p-5">
-            <h2 className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">
+            <div className="mb-3"><PanelHeader>
               Intraday updates {intraday.length > 0 && <span className="text-teal-200/40">· {intraday.length}</span>}
-            </h2>
+            </PanelHeader></div>
             {intraday.length === 0 ? (
               <p className="text-sm text-teal-200/40">No intraday updates filed.</p>
             ) : (
@@ -124,7 +125,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
           <Card className="p-5">
             <details open className="group">
               <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Morning plan</h2>
+                <div className="mb-2"><PanelHeader>Morning plan</PanelHeader></div>
                 {plan && <span className="text-xs tabular-nums text-teal-200/40">{etTime(plan.at)} ET</span>}
                 <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
                 <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>
@@ -141,7 +142,7 @@ export default async function DayReport({ params }: { params: Promise<{ date: st
             <Card className="p-5">
               <details className="group">
                 <summary className="flex cursor-pointer list-none items-center gap-3 [&::-webkit-details-marker]:hidden">
-                  <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Pre-market read</h2>
+                  <div className="mb-2"><PanelHeader>Pre-market read</PanelHeader></div>
                   <span className="text-xs tabular-nums text-teal-200/40">{etTime(premorn.at)} ET</span>
                   <span className="ml-auto text-xs text-teal-300/60 group-open:hidden">▸ show</span>
                   <span className="ml-auto hidden text-xs text-teal-300/40 group-open:inline">▾ hide</span>

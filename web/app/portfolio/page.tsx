@@ -10,7 +10,10 @@ import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import PersonalLane, { type PersonalRow } from "@/components/PersonalLane";
+import ConnectSplash from "@/components/accounts/ConnectSplash";
+import PanelHeader from "@/components/PanelHeader";
 import { allUniverse } from "@/lib/universe";
+import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor } from "@/lib/external/store";
 import { etDateStr } from "@/agent/calendar";
 
@@ -82,7 +85,8 @@ export default async function Portfolio() {
   // Cam sees his), members-only, UI-only contrast — the agent never reads these.
   let personalRows: PersonalRow[] = [];
   let personalTotal = "";
-  const personalConfigured = session?.role === "member" && snaptradeConfiguredFor(session.email);
+  let personalCadCents = 0; // external holdings summed in CAD (USD valued at fx)
+  const personalConfigured = session?.role === "member" && (await snaptradeConfiguredFor(session.email));
   if (session?.role === "member") {
     const [meView] = await accountsForMembers([session.email]);
     const holdings = (meView?.accounts ?? []).flatMap((a) =>
@@ -129,6 +133,8 @@ export default async function Portfolio() {
       const byCur = new Map<string, number>();
       for (const h of holdings) byCur.set(h.currency, (byCur.get(h.currency) ?? 0) + h.marketValueCents);
       personalTotal = [...byCur.entries()].map(([c, cents]) => money(cents, c)).join(" · ");
+      const fxUsdCad = await usdCadRate();
+      personalCadCents = holdings.reduce((s, h) => s + toCadCents(h.marketValueCents, h.currency, fxUsdCad), 0);
     }
   }
 
@@ -154,30 +160,36 @@ export default async function Portfolio() {
   const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
 
+  // "Outside GRQ" stat tile — the member's external (read-only) holdings, summed in
+  // CAD. Only shown when they actually hold something outside the fund.
+  const showExternal = session?.role === "member" && personalCadCents > 0;
+
   // The main cards, factored out so the layout can be arranged two ways without
   // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
   // grid row (Activity matches the Positions height) and brief/journal + Agenda drop to
   // the row below; without one, the classic single-column-of-cards + full-height rail.
-  const positionsCard = (
-    <Card className="overflow-x-auto">
-      <div className="flex items-baseline justify-between px-5 pt-4">
-        <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-          Positions
-        </span>
-        <span className="text-xs text-teal-200/40">
-          {pf.quotesAsOf
-            ? `quotes delayed ~15 min · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
-            : "ACB includes commissions"}
-        </span>
-      </div>
-      {pf.positions.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-teal-200/40">
-          All cash — the agent researches at 9:00 ET and only buys when a thesis clears
-          every guardrail. Patience is a position.
-        </p>
-      ) : (
-        <SortableTable
-          className="mt-2 w-full text-sm"
+  const positionsPanel = (
+    <div className="space-y-2">
+      <PanelHeader
+        right={
+          <span className="text-teal-200/40">
+            {pf.quotesAsOf
+              ? `quotes delayed ~15 min · as of ${pf.quotesAsOf.toLocaleTimeString("en-CA", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" })} ET`
+              : "ACB includes commissions"}
+          </span>
+        }
+      >
+        Positions
+      </PanelHeader>
+      <Card className="overflow-x-auto">
+        {pf.positions.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-teal-200/40">
+            All cash — the agent researches at 9:00 ET and only buys when a thesis clears
+            every guardrail. Patience is a position.
+          </p>
+        ) : (
+          <SortableTable
+            className="w-full text-sm"
           headRowClassName="text-left text-xs uppercase tracking-wider text-teal-200/40"
           initialSort={{ key: "symbol", dir: "asc" }}
           groups={[
@@ -255,39 +267,43 @@ export default async function Portfolio() {
               )}
             </>
           }
-        />
-      )}
-    </Card>
+          />
+        )}
+      </Card>
+    </div>
   );
 
-  const briefCard = latestBrief && (
-    <Card className="p-5">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">
-          {latestBrief.kicker}
-        </span>
-        <span className="shrink-0 text-xs text-teal-200/40">{fmtWhen(latestBrief.at)}</span>
-      </div>
-      <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
-      <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
-        <Sources sourcesJson={latestBrief.sourcesJson} />
-      </CollapsibleMd>
-      <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
-        <Link href={latestBrief.href} className="text-xs font-semibold text-teal-300 hover:underline">
-          {latestBrief.cta} →
-        </Link>
-      </div>
-    </Card>
+  const briefPanel = latestBrief && (
+    <div className="space-y-2">
+      <PanelHeader right={<span className="text-teal-200/40">{fmtWhen(latestBrief.at)}</span>}>
+        {latestBrief.kicker}
+      </PanelHeader>
+      <Card className="p-5">
+        <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
+        <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
+          <Sources sourcesJson={latestBrief.sourcesJson} />
+        </CollapsibleMd>
+        <div className="mt-3 border-t border-teal-400/10 pt-2 text-right">
+          <Link href={latestBrief.href} className="text-xs font-semibold text-teal-300 hover:underline">
+            {latestBrief.cta} →
+          </Link>
+        </div>
+      </Card>
+    </div>
   );
 
-  const journalCard = (
-    <Card className="p-5">
-      <div className="mb-3 flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wider text-teal-200/50">Latest journal</span>
-        <Link href="/journal" className="text-xs text-teal-300 hover:underline">
-          journal →
-        </Link>
-      </div>
+  const journalPanel = (
+    <div className="space-y-2">
+      <PanelHeader
+        right={
+          <Link href="/journal" className="text-teal-300 hover:underline">
+            journal →
+          </Link>
+        }
+      >
+        Latest journal
+      </PanelHeader>
+      <Card className="p-5">
       {recentJournal.length === 0 ? (
         <p className="text-sm text-teal-200/40">Quiet so far.</p>
       ) : (
@@ -301,27 +317,23 @@ export default async function Portfolio() {
           ))}
         </ul>
       )}
-    </Card>
-  );
-
-  const activityHeader = (
-    <div className="flex shrink-0 items-baseline justify-between px-5 pt-4">
-      <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">Activity</span>
-      <Link href="/journal" className="text-xs text-teal-300 hover:underline">
-        ledger →
-      </Link>
+      </Card>
     </div>
   );
 
-  const agendaCard = (
-    <Card className="overflow-hidden">
-      <div className="flex items-baseline justify-between px-5 pt-4">
-        <span className="text-xs font-semibold uppercase tracking-wider text-teal-300/70">Agenda</span>
-        <span className="shrink-0 text-xs text-teal-200/40">
-          {agenda.length} open · what the agent's watching for
-        </span>
-      </div>
-      <ul className="mt-2 divide-y divide-teal-400/10">
+  const agendaPanel = (
+    <div className="space-y-2">
+      <PanelHeader
+        right={
+          <span className="text-teal-200/40">
+            {agenda.length} open · what the agent&apos;s watching for
+          </span>
+        }
+      >
+        Agenda
+      </PanelHeader>
+      <Card className="overflow-hidden">
+      <ul className="divide-y divide-teal-400/10">
         {agenda.map((a) => (
           <li key={a.id} className="px-5 py-3">
             <div className="flex items-center gap-2">
@@ -338,7 +350,31 @@ export default async function Portfolio() {
           </li>
         ))}
       </ul>
-    </Card>
+      </Card>
+    </div>
+  );
+
+  // "Your accounts" — external (read-only) holdings. Sits under Positions in the
+  // left column (Activity fills the rail beside both): the linked lane when
+  // connected, otherwise the guided steps to connect — the panel never disappears.
+  const personalSection = session?.role === "member" && (
+    <div className="space-y-2">
+      <PanelHeader>
+        Your accounts{" "}
+        <span className="font-normal normal-case text-teal-200/40">
+          · outside the fund · read-only · GRQ can&apos;t trade these
+        </span>
+      </PanelHeader>
+      {personalRows.length > 0 ? (
+        <PersonalLane rows={personalRows} total={personalTotal} />
+      ) : personalConfigured ? (
+        <Card className="p-5 text-sm text-teal-200/50">
+          Linked — waiting on your first holdings sync. They&apos;ll appear here automatically.
+        </Card>
+      ) : (
+        <ConnectSplash />
+      )}
+    </div>
   );
 
   return (
@@ -359,7 +395,7 @@ export default async function Portfolio() {
         </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <section className={`grid grid-cols-2 gap-4 ${showExternal ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
         <StatCard
           label="Net asset value (CAD)"
           term="nav"
@@ -421,83 +457,53 @@ export default async function Portfolio() {
             </div>
           </div>
         </Card>
+        {showExternal && (
+          <StatCard
+            label="Outside GRQ (CAD)"
+            value={money(personalCadCents)}
+            note="your external accounts · read-only"
+          />
+        )}
       </section>
 
-      {hasAgenda ? (
-        // With an agenda: Positions and Activity share grid row 1 (so Activity stretches
-        // to the Positions height and scrolls internally), and brief/journal + Agenda drop
-        // to row 2 — putting the Agenda beside the agent's latest briefing.
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">{positionsCard}</div>
+      {/* Positions + Your accounts stack in the left column; Activity fills the
+          rail across the height of BOTH (on lg it's absolutely-filled so the row
+          track is set by the left column, then scrolls internally; on mobile it's
+          a normal block under them). */}
+      <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {positionsPanel}
+          {personalSection}
+        </div>
 
-          {/* On lg: an absolutely-filled card so the grid row track is set by Positions
-              alone; the Activity card fills that height and scrolls. On mobile it's a
-              normal block (full feed). */}
-          <div className="lg:relative lg:col-span-1 lg:self-stretch">
-            <Card className="flex flex-col overflow-hidden lg:absolute lg:inset-0">
-              {activityHeader}
-              <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
-                <ActivityFeed limit={12} compact />
-              </div>
-            </Card>
-          </div>
-
-          <div className="space-y-6 lg:col-span-2">
-            {briefCard}
-            {journalCard}
-          </div>
-          <aside className="lg:col-span-1">{agendaCard}</aside>
-        </section>
-      ) : (
-        // No agenda: the classic layout — a single column of cards with the full-height
-        // activity feed in the rail.
-        <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            {positionsCard}
-            {briefCard}
-            {journalCard}
-          </div>
-          <aside className="lg:col-span-1">
-            <Card className="overflow-hidden">
-              {activityHeader}
-              <div className="mt-2">
-                <ActivityFeed limit={15} compact />
-              </div>
-            </Card>
-          </aside>
-        </section>
-      )}
-
-      {personalRows.length > 0 && (
-        <section className="mt-6">
-          <div className="mb-2 flex items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold text-teal-100/80">
-              Your accounts
-              <span className="ml-2 font-normal text-teal-200/40">
-                outside the fund · read-only · GRQ can&apos;t trade these
-              </span>
-            </h2>
-          </div>
-          <PersonalLane rows={personalRows} total={personalTotal} />
-        </section>
-      )}
-
-      {session?.role === "member" && !personalConfigured && (
-        <section className="mt-6">
-          <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div className="text-sm text-teal-200/70">
-              <span className="font-semibold text-teal-100/80">See your own holdings beside the fund.</span>{" "}
-              Link your brokerage read-only and your personal accounts show up here, with GRQ&apos;s call on each name.
-            </div>
-            <Link
-              href="/accounts"
-              className="shrink-0 rounded-lg border border-teal-400/30 px-3 py-1.5 text-xs font-semibold text-teal-200/90 transition hover:bg-teal-400/10"
+        <div className="lg:relative lg:col-span-1 lg:self-stretch">
+          <div className="flex flex-col space-y-2 lg:absolute lg:inset-0">
+            <PanelHeader
+              right={
+                <Link href="/journal" className="text-teal-300 hover:underline">
+                  ledger →
+                </Link>
+              }
             >
-              Connect your accounts →
-            </Link>
-          </Card>
-        </section>
-      )}
+              Activity
+            </PanelHeader>
+            <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <ActivityFeed limit={20} compact />
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* The agent's latest briefing + journal, with the Agenda alongside when open. */}
+      <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          {briefPanel}
+          {journalPanel}
+        </div>
+        {hasAgenda ? <aside className="lg:col-span-1">{agendaPanel}</aside> : null}
+      </section>
     </main>
   );
 }

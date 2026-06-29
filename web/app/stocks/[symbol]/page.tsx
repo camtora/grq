@@ -491,7 +491,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               {/* The verdict word, with the bull/bear bar (the same call) directly under
                   it. Technicals are an input below, not a competing verdict. */}
               <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
-                {stance ? <Term k="agent-call">GRQ&apos;s call</Term> : "Technical signal"}
+                {stance ? <Term k="agent-call">Alfred&apos;s call</Term> : "Technical signal"}
               </div>
               {stance ? (
                 <>
@@ -586,7 +586,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </div>
               {/* The caveat back under the Why (Cam 2026-06-25). */}
               <p className="mt-3 text-[11px] text-teal-200/40">
-                The rating above is <span className="text-teal-200/60">GRQ&apos;s call</span> — its judgment. The technical
+                The rating above is <span className="text-teal-200/60">Alfred&apos;s call</span> — its judgment. The technical
                 signals are an input, not the verdict; the trade it actually places lives in its journal below.
               </p>
             </div>

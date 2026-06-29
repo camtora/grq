@@ -1,6 +1,7 @@
 import { prisma } from "../db";
 import { fmpEnabled, fmpPeerComparison } from "../fmp";
 import { trackedUniverse, type UniverseRow } from "../universe";
+import { bareChainKey } from "../chess";
 import { relatedFor, type RelatedName } from "./related";
 
 // Knowledge graph — Slice 2 persistence (docs/KNOWLEDGE-GRAPH.md). A deterministic
@@ -14,12 +15,15 @@ const STORE_LIMIT = 20; // persist more edges per node than the panel shows (8)
 
 async function persistEdges(fromSymbol: string, items: RelatedName[]): Promise<void> {
   const keep = items.map((i) => i.ticker);
-  // Drop neighbours that no longer hold for this node (stale edges).
+  // Drop neighbours that no longer hold for this node (stale edges). Never touch
+  // "chain" edges — those are written by Chess Moves (upsertChainEdges), not this
+  // deterministic scan, and must survive a recompute.
+  const notChain = { NOT: { sources: { contains: "chain" } } };
   if (keep.length === 0) {
-    await prisma.knowledgeEdge.deleteMany({ where: { fromSymbol } });
+    await prisma.knowledgeEdge.deleteMany({ where: { fromSymbol, ...notChain } });
     return;
   }
-  await prisma.knowledgeEdge.deleteMany({ where: { fromSymbol, toTicker: { notIn: keep } } });
+  await prisma.knowledgeEdge.deleteMany({ where: { fromSymbol, toTicker: { notIn: keep }, ...notChain } });
   for (const it of items) {
     const data = { toSymbol: it.symbol, weight: it.weight, sources: it.sources.join(","), why: it.why, computedAt: new Date() };
     await prisma.knowledgeEdge.upsert({
@@ -49,6 +53,50 @@ export async function runGraphScan(opts?: { withPeers?: boolean; limit?: number 
   let edges = 0;
   for (const row of nodes) edges += await buildEdgesForSymbol(row, opts).catch(() => 0);
   return { nodes: nodes.length, edges };
+}
+
+const CHAIN_WEIGHT = 62; // a Chess Moves board link — agent-reasoned, strong, below comention (70)
+
+/** Persist a Chess Moves board's chain links into the knowledge graph (source
+ *  "chain") so each play's stock-page Related panel surfaces the relationship.
+ *  Stored in BOTH directions (so either endpoint shows it), keyed by bare ticker to
+ *  match the panel's join (lib/graph/related.ts). Merges with any existing edge for a
+ *  pair rather than clobbering its provenance. Returns the number of edge rows written. */
+export async function upsertChainEdges(themeTitle: string, links: { from: string; to: string; label?: string }[]): Promise<number> {
+  if (links.length === 0) return 0;
+  const tracked = await trackedUniverse();
+  const symBy = new Map(tracked.map((r) => [bareChainKey(r.yahoo), r.symbol] as const));
+  const seen = new Set<string>();
+  let written = 0;
+  for (const l of links) {
+    const a = bareChainKey(l.from);
+    const b = bareChainKey(l.to);
+    if (!a || !b || a === b) continue;
+    const chainWhy = `linked in the “${themeTitle}” board${l.label ? ` (${l.label})` : ""}`;
+    for (const [from, to] of [[a, b] as const, [b, a] as const]) {
+      const k = `${from}>${to}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const existing = await prisma.knowledgeEdge.findUnique({ where: { fromSymbol_toTicker: { fromSymbol: from, toTicker: to } } }).catch(() => null);
+      const srcSet = new Set(existing ? existing.sources.split(",").filter(Boolean) : []);
+      srcSet.add("chain");
+      const why = existing && !existing.sources.includes("chain") ? `${existing.why} · ${chainWhy}` : chainWhy;
+      const data = {
+        toSymbol: symBy.get(to) ?? null,
+        weight: Math.max(existing?.weight ?? 0, CHAIN_WEIGHT),
+        sources: Array.from(srcSet).join(","),
+        why,
+        computedAt: new Date(),
+      };
+      await prisma.knowledgeEdge.upsert({
+        where: { fromSymbol_toTicker: { fromSymbol: from, toTicker: to } },
+        create: { fromSymbol: from, toTicker: to, ...data },
+        update: data,
+      });
+      written++;
+    }
+  }
+  return written;
 }
 
 export type GraphEdge = { toTicker: string; toSymbol: string | null; weight: number; sources: string[]; why: string };
