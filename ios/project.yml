@@ -8,7 +8,9 @@ options:
 
 settings:
   base:
-    MARKETING_VERSION: "0.1.0"
+    # The rebuild ships as 2.0 (old app was 1.0/build 3). A fresh marketing version keeps
+    # TestFlight build numbering clean for the new UI.
+    MARKETING_VERSION: "2.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
     # Cam's team (3WR9SN94Q4) baked in so an `xcodegen generate` doesn't wipe the
@@ -22,17 +24,13 @@ packages:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "7.1.0"
 
-# Explicit shared schemes so the names are stable (xcodegen otherwise names a scheme after
-# the TARGET — "GRQNext" — not the product). Both targets get one; pick "GRQ Next" to run
-# the rebuild, "GRQ" for the current shipping app.
+# Phase F cutover (the rebuild is now THE app): one scheme, "GRQ", builds the GRQNext target
+# (the new UI) at the production bundle id. The old target was retired here; its source files
+# stay on disk (GRQ/App, GRQ/Views, GRQ/Theme/Components.swift — now in no target) so the
+# cutover is fully reversible via git if needed. The shared layer (GRQ/Services, GRQ/Models,
+# GRQ/Theme/Theme.swift, GRQ/Resources, GRQ/Info.plist, GRQ/*.entitlements) is still used.
 schemes:
   GRQ:
-    build:
-      targets:
-        GRQ: all
-    run:
-      config: Debug
-  GRQ Next:
     build:
       targets:
         GRQNext: all
@@ -40,66 +38,10 @@ schemes:
       config: Debug
 
 targets:
-  GRQ:
-    type: application
-    platform: iOS
-    sources:
-      - path: GRQ
-      # The shared word + token layer is bundled as resources, so the app reads
-      # the SAME source of truth as the web app (../shared). This is "no separation".
-      - path: ../shared/content
-        buildPhase: resources
-        excludes:
-          - "*.md"
-      - path: ../shared/tokens.json
-        buildPhase: resources
-    dependencies:
-      - package: GoogleSignIn
-        product: GoogleSignIn
-    # Explicit Info.plist (xcodegen writes GRQ/Info.plist) — needed because the
-    # GoogleSignIn redirect requires a CFBundleURLTypes scheme, which the auto-
-    # generated plist can't express. The launch/orientation keys below reproduce
-    # what GENERATE_INFOPLIST_FILE previously did.
-    info:
-      path: GRQ/Info.plist
-      properties:
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-        # Silent (content-available) push wakes the app to clear delivered notifications
-        # (D64). Kept in the yml so `xcodegen generate` doesn't drop it from the plist on regen.
-        UIBackgroundModes:
-          - remote-notification
-        # GoogleSignIn: the iOS OAuth client id + its reversed-id URL scheme so
-        # Google can redirect back into the app (docs/IOS-PLAN.md).
-        GIDClientID: 848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf.apps.googleusercontent.com
-        CFBundleURLTypes:
-          - CFBundleURLSchemes:
-              - com.googleusercontent.apps.848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: ca.camerontora.grq
-        PRODUCT_NAME: GRQ
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        TARGETED_DEVICE_FAMILY: "1"
-      # Push Notifications entitlement, per build config — MUST live in the yml or an
-      # xcodegen regen drops it (dev→sandbox / release→production APNs; D53).
-      configs:
-        Debug:
-          CODE_SIGN_ENTITLEMENTS: GRQ/GRQ.entitlements
-        Release:
-          CODE_SIGN_ENTITLEMENTS: GRQ/GRQ-Release.entitlements
-
-  # GRQ Next — the ground-up UI rebuild (a SECOND app target, parallel dev). It REUSES
-  # the live data + auth layer (Services), the contract models (Models), the content
-  # loader (Content), and the colour palette (Theme.swift) — and builds an all-new shell
-  # + design system under GRQNext/. It does NOT include the old App/Views/Components.
-  # Dev bundle id ca.camerontora.grq2 so it installs alongside the shipping app; cut over
-  # to ca.camerontora.grq when it's ready to become THE app. (Signing/entitlements set in
-  # Xcode after `xcodegen generate`, same as the GRQ target.)
+  # The shipping app — the ground-up UI rebuild, now at the production bundle id
+  # ca.camerontora.grq (was ca.camerontora.grq2 during parallel dev). Builds an all-new
+  # shell + design system under GRQNext/, reusing the live data/auth layer (GRQ/Services),
+  # the contract models (GRQ/Models), the content loader, and the colour palette (Theme.swift).
   GRQNext:
     type: application
     platform: iOS
@@ -134,13 +76,13 @@ targets:
               - com.googleusercontent.apps.848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ca.camerontora.grq2
-        PRODUCT_NAME: GRQ Next
+        PRODUCT_BUNDLE_IDENTIFIER: ca.camerontora.grq
+        PRODUCT_NAME: GRQ
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
       # Push Notifications entitlement, per build config (D53). Automatic signing sees the
-      # aps-environment entitlement and provisions the Push capability for ca.camerontora.grq2.
+      # aps-environment entitlement and provisions the Push capability for ca.camerontora.grq.
       configs:
         Debug:
           CODE_SIGN_ENTITLEMENTS: GRQNext/GRQNext.entitlements

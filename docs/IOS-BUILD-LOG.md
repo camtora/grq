@@ -234,3 +234,27 @@ The rebuild's server half landed and the app now reaches live data end-to-end (D
 - **What's where:** Hunt/Smart-Money/Reports/Chat now work on the **existing installed app build** (the
   fix was server + edge). The **bull icon** and **top-right chat button** need a Mac rebuild. TestFlight
   still gated on the Apple **PLA acceptance + distribution cert** (account-side, not code).
+
+## 2026-06-29 — GRQ Next: ground-up UI rebuild (Phases A–F), now THE app
+
+Full from-scratch SwiftUI rebuild as a parallel target ("GRQ Next"), reusing the live
+data/auth layer (Services), the contract models (Models), the content loader, and the
+colour palette — all-new shell + design system under `ios/GRQNext/`.
+
+- **A** foundation — XcodeGen target, app shell, native 5-tab nav (Today · Portfolio ·
+  Markets · Experiments · More), design system (GCard/SectionHeader/Chip/StatTile/Fmt/
+  Loadable/RatingBar/charts/MD), money-rain tap-to-enter splash (the keeper).
+- **B** Today · Portfolio (+Accounts) · Stock dossier (full D60 panel parity).
+- **C** Markets — Watchlist/Universe/Browse/Smart Money.
+- **D** engagement — notifications, Ask-Alfred SSE chat, messages, FX approvals, settings
+  (risk dial + kill switch, Face-ID), price alerts, dossier actions (watch/directive/share/alert).
+- **E** discovery + experiments, all native — The Hunt, The Wire, and NEW mobile endpoints +
+  screens for Chess Moves, Second Opinions, Bull Race, Options Desk, Report Card.
+  New web routes: /api/accounts · /api/chess(+[id]) · /api/race · /api/bulls · /api/desk ·
+  /api/report-card · /api/settings (all in middleware MOBILE_API).
+- **F** cutover — GRQNext is now THE app at `ca.camerontora.grq`, v2.0; one scheme "GRQ".
+  The old target is retired from the build; its source files (GRQ/App, GRQ/Views,
+  GRQ/Theme/Components.swift) stay on disk, so the cutover is reversible via git.
+
+**Build:** `cd ios && rm -rf GRQ.xcodeproj && xcodegen generate && open GRQ.xcodeproj` →
+scheme **GRQ** → build. Web endpoints need a `web` deploy to return data.
