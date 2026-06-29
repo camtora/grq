@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest, displayName } from "@/lib/session";
-import { startOfEtDay } from "@/agent/calendar";
 import { CHESS } from "@/agent/policy";
 
 export const dynamic = "force-dynamic";
@@ -19,14 +18,9 @@ export async function POST(req: Request) {
   const brief = typeof body?.brief === "string" ? body.brief.trim().slice(0, 280) : "";
   if (brief.length < 3) return NextResponse.json({ error: "Give the board a theme or chain to map." }, { status: 400 });
 
-  // One board in flight at a time — don't pile up Opus sessions.
+  // One board in flight at a time — don't pile up Opus sessions (no per-day cap, Cam 2026-06-29).
   const active = await prisma.chessTheme.count({ where: { status: { in: ["PENDING", "RUNNING"] } } });
   if (active > 0) return NextResponse.json({ ok: true, queued: false, note: "A board is already being mapped — give it a minute." });
-
-  const today = await prisma.chessTheme.count({ where: { createdAt: { gte: startOfEtDay() } } });
-  if (today >= CHESS.maxThemesPerDay) {
-    return NextResponse.json({ ok: true, queued: false, note: `Daily limit reached (${CHESS.maxThemesPerDay} boards/day) — try again tomorrow.` });
-  }
 
   const theme = await prisma.chessTheme.create({
     data: { kind: "BRIEF", title: brief.slice(0, 80), anchor: brief.slice(0, 120), brief, requestedBy: displayName(session) },

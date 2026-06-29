@@ -568,10 +568,27 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 <div>
                   {bottomLineEntry?.bottomLine ? (
                     <>
+                      {/* Rendered to mirror "What would change our mind" (ConfidenceLevers):
+                          an eyebrow + intro + a divide-y row list, so the two read as
+                          siblings side by side (Cam 2026-06-29). */}
                       <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-teal-200/50">Why</div>
-                      <div className="text-sm text-teal-100/80">
-                        <Md text={bottomLineEntry.bottomLine} />
-                      </div>
+                      <p className="mb-3 text-[11px] text-teal-200/45">
+                        The plain-English case — the real reasons this is a buy, hold, or sell for us.
+                      </p>
+                      <ul className="divide-y divide-teal-400/10">
+                        {bottomLineEntry.bottomLine
+                          .split("\n")
+                          .map((l) => l.replace(/^[-*]\s*/, "").trim())
+                          .filter(Boolean)
+                          .map((b, i) => (
+                            <li key={i} className="flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0">
+                              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400/60" aria-hidden />
+                              <div className="min-w-0 flex-1 text-sm text-teal-100/85">
+                                <Md text={b} />
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
                     </>
                   ) : (
                     <p className="text-sm text-teal-100/80">

@@ -1140,6 +1140,35 @@ model ChessPlay {
   @@index([symbol])
 }
 
+// Report Card (docs/REPORT-CARD.md) — a forward-test ledger that grades the fund's dated,
+// directional predictions against actual price action. ONE row per prediction across all the
+// experiments: a Chess play, an Alfred 7-point call, a Hunt lead. We snapshot only the ENTRY
+// mark here (the close at the moment the call was filed, native ccy) — the forward return,
+// T+N marks and hit/miss are computed live at render off the Bar history, like The Race. A
+// READ-ONLY consumer: it never edits or trades the source experiments. NEUTRAL/HOLD (non-
+// directional) calls are dropped at snapshot time and never land here.
+model Prediction {
+  id              Int      @id @default(autoincrement())
+  source          String // "chess" | "call" | "hunt"
+  refId           Int // the source row's id (ChessPlay / UniverseMember / JournalEntry) — provenance + idempotency
+  symbol          String // bare ticker (display)
+  yahoo           String? // resolved listing symbol — the Bar key we price against
+  currency        String? // native ccy of the entry mark (USD | CAD)
+  direction       String // normalized: "UP" | "DOWN" (beneficiary/buy/lead → UP; victim/sell → DOWN)
+  label           String? // human tag: "Strong Buy", "beneficiary · 2nd-order", "hunt lead"
+  conviction      Int? // 0–100 when the source carries one
+  effectOrder     Int? // chess only: 1/2/3-order — lets the card test "do ripple plays pay?"
+  context         String? // the board title, "Alfred's call", or the hunt blurb — for the row's subtitle
+  predictedAt     DateTime // when the call was filed (the source row's createdAt/updatedAt)
+  entryPriceCents Int // the anchored entry: close on/before predictedAt, native ccy
+  entryCloseAt    DateTime? // the date of the close we anchored on (honesty: may lag predictedAt by a day)
+  createdAt       DateTime @default(now())
+
+  @@unique([source, refId]) // idempotent snapshot — re-running never double-counts a call
+  @@index([symbol])
+  @@index([predictedAt])
+}
+
 // Market Base Layer (docs/MARKET-BASE-LAYER.md) — a wide, cheap awareness layer
 // BELOW the universe: every real (non-ETF) company on NASDAQ/NYSE/TSX/TSXV, with a
 // Tier-0 deterministic screen score and an optional Tier-1 Haiku light-tag. A name

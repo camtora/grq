@@ -453,21 +453,20 @@ async function maybeScheduledSessions() {
   if (CHESS.enabled) {
     const pendingTheme = await prisma.chessTheme.findFirst({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" } });
     if (pendingTheme) {
-      const ranToday = await prisma.chessTheme.count({ where: { status: { in: ["READY", "FAILED"] }, completedAt: { gte: dayStart } } });
-      if (ranToday < CHESS.maxThemesPerDay) {
-        await prisma.chessTheme.update({ where: { id: pendingTheme.id }, data: { status: "RUNNING" } });
-        sessionRunning = true;
-        try {
-          await runChessMoves({ id: pendingTheme.id, brief: pendingTheme.brief });
-          const done = await prisma.chessTheme.findUnique({ where: { id: pendingTheme.id }, select: { status: true, title: true } });
-          if (done?.status === "READY") {
-            await alert("info", `Chess Moves board ready: ${done.title}`, "A fresh value-chain board is live on Chess Moves.", { category: "hunt" });
-          }
-        } finally {
-          sessionRunning = false;
+      // No per-day cap (Cam 2026-06-29) — a pending board always runs; the API's
+      // one-in-flight guard is the only bound.
+      await prisma.chessTheme.update({ where: { id: pendingTheme.id }, data: { status: "RUNNING" } });
+      sessionRunning = true;
+      try {
+        await runChessMoves({ id: pendingTheme.id, brief: pendingTheme.brief });
+        const done = await prisma.chessTheme.findUnique({ where: { id: pendingTheme.id }, select: { status: true, title: true } });
+        if (done?.status === "READY") {
+          await alert("info", `Chess Moves board ready: ${done.title}`, "A fresh value-chain board is live on Chess Moves.", { category: "hunt" });
         }
-        return;
+      } finally {
+        sessionRunning = false;
       }
+      return;
     }
   }
 

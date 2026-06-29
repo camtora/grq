@@ -12,7 +12,7 @@ import ChessResearchButton from "@/components/chess/ChessResearchButton";
 import type { ChessPlayView } from "@/lib/chess";
 
 // One ChessPlay as a heat-ranked row (mirrors The Hunt's HuntRow). Leads-not-verdicts:
-// it shows direction (beneficiary/victim), effect order, conviction + heat — and GRQ's
+// it shows direction (beneficiary/victim), effect order, conviction + heat — and Alfred's
 // call only when we already cover the name; otherwise it's a "lead". Server component;
 // only the Research button is a client island.
 const DIR = {

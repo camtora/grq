@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.15-phase4";
+export const AGENT_VERSION = "v2.16-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -180,7 +180,8 @@ export const DESK = {
 // Humans edit this; the agent never does.
 export const CHESS = {
   enabled: (process.env.GRQ_CHESS_ENABLED ?? "true").toLowerCase() !== "false",
-  maxThemesPerDay: Number(process.env.GRQ_CHESS_MAX_PER_DAY ?? "3") || 3, // on-demand rate guard (Opus is expensive)
+  // No per-day cap (Cam 2026-06-29): boards run on demand, bounded only by the
+  // one-board-in-flight guard (the API refuses a new brief while one is mapping).
   maxPlaysPerTheme: 12, // anti-sprawl: a board enumerates a focused set of pieces
   weeklyEnabled: (process.env.GRQ_CHESS_WEEKLY ?? "true").toLowerCase() !== "false",
   weeklyWeekday: 0, // Sunday (ET) — market closed, low-activity
