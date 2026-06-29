@@ -146,14 +146,18 @@ struct GRQChrome: ViewModifier {
     @EnvironmentObject private var chrome: Chrome
     @EnvironmentObject private var notifs: NotificationsInbox
     func body(content: Content) -> some View {
+        // One ToolbarItem (no conditional at the ToolbarContent level → no builder
+        // ambiguity); the member gate + the two buttons live inside its ViewBuilder.
         content.toolbar {
-            if auth.currentUser?.role == .member {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { chrome.showNotifications = true } label: {
-                        Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
-                    }
-                    Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
-                        Image(systemName: "bubble.left.and.text.bubble.right")
+            ToolbarItem(placement: .topBarTrailing) {
+                if auth.currentUser?.role == .member {
+                    HStack(spacing: 2) {
+                        Button { chrome.showNotifications = true } label: {
+                            Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
+                        }
+                        Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                        }
                     }
                 }
             }
