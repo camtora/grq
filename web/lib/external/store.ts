@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { memberKeyForEmail } from "@/lib/users";
 import { bareTicker } from "@/lib/universe";
+import { getQuotes } from "@/lib/broker/quotes";
 import {
   type SnaptradePartner,
   listSnaptradeUsers,
@@ -263,6 +264,24 @@ export async function syncMemberIfConnected(
   return { configured: true, count };
 }
 
+/** Sync EVERY connected member's accounts (the nightly background refresh, so holdings —
+ *  especially share counts after a member trades — stay current without anyone opening the
+ *  app). Best-effort per member; one member's failure never blocks the others. Returns the
+ *  per-member counts. (Intraday VALUE is already live via accountsForMembers' quote mark;
+ *  this keeps QUANTITIES honest.) */
+export async function syncAllConnected(emails: string[]): Promise<{ email: string; count: number }[]> {
+  const out: { email: string; count: number }[] = [];
+  for (const email of emails) {
+    try {
+      const { configured, count } = await syncMemberIfConnected(email);
+      if (configured) out.push({ email, count });
+    } catch {
+      // skip — a broken connection shouldn't stall the rest
+    }
+  }
+  return out;
+}
+
 /** Forget a member's external data locally (privacy / unlink). For Personal keys
  *  we do NOT delete the SnapTrade user — it's the member's own auto-provisioned
  *  account and lives independent of GRQ; we just drop our mirror + cached userId. */
@@ -311,9 +330,14 @@ export type MemberAccountsView = {
  *  Canadian quote), a non-CAD holding to the bare US ticker. Tracked names
  *  canonicalize either way on the stock page. */
 function dossierHrefFor(symbol: string, currency: string): string {
+  return `/stocks/${encodeURIComponent(quoteSymFor(symbol, currency))}`;
+}
+
+/** The symbol our quote feed knows this holding by: CAD names resolve to `.TO`, US names
+ *  stay bare (same convention as the dossier link + the universe). */
+function quoteSymFor(symbol: string, currency: string): string {
   const bare = bareTicker(symbol);
-  const target = currency.toUpperCase() === "CAD" ? `${bare}.TO` : bare;
-  return `/stocks/${encodeURIComponent(target)}`;
+  return currency.toUpperCase() === "CAD" ? `${bare}.TO` : bare;
 }
 
 /** All members' external accounts (Cam & Graham both see both). `emails` is the
@@ -331,32 +355,57 @@ export async function accountsForMembers(emails: string[]): Promise<MemberAccoun
     include: { holdings: { orderBy: { marketValueCents: "desc" } } },
   });
 
+  // Mark holdings to OUR live quote feed (FMP, DB-cached) so values + net worth move
+  // intraday — SnapTrade gives us quantities + cost, the live price is ours. Holdings keep
+  // their last-synced price as the fallback when we have no quote (illiquid / untracked).
+  const quoteSyms = Array.from(
+    new Set(accounts.flatMap((a) => a.holdings.map((h) => quoteSymFor(h.symbol, h.currency)))),
+  );
+  const quotes = quoteSyms.length ? await getQuotes(quoteSyms).catch(() => new Map()) : new Map();
+
   return emails.map((email) => ({
     email,
     connected: connected.has(email),
     accounts: accounts
       .filter((a) => a.ownerEmail === email)
-      .map((a) => ({
-        id: a.id,
-        institution: a.institution,
-        name: a.name,
-        numberMasked: a.numberMasked,
-        accountType: a.accountType,
-        currency: a.currency,
-        totalValueCents: a.totalValueCents,
-        cashCents: a.cashCents,
-        disabled: a.disabled,
-        syncedAt: a.syncedAt.toISOString(),
-        holdings: a.holdings.map((h) => ({
-          symbol: h.symbol,
-          dossierHref: dossierHrefFor(h.symbol, h.currency),
-          description: h.description,
-          qty: h.qty,
-          priceCents: h.priceCents,
-          marketValueCents: h.marketValueCents,
-          currency: h.currency,
-          openPnlCents: h.openPnlCents,
-        })),
-      })),
+      .map((a) => {
+        const holdings = a.holdings.map((h) => {
+          const live = quotes.get(quoteSymFor(h.symbol, h.currency).toUpperCase());
+          const units = Number(h.qty);
+          // Re-mark only when we have a live price AND a parseable share count; else keep sync values.
+          if (live && Number.isFinite(units) && units !== 0) {
+            const priceCents = live.midCents;
+            const marketValueCents = Math.round(units * priceCents);
+            // Preserve cost basis: stored openPnl = storedMV − cost ⇒ cost = storedMV − storedOpenPnl.
+            const openPnlCents = h.openPnlCents == null ? null : marketValueCents - (h.marketValueCents - h.openPnlCents);
+            return { ...h, priceCents, marketValueCents, openPnlCents };
+          }
+          return h;
+        });
+        // Account value = cash + the (now live) holdings. Net worth follows automatically.
+        const holdingsValue = holdings.reduce((s, h) => s + h.marketValueCents, 0);
+        return {
+          id: a.id,
+          institution: a.institution,
+          name: a.name,
+          numberMasked: a.numberMasked,
+          accountType: a.accountType,
+          currency: a.currency,
+          totalValueCents: a.cashCents + holdingsValue,
+          cashCents: a.cashCents,
+          disabled: a.disabled,
+          syncedAt: a.syncedAt.toISOString(),
+          holdings: holdings.map((h) => ({
+            symbol: h.symbol,
+            dossierHref: dossierHrefFor(h.symbol, h.currency),
+            description: h.description,
+            qty: h.qty,
+            priceCents: h.priceCents,
+            marketValueCents: h.marketValueCents,
+            currency: h.currency,
+            openPnlCents: h.openPnlCents,
+          })),
+        };
+      }),
   }));
 }

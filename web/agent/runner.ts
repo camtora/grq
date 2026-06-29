@@ -31,6 +31,8 @@ import { apnsConfigured } from "../lib/push/apns";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
+import { syncAllConnected } from "../lib/external/store";
+import { memberEmails } from "../lib/users";
 
 const broker = getBroker();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -50,6 +52,7 @@ let lastWeeklyRefreshDay = "";
 let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
 let lastSmartMoneyDay = "";
+let lastExtAcctSyncDay = "";
 let lastOptionsMs = 0;
 let lastSocialMs = 0;
 let lastMacroEventDay = "";
@@ -722,6 +725,16 @@ async function tick() {
     lastBarsDay = p.dateStr;
     const n = await refreshBars(await trackedSymbols(), "5d").catch(() => 0);
     console.log(`[bars] nightly refresh stored ${n} rows`);
+  }
+
+  // Nightly external-accounts sync (SnapTrade) — once/day ~5:30am ET, so members' personal
+  // holdings (esp. share counts after they trade) are current each morning without anyone
+  // opening the app. Intraday VALUE is already live (accountsForMembers marks holdings to our
+  // quote feed); this keeps QUANTITIES honest. Cheap, no LLM; best-effort per member.
+  if (p.minutesSinceMidnight >= 5 * 60 + 30 && lastExtAcctSyncDay !== p.dateStr) {
+    lastExtAcctSyncDay = p.dateStr;
+    const synced = await syncAllConnected(memberEmails()).catch(() => []);
+    if (synced.length) console.log(`[external] nightly sync — ${synced.map((s) => `${s.email}:${s.count}`).join(", ")}`);
   }
 
   // Company-logo backfill (hourly; resolves everything on the first tick).
