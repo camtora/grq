@@ -19,6 +19,23 @@ packages:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "7.1.0"
 
+# Explicit shared schemes so the names are stable (xcodegen otherwise names a scheme after
+# the TARGET — "GRQNext" — not the product). Both targets get one; pick "GRQ Next" to run
+# the rebuild, "GRQ" for the current shipping app.
+schemes:
+  GRQ:
+    build:
+      targets:
+        GRQ: all
+    run:
+      config: Debug
+  GRQ Next:
+    build:
+      targets:
+        GRQNext: all
+    run:
+      config: Debug
+
 targets:
   GRQ:
     type: application
