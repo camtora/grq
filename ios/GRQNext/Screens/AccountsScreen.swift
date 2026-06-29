@@ -70,8 +70,11 @@ struct AccountsScreen: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(Fmt.money(a.totalValueCents, a.currency)).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(p.textPrimary)
-                        Text("updated \(DateFmt.relative(a.syncedAt))").font(.caption2).foregroundStyle(p.textMuted)
+                        HStack(spacing: 4) {
+                            Circle().fill(p.pos).frame(width: 6, height: 6)
+                            Text(Fmt.money(a.totalValueCents, a.currency)).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(p.textPrimary)
+                        }
+                        Text("prices live · holdings as of \(DateFmt.relative(a.syncedAt))").font(.caption2).foregroundStyle(p.textMuted)
                     }
                 }
                 .padding(Space.md)

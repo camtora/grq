@@ -154,11 +154,12 @@ function AccountCard({ account: a }: { account: AccountView }) {
           {a.disabled ? <Chip tone="red">reconnect needed</Chip> : null}
         </div>
         <div className="text-right">
-          <div className="font-semibold tabular-nums text-teal-50">
+          <div className="flex items-center justify-end gap-1.5 font-semibold tabular-nums text-teal-50">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
             {money(a.totalValueCents, a.currency)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
-            updated {fmtWhen(new Date(a.syncedAt))}
+            <span className="text-emerald-400/70">prices live</span> · holdings as of {fmtWhen(new Date(a.syncedAt))}
           </div>
         </div>
       </div>
