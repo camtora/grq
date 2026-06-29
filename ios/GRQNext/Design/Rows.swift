@@ -72,11 +72,47 @@ struct PositionRow: View {
     }
 }
 
+struct MarketNameRow: View {
+    @Environment(\.colorScheme) private var scheme
+    let m: MarketName
+    var body: some View {
+        let p = Theme.palette(scheme)
+        HStack(spacing: Space.md) {
+            CompanyLogo(symbol: m.symbol, url: m.logoUrl, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(m.symbol).font(.subheadline.weight(.semibold)).foregroundStyle(p.textPrimary)
+                    if let dir = m.directive { Chip(text: dir.label, tone: .amber) }
+                }
+                Text(m.name).font(.caption).foregroundStyle(p.textMuted).lineLimit(1)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Fmt.money(m.lastCents, m.currency ?? "CAD")).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(p.textPrimary)
+                HStack(spacing: 6) {
+                    if let r = m.resolvedRating { Chip(text: r.abbr, tone: chipTone(r.tone)) }
+                    BpsBadge(bps: m.dayChangeBps)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+    }
+}
+
 func chipTone(_ tone: String) -> ChipTone {
     switch tone {
     case "emerald": return .pos
     case "red": return .neg
     case "amber": return .amber
     default: return .teal
+    }
+}
+
+/// NEW/ADD → positive, TRIM/EXIT → negative, else dim (smart-money action badges).
+func actionChipTone(_ a: String) -> ChipTone {
+    switch a.uppercased() {
+    case "NEW", "ADD", "BUY": return .pos
+    case "TRIM", "EXIT", "SELL": return .neg
+    default: return .dim
     }
 }

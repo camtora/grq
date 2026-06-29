@@ -18,20 +18,6 @@ private struct ComingSoon: View {
     }
 }
 
-struct MarketsScreen: View {
-    @State private var tab = 0
-    private let tabs = ["Watchlist", "Universe", "Browse", "Smart Money"]
-    var body: some View {
-        ScreenScaffold(title: "Markets") {
-            Picker("", selection: $tab) {
-                ForEach(tabs.indices, id: \.self) { Text(tabs[$0]).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            ComingSoon(phase: "Phase C", note: "\(tabs[tab]) — names with prices, Alfred’s call, day moves, and member actions.")
-        }
-    }
-}
-
 struct ExperimentsScreen: View {
     @Environment(\.colorScheme) private var scheme
     private let items: [(String, String)] = [
