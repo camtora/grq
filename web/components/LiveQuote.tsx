@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { money } from "@/lib/money";
+import RollingNumber from "@/components/RollingNumber";
 
 // On-page live price. Renders the SSR snapshot immediately, then polls
 // /api/quotes (FMP) every ~2.5s and updates in place — flashing green/red on a
@@ -24,6 +25,7 @@ export default function LiveQuote({
   showChange = true,
   dollars = false,
   live = false,
+  roll = false,
 }: {
   symbol: string;
   initialCents: number | null;
@@ -40,6 +42,9 @@ export default function LiveQuote({
   dollars?: boolean;
   /** Show the freshness marker (pulsing dot + "live · Ns ago") beside the price. */
   live?: boolean;
+  /** Animate the price as an odometer — digits roll into each other on a move (Google-
+   *  Finance style). For prominent live prices; leave off for dense inline quotes. */
+  roll?: boolean;
 }) {
   const [cents, setCents] = useState<number | null>(initialCents);
   const [chg, setChg] = useState<number | null>(initialChangePct);
@@ -95,7 +100,7 @@ export default function LiveQuote({
   return (
     <>
       <span className={`tabular-nums transition-colors duration-500 ${flash === "up" ? "text-emerald-300" : flash === "down" ? "text-red-300" : ""} ${className}`}>
-        {cents !== null ? money(cents, currency) : "—"}
+        {cents !== null ? roll ? <RollingNumber value={money(cents, currency)} /> : money(cents, currency) : "—"}
         {showChange && !dollars && chg !== null && <span className={`ml-1.5 text-xs ${chg >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(chg)}</span>}
       </span>
       {dollars && chgCents !== null && chg !== null && (

@@ -132,10 +132,6 @@ export default async function Watchlist() {
   const defaultTab: "all" | "cam" | "graham" =
     (myKey === "cam" || myKey === "graham") && ownerCounts[myKey] > 0 ? myKey : "all";
 
-  const running = requests.filter((r) => r.status === "RUNNING");
-  const queued = requests.filter((r) => r.status === "QUEUED");
-  const recentDone = requests.filter((r) => r.status === "DONE").slice(0, 8);
-  const recentFailed = requests.filter((r) => r.status === "FAILED").slice(0, 4);
 
   return (
     <main>
@@ -175,55 +171,27 @@ export default async function Watchlist() {
         </p>
       </section>
 
-      <section className="mt-10 border-t border-teal-400/10 pt-6">
-        <div className="mb-1"><PanelHeader>Agent research pipeline</PanelHeader></div>
-        <p className="mb-4 text-xs text-teal-200/40">What the agent is auto-researching — behind-the-scenes plumbing.</p>
-
-        <Card className="mb-6 border-teal-400/30 p-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Research queue</span>
-            {running.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-400/15 px-2.5 py-0.5 text-sm font-semibold text-teal-200">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-400" />
-                researching {running.map((r) => r.symbol).join(", ")}…
-              </span>
-            )}
-            {queued.length > 0 ? (
-              <span className="text-sm text-teal-100/70">
-                <b className="text-teal-50">{queued.length}</b> queued: {queued.slice(0, 12).map((r) => r.symbol).join(", ")}
-                {queued.length > 12 ? ` +${queued.length - 12}` : ""}
-              </span>
-            ) : running.length === 0 ? (
-              <span className="text-sm text-teal-200/40">Nothing queued — watch a name above, or hit &ldquo;research now&rdquo; on any stock page.</span>
-            ) : null}
-            <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-teal-200/40">
-              {recentDone.length > 0 && <span>recent: {recentDone.map((r) => r.symbol).join(", ")}</span>}
-              {recentFailed.length > 0 && <span className="text-red-300/70">failed: {recentFailed.map((r) => r.symbol).join(", ")}</span>}
-            </span>
+      {/* Pending research moved off the watchlist → Portfolio + Today (Cam 2026-06-29). */}
+      {retired.length > 0 && (
+        <section className="mt-10 border-t border-teal-400/10 pt-6">
+          <div className="mb-3"><PanelHeader>Retired ({retired.length}) — history kept</PanelHeader></div>
+          <div className="space-y-2">
+            {retired.map((r) => (
+              <Card key={r.symbol} className="flex flex-wrap items-center gap-4 p-3">
+                <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-200/60 hover:underline">
+                  {r.symbol}
+                </Link>
+                <span className="text-sm text-teal-200/40">{r.name}</span>
+                {isMember && (
+                  <div className="ml-auto">
+                    <UniverseActions symbol={r.symbol} status="RETIRED" pendingBy={null} proposedTier={null} currentUser={me} />
+                  </div>
+                )}
+              </Card>
+            ))}
           </div>
-        </Card>
-
-        {retired.length > 0 && (
-          <div className="mt-4">
-            <div className="mb-3"><PanelHeader>Retired ({retired.length}) — history kept</PanelHeader></div>
-            <div className="space-y-2">
-              {retired.map((r) => (
-                <Card key={r.symbol} className="flex flex-wrap items-center gap-4 p-3">
-                  <Link href={`/stocks/${r.symbol}`} className="font-semibold text-teal-200/60 hover:underline">
-                    {r.symbol}
-                  </Link>
-                  <span className="text-sm text-teal-200/40">{r.name}</span>
-                  {isMember && (
-                    <div className="ml-auto">
-                      <UniverseActions symbol={r.symbol} status="RETIRED" pendingBy={null} proposedTier={null} currentUser={me} />
-                    </div>
-                  )}
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   );
 }

@@ -21,6 +21,10 @@ import { LiveMoverPrice } from "@/components/LiveTableCells";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
 import { getMacro, macroLine } from "@/lib/macro";
+import { getSession } from "@/lib/session";
+import { wireResponse } from "@/lib/feed";
+import WireRail, { type WireCard } from "@/components/wire/WireRail";
+import ResearchQueueCard from "@/components/ResearchQueueCard";
 
 function signedPct(bps: number): string {
   return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
@@ -472,6 +476,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const edition = isToday ? editionLabel() : "Archive";
 
+  const viewer = await getSession();
+  const wire = await wireResponse(viewer?.email, 24);
+
   return (
     <main>
       {/* Masthead */}
@@ -533,6 +540,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </div>
         </div>
       </header>
+
+      {/* The Wire rides as a 1/4-width right rail beside the main 3/4 column (Cam 2026-06-29).
+          On mobile the grid collapses to one column and the rail stacks below. */}
+      <div className="grid gap-6 lg:grid-cols-4">
+        <div className="min-w-0 lg:col-span-3">
 
       {/* Market indices — live until the close (the screenshot strip). Live data,
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
@@ -821,6 +833,17 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       )}
         </>
       )}
+
+        </div>
+        <aside className="lg:col-span-1">
+          <WireRail items={wire.items as unknown as WireCard[]} />
+        </aside>
+      </div>
+
+      {/* Pending research — always-on strip at the bottom of Today (Cam 2026-06-29). */}
+      <div className="mt-8 border-t border-teal-400/10 pt-6">
+        <ResearchQueueCard />
+      </div>
 
     </main>
   );

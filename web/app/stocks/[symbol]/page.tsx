@@ -29,6 +29,8 @@ import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
 import OptionsPanel from "@/components/OptionsPanel";
 import SocialPanel from "@/components/SocialPanel";
+import StockChessBoards from "@/components/chess/StockChessBoards";
+import { chessRefsForSymbol } from "@/lib/chess";
 import { refreshOptions } from "@/lib/options/store";
 import { refreshSocialOne } from "@/lib/social/store";
 import LiveQuote from "@/components/LiveQuote";
@@ -207,7 +209,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings, chessRefs] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -242,6 +244,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       fmpEnabled() ? fmpTopHolders(entry.yahoo).catch(() => []) : Promise.resolve([]),
       getSmartMoneyForSymbol(symbol).catch(() => null),
       prisma.settings.findUnique({ where: { id: 1 } }),
+      chessRefsForSymbol(symbol).catch(() => []),
     ]);
 
   // Knowledge graph — names this stock is connected to (peers · shared 13F holders ·
@@ -415,6 +418,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   changeClassName="text-base"
                   dollars
                   live
+                  roll
                 />
               </div>
             )}
@@ -492,14 +496,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   it. Technicals are an input below, not a competing verdict. */}
               {stance ? (
                 <>
-                  {/* The bull↔bear gauge (the signal) sits up top; Alfred's CALL is a
-                      well-defined box directly beneath it — the verdict + confidence, boxed,
-                      not a loose inline stack (Cam 2026-06-29). */}
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">Signal</div>
-                  <div className="w-full max-w-xs">
-                    <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />
-                  </div>
-                  <div className={`mt-3 max-w-xs rounded-lg border p-3 ${STANCE_TONE_CLASSES[stance.tone].border} ${STANCE_TONE_CLASSES[stance.tone].bg}`}>
+                  {/* Alfred's CALL is the boxed verdict ON TOP; the bull↔bear gauge (the
+                      signal) sits directly beneath it (Cam 2026-06-29). */}
+                  <div className={`max-w-xs rounded-lg border p-3 ${STANCE_TONE_CLASSES[stance.tone].border} ${STANCE_TONE_CLASSES[stance.tone].bg}`}>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/55">
                       <Term k="agent-call">Alfred&apos;s call</Term>
                     </div>
@@ -520,6 +519,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                     {stanceConfidenceAt && (
                       <p className="mt-0.5 text-[11px] text-teal-200/40">rated {fmtWhen(stanceConfidenceAt)}</p>
                     )}
+                  </div>
+                  <div className="mb-1 mt-3 text-[10px] uppercase tracking-wider text-teal-200/50">Signal</div>
+                  <div className="w-full max-w-xs">
+                    <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />
                   </div>
                 </>
               ) : recMeta ? (
@@ -1096,6 +1099,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <OptionsPanel o={optionsData} />
         <SocialPanel s={socialData} />
       </section>
+
+      {/* Chess Moves — the supply-chain/thematic boards this name is a play on (under
+          Options, Cam 2026-06-29). Self-hides when there are none. */}
+      {chessRefs.length > 0 && (
+        <section className="mb-6">
+          <StockChessBoards symbol={symbol} refs={chessRefs} />
+        </section>
+      )}
 
       {/* Valuation vs peers · Related names · Smart money — three equal-height panels. */}
       <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-3">

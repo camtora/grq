@@ -150,6 +150,32 @@ or `money()`/`signedMoney()` from `lib/money`, always with `tabular-nums` so col
 align. P&L is colour-coded by sign (`pnlClass`). USD uses the `usd()` helper / `US$`
 prefix.
 
+### 1.7 Links & hover affordance
+
+Inline links are **teal with an underline on hover** — `text-teal-300 hover:underline`
+(back-nav, "ledger →", action links). One rule that's easy to get wrong:
+
+**A clickable element that contains BOTH a ticker symbol and a company name must
+underline only the *symbol* on hover — never the whole symbol+name blob.** The symbol
+is the identifier/affordance; the company name is muted secondary text and never gets
+the underline. Putting `hover:underline` on a `<Link>` that wraps both underlines
+everything, which reads wrong (it was the chess-board bug, fixed 2026-06-29).
+
+The pattern — make the **whole** element clickable but scope the underline with
+`group` / `group-hover:`:
+
+```tsx
+<Link href={href} className="group">
+  <span className="font-mono font-semibold text-teal-200 group-hover:underline">{symbol}</span>{" "}
+  <span className="text-teal-100/85">{name}</span>   {/* never underlines */}
+</Link>
+```
+
+When there's no symbol (name-only), the name takes the `group-hover:underline` instead.
+A symbol-only link (e.g. a flow link, a row ticker) just uses `hover:underline`
+directly — there's nothing else in it to over-underline. The reference implementations
+are the stock-page header (symbol = link, name = muted span beside it) and `StockTable`.
+
 ---
 
 ## 2. The audit (snapshot 2026-06-28)

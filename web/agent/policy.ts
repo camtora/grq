@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.16-phase4";
+export const AGENT_VERSION = "v2.18-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -82,9 +82,11 @@ export const DIALS: Record<"CAUTIOUS" | "BALANCED" | "AGGRESSIVE", DialPolicy> =
   // deployment push (a fresh US$25k sleeve to build + rotation), so they fought the strategy. The
   // burst caps (HARD.maxOrdersPerDay 10 · /hour 4) still bound pace; the cautiousness of each dial
   // now comes from size/cash/stops/universe, not the trade count.
-  CAUTIOUS: { maxPositionPct: 10, cashFloorPct: 30, cashCeilingPct: 50, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 15 },
-  BALANCED: { maxPositionPct: 15, cashFloorPct: 15, cashCeilingPct: 30, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 20 },
-  AGGRESSIVE: { maxPositionPct: 25, cashFloorPct: 0, cashCeilingPct: 15, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 25 },
+  // maxPositionPct raised 10/15/25 → 25/50/80 (Cam 2026-06-29): bigger single-position
+  // concentration allowed at each level — Aggressive can run up to 80% of NAV in one name.
+  CAUTIOUS: { maxPositionPct: 25, cashFloorPct: 30, cashCeilingPct: 50, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 15 },
+  BALANCED: { maxPositionPct: 50, cashFloorPct: 15, cashCeilingPct: 30, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 20 },
+  AGGRESSIVE: { maxPositionPct: 80, cashFloorPct: 0, cashCeilingPct: 15, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 25 },
 };
 
 // The fund's REAL hurdle (Cam 2026-06-25): it only earns genuine return once it clears its own

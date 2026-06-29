@@ -9,7 +9,16 @@ import { parseBoard, bareChainKey, type ChessBoardData } from "@/lib/chess";
 // names the specific company-to-company links. Horizontally scrollable on narrow screens;
 // dependency-free (a force-directed SVG graph is still a follow-up). Pure display — the chain
 // is Alfred's reasoning, never imported data.
-export default function ChessBoard({ board, hrefBySym }: { board: ChessBoardData | string | null; hrefBySym?: Map<string, string> }) {
+export default function ChessBoard({
+  board,
+  hrefBySym,
+  highlightKey,
+}: {
+  board: ChessBoardData | string | null;
+  hrefBySym?: Map<string, string>;
+  /** Bare ticker to highlight on the board (e.g. the stock page you're viewing). */
+  highlightKey?: string;
+}) {
   const data = typeof board === "string" || board == null ? parseBoard(board ?? null) : board;
   if (data.stages.length === 0) return null;
 
@@ -20,6 +29,7 @@ export default function ChessBoard({ board, hrefBySym }: { board: ChessBoardData
     const k = bareChainKey(s);
     return hrefBySym?.get(k) ?? `/stocks/${encodeURIComponent(k)}`;
   };
+  const isHot = (s?: string) => !!highlightKey && !!s && bareChainKey(s) === highlightKey;
 
   return (
     <div className="space-y-3">
@@ -38,21 +48,28 @@ export default function ChessBoard({ board, hrefBySym }: { board: ChessBoardData
                   <ul className="space-y-1.5">
                     {st.items.map((it, j) => {
                       const href = stockHref(it.symbol);
+                      const hot = isHot(it.symbol);
+                      // Hover underlines only the SYMBOL (the link affordance), never the
+                      // company name — house convention (docs/DESIGN.md §1.7).
                       const head = (
                         <>
-                          {it.symbol && <span className="font-mono text-xs font-semibold text-teal-200">{it.symbol}</span>}{" "}
-                          <span className="text-teal-100/85">{it.name}</span>
+                          {it.symbol && <span className={`font-mono text-xs font-semibold group-hover:underline ${hot ? "text-teal-100" : "text-teal-200"}`}>{it.symbol}</span>}{" "}
+                          <span className={`${hot ? "font-semibold text-teal-50" : "text-teal-100/85"}${it.symbol ? "" : " group-hover:underline"}`}>{it.name}</span>
                         </>
                       );
                       return (
-                        <li key={j} className="text-sm leading-snug">
+                        <li
+                          key={j}
+                          className={`text-sm leading-snug ${hot ? "-mx-1.5 rounded bg-teal-400/15 px-1.5 py-0.5 ring-1 ring-teal-400/40" : ""}`}
+                        >
                           {href ? (
-                            <Link href={href} className="hover:underline">
+                            <Link href={href} className="group">
                               {head}
                             </Link>
                           ) : (
                             head
                           )}
+                          {hot && <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-wider text-teal-300/80">← this name</span>}
                           {it.note && <span className="block text-[11px] text-teal-200/45">{it.note}</span>}
                         </li>
                       );
@@ -82,13 +99,13 @@ export default function ChessBoard({ board, hrefBySym }: { board: ChessBoardData
               return (
                 <li key={i} className="tabular-nums">
                   {fromHref ? (
-                    <Link href={fromHref} className="font-mono text-teal-200 hover:underline">{l.from}</Link>
+                    <Link href={fromHref} className={`font-mono hover:underline ${isHot(l.from) ? "rounded bg-teal-400/15 px-1 font-bold text-teal-50 ring-1 ring-teal-400/40" : "text-teal-200"}`}>{l.from}</Link>
                   ) : (
                     <span className="font-mono text-teal-200">{l.from}</span>
                   )}
                   <span className="px-1 text-teal-300/70">→</span>
                   {toHref ? (
-                    <Link href={toHref} className="font-mono text-teal-200 hover:underline">{l.to}</Link>
+                    <Link href={toHref} className={`font-mono hover:underline ${isHot(l.to) ? "rounded bg-teal-400/15 px-1 font-bold text-teal-50 ring-1 ring-teal-400/40" : "text-teal-200"}`}>{l.to}</Link>
                   ) : (
                     <span className="font-mono text-teal-200">{l.to}</span>
                   )}

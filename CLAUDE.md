@@ -234,6 +234,7 @@ bypass-location are the remaining human steps before a phone can fetch live.
 | `docs/IBKR-PHASE3.md` | **IBKR-paper bring-up runbook** — gateway/proxy, 2FA, the connection saga (D22) |
 | `ibeam/conf.yaml` · `docker-compose.yaml ibeam-proxy` | The CP-gateway loopback proxy: socat sidecar (`network_mode: service:ibeam`) `:5002→127.0.0.1:5000` so the agent can reach the gateway (which is loopback-only). Agent → `IBKR_GATEWAY_URL=https://ibeam:5002` (D22) |
 | `docs/OWNERSHIP.md` | Whose money/account: options, tax notes, open decision |
+| `docs/DESIGN.md` | **Design system & UI contract — READ BEFORE any UI work.** Tokens/themes, the shared `components/ui.tsx` + `PanelHeader`, heading/back-nav/button/link conventions (§1.7 link-hover: underline the symbol, never the symbol+name blob). Stock page is the reference impl |
 | `docs/LITERACY.md` | **Financial-literacy product pillar** — every number explainable; glossary + agent explainers |
 | `docs/NEWSPAPER.md` | "The Daily" — Today-as-newspaper: editions by time of day, sections, imagery roadmap |
 | `docs/PUSH-NOTIFICATIONS.md` | **iOS push (APNs — D53)** runbook: the Discord→push fan-out, categories (trades+risk always-on), the Apple-portal steps, `APNS_*` env, deploy + verify |
@@ -264,6 +265,9 @@ bypass-location are the remaining human steps before a phone can fetch live.
 - Commit at phase boundaries with descriptive messages; remote is private GitHub.
 - Cam & Graham read the dashboards — keep UI copy in GRQ's voice (honest, lightly funny,
   teal). The fund's money rules are never funny: rejections state the guardrail plainly.
+- **READ `docs/DESIGN.md` before adding or restyling any UI** — it's the visual contract
+  (tokens, the shared `ui.tsx`/`PanelHeader` components, heading/back-nav/button/link
+  conventions). Match it; don't hand-roll what a shared component already does.
 - **Financial literacy is a product pillar** (`docs/LITERACY.md`): every number, acronym, and
   concept on screen should be explainable — inline or by the agent. A figure the app shows but
   can't explain is a bug. GRQ is being built as a product, not a single-user tool (multi-tenancy

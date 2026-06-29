@@ -69,6 +69,12 @@ export function useLiveQuote(symbol: string): LiveQuote | null {
   return quotes[symbol.toUpperCase()] ?? null;
 }
 
+/** The whole live-quote map — for aggregates (e.g. live NAV) that read many symbols in one
+ *  component without calling a hook per symbol. Empty until the first poll lands. */
+export function useLiveQuotes(): Record<string, LiveQuote> {
+  return useContext(LiveQuotesContext).quotes;
+}
+
 /** Briefly flag a value as moved up/down so a cell can flash on change. */
 export function useFlash(value: number | null): "up" | "down" | null {
   const prev = useRef<number | null>(value);

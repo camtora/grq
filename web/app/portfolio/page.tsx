@@ -9,12 +9,17 @@ import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import PersonalLane, { type PersonalRow } from "@/components/PersonalLane";
+import PersonalLane, { type PersonalRow, type PersonalTotal, type PersonalOwner } from "@/components/PersonalLane";
 import ConnectSplash from "@/components/accounts/ConnectSplash";
+import ResearchQueueCard from "@/components/ResearchQueueCard";
+import Avatar from "@/components/Avatar";
 import PanelHeader from "@/components/PanelHeader";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
+import { LiveTotal, LivePnlValue, LivePosLast, LivePosValue, LivePosUnrealized, type LivePos } from "@/components/portfolio/LiveNumbers";
 import { allUniverse } from "@/lib/universe";
 import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor } from "@/lib/external/store";
+import { personByEmail } from "@/lib/people";
 import { etDateStr } from "@/agent/calendar";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
@@ -80,62 +85,116 @@ export default async function Portfolio() {
   const hasAgenda = agenda.length > 0;
   const name = session?.user?.name ?? "friend";
 
-  // ── "Yours" lane: the logged-in member's OWN external holdings, stamped with
-  // GRQ's existing call + fund hold/track status. User-specific (Graham sees his,
-  // Cam sees his), members-only, UI-only contrast — the agent never reads these.
-  let personalRows: PersonalRow[] = [];
-  let personalTotal = "";
-  let personalCadCents = 0; // external holdings summed in CAD (USD valued at fx)
+  // ── Personal accounts: each member's external holdings in a SEPARATE lane (Graham first,
+  // then Cam — Cam 2026-06-29), stamped with GRQ's existing call + fund hold/track status.
+  // External accounts are "both see both" (same as /accounts), members-only, UI-only contrast —
+  // the agent never reads these. The viewer's own connection state drives the connect prompt.
+  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number }[] = [];
+  let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
   const personalConfigured = session?.role === "member" && (await snaptradeConfiguredFor(session.email));
   if (session?.role === "member") {
-    const [meView] = await accountsForMembers([session.email]);
-    const holdings = (meView?.accounts ?? []).flatMap((a) =>
-      a.holdings.map((h) => ({ ...h, account: a.name })),
-    );
-    if (holdings.length > 0) {
-      const bareKey = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/, "");
-      // Join personal holdings to GRQ's view by BARE ticker — the universe can carry
-      // both a bare and a `.TO` row for one name, so key on bare and prefer ACTIVE.
-      const uni = (await allUniverse()).filter((u) => u.status !== "RETIRED");
-      const statusByBare = new Map<string, "ACTIVE" | "CANDIDATE">();
-      for (const u of [...uni].sort((a, b) => (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1))) {
-        const k = bareKey(u.symbol);
-        if (!statusByBare.has(k)) statusByBare.set(k, u.status as "ACTIVE" | "CANDIDATE");
-      }
-      const stanceRows = await prisma.journalEntry.findMany({
-        where: { stance: { not: null }, symbol: { not: null } },
-        orderBy: { at: "desc" },
-        select: { symbol: true, stance: true },
-      });
-      const stanceByBare = new Map<string, string>();
-      for (const s of stanceRows) {
-        if (!s.symbol) continue;
-        const k = bareKey(s.symbol);
-        if (!stanceByBare.has(k)) stanceByBare.set(k, s.stance as string);
-      }
-      const fundBare = new Set(pf.positions.map((p) => bareKey(p.symbol)));
-
-      personalRows = holdings.map((h) => {
-        const k = bareKey(h.symbol);
-        return {
-          symbol: h.symbol,
-          dossierHref: h.dossierHref,
-          description: h.description,
-          account: h.account,
-          qty: h.qty,
-          marketValueCents: h.marketValueCents,
-          currency: h.currency,
-          stance: stanceByBare.get(k) ?? null,
-          fundHolds: fundBare.has(k),
-          tracked: statusByBare.get(k) ?? null,
-        };
-      });
-      const byCur = new Map<string, number>();
-      for (const h of holdings) byCur.set(h.currency, (byCur.get(h.currency) ?? 0) + h.marketValueCents);
-      personalTotal = [...byCur.entries()].map(([c, cents]) => money(cents, c)).join(" · ");
-      const fxUsdCad = await usdCadRate();
-      personalCadCents = holdings.reduce((s, h) => s + toCadCents(h.marketValueCents, h.currency, fxUsdCad), 0);
+    const fxUsdCad = await usdCadRate();
+    // Show ONLY the logged-in user's own accounts (Cam 2026-06-29 — was both members).
+    const views = await accountsForMembers([session.email]);
+    // GRQ-view join maps, computed once (member-independent): universe status, latest stance,
+    // and what the fund holds — all keyed on the BARE ticker.
+    const bareKey = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/, "");
+    const uni = (await allUniverse()).filter((u) => u.status !== "RETIRED");
+    const statusByBare = new Map<string, "ACTIVE" | "CANDIDATE">();
+    for (const u of [...uni].sort((a, b) => (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1))) {
+      const k = bareKey(u.symbol);
+      if (!statusByBare.has(k)) statusByBare.set(k, u.status as "ACTIVE" | "CANDIDATE");
     }
+    const stanceRows = await prisma.journalEntry.findMany({
+      where: { stance: { not: null }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      select: { symbol: true, stance: true },
+    });
+    const stanceByBare = new Map<string, string>();
+    for (const s of stanceRows) {
+      if (!s.symbol) continue;
+      const k = bareKey(s.symbol);
+      if (!stanceByBare.has(k)) stanceByBare.set(k, s.stance as string);
+    }
+    const fundBare = new Set(pf.positions.map((p) => bareKey(p.symbol)));
+
+    // Build one group per member. Graham's lane first, then Cam's (Cam 2026-06-29).
+    const ORDER: Record<string, number> = { graham: 0, cam: 1 };
+    for (const v of views) {
+      const person = personByEmail(v.email);
+      const holdings = (v.accounts ?? []).flatMap((a) => a.holdings.map((h) => ({ ...h, account: a.name })));
+      if (holdings.length === 0) continue;
+
+      const rows: PersonalRow[] = holdings
+        .map((h) => {
+          const k = bareKey(h.symbol);
+          return {
+            symbol: h.symbol,
+            dossierHref: h.dossierHref,
+            description: h.description,
+            account: h.account,
+            qty: h.qty,
+            marketValueCents: h.marketValueCents,
+            bookCostCents: h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents,
+            openPnlCents: h.openPnlCents,
+            currency: h.currency,
+            stance: stanceByBare.get(k) ?? null,
+            fundHolds: fundBare.has(k),
+            tracked: statusByBare.get(k) ?? null,
+          };
+        })
+        .sort((a, b) => toCadCents(b.marketValueCents, b.currency, fxUsdCad) - toCadCents(a.marketValueCents, a.currency, fxUsdCad));
+
+      // Per-currency totals, keyed by ACCOUNT currency so everything reconciles even when an
+      // account holds mixed-currency positions (e.g. a CAD TFSA holding a USD name): holdings
+      // are converted INTO the account currency, the account TOTAL comes straight from the
+      // brokerage, and cash = total − converted-holdings (TD-via-SnapTrade reports the explicit
+      // cash field as 0, so we derive it — Cam 2026-06-29). holdings + cash = total.
+      const toAcctCents = (cents: number, fromCcy: string, acctCcy: string) => {
+        if (fromCcy === acctCcy) return cents;
+        const cad = toCadCents(cents, fromCcy, fxUsdCad);
+        return acctCcy === "CAD" ? cad : Math.round(cad / (fxUsdCad || 1)); // CAD → USD
+      };
+      const byCur = new Map<string, { holdingsCents: number; cashCents: number; totalCents: number; changeCents: number; haveCost: boolean }>();
+      for (const a of v.accounts ?? []) {
+        const cur = a.currency;
+        const t = byCur.get(cur) ?? { holdingsCents: 0, cashCents: 0, totalCents: 0, changeCents: 0, haveCost: false };
+        let held = 0;
+        for (const h of a.holdings ?? []) {
+          held += toAcctCents(h.marketValueCents, h.currency, cur);
+          if (h.openPnlCents != null) {
+            t.changeCents += toAcctCents(h.openPnlCents, h.currency, cur);
+            t.haveCost = true;
+          }
+        }
+        t.holdingsCents += held;
+        t.totalCents += a.totalValueCents;
+        t.cashCents += Math.max(0, a.totalValueCents - held);
+        byCur.set(cur, t);
+      }
+      const totals: PersonalTotal[] = [...byCur.entries()]
+        .map(([currency, t]) => {
+          const cost = t.holdingsCents - t.changeCents;
+          return {
+            currency,
+            holdingsCents: t.holdingsCents,
+            cashCents: t.cashCents,
+            totalCents: t.totalCents,
+            changeCents: t.haveCost ? t.changeCents : null,
+            changeFrac: t.haveCost && cost > 0 ? t.changeCents / cost : null,
+          };
+        })
+        .sort((a, b) => a.currency.localeCompare(b.currency)); // CAD before USD
+
+      // CAD header total = the brokerage's account totals (holdings + cash) valued in CAD.
+      const cadTotalCents = (v.accounts ?? []).reduce((s, a) => s + toCadCents(a.totalValueCents, a.currency, fxUsdCad), 0);
+      const key = person?.key ?? v.email;
+      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, totals, cadTotalCents });
+    }
+    personalGroups.sort((a, b) => (ORDER[a.key] ?? 9) - (ORDER[b.key] ?? 9));
+    // The "Outside GRQ" stat tile shows the VIEWER's own external total, not the combined.
+    const myKey = personByEmail(session.email)?.key ?? session.email;
+    myCadCents = personalGroups.find((g) => g.key === myKey)?.cadTotalCents ?? 0;
   }
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
@@ -162,7 +221,7 @@ export default async function Portfolio() {
 
   // "Outside GRQ" stat tile — the member's external (read-only) holdings, summed in
   // CAD. Only shown when they actually hold something outside the fund.
-  const showExternal = session?.role === "member" && personalCadCents > 0;
+  const showExternal = session?.role === "member" && myCadCents > 0;
 
   // The main cards, factored out so the layout can be arranged two ways without
   // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
@@ -179,7 +238,7 @@ export default async function Portfolio() {
           </span>
         }
       >
-        Positions
+        Alfred&apos;s positions
       </PanelHeader>
       <Card className="overflow-x-auto">
         {pf.positions.length === 0 ? (
@@ -228,12 +287,14 @@ export default async function Portfolio() {
                 </td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
-                <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.lastCents)}</td>
-                <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                  {money(p.marketValueCents, p.currency)}
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">
+                  <LivePosLast symbol={p.symbol} lastCents={p.lastCents} currency={p.currency} />
                 </td>
-                <td className="px-5 py-2.5 text-right">
-                  <Pnl cents={p.unrealizedPnlCents} className="text-sm" />
+                <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
+                  <LivePosValue symbol={p.symbol} qty={p.qty} lastCents={p.lastCents} currency={p.currency} />
+                </td>
+                <td className="px-5 py-2.5 text-right text-sm">
+                  <LivePosUnrealized symbol={p.symbol} qty={p.qty} avgCostCents={p.avgCostCents} lastCents={p.lastCents} currency={p.currency} />
                 </td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
                   {pf.navCents > 0 ? pct(p.marketValueCadCents / pf.navCents) : "—"}
@@ -354,31 +415,56 @@ export default async function Portfolio() {
     </div>
   );
 
-  // "Your accounts" — external (read-only) holdings. Sits under Positions in the
-  // left column (Activity fills the rail beside both): the linked lane when
-  // connected, otherwise the guided steps to connect — the panel never disappears.
+  // Personal accounts — external (read-only) holdings, ONE panel per member, each titled
+  // with the member's name OUTSIDE the panel and their total value (CAD) top-right (Cam
+  // 2026-06-29). No umbrella header. The connect prompt shows for the viewer when nobody's
+  // linked yet.
   const personalSection = session?.role === "member" && (
-    <div className="space-y-2">
-      <PanelHeader>
-        Your accounts{" "}
-        <span className="font-normal normal-case text-teal-200/40">
-          · outside the fund · read-only · GRQ can&apos;t trade these
-        </span>
-      </PanelHeader>
-      {personalRows.length > 0 ? (
-        <PersonalLane rows={personalRows} total={personalTotal} />
-      ) : personalConfigured ? (
-        <Card className="p-5 text-sm text-teal-200/50">
-          Linked — waiting on your first holdings sync. They&apos;ll appear here automatically.
-        </Card>
-      ) : (
-        <ConnectSplash />
-      )}
-    </div>
+    personalGroups.length > 0 ? (
+      <div className="space-y-6">
+        {personalGroups.map((g) => (
+          <div key={g.key} className="space-y-2">
+            <PanelHeader
+              right={
+                <span className="tabular-nums text-teal-200/50">
+                  {money(g.cadTotalCents)} <span className="text-teal-200/35">total</span>
+                </span>
+              }
+            >
+              <span className="inline-flex items-center gap-2">
+                <Avatar src={g.owner.photo} name={g.owner.name} size="h-6 w-6" />
+                {g.owner.name}&apos;s positions
+                <span className="font-normal normal-case text-teal-200/40">· outside the fund · read-only · Alfred can&apos;t trade these</span>
+              </span>
+            </PanelHeader>
+            <PersonalLane rows={g.rows} totals={g.totals} />
+          </div>
+        ))}
+      </div>
+    ) : personalConfigured ? (
+      <Card className="p-5 text-sm text-teal-200/50">
+        Linked — waiting on your first holdings sync. They&apos;ll appear here automatically.
+      </Card>
+    ) : (
+      <ConnectSplash />
+    )
   );
+
+  // Live, rolling numbers (Cam 2026-06-29): the held symbols feed one LiveQuotesProvider; the
+  // NAV/holdings/P&L tiles + position cells recompute off the live quote map and roll on a move.
+  const fxLive = pf.fxUsdCad ?? 1;
+  const livePositions: LivePos[] = pf.positions.map((p) => ({
+    symbol: p.symbol,
+    qty: p.qty,
+    currency: p.currency,
+    lastCents: p.lastCents,
+    avgCostCents: p.avgCostCents,
+  }));
+  const posSymbols = pf.positions.map((p) => p.symbol);
 
   return (
     <main>
+      <LiveQuotesProvider symbols={posSymbols}>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-teal-50">
@@ -395,34 +481,48 @@ export default async function Portfolio() {
         </div>
       </div>
 
-      <section className={`grid grid-cols-2 gap-4 ${showExternal ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
+      <section className={`grid grid-cols-2 gap-3 ${showExternal ? "lg:grid-cols-7" : "lg:grid-cols-6"}`}>
+        {/* Portfolio value — total NAV, shown in BOTH CAD and USD, live + rolling (Cam 2026-06-29). */}
         <StatCard
-          label="Net asset value (CAD)"
+          label="Portfolio value (CAD)"
           term="nav"
-          value={money(pf.navCents)}
+          value={<LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="nav" currency="CAD" />}
           note={
             <>
-              invested <Money cents={pf.positionsCents} /> · {pf.positions.length} position{pf.positions.length === 1 ? "" : "s"}
+              = <LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="nav" currency="USD" /> ·{" "}
+              {pf.positions.length} position{pf.positions.length === 1 ? "" : "s"}
             </>
           }
         />
+        {/* Total holdings — positions only, CAD + USD, live. */}
+        <StatCard
+          label="Total holdings (CAD)"
+          term="market-value"
+          value={<LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="holdings" currency="CAD" />}
+          note={<>= <LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="holdings" currency="USD" /></>}
+        />
+        {/* Total cash — the CAD-valued total, split by currency. */}
+        <StatCard
+          label="Total cash (CAD)"
+          value={money(pf.cashCents)}
+          note={
+            <>
+              {money(pf.cadCashCents)} CAD · {usd(pf.usdCashCents)}
+            </>
+          }
+        />
+        {/* Total P&L — live value; the %/vs-XIC note is the server snapshot. */}
         <StatCard
           label="Total P&L"
           term="total-pnl"
-          value={signedMoney(pf.totalPnlCents)}
-          valueClassName={pnlClass(pf.totalPnlCents)}
+          value={<LivePnlValue positions={livePositions} cashCents={pf.cashCents} contributionsCents={pf.contributionsCents} fx={fxLive} />}
           note={
             pf.benchmarkCents !== null
               ? `${pct(pnlPct, 2)} · vs XIC ${signedMoney(pf.navCents - pf.benchmarkCents)}`
               : `${pct(pnlPct, 2)} on contributions`
           }
         />
-        <StatCard
-          label="Contributions (CAD)"
-          term="contributions"
-          value={money(pf.contributionsCents)}
-          note="initial commitment"
-        />
+        <StatCard label="Contributions (CAD)" term="contributions" value={money(pf.contributionsCents)} note="initial commitment" />
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-teal-200/50">
             <Term k="fee-budget">Fee budget</Term>
@@ -444,25 +544,8 @@ export default async function Portfolio() {
             />
           </span>
         </Card>
-        <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-teal-200/50">Cash</div>
-          <div className="mt-2 space-y-1">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs uppercase tracking-wider text-teal-200/40">CAD</span>
-              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.cadCashCents)}</span>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs uppercase tracking-wider text-teal-200/40">USD</span>
-              <span className="text-xl font-semibold tabular-nums text-teal-50">{usd(pf.usdCashCents)}</span>
-            </div>
-          </div>
-        </Card>
         {showExternal && (
-          <StatCard
-            label="Outside GRQ (CAD)"
-            value={money(personalCadCents)}
-            note="your external accounts · read-only"
-          />
+          <StatCard label="Outside GRQ (CAD)" value={money(myCadCents)} note="your external accounts · read-only" />
         )}
       </section>
 
@@ -470,8 +553,8 @@ export default async function Portfolio() {
           rail across the height of BOTH (on lg it's absolutely-filled so the row
           track is set by the left column, then scrolls internally; on mobile it's
           a normal block under them). */}
-      <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <section className="mt-6 grid items-start gap-4 lg:grid-cols-4">
+        <div className="space-y-6 lg:col-span-3">
           {positionsPanel}
           {personalSection}
         </div>
@@ -496,14 +579,18 @@ export default async function Portfolio() {
         </div>
       </section>
 
-      {/* The agent's latest briefing + journal, with the Agenda alongside when open. */}
+      {/* The agent's latest briefing + journal, with the Agenda alongside when open.
+          Pending research sits under the Agenda and above the intraday check-in/brief
+          (Cam 2026-06-29). */}
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          <ResearchQueueCard />
           {briefPanel}
           {journalPanel}
         </div>
         {hasAgenda ? <aside className="lg:col-span-1">{agendaPanel}</aside> : null}
       </section>
+      </LiveQuotesProvider>
     </main>
   );
 }

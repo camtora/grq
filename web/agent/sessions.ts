@@ -591,7 +591,7 @@ Honesty bar (load-bearing): there is no supply-chain data feed — this is YOUR 
 REACH: North America preferred (the fund holds CAD + USD; TSX · TSXV · CSE · NEO + NYSE · Nasdaq), but a board can include the best foreign names as leads-only. We already track these (fine to reference, but the value is in the names we DON'T cover): ${have || "(none)"}.
 
 Use WebSearch (and WebFetch on the best leads) to:
-1. MAP THE BOARD — lay the value chain out end to end: upstream (raw inputs / suppliers), midstream (the core operators), downstream (customers / OEMs), plus the adjacent picks-and-shovels and substitutes. Name the real companies in each stage.
+1. MAP THE BOARD — lay the value chain out end to end: upstream (raw inputs / suppliers), midstream (the core operators), downstream (customers / OEMs), plus the adjacent picks-and-shovels and substitutes. Name the real companies in each stage — and for EVERY single public company give it its OWN board item WITH its ticker symbol (so it links + highlights on the stock page); only a genuine foreign/grouped basket you're not individually tracking may be a name without a ticker.
 2. READ THE POSITION — name the single dominant force in motion and exactly how it ripples (the thesis), and what would change your mind (the levers).
 3. CALL THE PLAYS — 8–12 ripple-effect names, each tagged BENEFICIARY / VICTIM / NEUTRAL and by effect order (1 = directly hit, 2/3 = downstream consequence). Favour under-the-radar names (higher obscurity) — the obvious mega-cap is the least interesting play.
 

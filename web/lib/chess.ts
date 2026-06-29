@@ -103,6 +103,77 @@ type PlayRow = {
   obscurity: number | null;
 };
 
+// ---- "This stock is in play on these boards" (stock-page cross-reference) ----
+
+export type ChessBoardRef = {
+  themeId: number;
+  title: string;
+  anchor: string;
+  kind: string; // BRIEF | WEEKLY
+  completedAt: Date | null;
+  role: string; // the piece's role on that board
+  direction: PlayDirection; // BENEFICIARY | VICTIM | NEUTRAL
+  effectOrder: number; // 1/2/3-order
+  thesis: string; // the one-line why it moves on that board
+  conviction: number | null;
+  mentionedOnly: boolean; // appears in the board MAP but isn't a ranked play (e.g. the anchor/foundry)
+  board: ChessBoardData; // the full chain map → rendered inline on the stock page, this name highlighted
+};
+
+/** Every READY Chess board this symbol appears on — as a ranked *play* OR just mentioned in the
+ *  board map (a stage item or a flow link). Cam 2026-06-29: "surface if the stock is mentioned",
+ *  so a name that's the board's subject (e.g. TSMC on the packaging board) shows even when it
+ *  isn't one of the ripple plays. A name can be on more than one board — we surface them all.
+ *  Matched on the bare ticker so a `.TO`/`.US` listing still joins. Read-only — a board is a
+ *  lead, never a trade. */
+export async function chessRefsForSymbol(symbol: string): Promise<ChessBoardRef[]> {
+  const bare = bareChainKey(symbol);
+  const themes = await prisma.chessTheme.findMany({
+    where: { status: "READY" },
+    orderBy: { completedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      anchor: true,
+      kind: true,
+      completedAt: true,
+      boardJson: true,
+      plays: {
+        orderBy: [{ conviction: "desc" }, { rank: "asc" }],
+        select: { symbol: true, role: true, direction: true, effectOrder: true, thesis: true, conviction: true },
+      },
+    },
+  });
+
+  const refs: ChessBoardRef[] = [];
+  for (const t of themes) {
+    const board = parseBoard(t.boardJson);
+    const base = { themeId: t.id, title: t.title, anchor: t.anchor, kind: t.kind, completedAt: t.completedAt, board };
+    // 1) A ranked play on this board → carry its role/direction/effect-order.
+    const play = t.plays.find((p) => bareChainKey(p.symbol) === bare);
+    if (play) {
+      refs.push({
+        ...base,
+        role: play.role,
+        direction: asDirection(play.direction),
+        effectOrder: play.effectOrder,
+        thesis: play.thesis,
+        conviction: play.conviction || null,
+        mentionedOnly: false,
+      });
+      continue;
+    }
+    // 2) Otherwise, mentioned in the board MAP (a stage item's ticker, or a flow link).
+    const inMap =
+      board.stages.some((st) => st.items.some((it) => it.symbol && bareChainKey(it.symbol) === bare)) ||
+      board.links.some((l) => bareChainKey(l.from) === bare || bareChainKey(l.to) === bare);
+    if (inMap) {
+      refs.push({ ...base, role: "on the board", direction: "NEUTRAL", effectOrder: 0, thesis: "", conviction: null, mentionedOnly: true });
+    }
+  }
+  return refs;
+}
+
 const asDirection = (d: string): PlayDirection => (d === "VICTIM" || d === "NEUTRAL" ? d : "BENEFICIARY");
 
 /** Resolve ChessPlay rows into renderable views — heat-ranked, with momentum, logo,
