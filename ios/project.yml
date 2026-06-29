@@ -11,8 +11,11 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
-    # Set your team in Xcode (Signing & Capabilities) — left blank for the repo.
-    DEVELOPMENT_TEAM: ""
+    # Cam's team (3WR9SN94Q4) baked in so an `xcodegen generate` doesn't wipe the
+    # Signing selection each time (it formerly blanked it → "requires a development team").
+    # Graham overrides locally in Xcode's Signing & Capabilities for his own device builds.
+    DEVELOPMENT_TEAM: "3WR9SN94Q4"
+    CODE_SIGN_STYLE: Automatic
 
 packages:
   GoogleSignIn:
