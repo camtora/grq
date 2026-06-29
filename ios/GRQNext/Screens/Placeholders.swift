@@ -68,11 +68,31 @@ struct MoreScreen: View {
                     }
                 }
             }
-            SectionHeader("Settings")
-            ComingSoon(phase: "Phase D", note: "Reports, risk dial, kill switch, FX, notification preferences, price alerts, About.")
-            Button("Dark / light") { theme.toggle() }.buttonStyle(.bordered).tint(p.accent)
-            Button(role: .destructive) { auth.signOut() } label: { Text("Sign out") }
-                .buttonStyle(.bordered)
+            PanelSection("Settings") {
+                GCard(padding: 0) {
+                    VStack(spacing: 0) {
+                        NavigationLink { ReportsScreen() } label: { moreRow("Reports", "doc.text.fill", p) }
+                        Divider().overlay(p.cardBorder)
+                        Button { theme.toggle() } label: { moreRow("Dark / light", "circle.lefthalf.filled", p) }.buttonStyle(.plain)
+                    }
+                }
+            }
+            ComingSoon(phase: "Phase D (cont.)", note: "Coming next: chat, notifications, FX approvals, risk dial, kill switch, price alerts, About.")
+            Button(role: .destructive) { auth.signOut() } label: {
+                Text("Sign out").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
         }
+    }
+
+    private func moreRow(_ title: String, _ icon: String, _ p: Palette) -> some View {
+        HStack(spacing: Space.md) {
+            Image(systemName: icon).foregroundStyle(p.accent).frame(width: 24)
+            Text(title).foregroundStyle(p.textPrimary)
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted)
+        }
+        .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
+        .contentShape(Rectangle())
     }
 }

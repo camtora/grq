@@ -80,7 +80,13 @@ struct RootView: View {
                 await push.uploadTokenIfPossible()
             }
         }
-        // Push deep-link → stock dossier is wired in Phase D (StockDetailView lands then).
+        // A tapped notification carrying a symbol opens that stock's dossier (scrolled to a
+        // panel when the push named one).
+        .sheet(item: $push.route) { r in
+            NavigationStack { StockDetailView(symbol: r.symbol, scrollTo: r.panel) }
+                .environmentObject(auth)
+                .environmentObject(glossary)
+        }
     }
 }
 
