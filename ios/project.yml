@@ -85,6 +85,13 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
+      # Push Notifications entitlement, per build config — MUST live in the yml or an
+      # xcodegen regen drops it (dev→sandbox / release→production APNs; D53).
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: GRQ/GRQ.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: GRQ/GRQ-Release.entitlements
 
   # GRQ Next — the ground-up UI rebuild (a SECOND app target, parallel dev). It REUSES
   # the live data + auth layer (Services), the contract models (Models), the content
@@ -132,3 +139,10 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
+      # Push Notifications entitlement, per build config (D53). Automatic signing sees the
+      # aps-environment entitlement and provisions the Push capability for ca.camerontora.grq2.
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: GRQNext/GRQNext.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: GRQNext/GRQNext-Release.entitlements
