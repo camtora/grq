@@ -148,12 +148,10 @@ struct GRQChrome: ViewModifier {
     func body(content: Content) -> some View {
         content.toolbar {
             if auth.currentUser?.role == .member {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { chrome.showNotifications = true } label: {
                         Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
                         Image(systemName: "bubble.left.and.text.bubble.right")
                     }
