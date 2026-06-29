@@ -238,7 +238,15 @@ export default async function Portfolio() {
           </span>
         }
       >
-        Alfred&apos;s positions
+        <span className="inline-flex items-center gap-2">
+          {/* Alfred's face — the GRQ bull, matching how the chat represents the agent —
+              so the fund's panel has an avatar like the members' lanes (Cam 2026-06-29). */}
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-400/15 ring-1 ring-teal-400/25">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/bull-splash.png" alt="Alfred" className="h-5 w-5 object-contain" />
+          </span>
+          Alfred&apos;s positions
+        </span>
       </PanelHeader>
       <Card className="overflow-x-auto">
         {pf.positions.length === 0 ? (
