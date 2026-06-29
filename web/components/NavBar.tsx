@@ -30,6 +30,7 @@ const EXPERIMENTS: NavLink[] = [
   { href: "/bulls", label: "Bull Race" },
   { href: "/options-desk", label: "Options Desk" },
   { href: "/chess", label: "Chess Moves" },
+  { href: "/report-card", label: "Report Card" },
 ];
 
 export default function NavBar({

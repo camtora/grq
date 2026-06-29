@@ -490,44 +490,51 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <div className="lg:col-span-1">
               {/* The verdict word, with the bull/bear bar (the same call) directly under
                   it. Technicals are an input below, not a competing verdict. */}
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">
-                {stance ? <Term k="agent-call">Alfred&apos;s call</Term> : "Technical signal"}
-              </div>
               {stance ? (
                 <>
-                  <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
-                  <div className="mt-3 w-full max-w-xs">
+                  {/* The bull↔bear gauge (the signal) sits up top; Alfred's CALL is a
+                      well-defined box directly beneath it — the verdict + confidence, boxed,
+                      not a loose inline stack (Cam 2026-06-29). */}
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">Signal</div>
+                  <div className="w-full max-w-xs">
                     <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />
                   </div>
-                  {/* Under the bar: GRQ's confidence in this call (with an explainer), and when
-                      it was rated. No score on file → say so plainly rather than imply certainty. */}
-                  <div className="mt-3">
-                    {stanceConfidence != null ? (
-                      <>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-black tabular-nums text-teal-100">{stanceConfidence}%</span>
-                          <Term k="confidence" className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">
-                            confidence
-                          </Term>
-                        </div>
-                        {stanceConfidenceAt && (
-                          <p className="mt-0.5 text-[11px] text-teal-200/40">rated {fmtWhen(stanceConfidenceAt)}</p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-sm text-teal-200/50">
+                  <div className={`mt-3 max-w-xs rounded-lg border p-3 ${STANCE_TONE_CLASSES[stance.tone].border} ${STANCE_TONE_CLASSES[stance.tone].bg}`}>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/55">
+                      <Term k="agent-call">Alfred&apos;s call</Term>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                      <span className={`text-3xl font-black leading-tight ${STANCE_TONE_CLASSES[stance.tone].text}`}>{stance.label}</span>
+                      {stanceConfidence != null && (
+                        <span className="flex items-baseline gap-1">
+                          <span className="text-xl font-black tabular-nums text-teal-100">{stanceConfidence}%</span>
+                          <Term k="confidence" className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/50">conf</Term>
+                        </span>
+                      )}
+                    </div>
+                    {stanceConfidence == null && (
+                      <p className="mt-1 text-xs text-teal-200/50">
                         No <Term k="confidence" className="font-semibold">confidence</Term> score on this call yet.
                       </p>
+                    )}
+                    {stanceConfidenceAt && (
+                      <p className="mt-0.5 text-[11px] text-teal-200/40">rated {fmtWhen(stanceConfidenceAt)}</p>
                     )}
                   </div>
                 </>
               ) : recMeta ? (
                 <>
-                  <span className="text-2xl font-bold leading-tight text-teal-100/70">{recMeta.label}</span>
-                  <div className="mt-3 w-full max-w-xs">
+                  {/* No Alfred call yet — show the technical signal gauge, with the lean boxed
+                      beneath it the same way (clearly an input, not a verdict). */}
+                  <div className="mb-1 text-[10px] uppercase tracking-wider text-teal-200/50">Signal</div>
+                  <div className="w-full max-w-xs">
                     <RatingBar label={recMeta.label} tone={recMeta.tone} pos={recMeta.pos} mascots hideLabel className="w-full" />
                   </div>
-                  <p className="mt-3 text-sm text-teal-200/50">No GRQ call yet — technical signal only (an input, not a verdict).</p>
+                  <div className="mt-3 max-w-xs rounded-lg border border-teal-400/15 bg-teal-400/[0.03] p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-200/45">Technical signal</div>
+                    <span className="mt-1 block text-2xl font-bold leading-tight text-teal-100/70">{recMeta.label}</span>
+                    <p className="mt-1 text-xs text-teal-200/50">No Alfred call yet — technical signal only (an input, not a verdict).</p>
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-teal-200/50">Not yet rated — the agent hasn&apos;t filed a call on this name.</p>
