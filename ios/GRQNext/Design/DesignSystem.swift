@@ -14,6 +14,16 @@ enum Radius {
     static let card: CGFloat = 18, pill: CGFloat = 999, control: CGFloat = 12
 }
 
+// Strip markdown to a clean one-paragraph preview (for clamped card bodies).
+func plainPreview(_ md: String) -> String {
+    md.replacingOccurrences(of: "`", with: "")
+        .split(separator: "\n")
+        .map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "#", with: "").replacingOccurrences(of: "*", with: "").replacingOccurrences(of: "_", with: "") }
+        .map { $0.hasPrefix("- ") ? String($0.dropFirst(2)) : $0 }
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+}
+
 // MARK: - Money / number formatting (cents in, never floats on the wire)
 
 enum Fmt {

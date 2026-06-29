@@ -20,36 +20,45 @@ private struct ComingSoon: View {
 
 struct ExperimentsScreen: View {
     @Environment(\.colorScheme) private var scheme
-    private let items: [(String, String)] = [
-        ("The Hunt", "binoculars.fill"),
-        ("The Wire", "dot.radiowaves.left.and.right"),
-        ("Second Opinions", "person.2.fill"),
-        ("Bull Race", "hare.fill"),
-        ("Options Desk", "slider.horizontal.3"),
-        ("Chess Moves", "checkerboard.rectangle"),
-        ("Report Card", "checkmark.seal.fill"),
-    ]
     var body: some View {
         let p = Theme.palette(scheme)
         ScreenScaffold(title: "Experiments") {
-            SectionHeader("Labs")
+            SectionHeader("Live")
             GCard(padding: 0) {
                 VStack(spacing: 0) {
-                    ForEach(items.indices, id: \.self) { i in
-                        HStack(spacing: Space.md) {
-                            Image(systemName: items[i].1).foregroundStyle(p.accent).frame(width: 24)
-                            Text(items[i].0).foregroundStyle(p.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted)
-                        }
-                        .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
-                        if i < items.count - 1 { Divider().overlay(p.cardBorder) }
-                    }
+                    NavigationLink { HuntScreen() } label: { labRow("The Hunt", "binoculars.fill", "under-the-radar leads, heat-ranked", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { WireScreen() } label: { labRow("The Wire", "dot.radiowaves.left.and.right", "the woven discovery feed", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { ChessMovesScreen() } label: { labRow("Chess Moves", "checkerboard.rectangle", "value-chain boards & ripple plays", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { RaceScreen() } label: { labRow("Second Opinions", "person.2.fill", "shadow models grade the calls", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { BullsScreen() } label: { labRow("Bull Race", "hare.fill", "each model runs its own book", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { OptionsDeskScreen() } label: { labRow("Options Desk", "slider.horizontal.3", "stock-only vs +options sandbox", p) }
+                    Divider().overlay(p.cardBorder)
+                    NavigationLink { ReportCardScreen() } label: { labRow("Report Card", "checkmark.seal.fill", "how the calls actually did", p) }
                 }
             }
-            ComingSoon(phase: "Phase E", note: "The Hunt + Wire come first; Chess/Race/Bulls/Options need new mobile endpoints, then go native.")
+            Text("Experiments are sandboxes & research — never the live fund.")
+                .font(.caption2).foregroundStyle(p.textMuted)
         }
         .grqChrome()
+    }
+
+    private func labRow(_ title: String, _ icon: String, _ sub: String, _ p: Palette) -> some View {
+        HStack(spacing: Space.md) {
+            Image(systemName: icon).foregroundStyle(p.accent).frame(width: 24)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).foregroundStyle(p.textPrimary)
+                Text(sub).font(.caption2).foregroundStyle(p.textMuted)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption).foregroundStyle(p.textMuted)
+        }
+        .padding(.horizontal, Space.lg).padding(.vertical, Space.md)
+        .contentShape(Rectangle())
     }
 }
 
