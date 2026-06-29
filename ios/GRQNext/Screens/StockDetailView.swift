@@ -6,8 +6,14 @@ import SwiftUI
 struct StockDetailView: View {
     let symbol: String
     var scrollTo: String? = nil
+    @EnvironmentObject private var auth: AuthManager
     @Environment(\.colorScheme) private var scheme
     @State private var state: Loadable<Dossier> = .loading
+    @State private var watchState: String? = nil   // none | watching | universe (optimistic)
+    @State private var busy = false
+    @State private var showChat = false
+
+    private var isMember: Bool { auth.currentUser?.role == .member }
 
     var body: some View {
         ScrollView {
@@ -19,6 +25,9 @@ struct StockDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if case .loading = state { await load() } }
         .refreshable { await load() }
+        .sheet(isPresented: $showChat) {
+            AgentChatScreen(symbol: symbol).environmentObject(auth)
+        }
     }
 
     private struct PanelItem: Identifiable { let id: String; let title: String; let view: AnyView }
@@ -26,6 +35,7 @@ struct StockDetailView: View {
     private func content(_ d: Dossier) -> some View {
         VStack(alignment: .leading, spacing: Space.lg) {
             header(d)
+            if isMember { memberControls }
             ForEach(panelItems(d)) { item in
                 VStack(alignment: .leading, spacing: Space.sm) {
                     SectionHeader(item.title)
@@ -64,6 +74,47 @@ struct StockDetailView: View {
                 }
                 if let r = d.resolvedRating { RatingBar(rating: r) }
             }
+        }
+    }
+
+    // MARK: member controls
+
+    @ViewBuilder private var memberControls: some View {
+        let p = Theme.palette(scheme)
+        let watching = watchState == "watching"
+        HStack(spacing: Space.sm) {
+            Button {
+                Task { await toggleWatch() }
+            } label: {
+                Label(watching ? "Watching" : "Watch", systemImage: watching ? "star.fill" : "star")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+            }
+            .foregroundStyle(watching ? Color(hex: "04110d") : p.accent)
+            .background(watching ? AnyShapeStyle(p.accent) : AnyShapeStyle(p.accent.opacity(0.12)), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .disabled(busy)
+
+            Button {
+                showChat = true
+            } label: {
+                Label("Ask Alfred", systemImage: "bubble.left.and.text.bubble.right")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+            }
+            .foregroundStyle(p.accent)
+            .background(p.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        }
+    }
+
+    private func toggleWatch() async {
+        busy = true; defer { busy = false }
+        let r: ActionResult
+        if watchState == "watching" {
+            r = await APIClient.shared.universeAction(symbol, "unwatch")
+            if r.ok { watchState = "none" }
+        } else {
+            r = await APIClient.shared.watch(symbol)
+            if r.ok { watchState = "watching" }
         }
     }
 
@@ -288,7 +339,11 @@ struct StockDetailView: View {
     }
 
     private func load() async {
-        if let d = await APIClient.shared.dossier(symbol) { state = .loaded(d) }
-        else { state = .failed("Couldn’t load \(symbol). Pull to retry.") }
+        if let d = await APIClient.shared.dossier(symbol) {
+            state = .loaded(d)
+            if watchState == nil { watchState = d.watch ?? "none" }
+        } else {
+            state = .failed("Couldn’t load \(symbol). Pull to retry.")
+        }
     }
 }

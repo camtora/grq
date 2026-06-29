@@ -28,6 +28,7 @@ struct MarketsScreen: View {
                 }
             }
         }
+        .grqChrome()
         .task { if case .loading = market { await loadMarket() } }
     }
 

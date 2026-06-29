@@ -91,13 +91,23 @@ struct RootView: View {
     }
 }
 
+/// Drives the global chat + notification sheets (presented once at the tab root; every
+/// screen's top-bar chrome flips these).
+final class Chrome: ObservableObject {
+    @Published var showChat = false
+    @Published var chatSymbol: String? = nil   // set to pre-scope "Ask Alfred about TSLA"
+    @Published var showNotifications = false
+}
+
 /// The native 5-tab bar, mirroring the web nav:
 /// Today · Portfolio · Markets · Experiments · More. Each tab is its own NavigationStack;
-/// the Stock dossier pushes from anywhere. Global Chat + Notifications chrome lands in Phase D.
+/// the Stock dossier pushes from anywhere. Chat + Notifications are global sheets driven by
+/// `Chrome`, with a top-bar button on every screen (see `.grqChrome()`).
 struct MainTabView: View {
     @EnvironmentObject private var auth: AuthManager
-    @EnvironmentObject private var theme: NextTheme
     @EnvironmentObject private var glossary: NextGlossary
+    @StateObject private var chrome = Chrome()
+    @StateObject private var notifs = NotificationsInbox()
 
     var body: some View {
         TabView {
@@ -112,5 +122,44 @@ struct MainTabView: View {
             NavigationStack { MoreScreen() }
                 .tabItem { Label("More", systemImage: "ellipsis.circle.fill") }
         }
+        .environmentObject(chrome)
+        .environmentObject(notifs)
+        .task { notifs.start() }
+        .sheet(isPresented: $chrome.showChat) {
+            AgentChatScreen(symbol: chrome.chatSymbol)
+                .environmentObject(auth)
+                .environmentObject(glossary)
+        }
+        .sheet(isPresented: $chrome.showNotifications) {
+            NotificationCenterView()
+                .environmentObject(auth)
+                .environmentObject(glossary)
+                .environmentObject(notifs)
+        }
     }
 }
+
+/// Adds the standard GRQ top-bar chrome (notification bell + Ask-Alfred button) to a screen
+/// inside the tab's NavigationStack. Members only — viewers get a read-only app.
+struct GRQChrome: ViewModifier {
+    @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var chrome: Chrome
+    @EnvironmentObject private var notifs: NotificationsInbox
+    func body(content: Content) -> some View {
+        content.toolbar {
+            if auth.currentUser?.role == .member {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { chrome.showNotifications = true } label: {
+                        Image(systemName: notifs.unread > 0 ? "bell.badge.fill" : "bell")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { chrome.chatSymbol = nil; chrome.showChat = true } label: {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                    }
+                }
+            }
+        }
+    }
+}
+extension View { func grqChrome() -> some View { modifier(GRQChrome()) } }

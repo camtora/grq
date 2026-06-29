@@ -12,6 +12,7 @@ struct PortfolioScreen: View {
         ScreenScaffold(title: "Portfolio", refresh: load) {
             LoadableView(state: state, retry: load) { pf in content(pf) }
         }
+        .grqChrome()
         .task { if case .loading = state { await load() } }
     }
 

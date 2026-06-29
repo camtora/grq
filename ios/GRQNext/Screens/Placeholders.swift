@@ -49,6 +49,7 @@ struct ExperimentsScreen: View {
             }
             ComingSoon(phase: "Phase E", note: "The Hunt + Wire come first; Chess/Race/Bulls/Options need new mobile endpoints, then go native.")
         }
+        .grqChrome()
     }
 }
 

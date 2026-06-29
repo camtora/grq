@@ -10,6 +10,7 @@ struct TodayScreen: View {
         ScreenScaffold(title: "Today", refresh: load) {
             LoadableView(state: state, retry: load) { today in content(today) }
         }
+        .grqChrome()
         .task { if case .loading = state { await load() } }
     }
 
