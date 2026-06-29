@@ -918,6 +918,92 @@ enum PanelKind: String, CaseIterable {
 
 // MARK: - Reports (A10)
 
+// MARK: - Chess Moves (value-chain boards + ripple plays)
+
+struct ChessThemeSummary: Codable, Identifiable {
+    let id: Int
+    let title: String
+    let anchor: String
+    let kind: String       // BRIEF | WEEKLY
+    let status: String     // PENDING | RUNNING | READY | FAILED
+    var bottomLine: String? = nil
+    var requestedBy: String? = nil
+    let createdAt: String
+    let playCount: Int
+    var tickers: [String] = []
+}
+
+struct ChessListResponse: Codable { var themes: [ChessThemeSummary] = [] }
+
+struct ChessBoardItem: Codable, Identifiable {
+    var symbol: String? = nil
+    let name: String
+    var note: String? = nil
+    var id: String { (symbol ?? "") + name }
+}
+struct ChessBoardStage: Codable, Identifiable {
+    let label: String
+    var role: String? = nil
+    var items: [ChessBoardItem] = []
+    var id: String { label }
+}
+struct ChessBoardLink: Codable, Identifiable {
+    let from: String
+    let to: String
+    var label: String? = nil
+    var id: String { from + ">" + to }
+}
+struct ChessBoardMap: Codable {
+    var stages: [ChessBoardStage] = []
+    var links: [ChessBoardLink] = []
+}
+
+// Theme-level confidence lever (reuses the dossier lever shape).
+struct ChessLever: Codable, Identifiable {
+    let gap: String
+    var direction: String? = nil   // up | down | tighten
+    var magnitude: String? = nil   // small | moderate | large
+    var kind: String? = nil        // data-gap | catalyst
+    var trigger: String? = nil
+    var retrievable: Bool? = nil
+    var id: String { gap }
+}
+
+struct ChessPlayView: Codable, Identifiable {
+    let id: Int
+    let symbol: String
+    let name: String
+    let role: String
+    let direction: String   // BENEFICIARY | VICTIM | NEUTRAL
+    let effectOrder: Int     // 1/2/3
+    let thesis: String
+    var conviction: Int? = nil
+    var obscurity: Int? = nil
+    var tag: String? = nil
+    var logoUrl: String? = nil
+    var currency: String? = nil
+    var lastCents: Int? = nil
+    var change30d: Double? = nil
+    let heat: Int
+    let tracked: Bool
+    var stance: String? = nil
+}
+
+struct ChessBoard: Codable {
+    let id: Int
+    let title: String
+    let anchor: String
+    let kind: String
+    let status: String
+    var thesis: String? = nil
+    var bottomLine: String? = nil
+    var requestedBy: String? = nil
+    let completedAt: String
+    var board: ChessBoardMap = ChessBoardMap()
+    var levers: [ChessLever] = []
+    var plays: [ChessPlayView] = []
+}
+
 // MARK: - Personal / external accounts (SnapTrade — TD TFSA etc.)
 // Mirrors web/lib/feed.ts accountsResponse → the /accounts page on mobile. Visibility only
 // (read-only at source, never traded). All money is integer cents; qty is a string (may be

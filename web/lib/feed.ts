@@ -19,6 +19,8 @@ import { watchersFor } from "./watch";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers } from "./external/store";
+import { parseBoard, buildPlayViews } from "./chess";
+import { parseConfidenceLevers } from "./confidence-levers";
 import { stanceMeta } from "./stance";
 import { getCloses, refreshBars } from "./bars";
 import { computeHeat } from "./heat";
@@ -989,6 +991,72 @@ export async function accountsResponse(meEmail: string) {
           openPnlCents: h.openPnlCents,
         })),
       })),
+    })),
+  };
+}
+
+// Chess Moves (docs/CHESS-MOVES.md) for mobile — the value-chain boards + ripple plays.
+// List = non-retired themes newest-first with a tickers preview; detail = the parsed board,
+// the heat-ranked plays (reusing lib/chess.buildPlayViews), the thesis + confidence levers.
+export async function chessListResponse() {
+  const themes = await prisma.chessTheme.findMany({
+    where: { status: { not: "RETIRED" } },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    include: { _count: { select: { plays: true } }, plays: { orderBy: { rank: "asc" }, take: 6, select: { symbol: true } } },
+  });
+  return {
+    themes: themes.map((t) => ({
+      id: t.id,
+      title: t.title,
+      anchor: t.anchor,
+      kind: t.kind,
+      status: t.status,
+      bottomLine: t.bottomLine,
+      requestedBy: t.requestedBy,
+      createdAt: t.createdAt.toISOString(),
+      playCount: t._count.plays,
+      tickers: t.plays.map((p) => p.symbol),
+    })),
+  };
+}
+
+export async function chessBoardResponse(id: number) {
+  const t = await prisma.chessTheme.findUnique({ where: { id }, include: { plays: { orderBy: { rank: "asc" } } } });
+  if (!t || t.status === "RETIRED") return null;
+  const board = parseBoard(t.boardJson);
+  const plays = t.status === "READY" ? await buildPlayViews(t.plays) : [];
+  const levers = parseConfidenceLevers(t.confidenceLeversJson);
+  return {
+    id: t.id,
+    title: t.title,
+    anchor: t.anchor,
+    kind: t.kind,
+    status: t.status,
+    thesis: t.thesis,
+    bottomLine: t.bottomLine,
+    requestedBy: t.requestedBy,
+    completedAt: (t.completedAt ?? t.createdAt).toISOString(),
+    board, // { stages:[{label,role,items:[{symbol,name,note}]}], links:[{from,to,label}] }
+    levers, // [{ gap, direction, magnitude, kind, trigger, retrievable }]
+    plays: plays.map((p) => ({
+      id: p.id,
+      symbol: p.sym,
+      name: p.name,
+      role: p.role,
+      direction: p.direction,
+      effectOrder: p.effectOrder,
+      thesis: p.thesis,
+      conviction: p.conviction,
+      obscurity: p.obscurity,
+      tag: p.tag,
+      logoUrl: p.logoUrl,
+      currency: p.currency,
+      lastCents: p.cur,
+      change30d: p.change30d,
+      heat: p.heat,
+      tracked: p.tracked,
+      stance: p.stance,
     })),
   };
 }

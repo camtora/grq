@@ -33,6 +33,7 @@ const MOBILE_API = [
   "/api/hunt",            // GET feed (A1) + POST /api/hunt/refresh (member, A9)
   "/api/wire",            // GET The Wire — the discovery feed (prototype)
   "/api/smart-money",     // A3
+  "/api/chess",           // Chess Moves boards: GET list + GET [id] + POST brief/research/status (guards in-route)
   "/api/accounts",        // personal/external accounts (SnapTrade — TD TFSA etc.); members-only in-route
   "/api/reports",         // A10 (list + /day/[date])
   "/api/stock-extras",    // A7 (lazy earnings/grades)

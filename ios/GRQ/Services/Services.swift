@@ -205,6 +205,9 @@ final class APIClient {
     func smartMoney() async -> SmartMoneyResponse? { await get("smart-money") }
     func stockExtras(_ symbol: String) async -> StockExtras? { await get("stock-extras/\(symbol)") }
     func accounts() async -> AccountsResponse? { await get("accounts") }
+    func chessThemes() async -> ChessListResponse? { await get("chess") }
+    func chessBoard(_ id: Int) async -> ChessBoard? { await get("chess/\(id)") }
+    func briefChess(_ brief: String) async -> ActionResult { await postResult("chess", ["brief": brief]) }
     func reportForDay(_ date: String) async -> ReportDetail? { await get("reports/day/\(date)") }
 
     func reports() async -> [ReportSummary] {

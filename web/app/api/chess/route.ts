@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { memberFromRequest, displayName } from "@/lib/session";
+import { memberFromRequest, sessionFromRequest, displayName } from "@/lib/session";
+import { chessListResponse } from "@/lib/feed";
 import { CHESS } from "@/agent/policy";
 
 export const dynamic = "force-dynamic";
+
+// Mobile read — the list of Chess Moves boards. Any signed-in identity may read.
+export async function GET(req: Request) {
+  const session = sessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Sign in to view this." }, { status: 403 });
+  return NextResponse.json(await chessListResponse());
+}
 
 // Chess Moves (docs/CHESS-MOVES.md) — a member briefs a theme/chain to map. The web
 // (alpine) can't run a Claude session, so we create a PENDING ChessTheme the agent's

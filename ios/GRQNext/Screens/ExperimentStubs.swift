@@ -26,7 +26,6 @@ private struct LabStub: View {
     }
 }
 
-struct ChessMovesScreen: View { var body: some View { LabStub(title: "Chess Moves", blurb: "Pick a value chain; Alfred maps the board and the ripple-effect plays.") } }
 struct RaceScreen: View { var body: some View { LabStub(title: "Second Opinions", blurb: "Shadow models grade the fund’s real calls — no separate book.") } }
 struct BullsScreen: View { var body: some View { LabStub(title: "Bull Race", blurb: "Each model runs its own $50k paper book; standings over time.") } }
 struct OptionsDeskScreen: View { var body: some View { LabStub(title: "Options Desk", blurb: "Stock-only vs stock+options, same book — which compounds better.") } }
