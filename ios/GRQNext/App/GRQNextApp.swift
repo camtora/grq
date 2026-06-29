@@ -69,7 +69,9 @@ struct RootView: View {
         }
         .onAppear { if let t = auth.currentUser?.theme { theme.apply(t) } }
         .onChange(of: auth.currentUser?.theme) { _, t in if let t { theme.apply(t) } }
-        .onChange(of: scenePhase) { _, new in
+        .onChange(of: scenePhase) { old, new in
+            // Make it rain on every return from background — the splash Cam loves (tap to enter).
+            if new == .active && old == .background { showSplash = true }
             if new == .active { Task { await push.reconcileOnForeground() } }
         }
         .task(id: auth.isAuthenticated) {
