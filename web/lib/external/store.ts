@@ -22,14 +22,18 @@ import {
 type MemberCreds = { partner: SnaptradePartner; userSecret: string; userIdOverride: string | null };
 
 async function credsFor(email: string): Promise<MemberCreds | null> {
-  // Self-served DB keys win; env is the fallback (Cam's original setup + any
-  // pinned overrides). A member can now connect entirely through the UI.
+  // Self-served DB keys win; env is the fallback. The env keys belong to a SPECIFIC named
+  // person — Cam (unsuffixed) and Graham (`_GRAHAM`) — so the env fallback is scoped to that
+  // person ONLY. Anyone else (a third person / viewer like Jose) MUST have their own
+  // ExternalCredential row; they never inherit Cam's key (Cam 2026-06-29).
   const row = await prisma.externalCredential.findUnique({ where: { email } }).catch(() => null);
-  const g = memberKeyForEmail(email) === "graham";
-  const clientId = row?.clientId || (g ? process.env.SNAPTRADE_CLIENT_ID_GRAHAM : process.env.SNAPTRADE_CLIENT_ID);
-  const consumerKey = row?.consumerKey || (g ? process.env.SNAPTRADE_CONSUMER_KEY_GRAHAM : process.env.SNAPTRADE_CONSUMER_KEY);
-  const userSecretSrc = row?.userSecret || (g ? process.env.SNAPTRADE_USER_SECRET_GRAHAM : process.env.SNAPTRADE_USER_SECRET);
-  const userIdOverride = (g ? process.env.SNAPTRADE_USER_ID_GRAHAM : process.env.SNAPTRADE_USER_ID) || null;
+  const key = memberKeyForEmail(email); // "cam" | "graham" | null
+  const env = (name: string): string | undefined =>
+    key === "graham" ? process.env[`${name}_GRAHAM`] : key === "cam" ? process.env[name] : undefined;
+  const clientId = row?.clientId || env("SNAPTRADE_CLIENT_ID");
+  const consumerKey = row?.consumerKey || env("SNAPTRADE_CONSUMER_KEY");
+  const userSecretSrc = row?.userSecret || env("SNAPTRADE_USER_SECRET");
+  const userIdOverride = env("SNAPTRADE_USER_ID") || null;
   if (clientId && consumerKey) {
     // SnapTrade Personal keys: the single auto-provisioned user's read token IS the
     // consumer secret (verified 2026-06-28 — it pulled Cam's TD TFSA). So the two

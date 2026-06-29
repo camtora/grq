@@ -91,8 +91,10 @@ export default async function Portfolio() {
   // the agent never reads these. The viewer's own connection state drives the connect prompt.
   const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number }[] = [];
   let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
-  const personalConfigured = session?.role === "member" && (await snaptradeConfiguredFor(session.email));
-  if (session?.role === "member") {
+  // Personal external accounts show for ANY authenticated user — their OWN holdings (Cam &
+  // Graham see their TD, a viewer like Jose sees his IBKR). Read-only display either way.
+  const personalConfigured = !!session?.email && (await snaptradeConfiguredFor(session.email));
+  if (session?.email) {
     const fxUsdCad = await usdCadRate();
     // Show ONLY the logged-in user's own accounts (Cam 2026-06-29 — was both members).
     const views = await accountsForMembers([session.email]);
@@ -427,7 +429,7 @@ export default async function Portfolio() {
   // with the member's name OUTSIDE the panel and their total value (CAD) top-right (Cam
   // 2026-06-29). No umbrella header. The connect prompt shows for the viewer when nobody's
   // linked yet.
-  const personalSection = session?.role === "member" && (
+  const personalSection = session?.email && (
     personalGroups.length > 0 ? (
       <div className="space-y-6">
         {personalGroups.map((g) => (
@@ -449,13 +451,17 @@ export default async function Portfolio() {
           </div>
         ))}
       </div>
-    ) : personalConfigured ? (
-      <Card className="p-5 text-sm text-teal-200/50">
-        Linked — waiting on your first holdings sync. They&apos;ll appear here automatically.
-      </Card>
-    ) : (
-      <ConnectSplash />
-    )
+    ) : session.role === "member" ? (
+      // Onboarding (connect prompt) is members-only — a viewer with no linked accounts
+      // simply sees nothing here, not a "connect your accounts" splash.
+      personalConfigured ? (
+        <Card className="p-5 text-sm text-teal-200/50">
+          Linked — waiting on your first holdings sync. They&apos;ll appear here automatically.
+        </Card>
+      ) : (
+        <ConnectSplash />
+      )
+    ) : null
   );
 
   // Live, rolling numbers (Cam 2026-06-29): the held symbols feed one LiveQuotesProvider; the

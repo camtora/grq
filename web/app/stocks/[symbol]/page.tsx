@@ -542,6 +542,20 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               ) : (
                 <p className="text-sm text-teal-200/50">Not yet rated — the agent hasn&apos;t filed a call on this name.</p>
               )}
+              {/* P/E — surfaced under the bull/bear bar (Cam 2026-06-29), with the peer median
+                  for context. Negative/null P/E (no earnings) reads "—". */}
+              {selfPeer?.peTtm != null && selfPeer.peTtm > 0 && (
+                <p className="mt-4 text-sm text-teal-200/70">
+                  <Term k="pe">P/E</Term>:{" "}
+                  <span className="font-semibold text-teal-100">{selfPeer.peTtm.toFixed(1)}</span>
+                  {peerPes.length > 0 && (
+                    <span className="text-teal-200/45">
+                      {" "}
+                      · peers ~{[...peerPes].sort((a, b) => a - b)[Math.floor(peerPes.length / 2)].toFixed(1)}
+                    </span>
+                  )}
+                </p>
+              )}
               {/* GRQ's own near/12-mo target — back in the bottom line, under the confidence
                   date (Cam 2026-06-25). */}
               {(nearPct !== null || farPct !== null) && (
