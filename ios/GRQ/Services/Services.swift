@@ -226,6 +226,7 @@ final class APIClient {
     // MARK: - Writes (members; the server re-checks role + the guardrail gate)
 
     func setKillSwitch(_ engaged: Bool) async -> ActionResult { await postResult("killswitch", ["engaged": engaged]) }
+    func setRisk(_ level: String) async -> ActionResult { await postResult("settings", ["riskLevel": level]) }
 
     // FX (D62) — read the panel state; convert either direction with the amount typed in either
     // currency; approve/reject the agent's requests. `amountCents` is denominated in `inputCurrency`.

@@ -10,8 +10,13 @@ struct StockDetailView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var state: Loadable<Dossier> = .loading
     @State private var watchState: String? = nil   // none | watching | universe (optimistic)
+    @State private var directive: String? = nil    // pin | no_fly | nil (optimistic)
+    @State private var currency = "CAD"
+    @State private var lastCents: Int? = nil
     @State private var busy = false
     @State private var showChat = false
+    @State private var showAlert = false
+    @State private var shareToast: String? = nil
 
     private var isMember: Bool { auth.currentUser?.role == .member }
 
@@ -27,6 +32,18 @@ struct StockDetailView: View {
         .refreshable { await load() }
         .sheet(isPresented: $showChat) {
             AgentChatScreen(symbol: symbol).environmentObject(auth)
+        }
+        .sheet(isPresented: $showAlert) {
+            SetPriceAlertSheet(symbol: symbol, currency: currency, lastCents: lastCents)
+        }
+        .overlay(alignment: .bottom) {
+            if let t = shareToast {
+                Text(t).font(.caption.weight(.semibold))
+                    .padding(.horizontal, Space.md).padding(.vertical, Space.sm)
+                    .background(.bar, in: Capsule())
+                    .padding(.bottom, Space.xl)
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -82,28 +99,60 @@ struct StockDetailView: View {
     @ViewBuilder private var memberControls: some View {
         let p = Theme.palette(scheme)
         let watching = watchState == "watching"
-        HStack(spacing: Space.sm) {
-            Button {
-                Task { await toggleWatch() }
-            } label: {
-                Label(watching ? "Watching" : "Watch", systemImage: watching ? "star.fill" : "star")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-            }
-            .foregroundStyle(watching ? Color(hex: "04110d") : p.accent)
-            .background(watching ? AnyShapeStyle(p.accent) : AnyShapeStyle(p.accent.opacity(0.12)), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .disabled(busy)
+        VStack(spacing: Space.sm) {
+            HStack(spacing: Space.sm) {
+                Button { Task { await toggleWatch() } } label: {
+                    Label(watching ? "Watching" : "Watch", systemImage: watching ? "star.fill" : "star")
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .foregroundStyle(watching ? Color(hex: "04110d") : p.accent)
+                .background(watching ? AnyShapeStyle(p.accent) : AnyShapeStyle(p.accent.opacity(0.12)), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .disabled(busy)
 
-            Button {
-                showChat = true
-            } label: {
-                Label("Ask Alfred", systemImage: "bubble.left.and.text.bubble.right")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                Button { showChat = true } label: {
+                    Label("Ask Alfred", systemImage: "bubble.left.and.text.bubble.right")
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .foregroundStyle(p.accent)
+                .background(p.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             }
-            .foregroundStyle(p.accent)
-            .background(p.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+
+            HStack(spacing: Space.sm) {
+                Button { showAlert = true } label: { miniLabel("Alert", "bell.badge", p) }
+                Button { Task { await share() } } label: { miniLabel("Share", "paperplane", p) }
+                Menu {
+                    Button("Pin (must-watch)") { Task { await setDirective("pin") } }
+                    Button("No-fly (don’t buy)") { Task { await setDirective("no_fly") } }
+                    if directive != nil { Button("Clear directive", role: .destructive) { Task { await setDirective(nil) } } }
+                } label: {
+                    miniLabel(directive == "pin" ? "Pinned" : directive == "no_fly" ? "No-fly" : "Directive", "flag", p)
+                }
+                .disabled(busy)
+            }
         }
+    }
+
+    private func miniLabel(_ text: String, _ icon: String, _ p: Palette) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.semibold)).foregroundStyle(p.accent)
+            .frame(maxWidth: .infinity).padding(.vertical, 8)
+            .background(p.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+    }
+
+    private func setDirective(_ d: String?) async {
+        busy = true; defer { busy = false }
+        let r = await APIClient.shared.setDirective(symbol, d)
+        if r.ok { directive = d }
+    }
+
+    private func share() async {
+        let r = await APIClient.shared.sendMessage(body: nil, symbol: symbol)
+        if r.ok { flashToast("Shared with your partner") }
+    }
+
+    private func flashToast(_ s: String) {
+        withAnimation { shareToast = s }
+        Task { try? await Task.sleep(for: .seconds(2)); withAnimation { shareToast = nil } }
     }
 
     private func toggleWatch() async {
@@ -342,6 +391,9 @@ struct StockDetailView: View {
         if let d = await APIClient.shared.dossier(symbol) {
             state = .loaded(d)
             if watchState == nil { watchState = d.watch ?? "none" }
+            directive = d.directive?.rawValue
+            currency = d.currency ?? "CAD"
+            lastCents = d.lastCents
         } else {
             state = .failed("Couldn’t load \(symbol). Pull to retry.")
         }

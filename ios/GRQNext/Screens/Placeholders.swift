@@ -57,6 +57,7 @@ struct MoreScreen: View {
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var theme: NextTheme
     @Environment(\.colorScheme) private var scheme
+    private var isMember: Bool { auth.currentUser?.role == .member }
     var body: some View {
         let p = Theme.palette(scheme)
         ScreenScaffold(title: "More") {
@@ -69,21 +70,25 @@ struct MoreScreen: View {
                     }
                 }
             }
-            PanelSection("Settings") {
-                GCard(padding: 0) {
-                    VStack(spacing: 0) {
-                        NavigationLink { ReportsScreen() } label: { moreRow("Reports", "doc.text.fill", p) }
+            GCard(padding: 0) {
+                VStack(spacing: 0) {
+                    if isMember {
+                        NavigationLink { SettingsScreen() } label: { moreRow("Settings · risk & kill switch", "slider.horizontal.3", p) }
                         Divider().overlay(p.cardBorder)
-                        Button { theme.toggle() } label: { moreRow("Dark / light", "circle.lefthalf.filled", p) }.buttonStyle(.plain)
+                        NavigationLink { MessagesScreen() } label: { moreRow("Messages", "bubble.left.and.bubble.right.fill", p) }
+                        Divider().overlay(p.cardBorder)
                     }
+                    NavigationLink { ReportsScreen() } label: { moreRow("Reports", "doc.text.fill", p) }
+                    Divider().overlay(p.cardBorder)
+                    Button { theme.toggle() } label: { moreRow("Dark / light", "circle.lefthalf.filled", p) }.buttonStyle(.plain)
                 }
             }
-            ComingSoon(phase: "Phase D (cont.)", note: "Coming next: chat, notifications, FX approvals, risk dial, kill switch, price alerts, About.")
             Button(role: .destructive) { auth.signOut() } label: {
                 Text("Sign out").frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
         }
+        .grqChrome()
     }
 
     private func moreRow(_ title: String, _ icon: String, _ p: Palette) -> some View {
