@@ -1427,3 +1427,20 @@ model ExternalHolding {
   @@unique([accountId, symbol])
   @@index([accountId])
 }
+
+// Forward-only daily snapshot of a member's TOTAL external value in CAD — one row per
+// member per ET day, written by the nightly external sync (~5:30am ET). The external
+// store is otherwise a current-state snapshot (no history); this is the ONE deliberate
+// time-series, built so we can show a true DAY change on the portfolio tile (and a
+// sparkline later) without pulling the brokerage's transaction history. Nothing
+// retroactive — it starts accumulating from first run.
+model ExternalDailyValue {
+  id            Int      @id @default(autoincrement())
+  ownerEmail    String
+  date          String // ET date "YYYY-MM-DD" (sortable)
+  totalCadCents Int // sum of the member's account totals valued in CAD that morning
+  createdAt     DateTime @default(now())
+
+  @@unique([ownerEmail, date])
+  @@index([ownerEmail])
+}

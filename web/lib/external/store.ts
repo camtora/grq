@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { memberKeyForEmail } from "@/lib/users";
 import { bareTicker } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
+import { toCadCents, usdCadRate } from "@/lib/fx";
 import {
   type SnaptradePartner,
   listSnaptradeUsers,
@@ -282,6 +283,42 @@ export async function syncAllConnected(emails: string[]): Promise<{ email: strin
     }
   }
   return out;
+}
+
+/** Write today's daily value snapshot (one row per member, total in CAD) — the forward-only
+ *  time-series behind the portfolio day-change tile. Called once/day by the nightly sync AFTER
+ *  syncAllConnected, so it captures the freshly-synced (≈ prior-close) value as today's baseline.
+ *  `dateStr` = the ET date "YYYY-MM-DD". Idempotent (upsert on owner+date). Best-effort. */
+export async function snapshotExternalValues(emails: string[], dateStr: string): Promise<number> {
+  const fx = await usdCadRate().catch(() => null);
+  const views = await accountsForMembers(emails);
+  let written = 0;
+  for (const v of views) {
+    if (!v.connected) continue;
+    const totalCadCents = v.accounts.reduce((s, a) => s + toCadCents(a.totalValueCents, a.currency, fx), 0);
+    if (totalCadCents <= 0) continue;
+    await prisma.externalDailyValue
+      .upsert({
+        where: { ownerEmail_date: { ownerEmail: v.email, date: dateStr } },
+        create: { ownerEmail: v.email, date: dateStr, totalCadCents },
+        update: { totalCadCents },
+      })
+      .then(() => {
+        written += 1;
+      })
+      .catch(() => {});
+  }
+  return written;
+}
+
+/** The most recent daily-value baseline for a member (the latest snapshot ≤ today) — the
+ *  anchor a live total is compared against for the day-change tile. Null until the first
+ *  nightly snapshot has run. */
+export async function externalDayBaselineCadCents(email: string): Promise<number | null> {
+  const row = await prisma.externalDailyValue
+    .findFirst({ where: { ownerEmail: email }, orderBy: { date: "desc" } })
+    .catch(() => null);
+  return row?.totalCadCents ?? null;
 }
 
 /** Forget a member's external data locally (privacy / unlink). For Personal keys

@@ -33,7 +33,7 @@ import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
 import { verifyExperiments } from "../lib/race/verify";
 import { snapshotPredictions } from "../lib/report-card/snapshot";
-import { syncAllConnected } from "../lib/external/store";
+import { syncAllConnected, snapshotExternalValues } from "../lib/external/store";
 import { memberEmails } from "../lib/users";
 
 const broker = getBroker();
@@ -753,6 +753,10 @@ async function tick() {
     lastExtAcctSyncDay = p.dateStr;
     const synced = await syncAllConnected(memberEmails()).catch(() => []);
     if (synced.length) console.log(`[external] nightly sync — ${synced.map((s) => `${s.email}:${s.count}`).join(", ")}`);
+    // Forward-only daily value snapshot (one row/member/day) — today's baseline for the
+    // portfolio day-change tile. Runs after the sync so it captures fresh values.
+    const snapped = await snapshotExternalValues(memberEmails(), p.dateStr).catch(() => 0);
+    if (snapped) console.log(`[external] daily value snapshot — ${snapped} member(s) for ${p.dateStr}`);
   }
 
   // Company-logo backfill (hourly; resolves everything on the first tick).

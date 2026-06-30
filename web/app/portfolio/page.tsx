@@ -18,7 +18,7 @@ import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import { LiveTotal, LivePnlValue, LivePosLast, LivePosValue, LivePosUnrealized, type LivePos } from "@/components/portfolio/LiveNumbers";
 import { allUniverse } from "@/lib/universe";
 import { toCadCents, usdCadRate } from "@/lib/fx";
-import { accountsForMembers, snaptradeConfiguredFor } from "@/lib/external/store";
+import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents } from "@/lib/external/store";
 import { personByEmail } from "@/lib/people";
 import { etDateStr } from "@/agent/calendar";
 
@@ -91,8 +91,9 @@ export default async function Portfolio() {
   // the agent never reads these. The viewer's own connection state drives the connect prompt.
   const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number; cadChangeCents: number; cadChangeFrac: number | null }[] = [];
   let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
-  let myCadChangeCents = 0; // the VIEWER's own external open P&L in CAD (the "Outside GRQ change" tile)
-  let myCadChangeFrac: number | null = null; // null = no cost basis reported → hide the change tile
+  let myCadChangeCents = 0; // the VIEWER's own external open P&L in CAD (unrealized-vs-cost fallback)
+  let myCadChangeFrac: number | null = null; // null = no cost basis reported
+  let myExternalBaselineCad: number | null = null; // this morning's snapshot total (CAD) → true day-change anchor
   // Personal external accounts show for ANY authenticated user — their OWN holdings (Cam &
   // Graham see their TD, a viewer like Jose sees his IBKR). Read-only display either way.
   const personalConfigured = !!session?.email && (await snaptradeConfiguredFor(session.email));
@@ -215,6 +216,7 @@ export default async function Portfolio() {
     myCadCents = myGroup?.cadTotalCents ?? 0;
     myCadChangeCents = myGroup?.cadChangeCents ?? 0;
     myCadChangeFrac = myGroup?.cadChangeFrac ?? null;
+    myExternalBaselineCad = await externalDayBaselineCadCents(session.email);
   }
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
@@ -238,11 +240,20 @@ export default async function Portfolio() {
   const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
 
-  // "Outside GRQ" stat tiles — the member's external (read-only) holdings, summed in
-  // CAD. The value tile shows whenever they hold something outside the fund; the change
-  // tile additionally needs a reported cost basis (myCadChangeFrac != null).
+  // "Outside GRQ" stat tiles — the member's external (read-only) holdings, summed in CAD.
+  // The value tile shows whenever they hold something outside the fund. The change tile
+  // prefers a TRUE day change (live total − this morning's snapshot baseline) once a
+  // baseline exists, and falls back to unrealized-vs-cost until the first nightly snapshot.
   const showExternal = session?.role === "member" && myCadCents > 0;
-  const showExternalChange = showExternal && myCadChangeFrac !== null;
+  const dayChangeCents = myExternalBaselineCad !== null ? myCadCents - myExternalBaselineCad : null;
+  const dayChangeFrac = myExternalBaselineCad !== null && myExternalBaselineCad > 0 ? (dayChangeCents as number) / myExternalBaselineCad : 0;
+  const extChange =
+    dayChangeCents !== null
+      ? { cents: dayChangeCents, note: `${pct(dayChangeFrac, 2)} · today` }
+      : myCadChangeFrac !== null
+        ? { cents: myCadChangeCents, note: `${pct(myCadChangeFrac, 2)} · unrealized vs cost` }
+        : null;
+  const showExternalChange = showExternal && extChange !== null;
   // Top stat-row column count: 5 base tiles + the external value tile + the external change tile.
   const topCols = 5 + (showExternal ? 1 : 0) + (showExternalChange ? 1 : 0);
   const topColsClass = topCols >= 7 ? "lg:grid-cols-7" : topCols === 6 ? "lg:grid-cols-6" : "lg:grid-cols-5";
@@ -562,12 +573,8 @@ export default async function Portfolio() {
         {showExternal && (
           <StatCard label="Outside GRQ (CAD)" value={money(myCadCents)} note="your external accounts · read-only" />
         )}
-        {showExternalChange && (
-          <StatCard
-            label="Outside GRQ change (CAD)"
-            value={<Pnl cents={myCadChangeCents} />}
-            note={`${pct(myCadChangeFrac ?? 0, 2)} · unrealized vs cost`}
-          />
+        {showExternalChange && extChange && (
+          <StatCard label="Outside GRQ change (CAD)" value={<Pnl cents={extChange.cents} />} note={extChange.note} />
         )}
       </section>
 
