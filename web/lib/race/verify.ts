@@ -67,6 +67,50 @@ export async function verifyExperiments(now: Date = new Date()): Promise<Experim
     info.push(`"${race.name}": ${ids.length} active bulls, ${untraded} unranked (0 trades), ${min === max ? `${max}` : `${min}..${max}`} snapshot(s) today.`);
   }
 
+  // Options Desk books — same integrity checks as the Bull Race, plus the option-sleeve sanity
+  // (optionsCadCents is a SUBSET of positionsCadCents). Persisted DeskEntrant/DeskNavSnapshot books.
+  const desks = await prisma.optionsDesk.findMany({
+    where: { status: "RUNNING" },
+    include: { entrants: { where: { status: "ACTIVE" } } },
+  });
+  for (const desk of desks) {
+    const ids = desk.entrants.map((e) => e.id);
+    if (ids.length === 0) continue;
+
+    const snapsToday = await prisma.deskNavSnapshot.groupBy({
+      by: ["entrantId"],
+      where: { entrantId: { in: ids }, at: { gte: dayStart } },
+      _count: { _all: true },
+    });
+    const countById = new Map(snapsToday.map((s) => [s.entrantId, s._count._all]));
+    const counts = ids.map((id) => countById.get(id) ?? 0);
+    const dmin = Math.min(...counts);
+    const dmax = Math.max(...counts);
+    if (dmax - dmin > 1) {
+      warnings.push(`Options Desk "${desk.name}": ragged NAV marks today — arms got ${dmin}..${dmax} snapshots (should be equal).`);
+    }
+
+    const latest = await prisma.deskNavSnapshot.findMany({
+      where: { entrantId: { in: ids } },
+      orderBy: [{ entrantId: "asc" }, { at: "desc" }],
+      distinct: ["entrantId"],
+    });
+    for (const s of latest) {
+      if (s.navCadCents !== s.cashCents + s.positionsCadCents) {
+        violations.push(`Options Desk "${desk.name}" arm ${s.entrantId}: NAV ${s.navCadCents} ≠ cash ${s.cashCents} + positions ${s.positionsCadCents}.`);
+      }
+      if (s.optionsCadCents > s.positionsCadCents) {
+        violations.push(`Options Desk "${desk.name}" arm ${s.entrantId}: option sleeve ${s.optionsCadCents} > positions ${s.positionsCadCents} (must be a subset).`);
+      }
+      if (s.cashCents < 0) violations.push(`Options Desk "${desk.name}" arm ${s.entrantId}: negative cash ${s.cashCents} (margin leak).`);
+      if (s.positionsCadCents < 0 || s.optionsCadCents < 0) violations.push(`Options Desk "${desk.name}" arm ${s.entrantId}: negative position/option value.`);
+    }
+    for (const e of desk.entrants) {
+      if (e.cashCents < 0) violations.push(`Options Desk "${desk.name}" arm ${e.id} (${e.arm}): live cash ${e.cashCents} < 0.`);
+    }
+    info.push(`Options Desk "${desk.name}": ${ids.length} arms, ${dmin === dmax ? `${dmax}` : `${dmin}..${dmax}`} snapshot(s) today.`);
+  }
+
   // Second-Opinions fairness: every model that named the SAME symbol at the SAME session must share
   // one entry price (the run's shared per-session mark). A spread means the Race scored some calls on
   // a different entry basis — unfair. Scoped to the last 14 days; pre-fix rows age out of this window.

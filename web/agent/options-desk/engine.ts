@@ -241,12 +241,23 @@ async function refreshOptionMarks(entrantId: number, now: Date): Promise<void> {
 }
 
 /** Mark the arm to live and append a NAV point (every session — even on HOLD — so the line shows decay). */
+/** Snapshot EVERY arm's NAV together, after the desk tick settles — so an arm whose session errored
+ *  or ran long is still marked this tick (no ragged gaps) and both arms mark on one pass. Mirrors the
+ *  Bull-Race fix (snapshotRaceNav). Re-reads cash fresh (the session mutated it) and refreshes each
+ *  arm's option marks before valuing. */
+export async function snapshotDeskNavAll(entrants: { id: number }[], fx: number | null, now: Date): Promise<void> {
+  for (const e of entrants) {
+    await refreshOptionMarks(e.id, now);
+    const fresh = await prisma.deskEntrant.findUnique({ where: { id: e.id } });
+    if (!fresh) continue;
+    const book = await valueDeskBook(e.id, fresh.cashCents, fx);
+    await prisma.deskNavSnapshot.create({ data: { entrantId: e.id, navCadCents: book.navCadCents, cashCents: fresh.cashCents, positionsCadCents: book.positionsCadCents, optionsCadCents: book.optionsCadCents } });
+  }
+}
+
+/** Single-arm snapshot — kept for the verify script. Delegates to the batch (one implementation). */
 export async function snapshotDeskNav(entrantId: number, fx: number | null, now: Date): Promise<void> {
-  const e = await prisma.deskEntrant.findUnique({ where: { id: entrantId } });
-  if (!e) return;
-  await refreshOptionMarks(entrantId, now);
-  const book = await valueDeskBook(entrantId, e.cashCents, fx);
-  await prisma.deskNavSnapshot.create({ data: { entrantId, navCadCents: book.navCadCents, cashCents: e.cashCents, positionsCadCents: book.positionsCadCents, optionsCadCents: book.optionsCadCents } });
+  await snapshotDeskNavAll([{ id: entrantId }], fx, now);
 }
 
 /** Route a parsed call to the right fill path. Control arm can never trade options. */
@@ -282,8 +293,7 @@ async function runDeskSession(entrant: EntrantRow, desk: { startingStakeCents: n
     const text = await runDeskModel(entrant.model, prompt, `desk:${entrant.arm}:${entrant.model}`);
     if (text == null) {
       console.error(`[optionsdesk] ${entrant.label} produced no output`);
-      await snapshotDeskNav(entrant.id, fx, sessionAt);
-      return;
+      return; // NAV is snapshotted for all arms at tick-end (snapshotDeskNavAll), not here
     }
     const call = parseDeskCall(text);
     let res: FillResult = { filled: false, rejectReason: null };
@@ -308,7 +318,7 @@ async function runDeskSession(entrant: EntrantRow, desk: { startingStakeCents: n
         rejectReason: res.rejectReason,
       },
     });
-    await snapshotDeskNav(entrant.id, fx, sessionAt);
+    // NAV snapshotted for all arms together at tick-end (snapshotDeskNavAll), not per-session.
     console.log(`[optionsdesk] ${entrant.label}: ${call?.action ?? "?"} ${call?.symbol ?? ""} ${res.filled ? "FILLED" : res.rejectReason ?? "(no trade)"}`);
   } catch (e) {
     console.error(`[optionsdesk] ${entrant.label} failed`, e instanceof Error ? e.message : e);
@@ -355,6 +365,8 @@ export async function runDeskTick(): Promise<void> {
           return runDeskSession(e, desk, now, fx);
         }),
       );
+      // One synchronized NAV mark for every arm, after the sessions settle (1b parity for the desk).
+      await snapshotDeskNavAll(desk.entrants, fx, now);
       return; // one desk per tick
     }
   } finally {
