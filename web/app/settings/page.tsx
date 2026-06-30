@@ -118,6 +118,7 @@ export default async function Settings() {
             <FeeBudget
               riskLevel={settings?.riskLevel ?? "BALANCED"}
               feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
+              feeSpentMonthCents={pf.feeSpentMonthCents}
               readOnly={!isMember}
             />
           </Card>

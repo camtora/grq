@@ -89,8 +89,10 @@ export default async function Portfolio() {
   // then Cam — Cam 2026-06-29), stamped with GRQ's existing call + fund hold/track status.
   // External accounts are "both see both" (same as /accounts), members-only, UI-only contrast —
   // the agent never reads these. The viewer's own connection state drives the connect prompt.
-  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number }[] = [];
+  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number; cadChangeCents: number; cadChangeFrac: number | null }[] = [];
   let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
+  let myCadChangeCents = 0; // the VIEWER's own external open P&L in CAD (the "Outside GRQ change" tile)
+  let myCadChangeFrac: number | null = null; // null = no cost basis reported → hide the change tile
   // Personal external accounts show for ANY authenticated user — their OWN holdings (Cam &
   // Graham see their TD, a viewer like Jose sees his IBKR). Read-only display either way.
   const personalConfigured = !!session?.email && (await snaptradeConfiguredFor(session.email));
@@ -190,13 +192,29 @@ export default async function Portfolio() {
 
       // CAD header total = the brokerage's account totals (holdings + cash) valued in CAD.
       const cadTotalCents = (v.accounts ?? []).reduce((s, a) => s + toCadCents(a.totalValueCents, a.currency, fxUsdCad), 0);
+      // External open P&L (unrealized vs cost), summed in CAD — drives the "Outside GRQ change" tile.
+      let cadChangeCents = 0;
+      let cadCostCents = 0;
+      let haveCost = false;
+      for (const a of v.accounts ?? [])
+        for (const h of a.holdings ?? []) {
+          if (h.openPnlCents != null) {
+            cadChangeCents += toCadCents(h.openPnlCents, h.currency, fxUsdCad);
+            cadCostCents += toCadCents(h.marketValueCents - h.openPnlCents, h.currency, fxUsdCad);
+            haveCost = true;
+          }
+        }
+      const cadChangeFrac = haveCost && cadCostCents > 0 ? cadChangeCents / cadCostCents : null;
       const key = person?.key ?? v.email;
-      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, totals, cadTotalCents });
+      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, totals, cadTotalCents, cadChangeCents: haveCost ? cadChangeCents : 0, cadChangeFrac });
     }
     personalGroups.sort((a, b) => (ORDER[a.key] ?? 9) - (ORDER[b.key] ?? 9));
-    // The "Outside GRQ" stat tile shows the VIEWER's own external total, not the combined.
+    // The "Outside GRQ" stat tiles show the VIEWER's own external total + change, not the combined.
     const myKey = personByEmail(session.email)?.key ?? session.email;
-    myCadCents = personalGroups.find((g) => g.key === myKey)?.cadTotalCents ?? 0;
+    const myGroup = personalGroups.find((g) => g.key === myKey);
+    myCadCents = myGroup?.cadTotalCents ?? 0;
+    myCadChangeCents = myGroup?.cadChangeCents ?? 0;
+    myCadChangeFrac = myGroup?.cadChangeFrac ?? null;
   }
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
@@ -213,7 +231,6 @@ export default async function Portfolio() {
   ].filter((b): b is NonNullable<typeof b> => Boolean(b));
   const latestBrief = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
-  const feeFrac = pf.feeBudgetCentsMonth > 0 ? pf.feeSpentMonthCents / pf.feeBudgetCentsMonth : 0;
 
   // Currency split (D62 — the fund now holds CAD + USD). The Cash card shows the raw
   // CAD and USD balances side by side; usdCashCadCents is the USD cash valued in CAD
@@ -221,9 +238,14 @@ export default async function Portfolio() {
   const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
 
-  // "Outside GRQ" stat tile — the member's external (read-only) holdings, summed in
-  // CAD. Only shown when they actually hold something outside the fund.
+  // "Outside GRQ" stat tiles — the member's external (read-only) holdings, summed in
+  // CAD. The value tile shows whenever they hold something outside the fund; the change
+  // tile additionally needs a reported cost basis (myCadChangeFrac != null).
   const showExternal = session?.role === "member" && myCadCents > 0;
+  const showExternalChange = showExternal && myCadChangeFrac !== null;
+  // Top stat-row column count: 5 base tiles + the external value tile + the external change tile.
+  const topCols = 5 + (showExternal ? 1 : 0) + (showExternalChange ? 1 : 0);
+  const topColsClass = topCols >= 7 ? "lg:grid-cols-7" : topCols === 6 ? "lg:grid-cols-6" : "lg:grid-cols-5";
 
   // The main cards, factored out so the layout can be arranged two ways without
   // duplicating markup: with an agenda, Positions + Activity sit side-by-side in one
@@ -495,7 +517,7 @@ export default async function Portfolio() {
         </div>
       </div>
 
-      <section className={`grid grid-cols-2 gap-3 ${showExternal ? "lg:grid-cols-7" : "lg:grid-cols-6"}`}>
+      <section className={`grid grid-cols-2 gap-3 ${topColsClass}`}>
         {/* Portfolio value — total NAV, shown in BOTH CAD and USD, live + rolling (Cam 2026-06-29). */}
         <StatCard
           label="Portfolio value (CAD)"
@@ -537,29 +559,15 @@ export default async function Portfolio() {
           }
         />
         <StatCard label="Contributions (CAD)" term="contributions" value={money(pf.contributionsCents)} note="initial commitment" />
-        <Card className="p-5">
-          <div className="text-xs uppercase tracking-wider text-teal-200/50">
-            <Term k="fee-budget">Fee budget</Term>
-          </div>
-          <div className="mt-2 space-y-1">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs uppercase tracking-wider text-teal-200/40">Spent</span>
-              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.feeSpentMonthCents)}</span>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs uppercase tracking-wider text-teal-200/40">Budget</span>
-              <span className="text-xl font-semibold tabular-nums text-teal-50">{money(pf.feeBudgetCentsMonth)}</span>
-            </div>
-          </div>
-          <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-teal-400/10">
-            <span
-              className={`block h-full rounded-full ${feeFrac > 0.8 ? "bg-red-400" : "bg-teal-400/70"}`}
-              style={{ width: `${Math.min(100, feeFrac * 100)}%` }}
-            />
-          </span>
-        </Card>
         {showExternal && (
           <StatCard label="Outside GRQ (CAD)" value={money(myCadCents)} note="your external accounts · read-only" />
+        )}
+        {showExternalChange && (
+          <StatCard
+            label="Outside GRQ change (CAD)"
+            value={<Pnl cents={myCadChangeCents} />}
+            note={`${pct(myCadChangeFrac ?? 0, 2)} · unrealized vs cost`}
+          />
         )}
       </section>
 
