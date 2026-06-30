@@ -4,19 +4,28 @@ import { greeting } from "@/lib/greetings";
 import { getPortfolio } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { Card, StatCard, Chip, Pnl, Money } from "@/components/ui";
+import { Card, StatCard, Chip } from "@/components/ui";
 import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import PersonalLane, { type PersonalRow, type PersonalTotal, type PersonalOwner } from "@/components/PersonalLane";
+import PersonalLane, { type PersonalRow, type PersonalCash, type PersonalOwner } from "@/components/PersonalLane";
 import ConnectSplash from "@/components/accounts/ConnectSplash";
 import ResearchQueueCard from "@/components/ResearchQueueCard";
 import Avatar from "@/components/Avatar";
 import PanelHeader from "@/components/PanelHeader";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
-import { LiveTotal, LivePnlValue, LivePosLast, LivePosValue, LivePosUnrealized, type LivePos } from "@/components/portfolio/LiveNumbers";
-import { allUniverse } from "@/lib/universe";
+import {
+  LiveTotal,
+  LivePnlValue,
+  LivePosLast,
+  LivePosValue,
+  LivePosUnrealized,
+  LiveExternalValue,
+  LiveExternalTiles,
+  type LivePos,
+  type ExtAccount,
+} from "@/components/portfolio/LiveNumbers";
 import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents } from "@/lib/external/store";
 import { personByEmail } from "@/lib/people";
@@ -86,30 +95,30 @@ export default async function Portfolio() {
   const name = session?.user?.name ?? "friend";
 
   // ── Personal accounts: each member's external holdings in a SEPARATE lane (Graham first,
-  // then Cam — Cam 2026-06-29), stamped with GRQ's existing call + fund hold/track status.
-  // External accounts are "both see both" (same as /accounts), members-only, UI-only contrast —
-  // the agent never reads these. The viewer's own connection state drives the connect prompt.
-  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; totals: PersonalTotal[]; cadTotalCents: number; cadChangeCents: number; cadChangeFrac: number | null }[] = [];
+  // then Cam — Cam 2026-06-29), rendered with the SAME columns + spacing as Alfred's positions
+  // and stamped with Alfred's existing call (the call replaces the fund table's Weight column).
+  // Every number ticks LIVE off the page's <LiveQuotesProvider> (Cam 2026-06-30) — the lane gets
+  // each holding's `quoteSymbol` + static per-currency cash and recomputes price/value/change on
+  // the client. External accounts are "both see both" (same as /accounts), members-only, UI-only
+  // contrast — the agent never reads these. The viewer's own connection state drives the prompt.
+  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; cash: PersonalCash[]; extAccounts: ExtAccount[]; cadTotalCents: number }[] = [];
+  let fxUsdCad = 1; // USD→CAD, used by the live personal components (kept in sync with the SSR calc)
   let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
-  let myCadChangeCents = 0; // the VIEWER's own external open P&L in CAD (unrealized-vs-cost fallback)
-  let myCadChangeFrac: number | null = null; // null = no cost basis reported
+  let myExtAccounts: ExtAccount[] = []; // the VIEWER's accounts, fed to the live "Outside GRQ" tiles
+  let hasExtCost = false; // any viewer holding reports cost basis → an unrealized-change tile is possible
   let myExternalBaselineCad: number | null = null; // this morning's snapshot total (CAD) → true day-change anchor
   // Personal external accounts show for ANY authenticated user — their OWN holdings (Cam &
   // Graham see their TD, a viewer like Jose sees his IBKR). Read-only display either way.
   const personalConfigured = !!session?.email && (await snaptradeConfiguredFor(session.email));
   if (session?.email) {
-    const fxUsdCad = await usdCadRate();
+    // 1:1 fallback when BoC is unreachable — matches toCadCents' own null handling, and the live
+    // personal components need a concrete number.
+    fxUsdCad = (await usdCadRate()) ?? 1;
     // Show ONLY the logged-in user's own accounts (Cam 2026-06-29 — was both members).
     const views = await accountsForMembers([session.email]);
-    // GRQ-view join maps, computed once (member-independent): universe status, latest stance,
-    // and what the fund holds — all keyed on the BARE ticker.
+    // Alfred's latest call per name, keyed on the BARE ticker (the only GRQ-view join the lane
+    // still needs — the fund-hold / universe-status pill was dropped, Cam 2026-06-30).
     const bareKey = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/, "");
-    const uni = (await allUniverse()).filter((u) => u.status !== "RETIRED");
-    const statusByBare = new Map<string, "ACTIVE" | "CANDIDATE">();
-    for (const u of [...uni].sort((a, b) => (a.status === "ACTIVE" ? 0 : 1) - (b.status === "ACTIVE" ? 0 : 1))) {
-      const k = bareKey(u.symbol);
-      if (!statusByBare.has(k)) statusByBare.set(k, u.status as "ACTIVE" | "CANDIDATE");
-    }
     const stanceRows = await prisma.journalEntry.findMany({
       where: { stance: { not: null }, symbol: { not: null } },
       orderBy: { at: "desc" },
@@ -121,101 +130,79 @@ export default async function Portfolio() {
       const k = bareKey(s.symbol);
       if (!stanceByBare.has(k)) stanceByBare.set(k, s.stance as string);
     }
-    const fundBare = new Set(pf.positions.map((p) => bareKey(p.symbol)));
+
+    // CAD↔account-currency convert (CAD↔USD via the CAD leg) for the derived per-currency cash.
+    const toAcctCents = (cents: number, fromCcy: string, acctCcy: string) => {
+      if (fromCcy === acctCcy) return cents;
+      const cad = toCadCents(cents, fromCcy, fxUsdCad);
+      return acctCcy === "CAD" ? cad : Math.round(cad / (fxUsdCad || 1)); // CAD → USD
+    };
 
     // Build one group per member. Graham's lane first, then Cam's (Cam 2026-06-29).
     const ORDER: Record<string, number> = { graham: 0, cam: 1 };
     for (const v of views) {
       const person = personByEmail(v.email);
-      const holdings = (v.accounts ?? []).flatMap((a) => a.holdings.map((h) => ({ ...h, account: a.name })));
-      if (holdings.length === 0) continue;
+      const flat = (v.accounts ?? []).flatMap((a) => a.holdings.map((h) => ({ ...h, account: a.name, acctCurrency: a.currency })));
+      if (flat.length === 0) continue;
 
-      const rows: PersonalRow[] = holdings
-        .map((h) => {
-          const k = bareKey(h.symbol);
-          return {
-            symbol: h.symbol,
-            dossierHref: h.dossierHref,
-            description: h.description,
-            account: h.account,
-            qty: h.qty,
-            marketValueCents: h.marketValueCents,
-            bookCostCents: h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents,
-            openPnlCents: h.openPnlCents,
-            currency: h.currency,
-            stance: stanceByBare.get(k) ?? null,
-            fundHolds: fundBare.has(k),
-            tracked: statusByBare.get(k) ?? null,
-          };
-        })
+      const rows: PersonalRow[] = flat
+        .map((h) => ({
+          symbol: h.symbol,
+          quoteSymbol: h.quoteSymbol,
+          dossierHref: h.dossierHref,
+          description: h.description,
+          account: h.account,
+          acctCurrency: h.acctCurrency,
+          qty: h.qty,
+          priceCents: h.priceCents,
+          marketValueCents: h.marketValueCents,
+          bookCostCents: h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents,
+          openPnlCents: h.openPnlCents,
+          currency: h.currency,
+          stance: stanceByBare.get(bareKey(h.symbol)) ?? null,
+        }))
         .sort((a, b) => toCadCents(b.marketValueCents, b.currency, fxUsdCad) - toCadCents(a.marketValueCents, a.currency, fxUsdCad));
 
-      // Per-currency totals, keyed by ACCOUNT currency so everything reconciles even when an
-      // account holds mixed-currency positions (e.g. a CAD TFSA holding a USD name): holdings
-      // are converted INTO the account currency, the account TOTAL comes straight from the
-      // brokerage, and cash = total − converted-holdings (TD-via-SnapTrade reports the explicit
-      // cash field as 0, so we derive it — Cam 2026-06-29). holdings + cash = total.
-      const toAcctCents = (cents: number, fromCcy: string, acctCcy: string) => {
-        if (fromCcy === acctCcy) return cents;
-        const cad = toCadCents(cents, fromCcy, fxUsdCad);
-        return acctCcy === "CAD" ? cad : Math.round(cad / (fxUsdCad || 1)); // CAD → USD
-      };
-      const byCur = new Map<string, { holdingsCents: number; cashCents: number; totalCents: number; changeCents: number; haveCost: boolean }>();
+      // Static per-currency cash (the lane's footer anchor): derived as account total − converted
+      // holdings, keyed by ACCOUNT currency, because TD-via-SnapTrade reports the explicit cash
+      // field as 0 (Cam 2026-06-29). The lane recomputes holdings/total/change live off this cash.
+      const cashByCur = new Map<string, number>();
       for (const a of v.accounts ?? []) {
-        const cur = a.currency;
-        const t = byCur.get(cur) ?? { holdingsCents: 0, cashCents: 0, totalCents: 0, changeCents: 0, haveCost: false };
         let held = 0;
-        for (const h of a.holdings ?? []) {
-          held += toAcctCents(h.marketValueCents, h.currency, cur);
-          if (h.openPnlCents != null) {
-            t.changeCents += toAcctCents(h.openPnlCents, h.currency, cur);
-            t.haveCost = true;
-          }
-        }
-        t.holdingsCents += held;
-        t.totalCents += a.totalValueCents;
-        t.cashCents += Math.max(0, a.totalValueCents - held);
-        byCur.set(cur, t);
+        for (const h of a.holdings ?? []) held += toAcctCents(h.marketValueCents, h.currency, a.currency);
+        cashByCur.set(a.currency, (cashByCur.get(a.currency) ?? 0) + Math.max(0, a.totalValueCents - held));
       }
-      const totals: PersonalTotal[] = [...byCur.entries()]
-        .map(([currency, t]) => {
-          const cost = t.holdingsCents - t.changeCents;
-          return {
-            currency,
-            holdingsCents: t.holdingsCents,
-            cashCents: t.cashCents,
-            totalCents: t.totalCents,
-            changeCents: t.haveCost ? t.changeCents : null,
-            changeFrac: t.haveCost && cost > 0 ? t.changeCents / cost : null,
-          };
-        })
+      const cash: PersonalCash[] = [...cashByCur.entries()]
+        .map(([currency, cashCents]) => ({ currency, cashCents }))
         .sort((a, b) => a.currency.localeCompare(b.currency)); // CAD before USD
 
-      // CAD header total = the brokerage's account totals (holdings + cash) valued in CAD.
+      // Account-level structure for the live "Outside GRQ" tiles — mirrors the day-change baseline
+      // formula (account cash + Σ native holding value, converted by the ACCOUNT currency).
+      const extAccounts: ExtAccount[] = (v.accounts ?? []).map((a) => ({
+        currency: a.currency,
+        cashCents: a.cashCents,
+        holdings: (a.holdings ?? []).map((h) => ({
+          quoteSymbol: h.quoteSymbol,
+          qty: h.qty,
+          mvCents: h.marketValueCents,
+          currency: h.currency,
+          bookCostCents: h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents,
+        })),
+      }));
+
+      // CAD header total = the brokerage's account totals (holdings + cash) valued in CAD — the
+      // SSR fallback for the live header pill + the show/hide decision for the tiles.
       const cadTotalCents = (v.accounts ?? []).reduce((s, a) => s + toCadCents(a.totalValueCents, a.currency, fxUsdCad), 0);
-      // External open P&L (unrealized vs cost), summed in CAD — drives the "Outside GRQ change" tile.
-      let cadChangeCents = 0;
-      let cadCostCents = 0;
-      let haveCost = false;
-      for (const a of v.accounts ?? [])
-        for (const h of a.holdings ?? []) {
-          if (h.openPnlCents != null) {
-            cadChangeCents += toCadCents(h.openPnlCents, h.currency, fxUsdCad);
-            cadCostCents += toCadCents(h.marketValueCents - h.openPnlCents, h.currency, fxUsdCad);
-            haveCost = true;
-          }
-        }
-      const cadChangeFrac = haveCost && cadCostCents > 0 ? cadChangeCents / cadCostCents : null;
       const key = person?.key ?? v.email;
-      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, totals, cadTotalCents, cadChangeCents: haveCost ? cadChangeCents : 0, cadChangeFrac });
+      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, cash, extAccounts, cadTotalCents });
     }
     personalGroups.sort((a, b) => (ORDER[a.key] ?? 9) - (ORDER[b.key] ?? 9));
     // The "Outside GRQ" stat tiles show the VIEWER's own external total + change, not the combined.
     const myKey = personByEmail(session.email)?.key ?? session.email;
     const myGroup = personalGroups.find((g) => g.key === myKey);
     myCadCents = myGroup?.cadTotalCents ?? 0;
-    myCadChangeCents = myGroup?.cadChangeCents ?? 0;
-    myCadChangeFrac = myGroup?.cadChangeFrac ?? null;
+    myExtAccounts = myGroup?.extAccounts ?? [];
+    hasExtCost = myExtAccounts.some((a) => a.holdings.some((h) => h.bookCostCents != null));
     myExternalBaselineCad = await externalDayBaselineCadCents(session.email);
   }
 
@@ -240,20 +227,19 @@ export default async function Portfolio() {
   const usd = (c: number) => `US$${(c / 100).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const usdCashCadCents = pf.cashCents - pf.cadCashCents;
 
-  // "Outside GRQ" stat tiles — the member's external (read-only) holdings, summed in CAD.
-  // The value tile shows whenever they hold something outside the fund. The change tile
-  // prefers a TRUE day change (live total − this morning's snapshot baseline) once a
-  // baseline exists, and falls back to unrealized-vs-cost until the first nightly snapshot.
+  // "Outside GRQ" stat tiles — the member's external (read-only) holdings, summed in CAD, live.
+  // The value tile shows whenever they hold something outside the fund. The change tile shows
+  // when there's a TRUE day change to compute (a snapshot baseline exists) OR cost basis for an
+  // unrealized-vs-cost fallback. The live values themselves are computed in <LiveExternalTiles>.
   const showExternal = session?.role === "member" && myCadCents > 0;
-  const dayChangeCents = myExternalBaselineCad !== null ? myCadCents - myExternalBaselineCad : null;
-  const dayChangeFrac = myExternalBaselineCad !== null && myExternalBaselineCad > 0 ? (dayChangeCents as number) / myExternalBaselineCad : 0;
-  const extChange =
-    dayChangeCents !== null
-      ? { cents: dayChangeCents, note: `${pct(dayChangeFrac, 2)} · today` }
-      : myCadChangeFrac !== null
-        ? { cents: myCadChangeCents, note: `${pct(myCadChangeFrac, 2)} · unrealized vs cost` }
-        : null;
-  const showExternalChange = showExternal && extChange !== null;
+  // Personalize the external tiles to whose holdings they show (always the VIEWER's own). Keep
+  // the labels SHORT ("Cam's value" / "Cam's change", not "…'s positions change") so the tile
+  // label stays one line in the dense 7-col stat row — a longer name like Graham's still fits,
+  // and the $ figure lines up with the other tiles (Cam 2026-06-30).
+  const extOwnerName = personByEmail(session?.email)?.name;
+  const extValueLabel = extOwnerName ? `${extOwnerName}'s value` : "Outside GRQ";
+  const extChangeLabel = extOwnerName ? `${extOwnerName}'s change` : "Outside GRQ change";
+  const showExternalChange = showExternal && (myExternalBaselineCad !== null || hasExtCost);
   // Top stat-row column count: 5 base tiles + the external value tile + the external change tile.
   const topCols = 5 + (showExternal ? 1 : 0) + (showExternalChange ? 1 : 0);
   const topColsClass = topCols >= 7 ? "lg:grid-cols-7" : topCols === 6 ? "lg:grid-cols-6" : "lg:grid-cols-5";
@@ -470,7 +456,7 @@ export default async function Portfolio() {
             <PanelHeader
               right={
                 <span className="tabular-nums text-teal-200/50">
-                  {money(g.cadTotalCents)} <span className="text-teal-200/35">total</span>
+                  <LiveExternalValue accounts={g.extAccounts} fx={fxUsdCad} /> <span className="text-teal-200/35">total</span>
                 </span>
               }
             >
@@ -480,7 +466,7 @@ export default async function Portfolio() {
                 <span className="font-normal normal-case text-teal-200/40">· outside the fund · read-only · Alfred can&apos;t trade these</span>
               </span>
             </PanelHeader>
-            <PersonalLane rows={g.rows} totals={g.totals} />
+            <PersonalLane rows={g.rows} cash={g.cash} fx={fxUsdCad} />
           </div>
         ))}
       </div>
@@ -507,11 +493,14 @@ export default async function Portfolio() {
     lastCents: p.lastCents,
     avgCostCents: p.avgCostCents,
   }));
+  // One provider polls every symbol the page renders live — the fund positions PLUS each
+  // member's external holdings (by the key our quote feed knows them by) — in a single batch.
   const posSymbols = pf.positions.map((p) => p.symbol);
+  const liveSymbols = [...new Set([...posSymbols, ...personalGroups.flatMap((g) => g.rows.map((r) => r.quoteSymbol))])];
 
   return (
     <main>
-      <LiveQuotesProvider symbols={posSymbols}>
+      <LiveQuotesProvider symbols={liveSymbols}>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold text-teal-50">
@@ -571,10 +560,14 @@ export default async function Portfolio() {
         />
         <StatCard label="Contributions (CAD)" term="contributions" value={money(pf.contributionsCents)} note="initial commitment" />
         {showExternal && (
-          <StatCard label="Outside GRQ (CAD)" value={money(myCadCents)} note="your external accounts · read-only" />
-        )}
-        {showExternalChange && extChange && (
-          <StatCard label="Outside GRQ change (CAD)" value={<Pnl cents={extChange.cents} />} note={extChange.note} />
+          <LiveExternalTiles
+            accounts={myExtAccounts}
+            fx={fxUsdCad}
+            baselineCad={myExternalBaselineCad}
+            valueLabel={extValueLabel}
+            changeLabel={extChangeLabel}
+            showChange={showExternalChange}
+          />
         )}
       </section>
 

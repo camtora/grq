@@ -2439,3 +2439,50 @@ order route still see only the fund's own IBKR account. Reading external holding
 to move money — it cannot trade, rebalance, or place anything in a personal account, by construction. A member kill
 switch for the *visibility* itself (not the trading wall, which is structural): `GRQ_AGENT_SEES_EXTERNAL=off`, no
 deploy needed. `AGENT_VERSION` → **v2.28-phase4**.
+
+### D98 — Stop the 30-min check-ins colliding: hunt → 8am, fire-window 60 → 25 min (Cam, 2026-06-30)
+
+**Symptom.** Cam: the 10:00 and 10:30 check-ins were running back-to-back. Confirmed live on 2026-06-30 — the
+`Scheduled check-in 10:00` marker landed at **10:31 ET** and `Scheduled check-in 10:30` at **10:41 ET**: two
+decision-capable Opus sessions ~10 min apart, near-duplicate context, wasted tokens + Max quota.
+
+**Cause.** Two things compounded. (1) D96 (2026-06-29) halved the check-in cadence (hourly → every 30 min,
+`CHECKIN_TIMES_ET` = 10:00…15:30) but left the per-slot **fire window at 60 min** (`runner.ts`: `m >= slot &&
+m < slot + 60`). With slots 30 min apart, every 60-min window overlapped the *next* slot, so a check-in deferred
+by lane contention could fire minutes before the following slot. (2) The agent runs **one session at a time**
+(held under `sessionRunning`); the **daily broad hunt ran at 10:00**, monopolizing the single lane exactly when
+the first check-in came due — so 10:00 deferred until the hunt freed the lane (~10:31), landing right on top of
+10:30.
+
+**Fix (two moves, chosen by Cam).**
+- **Hunt → 8:00–8:30 ET** (was 10:00), `runner.ts`. Pre-open, so the heaviest single-lane consumer drains before
+  the trading day and the lane is free when the 10:00 check-in comes due.
+- **Fire window 60 → 25 min** (`slot + 25`). 25 < the 30-min cadence ⇒ adjacent windows never overlap; a slot
+  whose lane stays busy past its window is simply dropped (the next slot covers it) rather than doubling up.
+
+Not chosen: a min-gap coalesce guard (preserves the wide window, suppresses a check-in <N min after the last) and
+reverting to hourly — Cam picked the narrow-window + earlier-hunt combination, which removes the *contention* as
+well as the *overlap*.
+
+**Unchanged:** the §6 order gate, the conviction bar (70%, D95), the check-in cadence itself (still every 30 min,
+D96), and the budget exemption for fixed check-ins. This is purely *when* sessions fire, not *whether* a trade
+clears. `AGENT_VERSION` → **v2.30-phase4**. Shipped + deployed 2026-06-30 (web change shipped same session: the
+Portfolio personal-lane gained a per-share **Price** column + a **Positions total · CAD** footer row).
+
+**Same-session follow-ups (2026-06-30):**
+- **Guardrail-display drift fixed (web).** Confirming the per-name concentration cap surfaced that `RiskDial.tsx`
+  carried a *hardcoded* copy of the dial caps — still **10/15/25** — while the gate (`policy.ts` DIALS) enforces
+  **25/50/80** since 2026-06-29. So Settings told a member Aggressive = 25% while the §6 gate permitted 80%: a
+  money-guardrail the UI under-stated. Fix: the Settings page (a Server Component) now **derives the dial cards
+  from `policy.ts` DIALS** and passes them to `RiskDial` as a prop — one source of truth, no second copy to drift.
+- **Options Desk cadence daily → hourly.** `OptionsDesk.cadence` flipped in the DB (the engine reads it per tick,
+  so no rebuild). The desk now runs ~once/hour per arm during market hours instead of once/day. v1 is all-Opus, so
+  this raises the desk's Max-quota draw ~7× (still small relative to dossiers/scans); the metered-$ cap is moot at $0.
+- **Agent prompts: stale 75% conviction bar → 70% (agent v2.31).** Same drift as the RiskDial bug, on the OTHER
+  side of the gate. D95 lowered `HARD.minBuyConfidence` 75→70 (the gate enforces 70), but the agent's *prompts* still
+  hardcoded **75** in the always-on context (`context.ts` ×3), the persona (`persona.ts` ×2), the self-invest tool
+  descriptions (`tools.ts` ×4), `sessions.ts` (the self-invest step), and the read-only chat persona
+  (`chat-server.ts`). So the agent was *told* the bar was 75 every session — effectively self-censoring at 75 and
+  not acting on the 70–74% names D95 was meant to unlock. Fix: every reference now **interpolates
+  `${HARD.minBuyConfidence}` / `${SELF_INVEST.minConfidence}`** (plain tool-description strings use inline
+  concatenation), so prompt and gate share one number and can't drift again. `AGENT_VERSION` → **v2.31-phase4**.

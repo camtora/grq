@@ -8,6 +8,14 @@ import { PageHeader, Card, Chip, EmptyState } from "@/components/ui";
 import Avatar from "@/components/Avatar";
 import MyAccountControls from "@/components/accounts/MyAccountControls";
 import ConnectSplash from "@/components/accounts/ConnectSplash";
+import { LiveQuotesProvider } from "@/components/LiveQuotes";
+import {
+  LiveHoldingPrice,
+  LiveHoldingValue,
+  LiveHoldingToday,
+  LiveHoldingUnrealized,
+  LiveAccountTotal,
+} from "@/components/accounts/LiveHoldingCells";
 import {
   accountsForMembers,
   snaptradeConfiguredFor,
@@ -62,16 +70,22 @@ export default async function AccountsPage() {
         </div>
       </Card>
 
-      <div className="space-y-9">
-        {views.map((v) => (
-          <MemberSection
-            key={v.email}
-            view={v}
-            isSelf={v.email === me}
-            configured={configuredByEmail.get(v.email) ?? false}
-          />
-        ))}
-      </div>
+      {/* One provider polls every holding's live quote (by the key our feed knows it by) so the
+          prices, values, today's change and account totals all roll intraday — Cam 2026-06-30. */}
+      <LiveQuotesProvider
+        symbols={[...new Set(views.flatMap((v) => v.accounts.flatMap((a) => a.holdings.map((h) => h.quoteSymbol))))]}
+      >
+        <div className="space-y-9">
+          {views.map((v) => (
+            <MemberSection
+              key={v.email}
+              view={v}
+              isSelf={v.email === me}
+              configured={configuredByEmail.get(v.email) ?? false}
+            />
+          ))}
+        </div>
+      </LiveQuotesProvider>
     </main>
   );
 }
@@ -156,7 +170,11 @@ function AccountCard({ account: a }: { account: AccountView }) {
         <div className="text-right">
           <div className="flex items-center justify-end gap-1.5 font-semibold tabular-nums text-teal-50">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-            {money(a.totalValueCents, a.currency)}
+            <LiveAccountTotal
+              cashCents={a.cashCents}
+              currency={a.currency}
+              holdings={a.holdings.map((h) => ({ quoteSymbol: h.quoteSymbol, qty: Number(h.qty), priceCents: h.priceCents }))}
+            />
           </div>
           <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
             <span className="text-emerald-400/70">prices live</span> · holdings as of {fmtWhen(new Date(a.syncedAt))}
@@ -174,6 +192,7 @@ function AccountCard({ account: a }: { account: AccountView }) {
               <th className="px-3 py-2 font-medium">Name</th>
               <th className="px-3 py-2 text-right font-medium">Qty</th>
               <th className="px-3 py-2 text-right font-medium">Price</th>
+              <th className="px-3 py-2 text-right font-medium">Today</th>
               <th className="px-3 py-2 text-right font-medium">Value</th>
               <th className="px-5 py-2 text-right font-medium">Unrealized</th>
             </tr>
@@ -191,19 +210,28 @@ function AccountCard({ account: a }: { account: AccountView }) {
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums text-teal-200/80">{h.qty}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-teal-200/80">
-                  {money(h.priceCents, h.currency)}
+                  <LiveHoldingPrice symbol={h.quoteSymbol} priceCents={h.priceCents} currency={h.currency} />
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  <LiveHoldingToday symbol={h.quoteSymbol} qty={Number(h.qty)} currency={h.currency} />
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums font-semibold text-teal-50">
-                  {money(h.marketValueCents, h.currency)}
+                  <LiveHoldingValue
+                    symbol={h.quoteSymbol}
+                    qty={Number(h.qty)}
+                    priceCents={h.priceCents}
+                    marketValueCents={h.marketValueCents}
+                    currency={h.currency}
+                  />
                 </td>
                 <td className="px-5 py-2 text-right tabular-nums">
-                  {h.openPnlCents == null ? (
-                    <span className="text-teal-200/30">—</span>
-                  ) : (
-                    <span className={h.openPnlCents >= 0 ? "text-emerald-400" : "text-red-400"}>
-                      {money(h.openPnlCents, h.currency)}
-                    </span>
-                  )}
+                  <LiveHoldingUnrealized
+                    symbol={h.quoteSymbol}
+                    qty={Number(h.qty)}
+                    priceCents={h.priceCents}
+                    bookCostCents={h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents}
+                    currency={h.currency}
+                  />
                 </td>
               </tr>
             ))}

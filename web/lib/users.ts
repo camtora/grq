@@ -33,16 +33,30 @@ export function memberEmails(): string[] {
 // Back-compat alias (kept for any caller that means "is a member").
 export const isAllowed = isMember;
 
-// Access tiers. oauth2-proxy already gates login to the infra allowlist
-// (~/infrastructure/oauth2-proxy/authenticated_emails.txt), so ANY request that
-// reaches GRQ with a valid X-Forwarded-Email is allowlisted → at least a
-// read-only viewer. Members may act; viewers may only look. null = no identity
-// (a header-less LAN hit) → denied at the door.
+// Access tiers. The shared oauth2-proxy allowlist gates login to ~20 household
+// apps, but GRQ is a CLOSED list of its own (Cam 2026-06-30): it NO LONGER admits
+// "any allowlisted email" as a viewer. Members (USERS + GRQ_ALLOWED_EMAILS) act on
+// the fund; the VIEWERS below get read-only; EVERYONE ELSE — even with a valid SSO
+// header for the other apps — is DENIED at the GRQ door (middleware 403s a null
+// role). This restricts GRQ without touching the shared SSO allowlist.
 export type Role = "member" | "viewer";
+
+// Read-only GRQ viewers — Cam's & Graham's alternate addresses (Cam 2026-06-30).
+// GRQ_VIEWER_EMAILS env replaces this default without a rebuild.
+function viewerEmails(): string[] {
+  const env = (process.env.GRQ_VIEWER_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return env.length ? env : ["cameron@camerontora.ca", "graham.j.appleby@gmail.com"];
+}
 
 export function roleForEmail(email: string | null | undefined): Role | null {
   if (!email || !email.trim()) return null;
-  return isMember(email) ? "member" : "viewer";
+  const normalized = email.trim().toLowerCase();
+  if (isMember(normalized)) return "member";
+  if (viewerEmails().includes(normalized)) return "viewer";
+  return null; // not on the GRQ allowlist → blocked (was: any allowlisted email got "viewer")
 }
 
 export function userForEmail(email: string | null | undefined): GrqUser | null {

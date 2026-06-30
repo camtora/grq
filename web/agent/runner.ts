@@ -516,8 +516,11 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // 10:00–10:30 discovery hunt on market days (once/day) — surfaces new names.
-  if (isMarketDay() && m >= 10 * 60 && m < 10 * 60 + 30) {
+  // 8:00–8:30 discovery hunt on market days (once/day) — surfaces new names.
+  // Pre-open (moved from 10:00, D98): the hunt is the heaviest single-lane consumer, and at
+  // 10:00 it collided head-on with the first check-in window (D96 halved check-ins to every
+  // 30 min). Running it before the open drains the lane so the 10:00 check-in fires on time.
+  if (isMarketDay() && m >= 8 * 60 && m < 8 * 60 + 30) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Hunt dossier" } },
     });
@@ -588,16 +591,20 @@ async function maybeScheduledSessions() {
     }
   }
 
-  // Fixed intraday trading check-ins (HOURLY 10:00–15:00 ET) — decision-capable
-  // sessions that act on the standing game plan. Each fires once/day inside a 60-min
-  // window (wide enough that a same-slot research/brief, which returns earlier in this
-  // function, runs first and the check-in falls through on a later tick). Restart-safe
-  // via a SYSTEM marker. EXEMPT from the decision budget (a short fixed list).
+  // Fixed intraday trading check-ins (every 30 min 10:00–15:30 ET) — decision-capable
+  // sessions that act on the standing game plan. Each fires once/day inside a 25-min
+  // window (D98: narrowed from 60 min). With check-ins 30 min apart, a 60-min window
+  // overlapped the next slot, so a check-in deferred by lane contention could land minutes
+  // before the following slot → two near-duplicate Opus sessions back-to-back. 25 < 30 means
+  // adjacent windows never overlap; a slot whose lane stays busy past its window is simply
+  // dropped (the next slot covers it). The hunt moving to 8:00 (above) keeps the lane free at
+  // 10:00 so on-time firing is the norm. Restart-safe via a SYSTEM marker. EXEMPT from the
+  // decision budget (a short fixed list).
   if (isMarketOpen()) {
     for (const hhmm of CHECKIN_TIMES_ET) {
       const [hh, mm] = hhmm.split(":").map(Number);
       const slot = hh * 60 + mm;
-      if (m < slot || m >= slot + 60) continue;
+      if (m < slot || m >= slot + 25) continue;
       const marker = `Scheduled check-in ${hhmm}`;
       const done = await prisma.journalEntry.count({ where: { kind: "SYSTEM", title: marker, at: { gte: dayStart } } });
       if (done > 0) continue;

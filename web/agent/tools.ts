@@ -13,7 +13,7 @@ import { computeSignals, overallSignal } from "./signals";
 import { fmpProfile } from "../lib/fmp";
 import { upsertChainEdges } from "../lib/graph/edges";
 import { bareChainKey } from "../lib/chess";
-import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA } from "./policy";
+import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA, HARD } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
 
@@ -320,11 +320,11 @@ const proposeOrderTool = tool(
 
 const addCandidateTool = tool(
   "add_candidate",
-  "Track a name you've researched (e.g. a discovery-hunt find) as a CANDIDATE — researched, not yet tradeable. Resolves the listing, pulls a year of bars, and queues a dossier if none exists. This is the step BEFORE promote_to_universe: track it, make sure its dossier rates it ≥Buy with ≥75 confidence, then promote. Members get a Discord alert. Give a one-line reason.",
+  "Track a name you've researched (e.g. a discovery-hunt find) as a CANDIDATE — researched, not yet tradeable. Resolves the listing, pulls a year of bars, and queues a dossier if none exists. This is the step BEFORE promote_to_universe: track it, make sure its dossier rates it ≥Buy with ≥" + HARD.minBuyConfidence + " confidence, then promote. Members get a Discord alert. Give a one-line reason.",
   { symbol: z.string(), name: z.string().optional(), reason: z.string().min(15).max(500) },
   async (args) => {
     const r = await addCandidate(args.symbol, args.reason, args.name);
-    return text(r.ok ? `TRACKING ${r.symbol} as a candidate. Once your dossier rates it ≥Buy with ≥75% confidence, promote_to_universe it.` : `SKIP: ${r.reason}`);
+    return text(r.ok ? `TRACKING ${r.symbol} as a candidate. Once your dossier rates it ≥Buy with ≥${HARD.minBuyConfidence}% confidence, promote_to_universe it.` : `SKIP: ${r.reason}`);
   },
 );
 
@@ -345,7 +345,7 @@ const requestResearchTool = tool(
 
 const promoteToUniverseTool = tool(
   "promote_to_universe",
-  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥75; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. The human promotion path is single-actor too (D78). Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
+  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥" + HARD.minBuyConfidence + "; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. The human promotion path is single-actor too (D78). Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
   {
     symbol: z.string(),
     tier: z.enum(["large", "mid"]).optional(),
@@ -442,7 +442,7 @@ const cancelCheckinTool = tool(
 
 const addAgendaTool = tool(
   "add_agenda",
-  'Add a follow-up to your standing to-do list — the thing to come back to at your NEXT hourly check-in instead of scheduling a separate session. Use this for anything that can wait an hour: "revisit DRX once its dossier lands — promote if ≥Buy/75", "watch LNR for the $96–99 add-zone", "trim ATD if it clears $98". The next scheduled intraday check-in reads the agenda and works through it. `symbol` is optional (the name it concerns).',
+  'Add a follow-up to your standing to-do list — the thing to come back to at your NEXT hourly check-in instead of scheduling a separate session. Use this for anything that can wait an hour: "revisit DRX once its dossier lands — promote if ≥Buy/' + HARD.minBuyConfidence + '", "watch LNR for the $96–99 add-zone", "trim ATD if it clears $98". The next scheduled intraday check-in reads the agenda and works through it. `symbol` is optional (the name it concerns).',
   { item: z.string().min(5).max(300), symbol: z.string().optional() },
   async (args) => {
     const open = await prisma.agentAgendaItem.count({ where: { status: "OPEN" } });

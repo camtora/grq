@@ -324,6 +324,30 @@ export class IBKRBroker implements BrokerAdapter {
     });
   }
 
+  /** Self-heal the trade ledger: a FILLED order can end up with NO Trade row if settleFill
+   *  threw AFTER the status flip (the XIC #32 / D33 gap) — the order reads FILLED and the
+   *  position mirrors from the broker, but the execution is invisible in the trade history +
+   *  realized-P&L. Each tick, find any FILLED ibkr order lacking a Trade and write the missing
+   *  Trade + journal from the order's recorded fill price, so the ledger always mirrors the
+   *  orders. Idempotent (skips orders that already have a Trade). Returns the count backfilled. */
+  private async backfillMissingTrades(): Promise<number> {
+    const [filled, trades] = await Promise.all([
+      prisma.order.findMany({
+        where: { status: "FILLED", broker: "ibkr" },
+        select: { id: true, symbol: true, side: true, qty: true, reason: true, avgFillPriceCents: true, commissionCents: true },
+      }),
+      prisma.trade.findMany({ select: { orderId: true } }),
+    ]);
+    const haveTrade = new Set(trades.map((t) => t.orderId));
+    let n = 0;
+    for (const o of filled) {
+      if (haveTrade.has(o.id) || o.avgFillPriceCents == null || o.avgFillPriceCents <= 0) continue;
+      await this.settleFill({ id: o.id, symbol: o.symbol, side: o.side, qty: o.qty, reason: o.reason }, o.avgFillPriceCents, o.commissionCents);
+      n++;
+    }
+    return n;
+  }
+
   /** Reconcile PENDING ibkr orders against broker truth. An order whose fill landed
    *  AFTER the synchronous poll window (placeOrder returned PENDING) is finalised
    *  here — Trade + journal written, Order flipped to FILLED — so the trade ledger is
@@ -332,6 +356,7 @@ export class IBKRBroker implements BrokerAdapter {
    *  cash after). Called on the tick BEFORE reconcile so a sell's realized P&L reads
    *  the pre-fill ACB. */
   async finalizePending(): Promise<FinalizedFill[]> {
+    await this.backfillMissingTrades().catch(() => {}); // self-heal FILLED orders missing their Trade row (the XIC #32 / D33 gap)
     const pending = await prisma.order.findMany({ where: { status: "PENDING", broker: "ibkr" } });
     const filled: FinalizedFill[] = [];
     for (const o of pending) {

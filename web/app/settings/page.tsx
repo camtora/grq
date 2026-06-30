@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { USERS, isOwner } from "@/lib/users";
 import { getSession } from "@/lib/session";
 import { soakStatus } from "@/lib/soak";
-import { ACCOUNT_TYPE } from "@/agent/policy";
+import { ACCOUNT_TYPE, DIALS } from "@/agent/policy";
 import Link from "next/link";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
@@ -26,6 +26,20 @@ const ROADMAP = [
   { n: 3, label: "IBKR paper — real broker plumbing proven & live-firing", done: true },
   { n: 4, label: "Live — real money, Cautious dial for week 1", done: false },
 ];
+
+// Risk-dial cards DERIVED from the single source of truth (agent/policy.ts DIALS) so the
+// guardrail display can never drift from the gate again. It DID drift: the 2026-06-29 cap
+// bump to 25/50/80 left the old hardcoded 10/15/25 on screen, so Settings under-stated the
+// real per-name concentration cap (Aggressive showed 25% while the §6 gate permitted 80%).
+const TIER_LABEL: Record<string, string> = { etf: "ETFs", large: "large-cap", mid: "mid-cap", small: "small-cap", micro: "micro-cap" };
+const RISK_DIAL_CARDS = (["CAUTIOUS", "BALANCED", "AGGRESSIVE"] as const).map((value) => {
+  const d = DIALS[value];
+  return {
+    value,
+    label: value.charAt(0) + value.slice(1).toLowerCase(),
+    desc: `Max ${d.maxPositionPct}% per position · ${d.cashFloorPct}–${d.cashCeilingPct}% cash (floor–ceiling, per currency) · ${d.tiers.map((t) => TIER_LABEL[t] ?? t).join(" + ")} · ${d.stopPct}% stop / ${d.takeProfitPct}% take-profit · ≤${d.maxNewTradesPerWeek} new buys/wk`,
+  };
+});
 
 export default async function Settings() {
   const [settings, session, cookieStore, pf, fxReqs] = await Promise.all([
@@ -138,6 +152,7 @@ export default async function Settings() {
           <RiskDial
             riskLevel={settings?.riskLevel ?? "BALANCED"}
             feeBudgetCentsMonth={settings?.feeBudgetCentsMonth ?? 2000}
+            dials={RISK_DIAL_CARDS}
             readOnly={!isMember}
           />
         </Card>

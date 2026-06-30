@@ -3,34 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const DIALS = [
-  {
-    value: "CAUTIOUS",
-    label: "Cautious",
-    desc: "Max 10% per position · 30–50% cash (floor–ceiling, per currency) · ETFs + large-cap (TSX60) · 5% stop / 15% take-profit · ≤15 new buys/wk",
-  },
-  {
-    value: "BALANCED",
-    label: "Balanced",
-    desc: "Max 15% per position · 15–30% cash (per currency) · ETFs + large + mid-cap · 8% stop / 25% take-profit · ≤20 new buys/wk",
-  },
-  {
-    value: "AGGRESSIVE",
-    label: "Aggressive",
-    desc: "Max 25% per position · 0–15% cash (per currency) · ETFs + large + mid-cap · 12% stop / 40% take-profit · ≤25 new buys/wk",
-  },
-] as const;
-
 // The risk dial, in its own panel. Its Save button writes BOTH risk + fee budget
 // (the settings API takes both together) — the fee budget rides along unchanged from
 // what's saved, so the fee panel and this panel never clobber each other's field.
+// `dials` is DERIVED from agent/policy.ts DIALS by the (server) Settings page and passed in,
+// so the on-screen caps always match the gate — no second hardcoded copy to drift (D98).
 export default function RiskDial({
   riskLevel,
   feeBudgetCentsMonth,
+  dials,
   readOnly = false,
 }: {
   riskLevel: string;
   feeBudgetCentsMonth: number;
+  dials: { value: string; label: string; desc: string }[];
   readOnly?: boolean;
 }) {
   const router = useRouter();
@@ -76,7 +62,7 @@ export default function RiskDial({
         )}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        {DIALS.map((d) => (
+        {dials.map((d) => (
           <button
             key={d.value}
             onClick={() => !readOnly && setRisk(d.value)}

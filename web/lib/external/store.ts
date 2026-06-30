@@ -336,6 +336,7 @@ export async function disconnectMember(email: string): Promise<void> {
 
 export type HoldingView = {
   symbol: string;
+  quoteSymbol: string; // the key OUR live quote feed (/api/quotes) knows this holding by
   dossierHref: string;
   description: string | null;
   qty: string;
@@ -436,6 +437,7 @@ export async function accountsForMembers(emails: string[]): Promise<MemberAccoun
           syncedAt: a.syncedAt.toISOString(),
           holdings: holdings.map((h) => ({
             symbol: h.symbol,
+            quoteSymbol: quoteSymFor(h.symbol, h.currency),
             dossierHref: dossierHrefFor(h.symbol, h.currency),
             description: h.description,
             qty: h.qty,
