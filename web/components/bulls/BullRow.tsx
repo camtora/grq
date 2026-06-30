@@ -11,11 +11,11 @@ const retClass = (p: number) => (p > 0 ? "text-emerald-300" : p < 0 ? "text-red-
 
 /** One bull's leaderboard row — click to expand its holdings + recent calls. The color dot ties it
  *  to its line on the chart. */
-export default function BullRow({ b, rank, color }: { b: BullStanding; rank: number; color: string }) {
+export default function BullRow({ b, rank, color }: { b: BullStanding; rank: number | null; color: string }) {
   return (
     <details className="rounded-xl border border-teal-400/10 bg-teal-400/[0.02]">
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-3">
-        <span className="w-5 text-center text-sm font-bold tabular-nums text-teal-200/50">{rank}</span>
+      <summary className={`flex cursor-pointer list-none items-center gap-3 p-3 ${rank == null ? "opacity-60" : ""}`}>
+        <span className="w-5 text-center text-sm font-bold tabular-nums text-teal-200/50">{rank ?? "—"}</span>
         <BullMark color={color} className="h-4 w-6 shrink-0" title={b.label} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -26,6 +26,9 @@ export default function BullRow({ b, rank, color }: { b: BullStanding; rank: num
               })()}
             </span>
             <Chip tone={dialTone(b.dial)}>{b.dial}</Chip>
+            {rank == null ? (
+              <span className="rounded bg-teal-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-teal-200/50">unranked · 0 trades</span>
+            ) : null}
           </div>
           <div className="text-[10px] tabular-nums text-teal-200/40">
             {money(b.navCadCents)} CAD · {Math.round(b.cashPct)}% cash · {b.tradeCount} trade{b.tradeCount === 1 ? "" : "s"}

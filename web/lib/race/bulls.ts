@@ -52,11 +52,12 @@ export type RaceSummary = {
 export async function listRaces(): Promise<RaceSummary[]> {
   const races = await prisma.race.findMany({
     orderBy: { id: "asc" },
-    include: { entrants: { include: { navSnaps: { orderBy: { at: "desc" }, take: 1 } } } },
+    include: { entrants: { include: { navSnaps: { orderBy: { at: "desc" }, take: 1 }, _count: { select: { trades: true } } } } },
   });
   return races.map((r) => {
     let leader: { label: string; returnPct: number } | null = null;
     for (const e of r.entrants) {
+      if (e._count.trades === 0) continue; // a bull that's never traded isn't placed — can't be leader (D-A)
       const nav = e.navSnaps[0]?.navCadCents ?? e.cashCents;
       const returnPct = r.startingStakeCents > 0 ? ((nav - r.startingStakeCents) / r.startingStakeCents) * 100 : 0;
       if (!leader || returnPct > leader.returnPct) leader = { label: e.label, returnPct };
@@ -117,7 +118,14 @@ export async function loadBullRace(raceId?: number): Promise<BullRaceView | null
         navHistory: navSnaps.filter((n) => n.entrantId === e.id).map((n) => ({ at: n.at, returnPct: retOf(n.navCadCents) })),
       };
     })
-    .sort((a, b) => b.navCadCents - a.navCadCents);
+    .sort((a, b) => {
+      // Untraded bulls aren't placed — they sort below everyone with ≥1 fill (D-A). Among the
+      // rest, rank by live NAV.
+      const at = a.tradeCount > 0 ? 1 : 0;
+      const bt = b.tradeCount > 0 ? 1 : 0;
+      if (at !== bt) return bt - at;
+      return b.navCadCents - a.navCadCents;
+    });
 
   let realFund: { returnPct: number; navCents: number } | null = null;
   try {

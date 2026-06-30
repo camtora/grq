@@ -31,6 +31,8 @@ import { apnsConfigured } from "../lib/push/apns";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
+import { verifyExperiments } from "../lib/race/verify";
+import { snapshotPredictions } from "../lib/report-card/snapshot";
 import { syncAllConnected } from "../lib/external/store";
 import { memberEmails } from "../lib/users";
 
@@ -57,6 +59,8 @@ let lastOptionsMs = 0;
 let lastSocialMs = 0;
 let lastMacroEventDay = "";
 let lastNewsRun = 0;
+let lastPredSnapshotDay = "";
+let lastExperimentCheckDay = "";
 let startupReviewChecked = false;
 let dailyLossAlerted = "";
 let sessionRunning = false;
@@ -727,6 +731,20 @@ async function tick() {
     console.log(`[bars] nightly refresh stored ${n} rows`);
   }
 
+  // (1d) Experiment integrity audit — after close, once per ET day. Pure DB read over the Bull-Race
+  // books: ragged/unsynchronized NAV marks, a NAV that doesn't reconcile to cash+positions, negative
+  // cash. Alerts (Discord + journal) on a hard violation; warnings just log. Read-only — never a book.
+  if (isMarketDay() && p.minutesSinceMidnight >= 16 * 60 + 30 && lastExperimentCheckDay !== p.dateStr) {
+    lastExperimentCheckDay = p.dateStr;
+    verifyExperiments()
+      .then(async (r) => {
+        for (const w of r.warnings) console.warn(`[verify] ${w}`);
+        if (!r.ok) await alert("warning", `Experiment integrity: ${r.violations.length} violation(s)`, r.violations.join("\n"), { category: "system" });
+        else console.log(`[verify] experiments OK — ${r.info.join(" · ")}`);
+      })
+      .catch((e) => console.error("[verify] experiment check failed:", e instanceof Error ? e.message : e));
+  }
+
   // Nightly external-accounts sync (SnapTrade) — once/day ~5:30am ET, so members' personal
   // holdings (esp. share counts after they trade) are current each morning without anyone
   // opening the app. Intraday VALUE is already live (accountsForMembers marks holdings to our
@@ -758,6 +776,16 @@ async function tick() {
     runSmartMoneyIngest()
       .then((r) => console.log(`[smartmoney] ingest: ${r.congress} congress · ${r.insiders} insider · ${r.portfolios.fresh} fresh 13F`))
       .catch((e) => console.error("[smartmoney] ingest failed:", e instanceof Error ? e.message : e));
+  }
+
+  // (1e) Report-card entry snapshot — once per ET day. Captures the entry price for every new
+  // directional call (Alfred's calls, hunt + chess leads), incl. untracked names (fetchMissingBars
+  // pulls their bars first), so the scorecard can grade them later. Cheap, no LLM; background.
+  if (lastPredSnapshotDay !== p.dateStr) {
+    lastPredSnapshotDay = p.dateStr;
+    snapshotPredictions({ fetchMissingBars: true })
+      .then((r) => { if (r.inserted > 0) console.log(`[reportcard] snapshotted ${r.inserted} new call entr${r.inserted === 1 ? "y" : "ies"} (${r.unpriceable} unpriceable)`); })
+      .catch((e) => console.error("[reportcard] snapshot failed:", e instanceof Error ? e.message : e));
   }
 
   // Tier 3 — options positioning (Graham's ask): ~HOURLY during market hours, cache CBOE dealer-

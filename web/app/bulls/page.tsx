@@ -22,6 +22,10 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
   const [session, races, data] = await Promise.all([getSession(), listRaces(), loadBullRace(wantId)]);
   const isMember = session?.role === "member";
   const roster = [MODELS.decision, ...RACE.challengers].map((m) => ({ model: m, label: modelLabel(m) }));
+  // Rank only bulls that have actually traded; untraded ones are shown but unplaced (D-A). data.bulls
+  // is sorted traded-first, so a running counter assigns 1..N to the traded bulls in order.
+  let placed = 0;
+  const ranks = data ? data.bulls.map((b) => (b.tradeCount > 0 ? ++placed : null)) : [];
 
   return (
     <main>
@@ -70,7 +74,7 @@ export default async function BullsPage({ searchParams }: { searchParams: Promis
               <div className="mb-2"><PanelHeader>Leaderboard</PanelHeader></div>
               <div className="space-y-2">
                 {data.bulls.map((b, i) => (
-                  <BullRow key={b.entrantId} b={b} rank={i + 1} color={BULL_COLORS[i % BULL_COLORS.length]} />
+                  <BullRow key={b.entrantId} b={b} rank={ranks[i]} color={BULL_COLORS[i % BULL_COLORS.length]} />
                 ))}
               </div>
             </div>

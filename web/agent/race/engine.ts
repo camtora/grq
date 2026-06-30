@@ -109,15 +109,47 @@ export async function applyRaceFill(
   return { filled: true, rejectReason: null };
 }
 
-/** Mark the bull to live prices and append a NAV point (every session — even on HOLD — so the
- *  P&L line captures mark-to-market drift). */
+/** Snapshot the NAV of EVERY given entrant together, from ONE shared quote map fetched at a single
+ *  instant. This is the tick's only NAV-write path: it runs AFTER all sessions settle, so a bull
+ *  whose session errored, ran long, or was metered-skipped is still marked this tick (no ragged
+ *  gaps), and every entrant is priced off the same quotes — a fair, synchronized leaderboard. (1b)
+ *  Re-reads cash fresh because applyRaceFill mutated it during the sessions. */
+export async function snapshotRaceNav(entrants: { id: number }[], fx: number | null): Promise<void> {
+  if (entrants.length === 0) return;
+  const ids = entrants.map((e) => e.id);
+  const [fresh, positions] = await Promise.all([
+    prisma.raceEntrant.findMany({ where: { id: { in: ids } }, select: { id: true, cashCents: true } }),
+    prisma.racePosition.findMany({ where: { entrantId: { in: ids } } }),
+  ]);
+  const symbols = [...new Set(positions.map((p) => p.symbol))];
+  const quotes = symbols.length ? await getQuotes(symbols) : new Map<string, { midCents: number }>();
+  const cashById = new Map(fresh.map((e) => [e.id, e.cashCents]));
+  const posByEntrant = new Map<number, typeof positions>();
+  for (const p of positions) {
+    const arr = posByEntrant.get(p.entrantId) ?? [];
+    arr.push(p);
+    posByEntrant.set(p.entrantId, arr);
+  }
+  await Promise.all(
+    ids.map((id) => {
+      const cashCents = cashById.get(id) ?? 0;
+      let positionsCadCents = 0;
+      for (const p of posByEntrant.get(id) ?? []) {
+        const q = quotes.get(p.symbol.toUpperCase());
+        const lastNative = q && q.midCents > 0 ? q.midCents : p.avgCostCents;
+        positionsCadCents += toCadCents(p.qty * lastNative, p.currency, fx);
+      }
+      return prisma.raceNavSnapshot.create({
+        data: { entrantId: id, navCadCents: cashCents + positionsCadCents, cashCents, positionsCadCents },
+      });
+    }),
+  );
+}
+
+/** Single-entrant snapshot — kept for the verify script. Delegates to the batch path so there is
+ *  exactly one NAV-mark implementation. */
 export async function snapshotBullNav(entrantId: number, fx: number | null): Promise<void> {
-  const e = await prisma.raceEntrant.findUnique({ where: { id: entrantId } });
-  if (!e) return;
-  const book = await valueBook(entrantId, e.cashCents, fx);
-  await prisma.raceNavSnapshot.create({
-    data: { entrantId, navCadCents: book.navCadCents, cashCents: e.cashCents, positionsCadCents: book.positionsCadCents },
-  });
+  await snapshotRaceNav([{ id: entrantId }], fx);
 }
 
 /** Run a model one-shot, no tools. Claude rides the Max token (free); OpenRouter is metered and
@@ -167,7 +199,8 @@ async function runBullSession(entrant: EntrantRow, startingStakeCents: number, s
         rejectReason,
       },
     });
-    await snapshotBullNav(entrant.id, fx);
+    // NAV is snapshotted once for all entrants after the tick settles (see snapshotRaceNav) — not
+    // here, where per-session timing made the marks ragged and unsynchronized. (1b)
     console.log(`[bullrace] ${entrant.label}: ${call?.action ?? "?"} ${call?.symbol ?? ""} ${filled ? "FILLED" : rejectReason ?? "(no trade)"}`);
   } catch (e) {
     console.error(`[bullrace] ${entrant.label} failed`, e instanceof Error ? e.message : e);
@@ -221,6 +254,9 @@ export async function runRaceTick(): Promise<void> {
         return runBullSession(e, race.startingStakeCents, now, fx);
       }),
     );
+    // One synchronized NAV mark for every active entrant, from a single shared quote map, AFTER all
+    // sessions settle — so errored/long/metered-skipped bulls are still marked this tick. (1b)
+    await snapshotRaceNav(race.entrants, fx);
     return; // one race per tick — the next due race runs next tick
   }
   } finally {
