@@ -189,7 +189,7 @@ export function LiveExternalTiles({
       <StatCard
         label={`${valueLabel} (CAD)`}
         value={<RollingNumber value={money(totalCad)} />}
-        note="your external accounts · read-only"
+        note="your external accounts"
       />
       {showChange && changeCents !== null && (
         <StatCard
