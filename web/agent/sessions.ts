@@ -181,30 +181,26 @@ type ChampionCall = {
   qty: number | null;
   confidence: number | null;
   thesis: string | null;
-  entryPriceCents: number | null;
-  entryCurrency: string | null;
 };
 
 /** The champion's "call" for a decision session = its strongest TradeProposal logged during the
  *  session (highest tradeConfidence; latest as tiebreak), scored on the PROPOSAL (gate outcome
- *  ignored, same as a challenger). priceCents on the proposal is the entry snapshot — exact, no
- *  extra fetch. No proposal this session ⇒ a NONE/stand-down call. Best-effort; never throws. */
+ *  ignored, same as a challenger). The entry PRICE is NOT taken here — runShadow resolves one shared
+ *  mark per symbol so the champion and every challenger that names it are entered identically (fair
+ *  Race terms). No proposal this session ⇒ a NONE/stand-down call. Best-effort; never throws. */
 async function championCall(sessionAt: Date): Promise<ChampionCall | null> {
   const props = await prisma.tradeProposal
-    .findMany({ where: { at: { gte: sessionAt } }, select: { symbol: true, side: true, qty: true, tradeConfidence: true, priceCents: true, at: true } })
-    .catch(() => [] as { symbol: string; side: string; qty: number; tradeConfidence: number | null; priceCents: number | null; at: Date }[]);
-  if (props.length === 0) return { action: "NONE", symbol: null, qty: null, confidence: null, thesis: null, entryPriceCents: null, entryCurrency: null };
+    .findMany({ where: { at: { gte: sessionAt } }, select: { symbol: true, side: true, qty: true, tradeConfidence: true, at: true } })
+    .catch(() => [] as { symbol: string; side: string; qty: number; tradeConfidence: number | null; at: Date }[]);
+  if (props.length === 0) return { action: "NONE", symbol: null, qty: null, confidence: null, thesis: null };
   props.sort((a, b) => (b.tradeConfidence ?? -1) - (a.tradeConfidence ?? -1) || b.at.getTime() - a.at.getTime());
   const pick = props[0];
-  const entryCurrency = pick.priceCents != null ? await currencyForSymbol(pick.symbol).catch(() => null) : null;
   return {
     action: pick.side === "SELL" ? "SELL" : "BUY",
     symbol: pick.symbol,
     qty: pick.qty,
     confidence: pick.tradeConfidence ?? null,
     thesis: null, // the champion's reasoning is its full note (the row's text); no separate thesis line
-    entryPriceCents: pick.priceCents ?? null,
-    entryCurrency,
   };
 }
 
@@ -222,12 +218,39 @@ async function runShadow(opts: {
   championText: string | null; // what the champion actually produced (its note / report body)
 }): Promise<void> {
   if (!RACE.enabled || RACE.challengers.length === 0) return;
+
+  // ONE entry mark per symbol for this whole shadow run (a single sessionAt): the champion and every
+  // challenger that names a symbol are entered at the SAME price, so The Race scores them on identical
+  // terms — no per-model getQuote drift (a quote refresh between rows used to spread the entry ~5bps).
+  // Memoized; uses the agent's own quote path. A symbol with no live quote stays unpriced (null).
+  // Memoize the PROMISE (stored synchronously, before the first await) so concurrent challengers
+  // naming the same symbol share one fetch — otherwise two could both miss the cache and double-fetch,
+  // and a quote refresh landing between them would reintroduce the very split this fixes.
+  const entryMarks = new Map<string, Promise<{ priceCents: number; currency: string | null } | null>>();
+  const resolveEntry = (symbol: string): Promise<{ priceCents: number; currency: string | null } | null> => {
+    const key = symbol.toUpperCase();
+    let pending = entryMarks.get(key);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          const q = await getQuote(key);
+          return q && q.midCents > 0 ? { priceCents: q.midCents, currency: await currencyForSymbol(key).catch(() => null) } : null;
+        } catch {
+          return null;
+        }
+      })();
+      entryMarks.set(key, pending);
+    }
+    return pending;
+  };
+
   try {
     // Champion row first — keep its written read AND, on decision sessions, its own "call" so it
     // races on the same hypothetical terms as the challengers. The champion has no JSON proposal
-    // (it uses tools); its call is its strongest TradeProposal this session (D37), with that
-    // proposal's quoted price as the entry snapshot. Its REAL fund P&L stays separate (NAV).
+    // (it uses tools); its call is its strongest TradeProposal this session (D37). Its entry uses the
+    // SAME shared mark as the challengers. Its REAL fund P&L stays separate (NAV).
     const call = opts.decisionKind === "decision" ? await championCall(opts.sessionAt) : null;
+    const champEntry = call && (call.action === "BUY" || call.action === "SELL") && call.symbol ? await resolveEntry(call.symbol) : null;
     await prisma.shadowRun.create({
       data: {
         sessionAt: opts.sessionAt,
@@ -242,8 +265,8 @@ async function runShadow(opts: {
         qty: call?.qty ?? null,
         confidence: call?.confidence ?? null,
         thesis: call?.thesis ?? null,
-        entryPriceCents: call?.entryPriceCents ?? null,
-        entryCurrency: call?.entryCurrency ?? null,
+        entryPriceCents: champEntry?.priceCents ?? null,
+        entryCurrency: champEntry?.currency ?? null,
         agentVersion: AGENT_VERSION,
       },
     });
@@ -287,7 +310,7 @@ async function runShadow(opts: {
             withTools: false, // shadow = frozen seed only; a tool call would diverge from what the champion saw
             maxTurns: 3,
           });
-          if (text != null) await writeChallengerRow({ ...opts, model, text, isDecision });
+          if (text != null) await writeChallengerRow({ ...opts, model, text, isDecision, resolveEntry });
         } catch (e) {
           console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
         }
@@ -300,7 +323,7 @@ async function runShadow(opts: {
         try {
           const r = await chatComplete({ model, system: PERSONA, user: fullPrompt });
           if (r && r.text) {
-            await writeChallengerRow({ ...opts, model, text: r.text, isDecision });
+            await writeChallengerRow({ ...opts, model, text: r.text, isDecision, resolveEntry });
             await recordOpenRouterUsage(`race:${opts.label}`, model, r);
           }
         } catch (e) {
@@ -321,25 +344,23 @@ async function writeChallengerRow(opts: {
   kind: ShadowKind;
   label: string;
   reason: string;
+  resolveEntry: (symbol: string) => Promise<{ priceCents: number; currency: string | null } | null>;
 }): Promise<void> {
   const p = opts.isDecision ? parseProposal(opts.text) : null;
 
-  // Snapshot the live price for a directional call, so The Race can mark it to the live price
-  // later (same getQuote path the agent trades on → entry & mark stay consistent). Unpriceable
-  // symbol → leave null; that call renders "unpriced" and is excluded from scoring.
+  // Entry price for a directional call comes from the run's SHARED per-symbol mark (resolveEntry) —
+  // so every model that named this symbol at this session is entered at the identical price, and the
+  // Race marks them to the live price on the same basis. Unpriceable symbol → null ("unpriced",
+  // excluded from scoring).
   let entryPriceCents: number | null = null;
   let entryCurrency: string | null = null;
   if (p && (p.action === "BUY" || p.action === "SELL") && p.symbol) {
-    try {
-      const q = await getQuote(p.symbol);
-      if (q && q.midCents > 0) {
-        entryPriceCents = q.midCents;
-        entryCurrency = await currencyForSymbol(p.symbol);
-      } else {
-        console.log(`[race] no quote to snapshot ${opts.model} ${p.action} ${p.symbol}`);
-      }
-    } catch (e) {
-      console.error(`[race] entry snapshot failed ${opts.model} ${p.symbol}`, e instanceof Error ? e.message : e);
+    const mark = await opts.resolveEntry(p.symbol);
+    if (mark) {
+      entryPriceCents = mark.priceCents;
+      entryCurrency = mark.currency;
+    } else {
+      console.log(`[race] no quote to snapshot ${opts.model} ${p.action} ${p.symbol}`);
     }
   }
 

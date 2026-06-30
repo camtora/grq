@@ -67,6 +67,28 @@ export async function verifyExperiments(now: Date = new Date()): Promise<Experim
     info.push(`"${race.name}": ${ids.length} active bulls, ${untraded} unranked (0 trades), ${min === max ? `${max}` : `${min}..${max}`} snapshot(s) today.`);
   }
 
+  // Second-Opinions fairness: every model that named the SAME symbol at the SAME session must share
+  // one entry price (the run's shared per-session mark). A spread means the Race scored some calls on
+  // a different entry basis — unfair. Scoped to the last 14 days; pre-fix rows age out of this window.
+  const since14 = new Date(now.getTime() - 14 * 24 * 60 * 60_000);
+  const shadowRows = await prisma.shadowRun.findMany({
+    where: { sessionAt: { gte: since14 }, entryPriceCents: { not: null }, symbol: { not: null } },
+    select: { sessionAt: true, symbol: true, entryPriceCents: true },
+  });
+  const pricesByKey = new Map<string, Set<number>>();
+  for (const r of shadowRows) {
+    const key = `${r.sessionAt.toISOString()}|${r.symbol}`;
+    const set = pricesByKey.get(key) ?? new Set<number>();
+    set.add(r.entryPriceCents as number);
+    pricesByKey.set(key, set);
+  }
+  const split = [...pricesByKey.values()].filter((prices) => prices.size > 1).length;
+  if (split > 0) {
+    warnings.push(`Second Opinions: ${split} (session, symbol) group(s) in the last 14d have split entry prices across models — same call entered on different bases. New sessions use one shared mark, so this should drain as old rows age out.`);
+  } else {
+    info.push(`Second Opinions: entry prices consistent across models for every shared (session, symbol) group (last 14d).`);
+  }
+
   info.push(`Report card: ${await prisma.prediction.count()} directional calls snapshotted.`);
 
   return { ok: violations.length === 0, violations, warnings, info };
