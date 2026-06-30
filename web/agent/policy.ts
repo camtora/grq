@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.25-phase4";
+export const AGENT_VERSION = "v2.27-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -20,27 +20,28 @@ export const HARD = {
   dailyLossPauseBps: -300, // day P&L ≤ −3% NAV → no new buys today
   drawdownKillBps: -1500, // NAV ≤ −15% from high-water mark → kill switch
   feeEdgeMultiple: 3, // thesis target must clear ≥ 3× round-trip commissions
-  minBuyConfidence: 75, // conviction gate (Graham, 2026-06-14): no BUY below 75% thesis confidence
+  minBuyConfidence: 70, // conviction gate (Graham 2026-06-14; lowered 75→70 by Cam 2026-06-29, D95): no BUY below 70% thesis confidence
   warmupMs: 5 * 60_000, // no agent trading for 5 min after a restart
   noEntriesFirstMin: 15, // no new BUYs in the first 15 min of the session
   noEntriesLastMin: 15, // …or the last 15
-  maxDecisionSessionsPerDay: 6, // AD-HOC decision budget: held-position trigger escalations + self-scheduled wakeups. The fixed CHECKIN_TIMES_ET check-ins are EXEMPT (bounded by being a short fixed list). Persisted per-ET-day in AgentState (Cam 2026-06-24) so restarts can't reset it.
+  maxDecisionSessionsPerDay: 14, // AD-HOC decision budget: held-position trigger escalations + self-scheduled wakeups. The fixed CHECKIN_TIMES_ET check-ins are EXEMPT (bounded by being a short fixed list). Raised 6→14 (Cam 2026-06-29) so self-scheduled "come back when the dossier lands" follow-ups aren't starved by position triggers — the agent now self-schedules a return ~20–30 min out after queuing research instead of waiting for the next slot. Persisted per-ET-day in AgentState (Cam 2026-06-24) so restarts can't reset it.
   triggerMoveBps: 400, // a held name fires a check when it has moved ≥4% SINCE THE LAST CHECK (a fresh ±4% leg) — not when its absolute day-move is ≥4%. So a +14% gap that holds is one check, not a 30-min drumbeat; a run to +18% or a reversal to +10% is a new check. The anchor is persisted (AgentState.triggerAnchorsJson). The 2-min scan cadence is unchanged. (Cam 2026-06-24)
 };
 
 // Anti-runaway cap on the agent's standing to-do list (AgentAgendaItem).
 export const MAX_OPEN_AGENDA = 12;
 
-// Fixed intraday trading check-ins (ET) — HOURLY 10:00→15:00 INCLUDING noon (Cam 2026-06-25;
-// noon used to be the midday brief — it's now a real check-in and the brief moved to 12:30).
+// Fixed intraday trading check-ins (ET) — EVERY 30 MIN 10:00→15:30 (Cam 2026-06-29; was hourly
+// 10:00–15:00). Denser cadence so the agent re-derives + acts more often instead of waiting a full
+// hour; pairs with the self-scheduled "come back when the dossier lands" follow-ups (maxDecisionSessionsPerDay).
 // Each is a decision-capable session that acts on the standing game plan, fires once/day in a
-// 60-min window, and runs AFTER any same-slot research/brief (those blocks return first; the
-// check-in falls through on a later tick within the hour). The 12:30 midday BRIEF (runMiddayReport,
-// in runner.ts) is a readable lunch summary, NOT a decision session: it shares the noon hour with
-// the 12:00 check-in (the check-in fires 12:00–12:30, the brief 12:30–13:00). The day is bookended
-// by the 9:00 morning plan ("open") and the 16:15 EOD brief ("close"). EXEMPT from
-// maxDecisionSessionsPerDay (a short fixed list). Humans edit this.
-export const CHECKIN_TIMES_ET = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"] as const;
+// 60-min match window (kept wide so a slot still catches up if a long session overruns), and runs
+// AFTER any same-slot research/brief (those blocks return first; the check-in falls through on a
+// later tick). NB: 12:30 is intentionally OMITTED — the 12:30–13:00 midday BRIEF (runMiddayReport,
+// in runner.ts) owns that half-hour (a readable lunch summary, NOT a decision session; it runs
+// before the loop and returns). The day is bookended by the 9:00 morning plan ("open") and the
+// 16:15 EOD brief ("close"). EXEMPT from maxDecisionSessionsPerDay (a short fixed list). Humans edit this.
+export const CHECKIN_TIMES_ET = ["10:00", "10:30", "11:00", "11:30", "12:00", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"] as const;
 
 // Agent self-scheduling: how many of its own future check-ins may be PENDING at
 // once (anti-runaway). Same-day, market-hours wakeups only for now.
@@ -55,7 +56,7 @@ export const MAX_PENDING_WAKEUPS = 6;
 export const SELF_INVEST = {
   enabled: (process.env.GRQ_AGENT_SELF_PROMOTE ?? "true").toLowerCase() !== "false",
   allowedStances: ["Strong Buy", "Buy"] as const, // must be a genuine buy call
-  minConfidence: HARD.minBuyConfidence, // ≥75, same bar as the BUY gate
+  minConfidence: HARD.minBuyConfidence, // ≥70, same bar as the BUY gate (moves with it — D95)
   maxPerRollingWeek: 25, // anti-runaway: ≤25 self-promotions / rolling 7 days (2→5→25 on 2026-06-18 — under the active-deployment mandate the agent's wider hunt is surfacing more real ≥75 ideas than 5/wk allowed; AC/COST/DAL got blocked. Still bounded by maxUniverseSize and the dial's maxNewTradesPerWeek BUY cap)
   maxUniverseSize: 60, // anti-runaway: total ACTIVE cap
   promotableTiers: ["large", "mid"] as const, // ETFs stay human-curated; default "mid"
@@ -93,7 +94,8 @@ export const DIALS: Record<"CAUTIOUS" | "BALANCED" | "AGGRESSIVE", DialPolicy> =
 // running costs — Claude Max (~$240 USD/mo) + FMP (~$250 USD/mo) ≈ $490 USD/mo in subscriptions.
 // Beating XIC while still UNDER this hurdle is NOT "doing a good job." The hurdle is brutal at
 // small AUM (a high % of a tiny NAV) and shrinks as capital grows — so the answer is scale +
-// patient compounding, NEVER oversized risk to chase it (the §6 gate + 75% bar are unchanged).
+// patient compounding, NEVER oversized risk to chase it (the §6 gate is unchanged; the conviction
+// bar is 70% as of D95).
 // Surfaced live in context (as %/yr of current NAV) and weighed by the agent's reporting. USD cents.
 export const OPERATING_COST_USD_CENTS_PER_MONTH = 49000;
 

@@ -194,7 +194,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
   const rhythm = [
     { t: "~6:00 ET", d: "Pre-morning read — a quick scan of the overnight tape; refreshes research it'll want before the open." },
     { t: "9:00 ET", d: "Game plan — the day's hypothesis, written before the bell." },
-    { t: `${CHECKIN_TIMES_ET.join(" · ")} ET`, d: "Hourly check-ins — each one rebuilds the plan from scratch, acts on what's live, and must surface new ideas." },
+    { t: `${CHECKIN_TIMES_ET.join(" · ")} ET`, d: "Check-ins every 30 minutes — each one rebuilds the plan from scratch, acts on what's live, and must widen the net by vetting 12–18 fresh names (dossiering only the promising few). It can also schedule itself a near-term return to act once a queued dossier lands, rather than waiting for the next slot." },
     { t: "12:30 ET", d: "Midday brief — a readable lunchtime summary (no trading decisions)." },
     { t: "16:15 ET", d: "End-of-day report — what happened, why, and tomorrow's watch list." },
     { t: "Saturday", d: "Weekly review — grades closed theses, bank lessons, and gives a contribute/hold/withdraw recommendation." },

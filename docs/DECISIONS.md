@@ -2370,3 +2370,51 @@ names** panel surfaces the relationship. The deterministic graph scan is taught 
 New models `ChessTheme`/`ChessPlay` (one expand-safe `prisma db push`). Config in `policy.ts → CHESS`
 (`GRQ_CHESS_ENABLED`, 3 boards/day, weekly toggle). `AGENT_VERSION` → **v2.15-phase4**. Full spec: `docs/CHESS-MOVES.md`.
 **Deferred:** iOS/contract surface, a force-directed SVG board (v1 is lanes + a links list), a per-stock "in play" badge.
+
+### D95 — Conviction gate lowered 75% → 70% (Cam, 2026-06-29)
+
+Cam dropped the BUY conviction bar from **75% → 70%** (`HARD.minBuyConfidence` in `agent/policy.ts`). A hard
+guardrail, changed in code by a human (the only sanctioned path — D11 / guardrail #1; the agent never edits this).
+Rationale: open the aperture slightly so genuinely-good 70–74% ideas can act, rather than being filtered out by a
+bar that was a round number, not a calibrated one. The fund still acts only on its stronger calls — just one notch
+wider.
+
+**Coupled consequence (intentional):** `SELF_INVEST.minConfidence` is defined as `HARD.minBuyConfidence`, so the
+**self-promote eligibility bar moves to 70% too** — the agent can now promote a researched candidate into its
+tradeable universe at ≥70% conviction (was ≥75%). `SELF_INVEST.allowedStances` is unchanged (still Strong Buy / Buy
+only — it must still be a genuine buy call).
+
+**Everything else in the §6 gate is unchanged:** kill switch, daily-loss pause (−3%), drawdown kill (−15%), no-fly /
+block-demote-kill, weekly-buy + order-rate caps, position-size cap, per-currency cash floor, no-margin and
+no-shorting funding rules, fee-edge gate. This is a single-threshold change, not a posture overhaul. It lands during
+the active IBKR-paper soak — a deliberate, member-directed loosening of the conviction bar, logged here for the
+record. `AGENT_VERSION` → **v2.26-phase4**.
+
+### D96 — Wider net, denser cadence: 30-min check-ins + 12–18 leads + self-scheduled follow-ups (Cam, 2026-06-29)
+
+The 2026-06-29 EOD was candid about the failure mode: zero trades, the entire focus list (NVDA/GOOG/GEV/VRT/MU)
+stuck just under the conviction bar, USD sleeve 77.5% idle. Alfred's own diagnosis — "widen the search." Cam's
+direction: research more names per check-in, and don't wait a full hour between checks. Three coordinated changes,
+none of which touch the §6 gate (still humans-only; every buy clears it):
+
+1. **Cadence → every 30 min** (`CHECKIN_TIMES_ET`, 10:00→15:30, **12:30 omitted** so the midday brief keeps its
+   half-hour). Was hourly 10:00–15:00. The 60-min match window in `runner.ts` is kept wide so a slot still catches
+   up if a long session overruns.
+2. **Self-scheduled follow-ups, encouraged.** The check-in + position prompts used to say "prefer `add_agenda`; only
+   `schedule_checkin` if it genuinely can't wait an hour." Flipped: after queuing a dossier on a name it wants to act
+   on, the agent `schedule_checkin`s a ~20–30 min return to decide once the research lands — rather than waiting for
+   the next slot. `HARD.maxDecisionSessionsPerDay` 6 → **14** so those follow-ups aren't starved by position-trigger
+   escalations (fixed check-ins remain budget-exempt).
+3. **Breadth: 12–18 LEADS, not full dossiers.** The check-in mandate went from "research ≥5 new names (each
+   `add_candidate` → a full dossier)" to a three-stage shape: **WIDEN** (vet 12–18 fresh names as cheap one-line
+   leads, seeded by the Market-Base-Layer screen now injected into the check-in via `huntAvoidAndSeed`), **DEEPEN**
+   (only the ~2–4 with a credible path to ≥Buy/70 get the expensive `add_candidate`/`request_research` full Opus
+   dossier), **DEPLOY** (promote + put idle sleeves to work). Check-in `maxTurns` 20 → 45 for the room.
+
+**Why the leads/dossiers split is load-bearing:** the literal ask (12–18 full dossiers × 12 slots/day) would queue
+~150–200 background Opus dossiers daily ≈ 3× a full universe refresh, every day — it would exhaust Cam's shared
+Max quota before noon and the 5-wide research queue couldn't drain it. Casting wide is nearly free (a WebSearch +
+a one-liner); the dossier is the cost, so it's reserved for names that earn it. Parallel research
+(`RESEARCH_CONCURRENCY=5`) cuts the clock, not the token total, so it isn't the lever for breadth — the funnel is.
+This is the same principle behind covering the ~10k-name market: cheap deterministic + Haiku tiers screen everything;
+Opus depth is spent only on the survivors. `AGENT_VERSION` → **v2.27-phase4**.

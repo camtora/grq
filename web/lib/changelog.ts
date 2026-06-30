@@ -16,6 +16,14 @@ export type ChangeEntry = {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "2026-06-29",
+    title: "Wider net, more often — checks every 30 minutes",
+    what: "Two changes to how the agent looks for ideas. (1) Cadence: it now runs a full check-in every 30 minutes (was hourly), and after queuing deep research on a name it can schedule itself a short follow-up to act once that research lands — instead of waiting for the next slot. (2) Breadth: each check-in now vets 12–18 fresh names as quick 'leads' (seeded by our market-wide screen), and only the genuinely promising few (2–4) get a full deep-research report. The previous floor was five.",
+    why: "An end-of-day review was honest about the problem: the fund sat in cash because the same handful of watched names kept stalling just under the buy bar. The fix is to look at far more names, far more often — but cheaply. Glancing widely is nearly free; the expensive deep reports are reserved for the names that earn them, so we widen the funnel without blowing the research budget.",
+    tag: "Strategy",
+    dRef: "D96",
+  },
+  {
     date: "2026-06-25",
     title: "Real trading begins — funded to $25k CAD + $25k USD",
     what: "The paper account was funded to the fund's true launch size: C$25,000 plus US$25,000, keeping the positions already held. Our reported P&L was reset so the deposit doesn't show up as a fake gain.",
