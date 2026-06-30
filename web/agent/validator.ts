@@ -1,5 +1,6 @@
 import { prisma } from "../lib/db";
 import { ibkrFixedCommissionCents } from "../lib/broker/sim";
+import { meetsConviction, breachesPositionCap, breachesCashFloor, fundingShortfallCents, breachesFeeEdge } from "../lib/broker/guardrails";
 import { toCadCents } from "../lib/fx";
 import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
@@ -112,7 +113,7 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
   if (!thesis.thesis || thesis.sources.length === 0) return refuse("Every order needs a thesis with at least one source (attribution rule).");
 
   // -- conviction gate (Graham, 2026-06-14): only act on high-conviction BUYs --
-  if (order.side === "BUY" && (typeof thesis.confidence !== "number" || thesis.confidence < HARD.minBuyConfidence)) {
+  if (order.side === "BUY" && !meetsConviction(thesis.confidence, HARD.minBuyConfidence)) {
     return refuse(
       `Conviction gate: BUYs require ≥${HARD.minBuyConfidence}% thesis confidence — this one is ${typeof thesis.confidence === "number" ? `${thesis.confidence}%` : "unstated"}. The fund only acts on its strongest calls.`,
     );
@@ -194,11 +195,11 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     const commIn = ibkrFixedCommissionCents(order.qty, estPrice);
     const costCad = cad(order.qty * estPrice + commIn);
     const newPosValueCad = (existing?.marketValueCadCents ?? 0) + cad(order.qty * estPrice);
-    if (newPosValueCad > (pf.navCents * dial.maxPositionPct) / 100) {
+    if (breachesPositionCap(newPosValueCad, pf.navCents, dial.maxPositionPct)) {
       return refuse(`Position would exceed ${dial.maxPositionPct}% of NAV (${settings?.riskLevel} dial).`);
     }
     const cashAfter = pf.cashCents - costCad;
-    if (cashAfter < (pf.navCents * dial.cashFloorPct) / 100) {
+    if (breachesCashFloor(cashAfter, pf.navCents, dial.cashFloorPct)) {
       return refuse(`Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial).`);
     }
     // USD funding: a USD buy must be covered by actual USD cash — never CAD on margin
@@ -207,8 +208,8 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     // (request_fx) for a member to approve (D62).
     if (posCcy === "USD") {
       const usdCost = order.qty * estPrice + commIn; // native USD cents
-      if (usdCost > pf.usdCashCents) {
-        const shortUsd = usdCost - pf.usdCashCents;
+      const shortUsd = fundingShortfallCents(order.qty, estPrice, commIn, pf.usdCashCents);
+      if (shortUsd > 0) {
         return refuse(
           `Insufficient USD: ${symbol} needs US$${(usdCost / 100).toFixed(2)}, the fund holds US$${(pf.usdCashCents / 100).toFixed(2)}. ` +
             `Use request_fx (direction CAD_TO_USD) to ask a member to convert ~US$${(shortUsd / 100).toFixed(2)} from CAD — the agent can't move money between currencies itself (no auto-FX, no USD margin).`,
@@ -221,8 +222,8 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     // (request_fx USD→CAD) here, instead of letting the order fail downstream at the broker.
     if (posCcy === "CAD") {
       const cadCost = order.qty * estPrice + commIn; // native CAD cents
-      if (cadCost > pf.cadCashCents) {
-        const shortCad = cadCost - pf.cadCashCents;
+      const shortCad = fundingShortfallCents(order.qty, estPrice, commIn, pf.cadCashCents);
+      if (shortCad > 0) {
         return refuse(
           `Insufficient CAD: ${symbol} needs $${(cadCost / 100).toFixed(2)} CAD, the fund holds $${(pf.cadCashCents / 100).toFixed(2)} CAD. ` +
             `If the USD sleeve has room, use request_fx (direction USD_TO_CAD) to ask a member to convert ~$${(shortCad / 100).toFixed(2)} CAD's worth — the agent can't move money between currencies itself (no auto-FX, no CAD margin).`,
@@ -232,7 +233,7 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     if (thesis.targetCents && thesis.targetCents > estPrice) {
       const commOut = ibkrFixedCommissionCents(order.qty, thesis.targetCents);
       const edge = (thesis.targetCents - estPrice) * order.qty;
-      if (edge < HARD.feeEdgeMultiple * (commIn + commOut)) {
+      if (breachesFeeEdge(edge, commIn, commOut, HARD.feeEdgeMultiple)) {
         return refuse(
           `Fee-aware gate: expected edge $${(edge / 100).toFixed(2)} is under ${HARD.feeEdgeMultiple}× round-trip commissions $${((commIn + commOut) / 100).toFixed(2)}. Trade bigger conviction or skip.`,
         );

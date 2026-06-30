@@ -3,6 +3,7 @@ import { getQuote, getQuotes, isHardStale } from "./quotes";
 import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
+import { isValidQty } from "./guardrails";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
  *  trade value (the cap may undercut the minimum on small orders — that's how
@@ -105,7 +106,7 @@ export class SimBroker implements BrokerAdapter {
     // ---- Pre-trade gate (the deterministic part the model can't override) ----
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     if (settings?.killSwitch) return reject("Kill switch is engaged — all trading halted.");
-    if (!Number.isInteger(input.qty) || input.qty <= 0) return reject("Quantity must be a positive whole number of shares.");
+    if (!isValidQty(input.qty)) return reject("Quantity must be a positive whole number of shares.");
 
     const quote = await getQuote(input.symbol);
     if (!quote) return reject(`No quote available for ${input.symbol.toUpperCase()}.`);
