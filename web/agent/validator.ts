@@ -1,13 +1,24 @@
 import { prisma } from "../lib/db";
-import { ibkrFixedCommissionCents } from "../lib/broker/sim";
-import { meetsConviction, breachesPositionCap, breachesCashFloor, fundingShortfallCents, breachesFeeEdge } from "../lib/broker/guardrails";
+import { ibkrFixedCommissionCents, ibkrOptionCommissionCents } from "../lib/broker/sim";
+import {
+  meetsConviction,
+  breachesPositionCap,
+  breachesCashFloor,
+  fundingShortfallCents,
+  breachesFeeEdge,
+  breachesOptionPremiumCap,
+  optionPremiumCents,
+  isValidQty,
+} from "../lib/broker/guardrails";
 import { toCadCents } from "../lib/fx";
 import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
+import type { OptionLeg } from "../lib/broker/types";
+import { resolveOpenContract } from "../lib/options/order";
 import { universeEntry } from "../lib/universe";
 import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
 import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay, etDateStr } from "./calendar";
-import { HARD, DIALS, AGENT_VERSION } from "./policy";
+import { HARD, DIALS, OPTIONS, AGENT_VERSION } from "./policy";
 import { alert } from "./alerts";
 
 export type Thesis = {
@@ -26,6 +37,19 @@ export type AgentOrder = {
   type: "MARKET" | "LIMIT";
   qty: number;
   limitPriceCents?: number;
+};
+
+// An option order the agent proposes (D99 — docs/ALFRED-OPTIONS.md). Buy-to-open long calls/puts only:
+// BUY_TO_OPEN takes a coarse `bias` and the system picks the concrete strike/expiry deterministically;
+// SELL_TO_CLOSE identifies a held contract by strike+expiry. qty is in CONTRACTS.
+export type AgentOptionOrder = {
+  symbol: string;
+  action: "BUY_TO_OPEN" | "SELL_TO_CLOSE";
+  right: "CALL" | "PUT";
+  contracts: number;
+  bias?: "ATM" | "SLIGHTLY_OTM"; // open only (defaults ATM)
+  strikeCents?: number; // close: the held contract's strike
+  expiry?: string; // close: the held contract's expiry (YYYY-MM-DD)
 };
 
 export type Verdict = {
@@ -304,6 +328,174 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
       "info",
       `${order.side === "BUY" ? "Bought" : "Sold"} ${order.qty} ${symbol} @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)}`,
       `${thesis.thesis}${sellLossNote}`,
+      { category: "trades", symbol },
+    );
+  }
+
+  return {
+    ok: true,
+    status: result.status,
+    orderId: result.orderId,
+    fillPriceCents: result.fillPriceCents,
+    commissionCents: result.commissionCents,
+  };
+}
+
+/**
+ * The §6 gate for an OPTION order (D99 — buy-to-open long calls/puts only, defined risk = premium).
+ * Reuses the stock rails (warm-up, hours, thesis, conviction, ACTIVE universe, BLOCKED, order-rate) and
+ * adds the option-only checks: the allowOptions/env toggle, US-only, deterministic contract selection,
+ * the premium-at-risk cap, the weekly-open cap, USD funding (no margin), and the close-only SELL (no
+ * short legs). Resolves the contract, then hands to broker.placeOrder (which independently re-marks +
+ * re-asserts the toggle). The broker stays the deterministic authority. See docs/ALFRED-OPTIONS.md.
+ */
+export async function validateAndPlaceOption(o: AgentOptionOrder, thesis: Thesis): Promise<Verdict> {
+  const broker = getBroker();
+  const symbol = o.symbol.toUpperCase();
+  const refuse = (rejectReason: string): Verdict => ({ ok: false, rejectReason });
+  const opening = o.action === "BUY_TO_OPEN";
+  const now = new Date();
+
+  // -- the real "no options" guardrail (rule #3) — first, before anything --
+  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  if (!OPTIONS.enabled) return refuse("Options trading is disabled (GRQ_OPTIONS_ENABLED=false).");
+  if (!settings?.allowOptions) {
+    return refuse("Options are off: a member must enable allowOptions on Settings first — Alfred can't (guardrail #3).");
+  }
+
+  // -- session/time rails (shared with stocks) --
+  if (Date.now() - bootTime < HARD.warmupMs) return refuse("Agent warm-up: no trading within 5 minutes of a restart.");
+  if (!isMarketOpen()) return refuse("Market is closed (9:30–16:00 ET trading window).");
+  if (opening) {
+    if (minutesSinceOpen() < HARD.noEntriesFirstMin) return refuse(`No new entries in the first ${HARD.noEntriesFirstMin} minutes (open is noisy).`);
+    if (minutesToClose() < HARD.noEntriesLastMin) return refuse(`No new entries in the last ${HARD.noEntriesLastMin} minutes before close.`);
+  }
+
+  // -- thesis discipline + whole contracts --
+  if (!thesis.thesis || thesis.sources.length === 0) return refuse("Every order needs a thesis with at least one source (attribution rule).");
+  if (!isValidQty(o.contracts)) return refuse("Contracts must be a positive whole number.");
+
+  // -- conviction gate (opens only) --
+  if (opening && !meetsConviction(thesis.confidence, HARD.minBuyConfidence)) {
+    return refuse(
+      `Conviction gate: option buys require ≥${HARD.minBuyConfidence}% thesis confidence — this one is ${typeof thesis.confidence === "number" ? `${thesis.confidence}%` : "unstated"}.`,
+    );
+  }
+
+  // -- universe, currency & directives (opens only — exits must never be trapped) --
+  if (opening) {
+    const entry = await universeEntry(symbol);
+    if (!entry || entry.status !== "ACTIVE") {
+      return refuse(`${symbol} is not in the ACTIVE universe — options only on names the fund already trades${entry ? ` (status: ${entry.status})` : ""}.`);
+    }
+    if ((entry.currency ?? "CAD").toUpperCase() !== "USD") {
+      return refuse(`Options are US-only (the CBOE feed) — ${symbol} is ${entry.currency ?? "CAD"}.`);
+    }
+    const directive = await prisma.symbolDirective.findUnique({ where: { symbol } });
+    if (directive?.directive === "BLOCKED") {
+      return refuse(`${symbol} is on the no-fly list (blocked by ${directive.by}). Members can unblock it; you cannot.`);
+    }
+  }
+
+  // -- rate limits: shared order pace + the option-specific weekly-open cap --
+  const dayStart = startOfEtDay();
+  const hourAgo = new Date(Date.now() - 60 * 60_000);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);
+  const [ordersToday, ordersHour, optOpensWeek] = await Promise.all([
+    prisma.order.count({ where: { createdAt: { gte: dayStart }, placedBy: "agent", status: { not: "REJECTED" } } }),
+    prisma.order.count({ where: { createdAt: { gte: hourAgo }, placedBy: "agent", status: { not: "REJECTED" } } }),
+    prisma.order.count({ where: { createdAt: { gte: weekAgo }, placedBy: "agent", side: "BUY", secType: "OPT", status: "FILLED" } }),
+  ]);
+  if (ordersToday >= HARD.maxOrdersPerDay) return refuse(`Daily order limit reached (${HARD.maxOrdersPerDay}).`);
+  if (ordersHour >= HARD.maxOrdersPerHour) return refuse(`Hourly order limit reached (${HARD.maxOrdersPerHour}).`);
+  if (opening && optOpensWeek >= OPTIONS.maxOpenPerWeek) {
+    return refuse(`Weekly option-open limit reached (${OPTIONS.maxOpenPerWeek}/wk).`);
+  }
+
+  // -- daily-loss pause (opens only) --
+  if (opening && (await isDailyLossPaused())) {
+    return refuse("Daily-loss pause is active (day P&L ≤ −3% NAV): no new option buys today. Closing a position is still allowed.");
+  }
+
+  // -- resolve the contract + run the option sizing/funding checks --
+  const pf = await getPortfolio();
+  let leg: OptionLeg;
+  if (opening) {
+    const resolved = await resolveOpenContract(symbol, o.right, o.bias ?? "ATM", now, OPTIONS.minDte, OPTIONS.maxDte);
+    if ("error" in resolved) return refuse(resolved.error);
+    leg = { right: o.right, strikeCents: resolved.strikeCents, expiry: resolved.expiry, multiplier: resolved.multiplier };
+
+    // Premium-at-risk cap — buy-to-open, so this premium IS the max loss (defined risk).
+    const commission = ibkrOptionCommissionCents(o.contracts);
+    const premiumUsd = optionPremiumCents(o.contracts, resolved.multiplier, resolved.markCents); // native USD cents
+    const premiumCad = toCadCents(premiumUsd, "USD", pf.fxUsdCad);
+    if (breachesOptionPremiumCap(premiumCad, pf.navCents, OPTIONS.maxPremiumPctNav)) {
+      return refuse(
+        `Premium $${(premiumCad / 100).toFixed(2)} CAD would exceed the ${OPTIONS.maxPremiumPctNav}% premium-at-risk cap (defined-risk sizing). Fewer contracts or skip.`,
+      );
+    }
+    // USD funding — the premium must be covered by actual USD cash, never CAD on margin (guardrail #3).
+    const shortUsd = fundingShortfallCents(o.contracts * resolved.multiplier, resolved.markCents, commission, pf.usdCashCents);
+    if (shortUsd > 0) {
+      return refuse(
+        `Insufficient USD for the premium: need US$${((premiumUsd + commission) / 100).toFixed(2)}, the fund holds US$${(pf.usdCashCents / 100).toFixed(2)}. ` +
+          `Use request_fx (direction CAD_TO_USD) to ask a member to convert ~US$${(shortUsd / 100).toFixed(2)} — no auto-FX, no USD margin.`,
+      );
+    }
+  } else {
+    // Close — identify the held contract (the broker re-checks the holding; no short legs).
+    if (o.strikeCents == null || !o.expiry) return refuse("A close needs the contract's strike (cents) and expiry (YYYY-MM-DD).");
+    leg = { right: o.right, strikeCents: o.strikeCents, expiry: o.expiry };
+    const expiryDate = new Date(`${o.expiry}T20:00:00Z`);
+    const pos = await prisma.optionPosition.findFirst({ where: { symbol, right: o.right, strikeCents: o.strikeCents, expiry: expiryDate } });
+    if (!pos || pos.qty < o.contracts) {
+      return refuse(`Cannot close ${o.contracts} ${symbol} ${o.right} — the fund holds ${pos?.qty ?? 0} of that contract.`);
+    }
+  }
+
+  // -- engine (re-marks the contract, re-asserts the toggle, books the fill) --
+  const result = await broker.placeOrder({
+    symbol,
+    side: opening ? "BUY" : "SELL",
+    type: "MARKET",
+    qty: o.contracts,
+    placedBy: "agent",
+    reason: thesis.thesis,
+    option: leg,
+  });
+
+  // -- journal the DECISION with full thesis + attribution (mirrors the stock path) --
+  const label = `${o.action} ${o.contracts} ${symbol} ${leg.right} $${(leg.strikeCents / 100).toFixed(0)} ${leg.expiry}`;
+  const verdictText = result.ok
+    ? result.status === "FILLED"
+      ? `FILLED @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)}/sh premium (commission $${((result.commissionCents ?? 0) / 100).toFixed(2)})`
+      : `PENDING (#${result.orderId})`
+    : `REJECTED — ${result.rejectReason}`;
+  await prisma.journalEntry.create({
+    data: {
+      kind: "DECISION",
+      symbol,
+      orderId: result.ok ? result.orderId : undefined,
+      title: `${label} → ${result.ok ? (result.status ?? "") : "REJECTED"}`,
+      body:
+        `**Thesis:** ${thesis.thesis}\n\n` +
+        (thesis.horizonDays ? `**Horizon:** ${thesis.horizonDays}d · ` : "") +
+        (typeof thesis.confidence === "number" ? `**Confidence:** ${thesis.confidence}%` : "") +
+        (thesis.invalidation ? `\n\n**Invalidation:** ${thesis.invalidation}` : "") +
+        `\n\n**Verdict:** ${verdictText}`,
+      confidence: thesis.confidence,
+      sourcesJson: JSON.stringify(thesis.sources),
+      agentVersion: AGENT_VERSION,
+    },
+  });
+
+  if (!result.ok) return { ok: false, orderId: result.orderId, rejectReason: result.rejectReason };
+
+  if (result.status === "FILLED") {
+    await alert(
+      "info",
+      `${opening ? "Opened" : "Closed"} ${o.contracts} ${symbol} ${leg.right.toLowerCase()}${o.contracts === 1 ? "" : "s"} @ $${((result.fillPriceCents ?? 0) / 100).toFixed(2)}/sh`,
+      `${thesis.thesis}`,
       { category: "trades", symbol },
     );
   }

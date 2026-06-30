@@ -176,6 +176,24 @@ export const DESK = {
   maxDte: 60,
 };
 
+// Live options trading for Alfred (docs/ALFRED-OPTIONS.md, D99) — the REAL fund, NOT the
+// Options Desk sandbox (DESK above). Buy-to-open long calls/puts ONLY → defined risk = premium.
+// Gated by Settings.allowOptions (member-only, OFF until the soak passes + IBKR perms land) AND
+// this env kill. Every order still clears the §6 gate. Humans edit this; the agent never does (D11).
+export const OPTIONS = {
+  // Env hard-kill (no deploy), like DESK/RACE. Harmless while Settings.allowOptions is false —
+  // BOTH must be true for an option order to clear. Set GRQ_OPTIONS_ENABLED=false to disable.
+  enabled: (process.env.GRQ_OPTIONS_ENABLED ?? "true").toLowerCase() !== "false",
+  // Per-position premium-at-risk cap as a % of NAV. Options are leveraged, so the size that
+  // matters is the premium paid (the MAX LOSS on a long leg), not notional. Deliberately tighter
+  // than the sandbox's 8% — this is the real book.
+  maxPremiumPctNav: Number(process.env.GRQ_OPT_PREMIUM_PCT ?? "4") || 4,
+  maxOpenPerWeek: Number(process.env.GRQ_OPT_PER_WEEK ?? "3") || 3, // new option opens / rolling 7d
+  minDte: 30, // contract-selection window (keeps theta/gamma noise down)
+  maxDte: 60,
+  usOnly: true, // the CBOE chain feed is US-only; CA names stay dark (leads, not trades)
+};
+
 // Chess Moves (docs/CHESS-MOVES.md) — the thematic / supply-chain reasoning EXPERIMENT.
 // On-demand: a member briefs a theme/chain and the agent maps the board + ripple PLAYS.
 // Plus a weekly self-picked "board of the week". Research-only (write_journal + the new

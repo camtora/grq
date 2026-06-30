@@ -66,6 +66,12 @@ model Settings {
   killSwitchBy        String?
   killSwitchAt        DateTime?
   agentVersion        String    @default("v1.48-phase4")
+  // Live options trading (Alfred, D99 — docs/ALFRED-OPTIONS.md). Buy-to-open long
+  // calls/puts only (defined risk = premium). This is the REAL, enforced "no options"
+  // guardrail (rule #3): the §6 gate + broker seam reject every option order while this
+  // is false. OFF until a member flips it AND the IBKR account has options permission +
+  // OPRA market data. Member-only (kill-switch tier); the agent NEVER writes it (rule #1).
+  allowOptions        Boolean   @default(false)
   // FX-approval guardrail (D62): member-set dials bounding CAD→USD conversions.
   // The agent may REQUEST any amount (request_fx); a member must approve each one,
   // and these caps bite at APPROVAL. 0 = no limit; usdAllocationCapPct 100 = all-USD ok.
@@ -158,6 +164,16 @@ model Order {
   // it to a fill and write the Trade/journal — keeps the ledger from silently
   // missing slow fills. Null for sim orders and legacy rows.
   brokerOrderId     String?
+  // Options (D99 — docs/ALFRED-OPTIONS.md). secType discriminates STK vs OPT. For an
+  // OPT order qty = CONTRACTS and *PriceCents = PER-SHARE premium (× multiplier × qty =
+  // $ premium); right/strike/expiry/multiplier identify the contract. Null/"STK" = a
+  // stock order — every existing row and the whole equities path is unchanged.
+  secType           String         @default("STK") // "STK" | "OPT"
+  right             String?        // "CALL" | "PUT" (OPT only)
+  strikeCents       Int?           // strike, per share (OPT only)
+  expiry            DateTime?      // contract expiry (OPT only)
+  multiplier        Int?           // shares per contract, default 100 (OPT only)
+  optionConid       Int?           // IBKR option contract conid cache (OPT only)
   trades            Trade[]
   journal           JournalEntry[]
 
@@ -176,6 +192,13 @@ model Trade {
   priceCents       Int
   commissionCents  Int
   realizedPnlCents Int?
+  // Options (D99). OPT: qty = contracts, priceCents = per-share premium, realizedPnlCents
+  // = realized on a close. Null/"STK" = a stock trade (existing rows unchanged).
+  secType          String    @default("STK") // "STK" | "OPT"
+  right            String?   // "CALL" | "PUT" (OPT only)
+  strikeCents      Int?      // strike, per share (OPT only)
+  expiry           DateTime? // contract expiry (OPT only)
+  multiplier       Int?      // shares per contract (OPT only)
 
   @@index([at])
 }
@@ -189,6 +212,30 @@ model Position {
   currency     String   @default("CAD")
   openedAt     DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+// A LONG option position the fund holds (D99 — docs/ALFRED-OPTIONS.md). Buy-to-open
+// only, so qty is always > 0 (never a short leg). Separate from Position because one
+// underlying can hold several contracts (different right/strike/expiry) — Position is
+// keyed by symbol and can't. Mirrors the proven sandbox DeskPosition shape. All cents,
+// whole contracts (rule #4). avgCostCents = PER-SHARE premium ACB (incl. commission);
+// the $ premium of the position = qty × multiplier × mark-per-share.
+model OptionPosition {
+  id           Int      @id @default(autoincrement())
+  symbol       String   // underlying universe ticker (e.g. "NVDA.US")
+  right        String   // "CALL" | "PUT"
+  strikeCents  Int      // strike, per share
+  expiry       DateTime // contract expiry (UTC instant of the ET expiry date)
+  multiplier   Int      @default(100) // shares per contract
+  qty          Int      // contracts held (> 0)
+  avgCostCents Int      // per-share premium paid (ACB, incl. commission per share)
+  currency     String   @default("USD") // options are US-only initially (CBOE feed)
+  conid        Int?     // IBKR option contract conid (cache)
+  openedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([symbol, right, strikeCents, expiry])
+  @@index([symbol])
 }
 
 model NavSnapshot {

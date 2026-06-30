@@ -7,6 +7,19 @@ export type Quote = {
   at: Date;
 };
 
+// An option leg on an order (D99 — docs/ALFRED-OPTIONS.md). Present → an OPT order;
+// absent → a stock order (today's behaviour, untouched). Buy-to-open only: side BUY =
+// buy-to-open, side SELL = sell-to-CLOSE a held leg (never opens a short option).
+// For an OPT order: qty = CONTRACTS, limitPriceCents = PER-SHARE premium. The $ premium
+// = qty × multiplier × per-share premium.
+export type OptionLeg = {
+  right: "CALL" | "PUT";
+  strikeCents: number; // strike per share
+  expiry: string; // "YYYY-MM-DD"
+  multiplier?: number; // shares per contract, default 100
+  conid?: number; // resolved IBKR option conid, if known
+};
+
 export type PlaceOrderInput = {
   symbol: string;
   side: "BUY" | "SELL";
@@ -15,6 +28,7 @@ export type PlaceOrderInput = {
   limitPriceCents?: number;
   placedBy: string;
   reason?: string;
+  option?: OptionLeg;
 };
 
 export type PlaceOrderResult =

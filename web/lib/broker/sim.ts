@@ -4,6 +4,7 @@ import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 import { isValidQty } from "./guardrails";
+import { markHeldContract, valueOptionPositionsCad } from "../options/order";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
  *  trade value (the cap may undercut the minimum on small orders — that's how
@@ -13,6 +14,11 @@ export function ibkrFixedCommissionCents(qty: number, priceCents: number): numbe
   const perShare = Math.max(100, qty * 1);
   const cap = Math.round(value * 0.005);
   return Math.max(1, Math.min(perShare, cap));
+}
+
+/** IBKR options commission (D99): $0.65/contract, $1.00/order minimum. USD cents, whole contracts. */
+export function ibkrOptionCommissionCents(contracts: number): number {
+  return Math.max(100, contracts * 65);
 }
 
 async function feeSpendThisMonthCents(): Promise<number> {
@@ -58,6 +64,9 @@ export async function writeNavSnapshot(
     const q = quotes.get(p.symbol);
     positionsCents += toCadCents(p.qty * (q?.midCents ?? p.avgCostCents), p.currency, fx);
   }
+  // Held option positions (D99) — premium value in CAD. No-op fetch when the fund holds none, so the
+  // equities NAV path is unchanged. Premium left cash on open and must reappear here or NAV would lie.
+  positionsCents += (await valueOptionPositionsCad(fx, new Date())).totalCadCents;
   const cashCents = (account?.cashCents ?? 0) + toCadCents(account?.usdCashCents ?? 0, "USD", fx); // total CAD
   const navCents = cashCents + positionsCents;
   const benchmarkCents = await benchmarkValueCents().catch(() => null);
@@ -106,6 +115,17 @@ export class SimBroker implements BrokerAdapter {
     // ---- Pre-trade gate (the deterministic part the model can't override) ----
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     if (settings?.killSwitch) return reject("Kill switch is engaged — all trading halted.");
+    // Options seam (D99): this equities engine never fills an option leg — without this guard an
+    // OPT order would silently fill as STOCK against the underlying's quote. Enforce the real
+    // "no options" guardrail FIRST (Settings.allowOptions, member-only + the env kill), then refuse
+    // until the buy-to-open fill path is wired. Both must be true to ever proceed past here.
+    if (input.option) {
+      const envOff = (process.env.GRQ_OPTIONS_ENABLED ?? "true").toLowerCase() === "false";
+      if (envOff || !settings?.allowOptions) {
+        return reject("Options trading is off (guardrail #3): a member must enable allowOptions — Alfred never can.");
+      }
+      return this.fillOption(input);
+    }
     if (!isValidQty(input.qty)) return reject("Quantity must be a positive whole number of shares.");
 
     const quote = await getQuote(input.symbol);
@@ -285,6 +305,118 @@ export class SimBroker implements BrokerAdapter {
 
     await writeNavSnapshot(`post-fill order #${result.orderId}`);
     return { ok: true, orderId: result.orderId, status: "FILLED", fillPriceCents: price, commissionCents };
+  }
+
+  /** Fill an OPTION order (D99 — buy-to-open long calls/puts only). The caller (validateAndPlaceOption)
+   *  has already cleared the §6 gate + resolved a concrete contract; the broker independently RE-MARKS
+   *  the contract (never trusts the caller's estimate) and books the fill on the OptionPosition ledger.
+   *  Funded from the USD cash bucket — options are US-only and can't use margin (guardrail #3). A SELL
+   *  only ever CLOSES a held leg (never opens a short). Mirrors the proven Options Desk accounting. */
+  private async fillOption(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+    const opt = input.option!;
+    const symbol = input.symbol.toUpperCase();
+    const right: "CALL" | "PUT" = opt.right;
+    const multiplier = opt.multiplier ?? 100;
+    const contracts = input.qty;
+    const expiryDate = new Date(`${opt.expiry}T20:00:00Z`); // ~16:00 ET close of the expiry date
+    const now = new Date();
+
+    const rejectOpt = async (rejectReason: string): Promise<PlaceOrderResult> => {
+      const order = await prisma.order.create({
+        data: {
+          symbol, side: input.side, type: input.type, qty: contracts, status: "REJECTED", rejectReason,
+          placedBy: input.placedBy, reason: input.reason,
+          secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
+        },
+      });
+      return { ok: false, orderId: order.id, rejectReason };
+    };
+
+    if (!isValidQty(contracts)) return rejectOpt("Contracts must be a positive whole number.");
+
+    const mark = await markHeldContract(symbol, right, opt.strikeCents, opt.expiry, now);
+    if (mark == null || mark <= 0) {
+      return rejectOpt(`No priceable premium for ${symbol} $${(opt.strikeCents / 100).toFixed(0)} ${right.toLowerCase()} exp ${opt.expiry}.`);
+    }
+    const commission = ibkrOptionCommissionCents(contracts);
+    const orderTitle = `${input.side === "BUY" ? "BUY_TO_OPEN" : "SELL_TO_CLOSE"} ${contracts} ${symbol} ${opt.expiry} $${(opt.strikeCents / 100).toFixed(0)} ${right}`;
+
+    if (input.side === "BUY") {
+      // BUY-TO-OPEN — defined risk = premium. No margin: the USD bucket must cover it.
+      const account = await prisma.account.findUnique({ where: { id: 1 } });
+      const usdCash = account?.usdCashCents ?? 0;
+      const cost = contracts * multiplier * mark + commission; // native USD cents
+      if (cost > usdCash) {
+        return rejectOpt(`Insufficient USD: premium US$${(cost / 100).toFixed(2)} > cash US$${(usdCash / 100).toFixed(2)} (no margin — guardrail).`);
+      }
+      const result = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
+          data: {
+            symbol, side: "BUY", type: input.type, qty: contracts, status: "FILLED", filledQty: contracts,
+            avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, reason: input.reason,
+            secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
+          },
+        });
+        const pos = await tx.optionPosition.findFirst({ where: { symbol, right, strikeCents: opt.strikeCents, expiry: expiryDate } });
+        if (pos) {
+          const nq = pos.qty + contracts;
+          const newAvg = Math.round((pos.qty * pos.avgCostCents + contracts * mark) / nq); // per-share premium ACB
+          await tx.optionPosition.update({ where: { id: pos.id }, data: { qty: nq, avgCostCents: newAvg } });
+        } else {
+          await tx.optionPosition.create({
+            data: { symbol, right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier, qty: contracts, avgCostCents: mark, currency: "USD", conid: opt.conid },
+          });
+        }
+        await tx.account.update({ where: { id: 1 }, data: { usdCashCents: { decrement: cost } } });
+        await tx.trade.create({
+          data: { orderId: order.id, symbol, side: "BUY", qty: contracts, priceCents: mark, commissionCents: commission, secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier },
+        });
+        await tx.journalEntry.create({
+          data: {
+            kind: "TRADE", symbol, orderId: order.id, title: orderTitle,
+            body: (input.reason ?? "(no thesis recorded)") + `\n\n**Premium:** US$${(cost / 100).toFixed(2)} (${contracts}×${multiplier}×$${(mark / 100).toFixed(2)} + $${(commission / 100).toFixed(2)} commission) · defined risk, max loss = premium.`,
+            agentVersion: "v1.48-phase4",
+          },
+        });
+        return { orderId: order.id };
+      });
+      await writeNavSnapshot(`option open order #${result.orderId}`);
+      return { ok: true, orderId: result.orderId, status: "FILLED", fillPriceCents: mark, commissionCents: commission };
+    }
+
+    // SELL-TO-CLOSE — must hold the contract; never opens a short leg (the option no-shorting rule).
+    const pos = await prisma.optionPosition.findFirst({ where: { symbol, right, strikeCents: opt.strikeCents, expiry: expiryDate } });
+    if (!pos || pos.qty < contracts) {
+      return rejectOpt(`Cannot sell ${contracts} ${symbol} ${right} — hold ${pos?.qty ?? 0} (no naked/short options — guardrail).`);
+    }
+    const proceeds = contracts * multiplier * mark - commission; // native USD cents
+    const realized = contracts * multiplier * (mark - pos.avgCostCents) - commission;
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          symbol, side: "SELL", type: input.type, qty: contracts, status: "FILLED", filledQty: contracts,
+          avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, reason: input.reason,
+          secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
+        },
+      });
+      const remaining = pos.qty - contracts;
+      if (remaining === 0) await tx.optionPosition.delete({ where: { id: pos.id } });
+      else await tx.optionPosition.update({ where: { id: pos.id }, data: { qty: remaining } });
+      await tx.account.update({ where: { id: 1 }, data: { usdCashCents: { increment: proceeds } } });
+      await tx.trade.create({
+        data: { orderId: order.id, symbol, side: "SELL", qty: contracts, priceCents: mark, commissionCents: commission, realizedPnlCents: realized, secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier },
+      });
+      await tx.journalEntry.create({
+        data: {
+          kind: "TRADE", symbol, orderId: order.id, title: orderTitle,
+          body: (input.reason ?? "(no thesis recorded)") + `\n\n**Realized P&L:** US$${(realized / 100).toFixed(2)} (after $${(commission / 100).toFixed(2)} commission).`,
+          agentVersion: "v1.48-phase4",
+        },
+      });
+      return { orderId: order.id };
+    });
+    await writeNavSnapshot(`option close order #${result.orderId}`);
+    return { ok: true, orderId: result.orderId, status: "FILLED", fillPriceCents: mark, commissionCents: commission };
   }
 
   /** Sweep resting limit orders against fresh quotes. Called by the agent tick. */

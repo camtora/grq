@@ -2486,3 +2486,45 @@ Portfolio personal-lane gained a per-share **Price** column + a **Positions tota
   not acting on the 70–74% names D95 was meant to unlock. Fix: every reference now **interpolates
   `${HARD.minBuyConfidence}` / `${SELF_INVEST.minConfidence}`** (plain tool-description strings use inline
   concatenation), so prompt and gate share one number and can't drift again. `AGENT_VERSION` → **v2.31-phase4**.
+
+### D99 — Alfred trades options: buy-to-open long calls/puts, behind a real OFF-by-default guardrail (Cam, 2026-06-30)
+
+**Decision.** Give the LIVE fund agent (Alfred) the ability to **buy-to-open long calls and puts** on US
+underlyings it already trades — a defined-risk instrument (max loss = premium) weighed alongside stock, cleared by
+the same §6 gate. Scope is **buy-to-open only** (Cam); short/written legs, spreads, margin, and CA options stay out
+(rules #3 unchanged). Timing: **build now against IBKR paper, behind an OFF-by-default toggle**; real-money options
+remain a *separate, later, humans-only* flip after the soak (rule #6). This is NOT the Options Desk sandbox
+(`docs/THE-OPTIONS-DESK.md`), which stays exactly as-is — this is the real money path. Full spec:
+**`docs/ALFRED-OPTIONS.md`**.
+
+**Key finding that shaped it.** Options weren't *blocked* in code — they were *unrepresentable*: there is no
+`if (option) reject` anywhere (verified across `validator.ts`/`sim.ts`/`guardrails.ts`); `PlaceOrderInput` simply
+had no contract field, and CLAUDE.md rule #3's "config toggle that is OFF" **did not exist in code**. So this is
+additive engineering across four stock-only layers, and step one is making the guardrail *real*.
+
+**Phase A — foundation (shipped to the branch, soak-safe, verified — `tsc` clean + 50/50 tests):**
+- **`Settings.allowOptions Boolean @default(false)`** — the real, enforced, member-only "no options" switch
+  (Alfred never writes it — rule #1). Plus a `GRQ_OPTIONS_ENABLED` env hard-kill (DESK/RACE pattern); **both**
+  must be true. Enforced at the **broker seam** (`sim.ts` + `ibkr.ts` `placeOrder` now intercept `input.option`
+  before any stock fill — so an OPT order can never silently fill as the underlying STOCK).
+- **`OptionPosition`** model (one underlying → many contracts; `Position` is keyed by `symbol` and can't hold
+  them) + additive nullable option columns on `Order`/`Trade` (`secType @default("STK")` + right/strike/expiry/
+  multiplier). Additive ⇒ the entire equities path + every existing row is byte-for-byte unchanged.
+- **`PlaceOrderInput.option`** wire field, `OPTIONS` policy block (4% premium-at-risk/NAV cap — tighter than the
+  sandbox's 8%; 3 opens/wk; 30–60 DTE; US-only), and `breachesOptionPremiumCap`/`optionPremiumCents` §6 math +
+  unit tests.
+
+**Phase B — also shipped to the branch (soak-safe, `tsc` clean + 52/52 tests):** `validateAndPlaceOption` gate
+branch (`agent/validator.ts`) + `SimBroker.fillOption` (open/close on the real `OptionPosition` ledger,
+USD-funded, no-margin + close-only SELL enforced) + NAV valuation (`getPortfolio`/`writeNavSnapshot` add
+held-option premium via `lib/options/order.ts`) + the option commission helper. Reuses the proven Options Desk
+path (agent picks right+bias; `pickContract`/`markContractCents` on the live CBOE chain). The tick-level mark
+refresh + expiry settlement ride Phase D's runner wiring (not dead-coded mid-soak).
+
+**Phases C–D (next):** IBKR OPT conid/order/reconcile (⚠️ blocked on **Graham** enabling options permission +
+OPRA market-data on the paper account `DUQ779121` — until then the ibkr seam cleanly rejects, so sim is the only
+fill path) → `propose_option_order` tool + context + the runner mark/expiry tick + UI. Deploy bumps
+`AGENT_VERSION` (D77) and respects the check-in window.
+
+**Unchanged:** the §6 order gate, kill switch, no-shorting/no-margin/no-naked-options, integer-cents/whole-units,
+and the soak gate before real money. Buy-to-open long calls/puts behind the toggle is the *only* relaxation.

@@ -41,3 +41,17 @@ export function fundingShortfallCents(qty: number, priceCents: number, commissio
 export function breachesFeeEdge(edgeCents: number, commInCents: number, commOutCents: number, feeEdgeMultiple: number): boolean {
   return edgeCents < feeEdgeMultiple * (commInCents + commOutCents);
 }
+
+/** Options premium-at-risk cap (D99 — buy-to-open only, so premium = MAX LOSS). The total premium
+ *  paid (qty·multiplier·perSharePremium + commission, valued in CAD) must not exceed maxPremiumPct
+ *  of NAV. Returns true when it BREACHES (→ reject). This is the option analog of breachesPositionCap,
+ *  but sized on the premium-at-risk (the real loss bound) rather than notional. */
+export function breachesOptionPremiumCap(premiumCadCents: number, navCents: number, maxPremiumPct: number): boolean {
+  return premiumCadCents > (navCents * maxPremiumPct) / 100;
+}
+
+/** The dollar premium (cents) of an option order: contracts × shares-per-contract × per-share premium.
+ *  Pure helper so the sizing/funding math is single-sourced and unit-tested (no floats — rule #4). */
+export function optionPremiumCents(contracts: number, multiplier: number, perSharePremiumCents: number): number {
+  return contracts * multiplier * perSharePremiumCents;
+}

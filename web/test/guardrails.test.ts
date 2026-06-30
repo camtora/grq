@@ -7,8 +7,10 @@ import {
   breachesCashFloor,
   fundingShortfallCents,
   breachesFeeEdge,
+  breachesOptionPremiumCap,
+  optionPremiumCents,
 } from "@/lib/broker/guardrails";
-import { ibkrFixedCommissionCents } from "@/lib/broker/sim";
+import { ibkrFixedCommissionCents, ibkrOptionCommissionCents } from "@/lib/broker/sim";
 
 describe("isValidQty — rule #4: whole, positive shares", () => {
   it("accepts positive whole numbers", () => {
@@ -87,6 +89,34 @@ describe("breachesFeeEdge — edge must clear feeEdgeMultiple × round-trip comm
   });
 });
 
+describe("optionPremiumCents — contracts × multiplier × per-share premium (D99)", () => {
+  it("computes the dollar premium of a leg", () => {
+    // 2 contracts × 100 shares × $3.50 premium = $700.00 = 70_000¢
+    assert.equal(optionPremiumCents(2, 100, 350), 70_000);
+  });
+  it("stays integer cents (whole contracts, no floats — rule #4)", () => {
+    assert.equal(optionPremiumCents(1, 100, 1), 100);
+    assert.equal(Number.isInteger(optionPremiumCents(3, 100, 127)), true);
+  });
+});
+
+describe("breachesOptionPremiumCap — premium-at-risk ≤ maxPremiumPct of NAV (D99)", () => {
+  const nav = 5_000_000; // US$50k; 4% cap = $2,000 = 200_000¢
+  it("breaches strictly above the cap", () => {
+    assert.equal(breachesOptionPremiumCap(200_001, nav, 4), true);
+  });
+  it("allows exactly at the cap and below", () => {
+    assert.equal(breachesOptionPremiumCap(200_000, nav, 4), false);
+    assert.equal(breachesOptionPremiumCap(199_999, nav, 4), false);
+  });
+  it("a defined-risk leg under the cap passes; an oversized one fails", () => {
+    const small = optionPremiumCents(2, 100, 350); // $700 premium
+    const big = optionPremiumCents(10, 100, 350); // $3,500 premium
+    assert.equal(breachesOptionPremiumCap(small, nav, 4), false);
+    assert.equal(breachesOptionPremiumCap(big, nav, 4), true);
+  });
+});
+
 describe("ibkrFixedCommissionCents — $0.01/share, $1.00 min, 0.5% cap", () => {
   it("hits the $1.00 (100¢) minimum on a normal small lot", () => {
     assert.equal(ibkrFixedCommissionCents(10, 43000), 100); // perShare 100 < cap 2150
@@ -100,5 +130,16 @@ describe("ibkrFixedCommissionCents — $0.01/share, $1.00 min, 0.5% cap", () => 
   });
   it("never goes below the 1¢ floor", () => {
     assert.equal(ibkrFixedCommissionCents(1, 10), 1); // cap rounds to 0 → floored at 1¢
+  });
+});
+
+describe("ibkrOptionCommissionCents — $0.65/contract, $1.00 min (D99)", () => {
+  it("hits the $1.00 (100¢) minimum on one contract", () => {
+    assert.equal(ibkrOptionCommissionCents(1), 100); // 65¢ < $1 min
+    assert.equal(ibkrOptionCommissionCents(2), 130); // 130¢ > min
+  });
+  it("charges $0.65/contract once above the minimum", () => {
+    assert.equal(ibkrOptionCommissionCents(10), 650);
+    assert.equal(ibkrOptionCommissionCents(100), 6500);
   });
 });

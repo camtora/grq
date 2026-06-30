@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { getQuotes } from "./broker/quotes";
 import { benchmarkValueCents } from "./broker/sim";
 import { toCadCents, usdCadRate } from "./fx";
+import { valueOptionPositionsCad } from "./options/order";
 
 // The fund's real track record begins at the IBKR-paper inception. The original
 // paper soak opened 2026-06-17, but on 2026-06-26 a member balance-reset the paper
@@ -36,7 +37,8 @@ export type PortfolioView = {
   usdCashCents: number;
   fxUsdCad: number | null;
   positions: PositionView[];
-  positionsCents: number; // Σ positions valued in CAD
+  positionsCents: number; // Σ positions valued in CAD (stocks + options)
+  optionPositionsCents: number; // Σ held option premium value, CAD (D99); 0 when none
   navCents: number;
   contributionsCents: number;
   totalPnlCents: number;
@@ -87,7 +89,11 @@ export async function getPortfolio(): Promise<PortfolioView> {
   const cadCashCents = account?.cashCents ?? 0;
   const usdCashCents = account?.usdCashCents ?? 0;
   const cashCents = cadCashCents + toCadCents(usdCashCents, "USD", fxUsdCad); // total, in CAD
-  const positionsCents = views.reduce((s, p) => s + p.marketValueCadCents, 0); // CAD
+  // Held option positions (D99) — premium value in CAD. No-op fetch when the fund holds none, so the
+  // stock NAV is unchanged. The premium left cash on open and is carried back here as position value.
+  const optionPositionsCents = (await valueOptionPositionsCad(fxUsdCad, new Date())).totalCadCents;
+  const stockPositionsCents = views.reduce((s, p) => s + p.marketValueCadCents, 0); // CAD
+  const positionsCents = stockPositionsCents + optionPositionsCents;
   const navCents = cashCents + positionsCents;
   const contributionsCents = contributions._sum.amountCents ?? 0;
   const benchmarkCents = await benchmarkValueCents().catch(() => null);
@@ -99,6 +105,7 @@ export async function getPortfolio(): Promise<PortfolioView> {
     fxUsdCad,
     positions: views,
     positionsCents,
+    optionPositionsCents,
     navCents,
     contributionsCents,
     totalPnlCents: navCents - contributionsCents,

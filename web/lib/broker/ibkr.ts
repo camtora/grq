@@ -186,6 +186,16 @@ export class IBKRBroker implements BrokerAdapter {
     // Pre-trade gate that must hold for EVERY broker: the kill switch.
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     if (settings?.killSwitch) return this.recordReject(input, "Kill switch is engaged — all trading halted.");
+    // Options seam (D99): this equities adapter resolves only STK conids — an OPT order must never
+    // fall through to the stock ticket. Enforce the real "no options" guardrail first, then refuse
+    // until the OPT conid + order path is wired (Phase C — needs the account's options perms + OPRA).
+    if (input.option) {
+      const envOff = (process.env.GRQ_OPTIONS_ENABLED ?? "true").toLowerCase() === "false";
+      if (envOff || !settings?.allowOptions) {
+        return this.recordReject(input, "Options trading is off (guardrail #3): a member must enable allowOptions — Alfred never can.");
+      }
+      return this.recordReject(input, "Options execution is not yet wired for IBKR — pending options permission + OPRA market data on the account (D99).");
+    }
     if (!Number.isInteger(input.qty) || input.qty <= 0) return this.recordReject(input, "Quantity must be a positive whole number of shares.");
 
     const conid = await this.conidFor(input.symbol);
