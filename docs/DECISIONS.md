@@ -2418,3 +2418,24 @@ a one-liner); the dossier is the cost, so it's reserved for names that earn it. 
 (`RESEARCH_CONCURRENCY=5`) cuts the clock, not the token total, so it isn't the lever for breadth — the funnel is.
 This is the same principle behind covering the ~10k-name market: cheap deterministic + Haiku tiers screen everything;
 Opus depth is spent only on the survivors. `AGENT_VERSION` → **v2.27-phase4**.
+
+### D97 — Tier 11: the agent SEES members' personal holdings (read-only, can't touch them) (Cam, 2026-06-29)
+
+Cam: "we should let the agent SEE what we hold, but it cannot obviously touch the account." The fund manages only
+*part* of Cam's & Graham's money; their personal brokerage holdings (TD TFSA etc.) already sync **read-only** via
+SnapTrade (`connectionType=read`, `lib/external/*`) for the human-only `/accounts` page — but were deliberately
+walled off from the agent. This wires that data into the agent's **decision context** as a new data tier (**Tier 11**,
+`docs/DATA-SOURCES.md`), so the agent can weigh **cross-account concentration** when picking — without ever being
+able to trade those accounts.
+
+**Implementation:** `agent/context.ts` `personalAccountsBlock()` → a Tier-11 section in `buildContext()` listing each
+member's holdings (value + % of their book), flagging any name the FUND also holds ("⚠ FUND ALSO HOLDS — combined
+household exposure"). Framed as "an INPUT you weigh, NEVER a gate; their money, their calls." Best-effort (a SnapTrade
+hiccup degrades to "(none linked)", never breaks context); values marked live by `accountsForMembers`.
+
+**The hard wall is unchanged and explicit (guardrail #1):** this is a *read into a context string*, not a tool and not
+an order path. The agent has **no** tool that touches a personal account; the broker seam, the §6 gate, and every
+order route still see only the fund's own IBKR account. Reading external holdings creates no new way for model output
+to move money — it cannot trade, rebalance, or place anything in a personal account, by construction. A member kill
+switch for the *visibility* itself (not the trading wall, which is structural): `GRQ_AGENT_SEES_EXTERNAL=off`, no
+deploy needed. `AGENT_VERSION` → **v2.28-phase4**.

@@ -12,10 +12,57 @@ import { recentNewsDigest } from "../lib/news/queries";
 import { screenFinds, findLine } from "../lib/market-screen/retrieval";
 import { getOptions, optionsLine } from "../lib/options/store";
 import { getSocial, socialLine } from "../lib/social/store";
+import { accountsForMembers } from "../lib/external/store";
+import { memberEmails } from "../lib/users";
+import { personByEmail } from "../lib/people";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
 
 function money(c: number): string {
   return `$${(c / 100).toFixed(2)}`;
+}
+
+/** Normalize a symbol to its bare ticker for cross-account overlap (strip known exchange
+ *  suffixes only — NOT class-share dots like BRK.B). Fund stores US as TICKER.US / CA as bare;
+ *  external holdings are bare + a currency — both collapse to the same key here. */
+function bareKey(s: string): string {
+  return s.toUpperCase().replace(/\.(TO|TSX|TSXV|V|CN|CSE|NE|NEO|US)$/i, "");
+}
+
+/** Tier 11 — members' personal brokerage accounts (Cam & Graham's TD TFSA etc. via SnapTrade).
+ *  READ-ONLY VISIBILITY: the agent SEES what they hold so it can weigh cross-account
+ *  concentration, but it can NEVER trade these accounts — they're isolated from the broker seam
+ *  (there is no order path here; this is a context string, not a tool). Best-effort; values are
+ *  marked live by accountsForMembers. Toggle off without a deploy via GRQ_AGENT_SEES_EXTERNAL=off. */
+async function personalAccountsBlock(fundBareHeld: Set<string>): Promise<string> {
+  if (process.env.GRQ_AGENT_SEES_EXTERNAL === "off") return "  (disabled)";
+  const views = await accountsForMembers(memberEmails()).catch(() => [] as Awaited<ReturnType<typeof accountsForMembers>>);
+  const connected = views.filter((v) => v.connected && v.accounts.some((a) => a.holdings.length > 0));
+  if (connected.length === 0) return "  (none linked yet — Cam & Graham can connect a brokerage on /accounts)";
+  const blocks: string[] = [];
+  for (const v of connected) {
+    const who = personByEmail(v.email)?.name ?? v.email;
+    // Aggregate a member's duplicate tickers across their accounts into one line each.
+    const bySym = new Map<string, { qty: number; valCents: number }>();
+    for (const a of v.accounts) {
+      for (const h of a.holdings) {
+        const k = bareKey(h.symbol);
+        const prev = bySym.get(k) ?? { qty: 0, valCents: 0 };
+        prev.qty += Number(h.qty) || 0;
+        prev.valCents += h.marketValueCents;
+        bySym.set(k, prev);
+      }
+    }
+    const total = [...bySym.values()].reduce((s, x) => s + x.valCents, 0);
+    const items = [...bySym.entries()]
+      .sort((a, b) => b[1].valCents - a[1].valCents)
+      .map(([sym, x]) => {
+        const pct = total > 0 ? Math.round((x.valCents / total) * 100) : 0;
+        const overlap = fundBareHeld.has(sym) ? "  ⚠ FUND ALSO HOLDS — combined household exposure" : "";
+        return `    ${sym}: ${money(x.valCents)} (${pct}% of their book)${overlap}`;
+      });
+    blocks.push(`  ${who} — ${money(total)} across ${bySym.size} name(s):\n${items.join("\n")}`);
+  }
+  return blocks.join("\n");
 }
 
 /** The stable context block prepended to every decision-capable session.
@@ -46,6 +93,11 @@ export async function buildContext(): Promise<string> {
   const dial = DIALS[dialName];
   const p = etParts();
   const dayBps = await dayPnlBps().catch(() => 0);
+
+  // Tier 11 — members' personal accounts (READ-ONLY visibility; see personalAccountsBlock).
+  // fundBareHeld lets us flag names the fund AND a member hold (combined household exposure).
+  const fundBareHeld = new Set(pf.positions.map((x) => bareKey(x.symbol)));
+  const personalBlock = await personalAccountsBlock(fundBareHeld);
 
   // Current dossier verdict per HOLDING and focus name — the AUTHORITATIVE live call
   // (latest "Dossier —" RESEARCH entry). Surfaced next to each position AND focus note
@@ -194,6 +246,10 @@ ${
         )
       ).join("\n")
 }
+
+## Tier 11 — Cam & Graham's personal accounts (READ-ONLY: you can SEE these but CANNOT trade them — no order ever touches a personal account; their money, their calls)
+Weigh this for CROSS-ACCOUNT CONCENTRATION: a name flagged "FUND ALSO HOLDS" means the household's combined exposure is larger than the fund's book alone shows — lean toward diversifying total risk rather than doubling down, and you may note the overlap in a dossier. It can also be a lead (a name a member backed with their own money is worth a look). An INPUT you weigh, NEVER a gate; never assume you should mirror or hedge their picks.
+${personalBlock}
 
 ## Your focus (ACTIVE names you're monitoring for an entry — update via set_focus)
 The dated "GRQ's call" is the CURRENT dossier verdict and is AUTHORITATIVE. Your note is scratch text with no update timestamp — if it disagrees with a fresher dossier (e.g. claims a name "needs a refresh" or cites old data, but the dossier date is newer), the DOSSIER WINS: act on it and fix the note via set_focus. Don't re-state a stale note as if it were today's read.

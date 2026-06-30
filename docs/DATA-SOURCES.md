@@ -48,6 +48,7 @@ FRED). The fund now trades CAD **and** USD (see `docs/DECISIONS.md` D34)._
 | 3 | Options data (as signal only) | Later | **Live (US) via CBOE (D88)** — dealer-gamma/put-call/IV-skew; a never-trade signal |
 | 8 | Social sentiment | Later | **Live (US) via Reddit/Stocktwits (D89)** — ApeWisdom mentions+velocity + Stocktwits bull/bear; a **crowding/risk** signal **on probation**; CA/off-radar names dark |
 | 10 | Alternative data | Maybe | Mostly paid; revisit at scale |
+| 11 | Members' personal accounts | **Now** | **Live (read-only)** — Cam & Graham's personal brokerage holdings (TD TFSA etc. via SnapTrade), injected into the agent context for **cross-account concentration awareness**. The agent SEES it but can NEVER trade these accounts (isolated from the broker seam). An input it weighs, never a gate. Toggle: `GRQ_AGENT_SEES_EXTERNAL` (D97) |
 
 ## Data freshness & refresh cadence
 
@@ -169,6 +170,19 @@ App rankings, web traffic, job postings, Glassdoor, shipping, card spending.
 mostly US-coverage. Revisit if the fund ever has an overhead budget that makes a data edge
 rational; until then the agent can approximate slices of it through web research when a
 thesis demands.
+
+### Tier 11 — Members' personal accounts — **LIVE (read-only), D97**
+Cam & Graham's personal brokerage holdings (TD TFSA etc.), synced **read-only** via SnapTrade
+(personal keys; `connectionType=read`, isolated from the broker/agent trading path).
+**Sources:** SnapTrade (`lib/external/*`), values marked live to our own quote feed.
+**GRQ lens:** the fund manages *part* of the household's money, so the agent should know the
+rest — chiefly to weigh **cross-account concentration** (don't pile the fund into a name a
+member is already heavily exposed to personally) and as a soft lead (a name a member backed
+with their own money). Injected into `buildContext()` as a Tier-11 block that flags any name
+the fund AND a member hold ("⚠ FUND ALSO HOLDS"). **Hard wall:** visibility only — the agent
+has no tool that touches these accounts and no order path reaches them; it cannot trade,
+rebalance, or place anything in a personal account. An input it weighs, never a gate. Member
+kill switch for the visibility itself: `GRQ_AGENT_SEES_EXTERNAL=off` (no deploy needed).
 
 ## Build order recommendation
 
