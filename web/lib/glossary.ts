@@ -584,4 +584,36 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "Sell a $95 put on a $100 stock for $2: you're paid $200 to maybe buy it at $95.",
     related: ["covered-call", "put-option", "premium"],
   },
+
+  // ---- Short selling: the Short Lab (docs/SHORT-LAB.md) ----
+  "short-selling": {
+    term: "Short selling",
+    def: "Borrowing shares, selling them now, and buying them back later — a bet a stock FALLS. You profit if the price drops below where you sold, and lose if it rises. It's the trade the long-only fund can't make, and the only one whose loss has no cap.",
+    example: "Short 100 shares at $50; if it drops to $40 you buy back for a $1,000 gain — if it runs to $80 you're down $3,000 and counting.",
+    related: ["cost-to-borrow", "margin-call", "short-squeeze", "put-option"],
+  },
+  "cost-to-borrow": {
+    term: "Cost to borrow",
+    def: "The annualized fee you pay to borrow the shares you short — small for liquid names, brutal for hard-to-borrow ones. You also pay any dividend the stock issues while you're short. Carry that bleeds you the longer you hold.",
+    example: "A 20%/yr borrow on a $10,000 short costs about $5.50 a day just to keep the position on.",
+    related: ["short-selling", "short-interest"],
+  },
+  "margin-call": {
+    term: "Margin call",
+    def: "Shorting runs on borrowed collateral. If the stock rises against you and your equity falls below the broker's maintenance requirement, you're force-covered — bought back at the worst possible moment, locking in the loss. This is how shorts blow up.",
+    example: "A short that doubles can erase your collateral and trigger a forced buy-in before you ever choose to exit.",
+    related: ["short-selling", "short-squeeze"],
+  },
+  "short-squeeze": {
+    term: "Short squeeze",
+    def: "When a heavily-shorted stock rallies, shorts rush to buy back and cover — and that buying pushes the price up further, forcing more covering. A self-feeding spike with no long-side equivalent, and the nightmare scenario for a short.",
+    example: "A crowded short doubling in days as everyone scrambles to cover at once.",
+    related: ["short-interest", "days-to-cover", "margin-call"],
+  },
+  "days-to-cover": {
+    term: "Days to cover",
+    def: "Short interest divided by average daily volume — roughly how many days of normal trading it would take every short to buy back. A high number means shorts are packed into a small exit, which makes a squeeze more violent.",
+    example: "Days-to-cover of 8 means it'd take over a week of average volume for shorts to all cover.",
+    related: ["short-interest", "short-squeeze"],
+  },
 };

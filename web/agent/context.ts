@@ -11,6 +11,7 @@ import { recentMacroEvents, upcomingEvents } from "../lib/macro-events";
 import { recentNewsDigest } from "../lib/news/queries";
 import { screenFinds, findLine } from "../lib/market-screen/retrieval";
 import { getOptions, optionsLine } from "../lib/options/store";
+import { shortLessonLine } from "../lib/short/shadow";
 import { getSocial, socialLine } from "../lib/social/store";
 import { accountsForMembers } from "../lib/external/store";
 import { memberEmails } from "../lib/users";
@@ -217,6 +218,8 @@ export async function buildContext(): Promise<string> {
   const focusLine = (w: { symbol: string; note: string | null }): string =>
     `  ${w.symbol}${callOf(w.symbol)}${w.note ? ` · your note: ${w.note}` : ""}`;
 
+  const shortLesson = await shortLessonLine().catch(() => null);
+
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
 Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — TSX session 9:30–16:00 ET.
@@ -319,6 +322,7 @@ ${
     : socRows.map((s) => `  ${s.symbol}: ${socialLine(s)}`).join("\n")
 }
 
+${shortLesson ? `## Shorting lesson (Short Lab sandbox — you NEVER short; rule #3)\n  ${shortLesson}\n` : ""}
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
 Hard limits: ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no cap on # of holdings (breadth is your call — size, the cash floor, and the weekly BUY cap still bind) · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.

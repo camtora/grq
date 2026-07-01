@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.33-phase4";
+export const AGENT_VERSION = "v2.36-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -174,6 +174,17 @@ export const DESK = {
   optionMaxOpenPerWeek: Number(process.env.GRQ_DESK_OPT_PER_WEEK ?? "5") || 5, // new option opens / rolling 7d
   minDte: 30, // contract-selection window — keeps theta/gamma noise out of the comparison (docs §3.4)
   maxDte: 60,
+};
+
+// The Short Lab agent A/B (docs/SHORT-LAB.md, Phase 2) — control (long-only) vs treatment (long + may
+// SHORT), same stake. OFF by default: it runs Opus sessions and spends Cam's Max quota, so a member
+// turns it on with GRQ_SHORTLAB_AGENT=true. Pure sandbox — never the §6 gate/broker/fund; the real fund
+// never shorts (rule #3). Humans edit these caps; the agent never does.
+export const SHORTDESK = {
+  enabled: (process.env.GRQ_SHORTLAB_AGENT ?? "false").toLowerCase() === "true",
+  maintMarginPct: 30, // maintenance margin (% of short market value) before a forced cover
+  maxShortPctNav: Number(process.env.GRQ_SHORTLAB_SHORT_PCT ?? "20") || 20, // per short, % of equity
+  maxShortsPerWeek: Number(process.env.GRQ_SHORTLAB_PER_WEEK ?? "5") || 5, // new shorts / rolling 7d
 };
 
 // Live options trading for Alfred (docs/ALFRED-OPTIONS.md, D99) — the REAL fund, NOT the

@@ -2562,3 +2562,43 @@ profit-when / lose-when / decay / worked-example / best-for); and **durable per-
 option's decay curve at close/expire so **closed** contracts keep a value line (surfaced in the Experiment tab).
 The agent redeploy suppressed the startup scan (pre-seeded guard marker; markets closed). **Still open: mobile
 parity** (iOS). 74/74 tests, `tsc` clean; web+agent+chat redeployed; not committed.
+
+### D101 — The Short Lab: study short selling in a permanent sandbox (Cam, 2026-06-30)
+
+A standalone `/short-lab` (Experiments menu) to **study and learn short selling** — the one bet the fund
+can't make and the only one with **unbounded loss**. **Modeled, never executable; the fund never shorts
+(rule #3, unchanged)** — a learning surface, not a loosening. Full spec: `docs/SHORT-LAB.md`. **Decisions
+(Cam):** both (interactive human lab now, autonomous agent A/B arm later) · **full mechanics** (borrow fee,
+margin + forced-cover margin call, short-interest/squeeze context, dividends) · a **standalone** lab, not
+folded into the options portal.
+
+**Phase 1 — the interactive human lab — BUILT + DEPLOYED 2026-06-30 (not committed).** You open a modeled
+short on a real US name (size by shares or $ notional) → proceeds credit a virtual $100k book + a buy-back
+liability. Positions mark to the live quote, accrue a modeled borrow fee, and get **force-covered on a
+margin call** (equity < maintenance requirement) — verified end-to-end (short 17 AAPL → equity held at
+$100k at open, no false call, cover + reset clean). Reuses the options payoff engine for the unbounded-loss
+diagram + a short-vs-put link. Marking is a **no-LLM runner tick** (`runShortLabTick`, throttled ~4 min,
+market-hours-gated) → **zero Opus tokens**; only Phase 2's arm spends quota.
+
+**Code:** `lib/short/mechanics.ts` (pure, cents; 12 tests — locks the margin call) · `lib/short/lab.ts`
+(engine + read) · 5 `Short*` tables (pushed to prod) · `app/api/short-lab` · `agent/short-lab/tick.ts`
+(wired into the runner) · `components/short/*` + `app/short-lab/page.tsx` · nav entry · 5 glossary terms ·
+`PayoffChart` gained an `expiryLabel` prop. **86/86 tests, `tsc` clean.** Agent redeploy = `AGENT_VERSION`
+v2.33→**v2.34-phase4** (D77); startup scan suppressed (markets closed). **Phase 2 — the agent A/B — BUILT + DEPLOYED 2026-06-30 (OFF, not committed).** A control Opus (long-only)
+vs a treatment Opus (long + may short), same $100k stake, mirroring the Options Desk: 6 `ShortDesk*` tables
+(pushed to prod) · `agent/short-lab/{desk-engine,desk-context,desk-parse}.ts` (BUY/SELL/SHORT/COVER fills,
+mark + force-cover margin call, cadence tick) · `SHORTDESK` policy caps · `lib/short/desk.ts` (auto-seeds a
+control+treatment contest, PAUSED) · the `/short-lab` Agent-A/B panel + start/pause/reset · `runShortDeskTick`
+wired in the runner. **Behind `GRQ_SHORTLAB_AGENT` (off) AND ships PAUSED** — spends Opus tokens only once a
+member Starts it and the flag is on. Agent redeploy: `AGENT_VERSION` v2.34→v2.35-phase4 (D77); scan suppressed.
+86/86 tests, `tsc` clean.
+
+**Phase 3 — grow — mostly BUILT + DEPLOYED 2026-06-30 (not committed).** ✅ **Shadow-short-our-sells** (the
+centerpiece): every real-fund stock SELL is mirrored as a modeled short at the sell price (`lib/short/shadow.ts`,
+idempotent via `ShortPosition.sourceTradeId`), marked over time; a `/short-lab` panel shows "what if we'd shorted
+our exits?" (avg return, win-rate), and a one-line lesson feeds the live agent's `buildContext` (an input on
+whether exits keep falling — never an action; the fund still can't short). ✅ **Dividend debits** — a short owes
+the dividend; `fmpDividends` (cached) folds ex-dates into the carry. ⏸ **Real cost-to-borrow / short-interest /
+squeeze: DEFERRED** — FMP short-interest returns empty (no free feed), so borrow stays modeled (honest). Agent
+`AGENT_VERSION` v2.35→v2.36-phase4 (D77); scan suppressed. 86/86 tests, `tsc` clean. Guardrails (§6 gate, kill
+switch, rule #3, soak) unchanged — the fund never shorts. The Short Lab (Phases 1–3) is a permanent sandbox.

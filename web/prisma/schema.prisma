@@ -1386,6 +1386,192 @@ model DeskNavSnapshot {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// The Short Lab — a permanently sandboxed study of short selling (docs/SHORT-LAB.md, D101).
+// MODELED, never executable; the fund never shorts (rule #3, unchanged). Own tables — touches nothing
+// in the real fund's book. Money is integer cents, quantities are whole shares (rule #4).
+model ShortLab {
+  id                Int                @id @default(autoincrement())
+  owner             String? // null = the shared house lab; an email = a member's personal lab
+  name              String             @default("Short Lab")
+  startingCashCents Int                @default(10000000) // $100k virtual collateral
+  cashCents         Int                @default(10000000) // current cash (incl. short proceeds)
+  maintMarginPct    Int                @default(30) // maintenance margin, % of short market value
+  status            String             @default("RUNNING")
+  createdAt         DateTime           @default(now())
+  positions         ShortPosition[]
+  trades            ShortTrade[]
+  snapshots         ShortLabSnapshot[]
+}
+
+model ShortPosition {
+  id                 Int                 @id @default(autoincrement())
+  labId              Int
+  lab                ShortLab            @relation(fields: [labId], references: [id], onDelete: Cascade)
+  symbol             String
+  companyName        String?
+  currency           String              @default("USD")
+  qty                Int // shares short (positive)
+  avgShortCents      Int // price sold at (per share)
+  borrowBps          Int                 @default(50) // modeled annualized cost-to-borrow
+  lastMarkCents      Int?
+  accruedBorrowCents Int                 @default(0)
+  status             String              @default("OPEN") // OPEN | COVERED | CALLED
+  openedAt           DateTime            @default(now())
+  lastAccruedAt      DateTime            @default(now()) // borrow accrues since this instant
+  closedAt           DateTime?
+  exitCents          Int? // cover / margin-call price
+  realizedPnlCents   Int?
+  sourceTradeId      Int?                @unique // shadow shorts: the real-fund SELL this mirrors (Phase 3)
+  marks              ShortPositionMark[]
+
+  @@index([labId])
+}
+
+model ShortPositionMark {
+  id                 Int           @id @default(autoincrement())
+  positionId         Int
+  position           ShortPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  at                 DateTime      @default(now())
+  markCents          Int
+  unrealCents        Int
+  accruedBorrowCents Int
+
+  @@index([positionId, at])
+}
+
+model ShortTrade {
+  id               Int      @id @default(autoincrement())
+  labId            Int
+  lab              ShortLab @relation(fields: [labId], references: [id], onDelete: Cascade)
+  at               DateTime @default(now())
+  symbol           String
+  side             String // SHORT_OPEN | COVER | MARGIN_CALL | DIVIDEND
+  qty              Int
+  priceCents       Int
+  borrowCostCents  Int      @default(0)
+  realizedPnlCents Int?
+  note             String?
+  card             String? // plain-English teaching card
+
+  @@index([labId])
+}
+
+model ShortLabSnapshot {
+  id               Int      @id @default(autoincrement())
+  labId            Int
+  lab              ShortLab @relation(fields: [labId], references: [id], onDelete: Cascade)
+  at               DateTime @default(now())
+  equityCents      Int
+  cashCents        Int
+  shortMktValCents Int
+  marginUsedPct    Int
+
+  @@index([labId, at])
+}
+
+// The Short Lab AGENT A/B (docs/SHORT-LAB.md, Phase 2) — a CONTROL arm (long-only) vs a TREATMENT arm
+// (long + may SHORT), same stake: does the power to bet against names help or hurt? Mirrors the Options
+// Desk; OFF until GRQ_SHORTLAB_AGENT (it spends Opus tokens). Sandbox — never the §6 gate/broker/fund.
+// Single-currency virtual book (no FX), integer cents, whole shares (rule #4).
+model ShortDesk {
+  id                 Int            @id @default(autoincrement())
+  name               String         @default("Short A/B")
+  status             String         @default("PAUSED") // RUNNING | PAUSED | ENDED
+  cadence            String         @default("daily") // daily | hourly
+  startingStakeCents Int            @default(10000000) // $100k each
+  maintMarginPct     Int            @default(30)
+  createdAt          DateTime       @default(now())
+  startedAt          DateTime?
+  arms               ShortDeskArm[]
+}
+
+model ShortDeskArm {
+  id        Int                 @id @default(autoincrement())
+  deskId    Int
+  desk      ShortDesk           @relation(fields: [deskId], references: [id], onDelete: Cascade)
+  arm       String // control | treatment
+  model     String
+  dial      String              @default("BALANCED")
+  label     String
+  cashCents Int
+  status    String              @default("ACTIVE") // ACTIVE | RETIRED
+  createdAt DateTime            @default(now())
+  positions ShortDeskPosition[]
+  trades    ShortDeskTrade[]
+  calls     ShortDeskCall[]
+  navs      ShortDeskNav[]
+
+  @@index([deskId])
+}
+
+model ShortDeskPosition {
+  id                 Int          @id @default(autoincrement())
+  armId              Int
+  arm                ShortDeskArm @relation(fields: [armId], references: [id], onDelete: Cascade)
+  symbol             String
+  side               String       @default("LONG") // LONG | SHORT
+  currency           String       @default("USD")
+  qty                Int
+  avgCostCents       Int // entry per share (long cost / short proceeds)
+  borrowBps          Int          @default(0) // short only
+  lastMarkCents      Int?
+  accruedBorrowCents Int          @default(0) // short only
+  status             String       @default("OPEN") // OPEN | CLOSED | CALLED
+  openedAt           DateTime     @default(now())
+  lastAccruedAt      DateTime     @default(now())
+
+  @@index([armId])
+}
+
+model ShortDeskTrade {
+  id               Int          @id @default(autoincrement())
+  armId            Int
+  arm              ShortDeskArm @relation(fields: [armId], references: [id], onDelete: Cascade)
+  at               DateTime     @default(now())
+  sessionAt        DateTime
+  symbol           String
+  side             String // BUY | SELL | SHORT_OPEN | COVER | MARGIN_CALL
+  qty              Int
+  priceCents       Int
+  borrowCostCents  Int          @default(0)
+  realizedPnlCents Int?
+
+  @@index([armId])
+}
+
+model ShortDeskCall {
+  id           Int          @id @default(autoincrement())
+  armId        Int
+  arm          ShortDeskArm @relation(fields: [armId], references: [id], onDelete: Cascade)
+  sessionAt    DateTime
+  action       String? // BUY | SELL | SHORT | COVER | HOLD | NONE
+  symbol       String?
+  positionSide String? // LONG | SHORT
+  qty          Int?
+  confidence   Int?
+  thesis       String?
+  text         String
+  filled       Boolean      @default(false)
+  rejectReason String?
+
+  @@index([armId])
+  @@index([sessionAt])
+}
+
+model ShortDeskNav {
+  id               Int          @id @default(autoincrement())
+  armId            Int
+  arm              ShortDeskArm @relation(fields: [armId], references: [id], onDelete: Cascade)
+  at               DateTime     @default(now())
+  equityCents      Int
+  cashCents        Int
+  longValCents     Int
+  shortMktValCents Int
+
+  @@index([armId, at])
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // External accounts — VISIBILITY ONLY (the members' personal TD Direct Investing
 // TFSAs etc., pulled in via SnapTrade so Cam & Graham can see each other's outside
 // holdings beside the fund). HARD GUARDRAIL: the agent and the fund can NEVER

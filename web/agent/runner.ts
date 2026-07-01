@@ -31,6 +31,8 @@ import { apnsConfigured } from "../lib/push/apns";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
+import { runShortLabTick } from "./short-lab/tick";
+import { runShortDeskTick } from "./short-lab/desk-engine";
 import { verifyExperiments } from "../lib/race/verify";
 import { snapshotPredictions } from "../lib/report-card/snapshot";
 import { syncAllConnected, snapshotExternalValues } from "../lib/external/store";
@@ -862,6 +864,14 @@ async function tick() {
   // The Options Desk (background — 2 arms; self-guarded against overlap, must NOT block the tick).
   // Pure sandbox (docs/THE-OPTIONS-DESK.md) — never touches the §6 gate, the broker, or real options.
   runDeskTick().catch((e) => console.error("[optionsdesk] tick error", e instanceof Error ? e.message : e));
+
+  // The Short Lab (background — pure math + quotes, NO model tokens; docs/SHORT-LAB.md). Marks members'
+  // modeled shorts to live, accrues borrow, runs the margin call. Sandbox — the fund never shorts.
+  runShortLabTick().catch((e) => console.error("[shortlab] tick error", e instanceof Error ? e.message : e));
+
+  // The Short Lab agent A/B (background — control long-only vs treatment long+short; docs/SHORT-LAB.md
+  // Phase 2). OFF unless GRQ_SHORTLAB_AGENT — it runs Opus sessions. Sandbox; the fund never shorts.
+  runShortDeskTick().catch((e) => console.error("[shortdesk] tick error", e instanceof Error ? e.message : e));
 }
 
 // Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every

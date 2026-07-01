@@ -30,6 +30,7 @@ const EXPERIMENTS: NavLink[] = [
   { href: "/race", label: "Second Opinions" },
   { href: "/bulls", label: "Bull Race" },
   { href: "/options-desk", label: "Options Desk" },
+  { href: "/short-lab", label: "Short Lab" },
   { href: "/chess", label: "Chess Moves" },
   { href: "/report-card", label: "Report Card" },
 ];

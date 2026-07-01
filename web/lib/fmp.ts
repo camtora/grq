@@ -321,6 +321,23 @@ export async function fmpEarnings(symbol: string): Promise<FmpEarnings | null> {
   return { ...pick, upcoming: pick.date >= today };
 }
 
+// Dividends (Tier — for the Short Lab: a short PAYS the dividend to the share lender, Phase 3). Ex-date
+// + per-share amount, most-recent first. FMP "date" on the dividends endpoint is the ex-dividend date.
+export type DividendRow = { exDate: string; amountCents: number };
+export async function fmpDividends(symbol: string): Promise<DividendRow[]> {
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`dividends?symbol=${encodeURIComponent(stripSuffix(symbol))}&limit=8`);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({ exDate: String(r.date ?? ""), amountCents: Math.round((numOrNull(r.dividend) ?? 0) * 100) }))
+    .filter((r) => r.exDate && r.amountCents > 0)
+    .sort((a, b) => b.exDate.localeCompare(a.exDate));
+}
+
+/** Per-share dividends (cents) whose ex-date falls in (afterISO, throughISO] — what a short accrues. Pure. */
+export function dividendsBetween(rows: DividendRow[], afterISO: string, throughISO: string): number {
+  return rows.filter((r) => r.exDate > afterISO && r.exDate <= throughISO).reduce((s, r) => s + r.amountCents, 0);
+}
+
 // Richer earnings for the stock page: BOTH the last reported quarter (actuals vs
 // estimates → beat/miss) AND the next scheduled date. Same endpoint as fmpEarnings,
 // just split into the two halves rather than picking one. Tier 6.

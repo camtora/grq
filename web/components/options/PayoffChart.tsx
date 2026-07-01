@@ -25,11 +25,13 @@ export default function PayoffChart({
   spotCents,
   dteNow,
   breakevens,
+  expiryLabel = "at expiry",
 }: {
   legs: Leg[];
   spotCents: number;
   dteNow: number;
   breakevens: number[];
+  expiryLabel?: string;
 }) {
   const ref = useRef<SVGSVGElement | null>(null);
   const [hoverSpot, setHoverSpot] = useState<number | null>(null);
@@ -166,7 +168,7 @@ export default function PayoffChart({
       ) : null}
 
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-teal-200/40">
-        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-teal-100" /> at expiry</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-teal-100" /> {expiryLabel}</span>
         {today ? <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-teal-300/50" style={{ borderTop: "1px dashed" }} /> today ({dteNow}d to go, modeled)</span> : null}
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-teal-200" /> break-even</span>
       </div>
