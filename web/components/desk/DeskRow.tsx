@@ -22,14 +22,19 @@ export default function DeskRow({ a, color }: { a: DeskStanding; color: string }
             <Chip tone={isTreatment ? "teal" : "dim"}>{isTreatment ? "options" : "stock-only"}</Chip>
           </div>
           <div className="text-[10px] tabular-nums text-teal-200/40">
-            {money(a.navCadCents)} CAD · {Math.round(a.cashPct)}% cash · {a.tradeCount} trade{a.tradeCount === 1 ? "" : "s"}
+            {Math.round(a.cashPct)}% cash · {a.tradeCount} trade{a.tradeCount === 1 ? "" : "s"}
             {isTreatment ? ` · ${a.openOptionCount} open option${a.openOptionCount === 1 ? "" : "s"}` : ""}
           </div>
         </div>
         <div className="hidden h-7 w-20 sm:block">
           <Sparkline data={a.navHistory.map((h) => h.returnPct)} />
         </div>
-        <div className={`w-20 text-right text-sm font-bold tabular-nums ${retClass(a.returnPct)}`}>{ret(a.returnPct)}</div>
+        {/* The book's current value (CAD) right beside its return, so each arm shows the
+            dollars it's at, not just the % (Cam 2026-06-30). */}
+        <div className="flex items-baseline justify-end gap-2">
+          <span className="w-24 text-right text-sm font-bold tabular-nums text-teal-50">{money(a.navCadCents)}</span>
+          <span className={`w-16 text-right text-sm font-bold tabular-nums ${retClass(a.returnPct)}`}>{ret(a.returnPct)}</span>
+        </div>
       </summary>
 
       <div className="border-t border-teal-400/10 p-3 text-xs">

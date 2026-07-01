@@ -480,4 +480,108 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "85% bullish on a name the crowd already owns can mean the easy money's been made.",
     related: ["social-buzz", "mention-velocity"],
   },
+
+  // ---- Options literacy: the calculator + education portal (docs/OPTIONS-PORTAL.md) ----
+  strike: {
+    term: "Strike price",
+    def: "The fixed price written into an option contract. A call only pays off when the stock is ABOVE its strike; a put only when it's BELOW. It's the line in the sand the whole bet is measured against.",
+    example: "A $105 call on a $100 stock needs the price above $105 by expiry to have any value left.",
+    related: ["call-option", "put-option", "premium", "moneyness"],
+  },
+  premium: {
+    term: "Premium",
+    def: "The price you pay (to buy) or receive (to sell) for an option, quoted per share — so a $2.50 premium costs $250 for one 100-share contract. When you BUY an option, the premium is the most you can lose.",
+    example: "Buy one call at a $2.50 premium and you've paid $250 and risked exactly that.",
+    related: ["strike", "intrinsic-value", "extrinsic-value", "max-loss"],
+  },
+  "intrinsic-value": {
+    term: "Intrinsic value",
+    def: "The part of an option's premium that is real, exercise-it-right-now value: how far in-the-money it is. A $105 call with the stock at $112 has $7 of intrinsic value. Out of the money, intrinsic value is zero.",
+    example: "Stock at $112, a $105 call: $7 is intrinsic; anything above $7 in the premium is time value.",
+    related: ["extrinsic-value", "premium", "moneyness"],
+  },
+  "extrinsic-value": {
+    term: "Extrinsic (time) value",
+    def: "The rest of the premium beyond intrinsic value — what you pay for the time and uncertainty left before expiry. It melts toward zero as expiry nears (time decay) and shrinks when implied volatility falls.",
+    example: "An at-the-money option is ALL time value — there's no intrinsic value to fall back on.",
+    related: ["intrinsic-value", "time-decay", "implied-volatility"],
+  },
+  moneyness: {
+    term: "Moneyness (ITM / ATM / OTM)",
+    def: "Where the stock sits versus the strike. In-the-money (ITM) = the option has intrinsic value; at-the-money (ATM) = stock ≈ strike; out-of-the-money (OTM) = no intrinsic value yet, all hope and time value.",
+    example: "Stock $100: a $90 call is ITM, a $100 call is ATM, a $110 call is OTM.",
+    related: ["strike", "intrinsic-value", "delta"],
+  },
+  "break-even": {
+    term: "Break-even",
+    def: "The stock price at which a trade's profit is exactly zero at expiry — below/above it you lose, beyond it you win. For a long call it's the strike plus the premium you paid.",
+    example: "A $105 call bought for $2.50 breaks even at $107.50 at expiry.",
+    related: ["payoff-diagram", "premium", "strike"],
+  },
+  "max-loss": {
+    term: "Max loss",
+    def: "The worst case for a position. For an option you BUY it's just the premium — defined risk. For strategies that SELL options the loss can be much larger, which is exactly why the fund only ever buys.",
+    example: "Long a call for $250, your max loss is $250 no matter how far the stock falls.",
+    related: ["premium", "payoff-diagram", "covered-call"],
+  },
+  "payoff-diagram": {
+    term: "Payoff diagram",
+    def: "The picture of a trade's profit or loss across every possible stock price. The flat parts, the kinks at the strikes, and where the line crosses zero (break-even) tell you the whole risk-and-reward shape at a glance.",
+    example: "A long call's payoff is a flat loss up to the strike, then a 45° line climbing into profit.",
+    related: ["break-even", "max-loss", "long-call"],
+  },
+  "time-decay": {
+    term: "Time decay (theta)",
+    def: "Options lose a little value every day just from time passing, because there's less chance left for a big move. The bleed accelerates as expiry approaches. You can be right on direction and still lose if the move is too slow.",
+    example: "Hold an at-the-money option over a quiet week and it's worth less Friday than Monday, stock unchanged.",
+    related: ["theta", "extrinsic-value", "expiry"],
+  },
+  delta: {
+    term: "Delta",
+    def: "How much an option's premium moves per $1 move in the stock — and a rough gauge of the odds it finishes in-the-money. A 0.50 delta call gains ~50¢ for a $1 rise; deep-in-the-money options approach 1.00.",
+    example: "A 0.30-delta call is ~30% likely to expire ITM and moves ~30¢ per $1 of stock.",
+    related: ["gamma", "moneyness", "greeks"],
+  },
+  gamma: {
+    term: "Gamma",
+    def: "How fast delta itself changes as the stock moves — the option's acceleration. Highest for at-the-money options near expiry, which is what makes those swing so violently.",
+    example: "High gamma means a small stock move can flip a near-the-money option from sleepy to fast-moving.",
+    related: ["delta", "greeks", "gamma-exposure"],
+  },
+  theta: {
+    term: "Theta",
+    def: "The dollar amount an option loses per day from time decay, all else equal. It's negative for anything you buy — the daily rent you pay for holding the bet.",
+    example: "A theta of −$5 means the position bleeds about $5 a day if nothing else changes.",
+    related: ["time-decay", "vega", "greeks"],
+  },
+  vega: {
+    term: "Vega",
+    def: "How much an option's premium changes when implied volatility moves one percentage point. Buyers are long vega — they profit if the market starts pricing in bigger swings, and lose if it calms down.",
+    example: "Vega of $8 means +1 point of IV adds about $8 to the position's value.",
+    related: ["implied-volatility", "theta", "greeks"],
+  },
+  greeks: {
+    term: "The Greeks",
+    def: "The handful of sensitivities that describe how an option's price reacts: delta (to the stock), gamma (to delta itself), theta (to time), and vega (to volatility). Together they're the dashboard for any option position.",
+    example: "Reading the Greeks tells you what your position will do before the stock even moves.",
+    related: ["delta", "gamma", "theta", "vega"],
+  },
+  expiry: {
+    term: "Expiry",
+    def: "The date an option contract dies. At expiry it's worth only its intrinsic value — anything in-the-money settles for that, anything out-of-the-money expires worthless. The deadline your thesis is racing against.",
+    example: "An OTM call still OTM at expiry simply vanishes — premium gone, lesson learned.",
+    related: ["time-decay", "intrinsic-value", "strike"],
+  },
+  "covered-call": {
+    term: "Covered call",
+    def: "Owning 100 shares and selling a call against them to collect premium as income. The catch: if the stock rallies past the strike your shares get called away, so you cap your upside in exchange for the cash now.",
+    example: "Own 100 shares at $100, sell a $110 call for $2: you pocket $200 but give up gains above $110.",
+    related: ["cash-secured-put", "call-option", "premium"],
+  },
+  "cash-secured-put": {
+    term: "Cash-secured put",
+    def: "Selling a put while holding enough cash to buy the shares if assigned. You collect premium up front; if the stock falls below the strike you buy it (cushioned by the premium), otherwise you keep the premium free.",
+    example: "Sell a $95 put on a $100 stock for $2: you're paid $200 to maybe buy it at $95.",
+    related: ["covered-call", "put-option", "premium"],
+  },
 };

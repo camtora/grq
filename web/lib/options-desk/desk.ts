@@ -44,6 +44,7 @@ export type DeskResolved = {
   realizedPnlCents: number | null; // CAD
   returnPct: number; // return on the premium paid
   card: string; // plain-English retrospective
+  decay?: number[]; // per-share (mark − entry) over the contract's life + exit (Phase 5, closed contracts)
 };
 export type DeskStanding = {
   entrantId: number;
@@ -180,6 +181,7 @@ export async function loadDesk(deskId?: number): Promise<DeskView | null> {
           const realizedCad = t.realizedPnlCents ?? 0;
           const costBasisCad = exitValueCad - realizedCad; // ≈ premium paid (folds in commissions)
           const returnPct = costBasisCad > 0 ? (realizedCad / costBasisCad) * 100 : 0;
+          const decay = Array.isArray(t.markHistory) ? (t.markHistory as unknown[]).filter((n): n is number => typeof n === "number") : undefined;
           return {
             at: t.at,
             kind: right,
@@ -191,6 +193,7 @@ export async function loadDesk(deskId?: number): Promise<DeskView | null> {
             realizedPnlCents: t.realizedPnlCents,
             returnPct,
             card: closedCard(t.side, right, t.underlying, t.strikeCents ?? 0, t.expiry ?? "", t.qty, exitValueCad, realizedCad, returnPct),
+            decay: decay && decay.length >= 2 ? decay : undefined,
           };
         });
       return {

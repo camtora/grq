@@ -10,7 +10,7 @@ import ConfidenceLevers from "@/components/ConfidenceLevers";
 import { parseConfidenceLevers } from "@/lib/confidence-levers";
 import ChessBoard from "@/components/chess/ChessBoard";
 import PlayCard from "@/components/chess/PlayCard";
-import { buildPlayViews, parseBoard, bareChainKey } from "@/lib/chess";
+import { buildPlayViews, buildBoardTrends, parseBoard, bareChainKey } from "@/lib/chess";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +60,7 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
 
   const plays = await buildPlayViews(theme.plays);
   const board = parseBoard(theme.boardJson);
+  const trendBySym = await buildBoardTrends(board);
   const hrefBySym = new Map(plays.map((p) => [bareChainKey(p.sym), p.href]));
   const levers = parseConfidenceLevers(theme.confidenceLeversJson);
 
@@ -124,7 +125,7 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
         <div className="mt-6">
           <PanelHeader>The board</PanelHeader>
           <div className="mt-2">
-            <ChessBoard board={board} hrefBySym={hrefBySym} />
+            <ChessBoard board={board} hrefBySym={hrefBySym} trendBySym={trendBySym} />
           </div>
         </div>
       )}

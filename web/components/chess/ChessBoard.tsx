@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { Card } from "@/components/ui";
-import { parseBoard, bareChainKey, type ChessBoardData } from "@/lib/chess";
+import Sparkline from "@/components/Sparkline";
+import { pct } from "@/lib/money";
+import { parseBoard, bareChainKey, type ChessBoardData, type BoardTrend } from "@/lib/chess";
 
 // The board — the value chain as a HORIZONTAL left→right rail. Each stage is a column in chain
 // order (upstream → downstream), the companies inside link to their stock page, and the stages
@@ -13,11 +15,15 @@ export default function ChessBoard({
   board,
   hrefBySym,
   highlightKey,
+  trendBySym,
 }: {
   board: ChessBoardData | string | null;
   hrefBySym?: Map<string, string>;
   /** Bare ticker to highlight on the board (e.g. the stock page you're viewing). */
   highlightKey?: string;
+  /** 30-day price trend per piece (bare ticker → sparkline + % change), from buildBoardTrends.
+   *  When present, each company with listed history shows a mini trend indicator. */
+  trendBySym?: Map<string, BoardTrend>;
 }) {
   const data = typeof board === "string" || board == null ? parseBoard(board ?? null) : board;
   if (data.stages.length === 0) return null;
@@ -49,6 +55,8 @@ export default function ChessBoard({
                     {st.items.map((it, j) => {
                       const href = stockHref(it.symbol);
                       const hot = isHot(it.symbol);
+                      const trend = it.symbol ? trendBySym?.get(bareChainKey(it.symbol)) : undefined;
+                      const up = (trend?.change30d ?? 0) >= 0;
                       // Hover underlines only the SYMBOL (the link affordance), never the
                       // company name — house convention (docs/DESIGN.md §1.7).
                       const head = (
@@ -70,6 +78,20 @@ export default function ChessBoard({
                             head
                           )}
                           {hot && <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-wider text-teal-300/80">← this name</span>}
+                          {/* 30-day trend — a mini price sparkline + % so the chain shows which pieces
+                              are rising vs falling at a glance. Only for pieces with listed history. */}
+                          {trend && trend.spark.length >= 2 && (
+                            <span className="mt-1 flex items-center gap-1.5">
+                              <Sparkline values={trend.spark} width={72} height={22} className="h-[22px] w-[72px] shrink-0" />
+                              {trend.change30d != null && (
+                                <span className={`font-mono text-[11px] font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
+                                  {up ? "+" : ""}
+                                  {pct(trend.change30d, 0)}
+                                </span>
+                              )}
+                              <span className="text-[9px] uppercase tracking-wider text-teal-200/30">30d</span>
+                            </span>
+                          )}
                           {it.note && <span className="block text-[11px] text-teal-200/45">{it.note}</span>}
                         </li>
                       );

@@ -2528,3 +2528,37 @@ fill path) → `propose_option_order` tool + context + the runner mark/expiry ti
 
 **Unchanged:** the §6 order gate, kill switch, no-shorting/no-margin/no-naked-options, integer-cents/whole-units,
 and the soak gate before real money. Buy-to-open long calls/puts behind the toggle is the *only* relaxation.
+
+### D100 — Options education portal: learn / play / watch / ask (Cam, 2026-06-30)
+
+A new top-level **`/options`** hub to teach Cam & Graham how options work — the optionsprofitcalculator.com
+equivalent, plus lessons, the experiment's live fake positions, and options-aware chat. **Education only,
+modeled, never executable** — it touches none of the §6 gate, the broker, or the live fund. Distinct from the
+Options Desk experiment (`/options-desk`, D91/D92) it *surfaces* and from Alfred Options (D99, real-fund options).
+Full spec: `docs/OPTIONS-PORTAL.md`. **Decisions (Cam):** top-level tab (not the Experiments dropdown) · v1
+strategy set of **4** (long call, long put, covered call, cash-secured put — the two short-leg ones taught as
+contrast; the fund still only ever *buys* options) · **live CBOE chains in v1**.
+
+**Built + deployed 2026-06-30 (web + chat; agent untouched, no `AGENT_VERSION` bump; not committed).** Four tabs:
+- **Learn** — 5 plain-English lessons, every term a `<Term>` (16 new options glossary keys).
+- **Calculator** — the centerpiece: pick a strategy, type a real US ticker to prefill a live CBOE contract, read
+  an interactive **payoff diagram** (`PayoffChart`, hover crosshair + at-expiry & modeled-"today" curves + break-
+  evens), stat cards, live **Greeks**, and a price×date **P/L heat table** with a **probability of profit**.
+- **The Experiment** — `loadDesk()` → the treatment Opus's actual open + resolved contracts with the plain-English
+  card, break-even/max-loss/days-left, the **value-over-time (decay)** line, and a one-click **"load into calculator."**
+- **Ask** — opens the read-only chat, now options-aware (`get_options_desk` tool + an education persona block:
+  explain / show the experiment / suggest hypotheticals that deep-link the calculator — still never trades).
+
+**New code (all schema-free):** `lib/options/{payoff,greeks,strategies,probability}.ts` (pure, integer-cents;
+greeks + probability are new — we only *read* CBOE greeks before), `app/api/options/chain/[symbol]` (read-only
+live-chain feed), `components/options/*`, `app/options/page.tsx`. Reuses the existing `price.ts` Black-Scholes +
+the free keyless CBOE feed. **74/74 unit tests, `tsc` clean.**
+
+**Phase 5 (grow) — 2026-06-30 (deployed):** the calculator went **4 → 8 strategies** (added bull call spread,
+bear put spread, long straddle, long strangle) via a leg-template model (`strategies.ts`); **saved scenarios**
+(`localStorage`); a **greeks-vs-price visualizer** (`GreeksChart`); **deeper per-strategy explanations** (view /
+profit-when / lose-when / decay / worked-example / best-for); and **durable per-contract mark history** —
+`DeskTrade.markHistory` (additive, pushed to prod), the desk engine (**agent v2.33-phase4**) snapshots each
+option's decay curve at close/expire so **closed** contracts keep a value line (surfaced in the Experiment tab).
+The agent redeploy suppressed the startup scan (pre-seeded guard marker; markets closed). **Still open: mobile
+parity** (iOS). 74/74 tests, `tsc` clean; web+agent+chat redeployed; not committed.

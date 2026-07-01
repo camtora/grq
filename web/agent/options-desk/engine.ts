@@ -159,6 +159,14 @@ async function applyOptionOpen(entrant: Lite, call: DeskCall, sessionAt: Date, f
   return { filled: true, rejectReason: null, strikeCents: c.strikeCents, expiry: c.expiry };
 }
 
+/** The per-share decay curve of a position, for its resolved-trade record (Phase 5): (mark − entry) at
+ *  each recorded session, then the exit. Read BEFORE the position (and its cascading DeskPositionMark
+ *  rows) is deleted, so a CLOSED contract keeps a value-over-time line. Int array (cents). */
+async function capturePositionDecay(positionId: number, avgCostCents: number, exitCents: number): Promise<number[]> {
+  const marks = await prisma.deskPositionMark.findMany({ where: { positionId }, orderBy: { at: "asc" }, select: { markCents: true } });
+  return [...marks.map((m) => m.markCents - avgCostCents), exitCents - avgCostCents];
+}
+
 // ── Option close: SELL-TO-CLOSE a held call/put ───────────────────────────────────────────────────
 async function applyOptionClose(entrant: Lite, call: DeskCall, sessionAt: Date, fx: number | null, now: Date): Promise<FillResult> {
   if (!call.symbol || !call.right) return { filled: false, rejectReason: "close needs symbol + right" };
@@ -176,12 +184,15 @@ async function applyOptionClose(entrant: Lite, call: DeskCall, sessionAt: Date, 
   const commission = optionCommissionCents(contracts);
   const proceedsCad = toCadCents(contracts * 100 * mark - commission, "USD", fx);
   const realizedCad = toCadCents(contracts * 100 * (mark - pos.avgCostCents) - commission, "USD", fx);
+  // Snapshot the decay curve BEFORE the tx deletes the position (which cascades DeskPositionMark rows),
+  // so the resolved trade keeps a value-over-time line (Phase 5). (markCents − entry) per session + exit.
+  const markHistory = await capturePositionDecay(pos.id, pos.avgCostCents, mark);
   await prisma.$transaction(async (tx) => {
     const remaining = pos.qty - contracts;
     if (remaining === 0) await tx.deskPosition.delete({ where: { id: pos.id } });
     else await tx.deskPosition.update({ where: { id: pos.id }, data: { qty: remaining } });
     await tx.deskEntrant.update({ where: { id: entrant.id }, data: { cashCents: { increment: proceedsCad } } });
-    await tx.deskTrade.create({ data: { entrantId: entrant.id, sessionAt, kind: call.right!, underlying: bare, strikeCents: pos.strikeCents, expiry: pos.expiry, side: "SELL_TO_CLOSE", qty: contracts, priceCents: mark, currency: "USD", commissionCents: commission, realizedPnlCents: realizedCad } });
+    await tx.deskTrade.create({ data: { entrantId: entrant.id, sessionAt, kind: call.right!, underlying: bare, strikeCents: pos.strikeCents, expiry: pos.expiry, side: "SELL_TO_CLOSE", qty: contracts, priceCents: mark, currency: "USD", commissionCents: commission, realizedPnlCents: realizedCad, markHistory } });
   });
   await notifyOut(
     "info",
@@ -205,10 +216,11 @@ export async function settleExpiries(entrantId: number, fx: number | null, now: 
     const intrinsic = intrinsicCents(right, spot, p.strikeCents ?? 0);
     const proceedsCad = toCadCents(p.qty * 100 * intrinsic, "USD", fx);
     const realizedCad = toCadCents(p.qty * 100 * (intrinsic - p.avgCostCents), "USD", fx);
+    const markHistory = await capturePositionDecay(p.id, p.avgCostCents, intrinsic); // decay curve before delete
     await prisma.$transaction(async (tx) => {
       await tx.deskPosition.delete({ where: { id: p.id } });
       if (proceedsCad > 0) await tx.deskEntrant.update({ where: { id: entrantId }, data: { cashCents: { increment: proceedsCad } } });
-      await tx.deskTrade.create({ data: { entrantId, sessionAt: now, kind: right, underlying: p.underlying, strikeCents: p.strikeCents, expiry: p.expiry, side: "EXPIRE", qty: p.qty, priceCents: intrinsic, currency: "USD", commissionCents: 0, realizedPnlCents: realizedCad } });
+      await tx.deskTrade.create({ data: { entrantId, sessionAt: now, kind: right, underlying: p.underlying, strikeCents: p.strikeCents, expiry: p.expiry, side: "EXPIRE", qty: p.qty, priceCents: intrinsic, currency: "USD", commissionCents: 0, realizedPnlCents: realizedCad, markHistory } });
     });
     const worthless = intrinsic <= 0;
     await notifyOut(

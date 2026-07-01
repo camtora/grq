@@ -248,3 +248,49 @@ export async function buildPlayViews(plays: PlayRow[]): Promise<ChessPlayView[]>
   views.forEach((v, i) => (v.rank = i + 1));
   return views;
 }
+
+// ---- Per-piece 30-day trend for the board MAP (the chain visualization) ----
+
+export type BoardTrend = { change30d: number | null; spark: number[] };
+
+/** A 30-day price trend (sparkline + % change) for every company in the board MAP that carries a
+ *  ticker — so the chain view shows, at a glance, which pieces are rising vs falling. Keyed by bare
+ *  ticker. Reuses the exact data path The Hunt / buildPlayViews use (getCloses → refreshBars for gaps
+ *  → the trailing 30-close window), so a board piece and the same name as a ranked play read the same.
+ *  A private/foreign/uncovered piece with no listed bars is simply absent (no indicator). Pure
+ *  read/derive — a board is Alfred's reasoning, never a trade. */
+export async function buildBoardTrends(board: ChessBoardData): Promise<Map<string, BoardTrend>> {
+  // Distinct board-item tickers (the flow-links reuse these same symbols).
+  const bySym = new Map<string, string>(); // bareKey → first raw symbol seen
+  for (const st of board.stages) {
+    for (const it of st.items) {
+      if (!it.symbol) continue;
+      const k = bareChainKey(it.symbol);
+      if (!bySym.has(k)) bySym.set(k, it.symbol);
+    }
+  }
+  if (bySym.size === 0) return new Map();
+
+  // Resolve each ticker to the listing we price/chart it on: our tracked symbol when we cover it,
+  // else the inferred Yahoo listing (toYahoo no longer mangles bare/US tickers — D45).
+  const tracked = await trackedUniverse();
+  const uBy = new Map<string, UniverseRow>(tracked.map((r) => [bareChainKey(r.yahoo), r]));
+  const resolved = Array.from(bySym.entries()).map(([k, raw]) => ({ k, listing: uBy.get(k)?.symbol ?? yahooForListing(raw) }));
+
+  const listings = Array.from(new Set(resolved.map((r) => r.listing)));
+  const closesByListing = new Map<string, { date: Date; closeCents: number }[]>();
+  await Promise.all(listings.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
+  const missing = listings.filter((s) => (closesByListing.get(s)?.length ?? 0) < 8);
+  if (missing.length) {
+    await refreshBars(missing, "3mo").catch(() => 0);
+    await Promise.all(missing.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
+  }
+
+  const out = new Map<string, BoardTrend>();
+  for (const { k, listing } of resolved) {
+    const spark = (closesByListing.get(listing) ?? []).slice(-30).map((c) => c.closeCents);
+    if (spark.length < 2 || spark[0] <= 0) continue; // no usable history → no indicator
+    out.set(k, { change30d: (spark[spark.length - 1] - spark[0]) / spark[0], spark });
+  }
+  return out;
+}

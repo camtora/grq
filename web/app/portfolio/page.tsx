@@ -331,8 +331,10 @@ export default async function Portfolio() {
               </tr>
             ),
           }))}
-          footer={
-            <>
+          // Cash sits UNDER its own currency group (CAD cash under Canada, USD cash under the
+          // US cluster) rather than in one combined table footer (Cam 2026-06-30).
+          groupFooters={{
+            CAD: (
               <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
                 <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
                 <td className="px-5 py-2.5" colSpan={3} />
@@ -342,21 +344,20 @@ export default async function Portfolio() {
                   {pf.navCents > 0 ? pct(pf.cadCashCents / pf.navCents) : "—"}
                 </td>
               </tr>
-              {pf.usdCashCents > 0 && (
-                <tr className="bg-teal-400/[0.03]">
+            ),
+            USD:
+              pf.usdCashCents > 0 ? (
+                <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
                   <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
                   <td className="px-5 py-2.5" colSpan={3} />
-                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
-                    {usd(pf.usdCashCents)}
-                  </td>
+                  <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{usd(pf.usdCashCents)}</td>
                   <td className="px-5 py-2.5" />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
                     {pf.navCents > 0 ? pct(usdCashCadCents / pf.navCents) : "—"}
                   </td>
                 </tr>
-              )}
-            </>
-          }
+              ) : null,
+          }}
           />
         )}
       </Card>
@@ -549,7 +550,7 @@ export default async function Portfolio() {
         />
         {/* Total P&L — live value; the %/vs-XIC note is the server snapshot. */}
         <StatCard
-          label="Total P&L"
+          label="Total P&L (CAD)"
           term="total-pnl"
           value={<LivePnlValue positions={livePositions} cashCents={pf.cashCents} contributionsCents={pf.contributionsCents} fx={fxLive} />}
           note={

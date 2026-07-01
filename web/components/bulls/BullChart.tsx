@@ -8,7 +8,7 @@ export type ChartSeries = { label: string; color: string; points: { at: Date; re
 const fmtX = (d: Date) =>
   d.toLocaleString("en-US", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export default function BullChart({ series }: { series: ChartSeries[] }) {
+export default function BullChart({ series, height = 380 }: { series: ChartSeries[]; height?: number }) {
   const all = series.flatMap((s) => s.points);
   if (all.length < 2) {
     return (
@@ -26,7 +26,8 @@ export default function BullChart({ series }: { series: ChartSeries[] }) {
   const spanX = maxX - minX || 1;
   const spanY = maxY - minY || 1;
   const W = 640;
-  const H = 380; // taller aspect so it fills the right-hand column beside the leaderboard
+  const H = height; // viewBox aspect → rendered height = container width × H/W. Default 380 (the
+  // leaderboard-column aspect on /bulls); callers can pass a flatter banner aspect (full-width on top).
   const padL = 46;
   const padR = 18;
   const padT = 18;

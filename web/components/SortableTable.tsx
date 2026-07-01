@@ -37,6 +37,7 @@ export default function SortableTable({
   className = "w-full text-sm",
   headRowClassName = "text-center text-xs uppercase tracking-wider text-teal-200/40",
   groups,
+  groupFooters,
 }: {
   columns: SortableColumn[];
   rows: SortableRow[];
@@ -48,6 +49,9 @@ export default function SortableTable({
   // this order, each cluster preceded by a labelled divider row (only when 2+ clusters are
   // present, so a single-group table looks unchanged). Sorting still applies WITHIN a cluster.
   groups?: { key: string; label: ReactNode }[];
+  // Optional per-group trailer row(s) (keyed by group key), rendered after that group's rows —
+  // e.g. CAD cash under the Canada cluster. A group with only a footer (no rows) still renders.
+  groupFooters?: Record<string, ReactNode>;
 }) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(initialSort);
   const numericByKey = new Map(columns.filter((c) => c.key).map((c) => [c.key as string, !!c.numeric]));
@@ -71,12 +75,15 @@ export default function SortableTable({
   // row whose group isn't listed trails at the end, unlabelled (defensive fallback).
   let body: ReactNode;
   if (groups && groups.length) {
-    const present = groups.filter((g) => ordered.some((r) => r.group === g.key));
+    // A group "counts" (gets a divider) when it has rows OR a trailer footer — so a section
+    // that's all cash (e.g. CAD cash, no CAD positions) still shows under its own header.
+    const present = groups.filter((g) => ordered.some((r) => r.group === g.key) || groupFooters?.[g.key]);
     const showDividers = present.length > 1;
     const matched = new Set<string>();
     const blocks = groups.map((g) => {
       const gRows = ordered.filter((r) => r.group === g.key);
-      if (!gRows.length) return null;
+      const gFooter = groupFooters?.[g.key];
+      if (!gRows.length && !gFooter) return null;
       gRows.forEach((r) => matched.add(r.key));
       return (
         <Fragment key={`grp-${g.key}`}>
@@ -91,6 +98,7 @@ export default function SortableTable({
             </tr>
           )}
           {gRows.map(renderRow)}
+          {gFooter}
         </Fragment>
       );
     });

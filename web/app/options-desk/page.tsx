@@ -63,18 +63,23 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
             {isMember ? <DeskControls deskId={data.desk.id} status={data.desk.status} /> : null}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <div className="mb-2"><PanelHeader>The two arms</PanelHeader></div>
-              <div className="space-y-2">
-                {data.arms.map((a) => (
-                  <DeskRow key={a.entrantId} a={a} color={ARM_COLORS[a.arm] ?? "var(--spark-up)"} />
-                ))}
-              </div>
+          {/* Graph along the top (full width), the two model arms side-by-side beneath it so
+              they're easy to compare position-for-position (Cam 2026-06-30). */}
+          <div className="mb-4">
+            <div className="mb-2"><PanelHeader>Return over time</PanelHeader></div>
+            {/* Cap the width: the SVG scales to its container, so on the 1700px-wide layout a
+                full-bleed chart blows up both its height AND its axis labels (~2.6×). Holding it
+                to ~768px keeps it a compact, readable strip (Cam 2026-06-30). */}
+            <div className="max-w-3xl">
+              <BullChart height={200} series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "var(--spark-up)", points: a.navHistory }))} />
             </div>
-            <div>
-              <div className="mb-2"><PanelHeader>Return over time</PanelHeader></div>
-              <BullChart series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "var(--spark-up)", points: a.navHistory }))} />
+          </div>
+          <div>
+            <div className="mb-2"><PanelHeader>The two arms</PanelHeader></div>
+            <div className="grid items-start gap-3 lg:grid-cols-2">
+              {data.arms.map((a) => (
+                <DeskRow key={a.entrantId} a={a} color={ARM_COLORS[a.arm] ?? "var(--spark-up)"} />
+              ))}
             </div>
           </div>
 

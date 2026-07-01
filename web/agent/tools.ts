@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/db";
 import { getQuotes } from "../lib/broker/quotes";
 import { getPortfolio } from "../lib/portfolio";
+import { loadDesk } from "../lib/options-desk/desk";
 import { universeEntry, activeSymbols, yahooForListing, bareTicker } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
@@ -639,6 +640,34 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__resolve_agenda",
 ];
 
+// The Options Desk EXPERIMENT, read-only — for the options-education portal (docs/OPTIONS-PORTAL.md).
+// Lets chat explain options on real (sandboxed, fake) contracts the treatment Opus holds. Never the
+// real fund, never executable.
+const getOptionsDeskTool = tool(
+  "get_options_desk",
+  "The Options Desk EXPERIMENT — a sandbox A/B where a CONTROL Opus trades stocks only (what the fund does today) and a TREATMENT Opus may ALSO buy calls/puts, same stake. Returns both arms' standings and the treatment's current + resolved option contracts (strike/expiry/breakeven/days-left + a plain-English note). Use it to explain how options work on concrete positions, show what the experiment holds, or ground an educational suggestion. These are MODELED, sandboxed, never-executable fake options — NOT a recommendation, and the real fund still never trades options.",
+  {},
+  async () => {
+    const view = await loadDesk().catch(() => null);
+    if (!view || view.arms.length === 0) return text("No Options Desk experiment is running right now.");
+    const m = (c: number) => `$${(c / 100).toFixed(2)}`;
+    const lines: string[] = [`Options Desk "${view.desk.name}" — ${view.desk.status}, ${m(view.desk.startingStakeCents)} stake each.`];
+    for (const a of view.arms) {
+      lines.push(`\n${a.label} (${a.arm}): ${m(a.navCadCents)} NAV, ${a.returnPct >= 0 ? "+" : ""}${a.returnPct.toFixed(2)}%.`);
+      const opts = a.holdings.filter((h) => h.kind !== "STOCK");
+      if (opts.length) {
+        lines.push("  Open options:");
+        for (const h of opts) lines.push(`   - ${h.underlying} ${h.expiry} ${m(h.strikeCents ?? 0)} ${h.kind} x${h.qty}: paid ${m(h.avgCostCents)}/sh, now ${m(h.markCents)}/sh, breakeven ${m(h.breakevenCents ?? 0)}, ${h.daysLeft}d left.${h.card ? " " + h.card : ""}`);
+      }
+      if (a.resolved.length) {
+        lines.push("  Resolved:");
+        for (const r of a.resolved) lines.push(`   - ${r.underlying} ${r.expiry} ${m(r.strikeCents ?? 0)} ${r.kind} x${r.qty} (${r.side}): ${r.returnPct >= 0 ? "+" : ""}${r.returnPct.toFixed(0)}%.${r.card ? " " + r.card : ""}`);
+      }
+    }
+    return text(lines.join("\n"));
+  },
+);
+
 // Read-only variant for the chat (2.5c): no propose_order, no writes —
 // a persuasive chat can never become a trading backdoor.
 // FACTORY, not a singleton: each call returns a FRESH in-process MCP server. Concurrent sessions
@@ -649,7 +678,7 @@ export const makeReadOnlyServer = () =>
   createSdkMcpServer({
     name: "grq",
     version: "1.0.0",
-    tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool],
+    tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool, getOptionsDeskTool],
   });
 
 export const GRQ_READONLY_TOOL_NAMES = [
@@ -658,6 +687,7 @@ export const GRQ_READONLY_TOOL_NAMES = [
   "mcp__grq__get_journal",
   "mcp__grq__get_focus",
   "mcp__grq__get_signals",
+  "mcp__grq__get_options_desk",
 ];
 
 // Research variant for dossier sessions (2.7): reads + write_journal only —
