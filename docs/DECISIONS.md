@@ -2421,6 +2421,8 @@ Opus depth is spent only on the survivors. `AGENT_VERSION` → **v2.27-phase4**.
 
 ### D97 — Tier 11: the agent SEES members' personal holdings (read-only, can't touch them) (Cam, 2026-06-29)
 
+> **⚠️ REVERSED by [D104](#d104--reversed-agents-are-blind-to-members-personal-holdings-again-cam-2026-07-02) (2026-07-02).** The agent (and the chat agent, which shares the same context) no longer sees members' personal holdings — the Tier 11 block below was removed from `buildContext()`. The rest of this entry is retained for history.
+
 Cam: "we should let the agent SEE what we hold, but it cannot obviously touch the account." The fund manages only
 *part* of Cam's & Graham's money; their personal brokerage holdings (TD TFSA etc.) already sync **read-only** via
 SnapTrade (`connectionType=read`, `lib/external/*`) for the human-only `/accounts` page — but were deliberately
@@ -2644,3 +2646,33 @@ start AAPL → buy 50 (Holder mirrors) → buy 10 more (Holder does NOT mirror) 
 Holder −$8.50, churn cost $21. Web DEPLOYED; **agent tick built + verified (v2.38) but swap deferred to a
 safe window** (built near the 13:30 check-in with a session in flight — no urgency, the page marks on view).
 **Phase 2** (rule-based auto-trader arm, not Opus) optional/later. Guardrails unchanged. Not committed.
+
+### D104 — REVERSED: the agents are BLIND to members' personal holdings again (Cam, 2026-07-02)
+
+Reverses **[D97](#d97--tier-11-the-agent-sees-members-personal-holdings-read-only-cant-touch-them-cam-2026-06-29)**.
+Cam caught the **chat** agent (Alfred) reciting Graham's personal book unprompted — Graham asked "why is MU
+dropping" and Alfred led with *"MU is 67% of your own book (~$108K)… 2/3 of your personal book."* Cam's ruling:
+**"I do not want the chat agent to be aware of Graham's or my positions. Positions are a single metric — not a
+decision-making factor."** Since the chat agent and the trading agent share **one** `buildContext()`, the Tier 11
+block couldn't be given to only the trader — so, per Cam ("if it's a single context for both agents, then remove
+it from both"), it was removed from **both**.
+
+**Why the reversal:** the D97 bet was that seeing a member's holdings would help the agent weigh *cross-account
+concentration*. In practice it did the opposite of what we want — it turned members' private money into an active
+talking/decision surface for a model that has no business reasoning about it, and the chat agent (unlike the
+trader, which never speaks to a human) surfaced it straight to the member. The concentration-awareness upside was
+never worth exposing personal positions to the LLM.
+
+**Implementation:** the entire Tier 11 section is **deleted** from `agent/context.ts` — `personalAccountsBlock()`,
+its `bareKey` helper, the heading/preamble, the `${personalBlock}` interpolation, and the now-orphaned
+`accountsForMembers` / `memberEmails` / `personByEmail` imports. `tsc` clean; both the **agent** and **chat** images
+were rebuilt and recreated (verified the baked images contain zero `Tier 11` references — the stale-image guard).
+The `GRQ_AGENT_SEES_EXTERNAL` env flag is now **inert** (no code reads it; safe to drop from `.env`). Three leaked
+`ChatMessage` rows that the old code had already written were scrubbed from the DB — 2 in Cam's thread, 1 in
+Graham's — found only on a broad both-threads sweep (the first pass, Cam-thread-only, missed Graham's).
+
+**"Positions are a single metric" — preserved WEB-ONLY:** the nightly SnapTrade sync still mirrors holdings into
+the DB for the human `/accounts` page, the `/portfolio` "Yours" lane, and the `ExternalDailyValue` day-change tile.
+None of that ever enters the LLM's context. The app still shows household value; the agents simply can't see it.
+The hard no-execution wall (D97/guardrail #1) was already structural and is untouched. `AGENT_VERSION` →
+**v2.41-phase4**.
