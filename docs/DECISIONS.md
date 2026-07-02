@@ -2602,3 +2602,45 @@ the dividend; `fmpDividends` (cached) folds ex-dates into the carry. ⏸ **Real 
 squeeze: DEFERRED** — FMP short-interest returns empty (no free feed), so borrow stays modeled (honest). Agent
 `AGENT_VERSION` v2.35→v2.36-phase4 (D77); scan suppressed. 86/86 tests, `tsc` clean. Guardrails (§6 gate, kill
 switch, rule #3, soak) unchanged — the fund never shorts. The Short Lab (Phases 1–3) is a permanent sandbox.
+
+### D102 — Exchange-aware market calendar: trade the US sleeve on TSX-only holidays (Cam, 2026-07-01)
+
+Prompted by Canada Day (TSX closed, NYSE open): the fund holds a USD sleeve, so it should keep trading
+US names on a TSX-only holiday (and CA names on a US-only holiday). The calendar was TSX-only, so it (a)
+sat the whole fund out on Canada Day and (b) latently mis-treated *US* holidays (July 4, MLK…) as open.
+
+`web/agent/calendar.ts` now carries **both** `CA_HOLIDAYS` (TSX) and `US_HOLIDAYS` (NYSE) — the two share
+the 9:30–16:00 ET session, only holidays differ — and `isMarketDay`/`isMarketOpen` take a `market`
+param (`"CA"|"US"|"ANY"`, default `ANY` = either exchange open). The **§6 gate** (`validator.ts`) now
+checks the ORDER's exchange (by `currencyForSymbol`): a USD name needs NYSE open, a CAD name needs the
+TSX open — so on Canada Day a US buy clears and a CA buy is rejected ("Canadian market (TSX) is closed").
+`buildContext` adds a ⚠️ note when only one exchange is open so the agent focuses on the tradeable sleeve.
+`openExchanges()` exposes the split. Verified: Jul 1 → US open / CA closed; Jul 3 (US Independence
+observed) → CA open / US closed; Christmas → both closed. 94/94 tests (8 new calendar tests). Deployed
+web+agent (`AGENT_VERSION` v2.36→v2.37-phase4); scan suppressed. Guardrails otherwise unchanged — this
+makes the market-hours rail MORE precise (it was TSX-only). Not committed.
+
+### D103 — The Day-Trading Lab: prove it vs. buy-and-hold (Cam, 2026-07-01)
+
+A standalone `/day-lab` (Experiments) to learn how day trading works and prove whether it beats holding.
+**Modeled, never executable**; the live fund is code-blocked from same-day round trips (a §6 hard limit)
+and that stays. Same family as the Options Desk (D91) + Short Lab (D101). Spec: `docs/DAY-TRADE-LAB.md`.
+**Decisions (Cam):** the point is **"prove it vs buy-and-hold"** (a Trader arm vs a Holder arm on the
+same name/day/cash) · **live paper** (mark against today's live ~15-min-delayed quotes; no new data).
+
+Two virtual books: the **Trader** (you, churning — every fill crosses the bid/ask spread + pays a
+commission) vs the **Holder** (mirrors the Trader's FIRST buy, then sits). A scoreboard shows each book's
+P&L, round trips, and the Trader's total fees + spread — making the structural drag visible. Honest
+caveat on the page: delayed quotes can't model scalping edge, so it demonstrates the *drag*, not a
+winning strategy. Marking is a no-LLM tick (zero tokens).
+
+**Phase 1 — BUILT 2026-07-01.** `lib/day/mechanics.ts` (pure, cents; 8 tests locking the drag — a churner
+trails a holder on a flat tape) · `lib/day/lab.ts` (engine + read: start/buy/sell/flatten/mark/reset,
+holder-mirrors-first-buy) · 3 `Day*` tables (pushed to prod) · `app/api/day-lab` · `agent/day-lab/tick.ts`
+(`runDayLabTick`, wired in runner) · `components/day/*` + `app/day-lab/page.tsx` (Trader-vs-Holder equity
+chart + verdict scoreboard + "past rounds" tally + education) · nav entry · 5 glossary terms (day-trading,
+bid-ask-spread, slippage, pattern-day-trader, settlement). **102/102 tests, `tsc` clean.** Verified E2E:
+start AAPL → buy 50 (Holder mirrors) → buy 10 more (Holder does NOT mirror) → flatten → Trader −$21 vs
+Holder −$8.50, churn cost $21. Web DEPLOYED; **agent tick built + verified (v2.38) but swap deferred to a
+safe window** (built near the 13:30 check-in with a session in flight — no urgency, the page marks on view).
+**Phase 2** (rule-based auto-trader arm, not Opus) optional/later. Guardrails unchanged. Not committed.

@@ -610,6 +610,36 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "A crowded short doubling in days as everyone scrambles to cover at once.",
     related: ["short-interest", "days-to-cover", "margin-call"],
   },
+  "day-trading": {
+    term: "Day trading",
+    def: "Buying and selling the same stock within a single day — often held minutes to hours — to profit from small intraday moves, never holding overnight. The opposite of GRQ's buy-and-hold-on-conviction style, and it's a hard §6 limit for the fund (no same-day round trips).",
+    example: "Buy at 10am, sell at noon, buy again at 2pm — all in one name, all in one day.",
+    related: ["bid-ask-spread", "slippage", "pattern-day-trader"],
+  },
+  "bid-ask-spread": {
+    term: "Bid/ask spread",
+    def: "The gap between the highest price buyers will pay (the bid) and the lowest sellers will take (the ask). You buy at the ask and sell at the bid, so every round trip starts underwater by the spread — a hidden cost that adds up fast when you trade often.",
+    example: "Bid $99.90 / ask $100.10: buy and immediately sell and you're already down 20¢ a share.",
+    related: ["day-trading", "slippage", "liquidity"],
+  },
+  slippage: {
+    term: "Slippage",
+    def: "The difference between the price you expected and the price you actually got — because the market moved or your order was big enough to push it. Together with commissions and the spread, it's what quietly eats a day-trader's thin per-trade margins.",
+    example: "You aim to buy at $100 but the fill comes back at $100.08 — that 8¢ is slippage.",
+    related: ["bid-ask-spread", "day-trading", "commission"],
+  },
+  "pattern-day-trader": {
+    term: "Pattern Day Trader (PDT)",
+    def: "A US rule: make 4+ day trades in 5 business days in a margin account under $25,000 and you're flagged as a Pattern Day Trader and restricted from further day trading until you top up. Cash accounts avoid it but hit settlement limits instead.",
+    example: "A $10k margin account gets locked from day trading after its fourth round trip in a week.",
+    related: ["day-trading", "settlement", "margin-call"],
+  },
+  settlement: {
+    term: "Settlement",
+    def: "Stock trades take a day or two to officially settle (cash and shares change hands). In a cash account you can't rebuy with proceeds that haven't settled yet — doing so is a 'good-faith violation' — which caps how fast you can churn without margin.",
+    example: "Sell today, and that cash isn't fully available to redeploy until it settles a day later.",
+    related: ["day-trading", "pattern-day-trader"],
+  },
   "days-to-cover": {
     term: "Days to cover",
     def: "Short interest divided by average daily volume — roughly how many days of normal trading it would take every short to buy back. A high number means shorts are packed into a small exit, which makes a squeeze more violent.",

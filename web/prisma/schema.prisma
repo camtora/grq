@@ -1571,6 +1571,69 @@ model ShortDeskNav {
   @@index([armId, at])
 }
 
+// The Day-Trading Lab (docs/DAY-TRADE-LAB.md, D103) — a MODELED sandbox: a Trader arm (you, churning
+// intraday) vs a Holder arm (buy once, hold), same name + day + cash, to prove whether day trading beats
+// holding after fees + spread. Never executable; the fund is code-blocked from same-day round trips (§6).
+// Own tables, single-currency virtual book (no FX), integer cents + whole shares (rule #4).
+model DayLab {
+  id                Int         @id @default(autoincrement())
+  owner             String? // null = shared house lab; an email = a member's
+  symbol            String
+  companyName       String?
+  currency          String      @default("USD")
+  tradingDate       String // YYYY-MM-DD (ET) the lab was opened
+  startingCashCents Int         @default(5000000) // $50k each book (matches the desk/bull stakes)
+  status            String      @default("OPEN") // OPEN | CLOSED
+  // Trader book (churns intraday)
+  traderCashCents   Int         @default(5000000)
+  traderShares      Int         @default(0)
+  traderAvgCents    Int         @default(0) // weighted avg fill price (display)
+  // Holder book (mirrors the Trader's FIRST buy, then holds)
+  holderShares      Int         @default(0)
+  holderCashCents   Int         @default(5000000)
+  holderEntryCents  Int? // set on the first buy; null = not yet activated
+  // running teaching stats
+  realizedCents     Int         @default(0) // Trader's realized P&L (net of sell commissions)
+  feesCents         Int         @default(0) // total commissions the Trader paid
+  spreadCents       Int         @default(0) // total spread cost the Trader paid
+  roundTrips        Int         @default(0) // completed Trader sells
+  lastMarkCents     Int?
+  openedAt          DateTime    @default(now())
+  closedAt          DateTime?
+  trades            DayTrade[]
+  marks             DayMark[]
+
+  @@index([owner, status])
+}
+
+model DayTrade {
+  id               Int      @id @default(autoincrement())
+  labId            Int
+  lab              DayLab   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  at               DateTime @default(now())
+  side             String // BUY | SELL | FLATTEN
+  shares           Int
+  priceCents       Int // fill (ask on buy, bid on sell)
+  midCents         Int
+  commissionCents  Int
+  spreadCostCents  Int
+  realizedPnlCents Int? // sells only
+  card             String? // plain-English teaching line
+
+  @@index([labId])
+}
+
+model DayMark {
+  id                Int      @id @default(autoincrement())
+  labId             Int
+  lab               DayLab   @relation(fields: [labId], references: [id], onDelete: Cascade)
+  at                DateTime @default(now())
+  traderEquityCents Int
+  holderEquityCents Int
+
+  @@index([labId, at])
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // External accounts — VISIBILITY ONLY (the members' personal TD Direct Investing
 // TFSAs etc., pulled in via SnapTrade so Cam & Graham can see each other's outside

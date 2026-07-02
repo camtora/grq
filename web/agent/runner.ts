@@ -33,6 +33,7 @@ import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
 import { runShortLabTick } from "./short-lab/tick";
 import { runShortDeskTick } from "./short-lab/desk-engine";
+import { runDayLabTick } from "./day-lab/tick";
 import { verifyExperiments } from "../lib/race/verify";
 import { snapshotPredictions } from "../lib/report-card/snapshot";
 import { syncAllConnected, snapshotExternalValues } from "../lib/external/store";
@@ -872,6 +873,10 @@ async function tick() {
   // The Short Lab agent A/B (background — control long-only vs treatment long+short; docs/SHORT-LAB.md
   // Phase 2). OFF unless GRQ_SHORTLAB_AGENT — it runs Opus sessions. Sandbox; the fund never shorts.
   runShortDeskTick().catch((e) => console.error("[shortdesk] tick error", e instanceof Error ? e.message : e));
+
+  // The Day-Trading Lab (background — marks Trader vs Holder equity to live; docs/DAY-TRADE-LAB.md).
+  // Pure math + quotes, NO model tokens. Sandbox; the fund is code-blocked from same-day round trips.
+  runDayLabTick().catch((e) => console.error("[daylab] tick error", e instanceof Error ? e.message : e));
 }
 
 // Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every
