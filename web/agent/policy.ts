@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.41-phase4";
+export const AGENT_VERSION = "v2.42-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -171,7 +171,7 @@ export const DESK = {
   // Per OPTION position, the premium-at-risk cap as a % of NAV. Options are leveraged, so the size
   // that matters is the premium paid (the max loss), not notional. A blowup-guard, not a strategy.
   optionMaxPremiumPctNav: Number(process.env.GRQ_DESK_OPT_PREMIUM_PCT ?? "8") || 8,
-  optionMaxOpenPerWeek: Number(process.env.GRQ_DESK_OPT_PER_WEEK ?? "5") || 5, // new option opens / rolling 7d
+  optionMaxOpenPerWeek: Number(process.env.GRQ_DESK_OPT_PER_WEEK ?? "0") || 0, // new option opens / rolling 7d; 0 = NO weekly cap (Cam 2026-07-02) — sandbox, so let the treatment run; re-impose via GRQ_DESK_OPT_PER_WEEK, no deploy. Still bounded by the per-position premium cap + cash.
   minDte: 30, // contract-selection window — keeps theta/gamma noise out of the comparison (docs §3.4)
   maxDte: 60,
 };

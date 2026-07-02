@@ -3,7 +3,7 @@ import { getQuotes } from "../../lib/broker/quotes";
 import { trackedUniverse } from "../../lib/universe";
 import { usdCadRate, toCadCents } from "../../lib/fx";
 import { getMacro, macroLine } from "../../lib/macro";
-import { DIALS } from "../policy";
+import { DIALS, DESK } from "../policy";
 import { etParts, isMarketOpen, minutesToClose } from "../calendar";
 import { DESK_CONTROL_SUFFIX, DESK_TREATMENT_SUFFIX } from "./parse";
 import { daysToExpiry } from "../../lib/options/price";
@@ -107,7 +107,7 @@ ${treatment ? `\n## Your option positions\n${optViews.length ? optViews.join("\n
 ## Your risk dial — ${e.dial} (HARD: calls that violate are auto-rejected by the desk gate)
 Stocks: max position ${dial.maxPositionPct}% of NAV = **${money(maxPosCad)} per name**. Keep ≥ ${dial.cashFloorPct}% cash (${money(cashFloorCad)}) → deployable now: **${money(deployableCad)}**. Max ${dial.maxNewTradesPerWeek} new stock buys / rolling week. No shorting, no margin.${
     treatment
-      ? `\nOptions: BUY-TO-OPEN ONLY (never sell/write, never spreads). Premium per option position capped at ~${money(maxOptPremiumCad)} (8% of NAV) — that premium IS your max loss. Max ${5} new option opens / rolling week. US-listed underlyings only.`
+      ? `\nOptions: BUY-TO-OPEN ONLY (never sell/write, never spreads). Premium per option position capped at ~${money(maxOptPremiumCad)} (8% of NAV) — that premium IS your max loss. ${DESK.optionMaxOpenPerWeek > 0 ? `Max ${DESK.optionMaxOpenPerWeek} new option opens / rolling week.` : "No weekly cap on the number of option opens (still bounded by the premium cap + your cash)."} US-listed underlyings only.`
       : ""
   }
 

@@ -133,9 +133,12 @@ async function applyOptionOpen(entrant: Lite, call: DeskCall, sessionAt: Date, f
   const cap = (book.navCadCents * DESK.optionMaxPremiumPctNav) / 100;
   if (premiumCad > cap) return { filled: false, rejectReason: `premium ${(premiumCad / 100).toFixed(2)} CAD exceeds ${DESK.optionMaxPremiumPctNav}% NAV cap (${(cap / 100).toFixed(2)})` };
 
-  const weekAgo = new Date(sessionAt.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const opensWeek = await prisma.deskTrade.count({ where: { entrantId: entrant.id, side: "BUY_TO_OPEN", at: { gte: weekAgo } } });
-  if (opensWeek >= DESK.optionMaxOpenPerWeek) return { filled: false, rejectReason: `weekly option-open cap (${DESK.optionMaxOpenPerWeek}) reached` };
+  // Weekly option-open cap — 0 = no cap (Cam 2026-07-02). Skip the count entirely when uncapped.
+  if (DESK.optionMaxOpenPerWeek > 0) {
+    const weekAgo = new Date(sessionAt.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const opensWeek = await prisma.deskTrade.count({ where: { entrantId: entrant.id, side: "BUY_TO_OPEN", at: { gte: weekAgo } } });
+    if (opensWeek >= DESK.optionMaxOpenPerWeek) return { filled: false, rejectReason: `weekly option-open cap (${DESK.optionMaxOpenPerWeek}) reached` };
+  }
 
   await prisma.$transaction(async (tx) => {
     const pos = await tx.deskPosition.findFirst({ where: { entrantId: entrant.id, kind: call.right!, underlying: bare, strikeCents: c.strikeCents, expiry: c.expiry } });
