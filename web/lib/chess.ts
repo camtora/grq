@@ -4,6 +4,7 @@ import { fmpLogo } from "./logos";
 import { getQuotes } from "./broker/quotes";
 import { getCloses, refreshBars } from "./bars";
 import { trackedUniverse, yahooForListing, isCadTradeable, type UniverseRow } from "./universe";
+import { bareChainKey, parseBoard, type ChessBoardData, type BoardTrend } from "./chess-board";
 
 // Chess Moves (docs/CHESS-MOVES.md) — the view/helper layer for the thematic /
 // supply-chain experiment. The agent writes the board (ChessTheme) + ranked pieces
@@ -11,54 +12,22 @@ import { trackedUniverse, yahooForListing, isCadTradeable, type UniverseRow } fr
 // momentum, logo, Alfred's call when we cover it — reusing the exact data path The Hunt
 // uses (getCloses + getQuotes + computeHeat). Pure read/derive; never trades.
 
-// Bare-ticker key, stripping CA venues AND ".US" — same canonical key the knowledge
-// graph uses (lib/graph/related.ts), so plays join tracked names + persisted edges.
-export const bareChainKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
-
-// ---- The board (chain map) the agent writes as boardJson on ChessTheme ----
-
-export type BoardItem = { symbol?: string; name: string; note?: string };
-export type BoardStage = { key?: string; label: string; role?: string; items: BoardItem[] };
-export type BoardLink = { from: string; to: string; label?: string };
-export type ChessBoardData = { stages: BoardStage[]; links: BoardLink[] };
-
-/** Tolerant parse of boardJson — never throws, drops malformed bits. */
-export function parseBoard(json: string | null | undefined): ChessBoardData {
-  const empty: ChessBoardData = { stages: [], links: [] };
-  if (!json) return empty;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(json);
-  } catch {
-    return empty;
-  }
-  if (!raw || typeof raw !== "object") return empty;
-  const o = raw as { stages?: unknown; links?: unknown };
-  const stages: BoardStage[] = Array.isArray(o.stages)
-    ? o.stages
-        .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && typeof (s as { label?: unknown }).label === "string")
-        .map((s) => ({
-          key: typeof s.key === "string" ? s.key : undefined,
-          label: String(s.label).trim(),
-          role: typeof s.role === "string" ? s.role.trim() : undefined,
-          items: Array.isArray(s.items)
-            ? (s.items as unknown[])
-                .filter((i): i is Record<string, unknown> => !!i && typeof i === "object" && typeof (i as { name?: unknown }).name === "string")
-                .map((i) => ({
-                  symbol: typeof i.symbol === "string" ? i.symbol.trim().toUpperCase() : undefined,
-                  name: String(i.name).trim(),
-                  note: typeof i.note === "string" ? i.note.trim() : undefined,
-                }))
-            : [],
-        }))
-    : [];
-  const links: BoardLink[] = Array.isArray(o.links)
-    ? o.links
-        .filter((l): l is Record<string, unknown> => !!l && typeof l === "object" && typeof (l as { from?: unknown }).from === "string" && typeof (l as { to?: unknown }).to === "string")
-        .map((l) => ({ from: String(l.from).trim(), to: String(l.to).trim(), label: typeof l.label === "string" ? l.label.trim() : undefined }))
-    : [];
-  return { stages, links };
-}
+// The board MAP types + pure helpers (bareChainKey, parseBoard, the range math) live in
+// the client-safe ./chess-board module so the client <ChessBoard> can share them; we
+// re-export here so existing `from "@/lib/chess"` imports are unchanged.
+export {
+  bareChainKey,
+  parseBoard,
+  sliceBoardRange,
+  BOARD_RANGES,
+  type BoardItem,
+  type BoardStage,
+  type BoardLink,
+  type ChessBoardData,
+  type BoardTrend,
+  type TrendPoint,
+  type BoardRangeKey,
+} from "./chess-board";
 
 // ---- Resolved plays for the page ----
 
@@ -249,16 +218,18 @@ export async function buildPlayViews(plays: PlayRow[]): Promise<ChessPlayView[]>
   return views;
 }
 
-// ---- Per-piece 30-day trend for the board MAP (the chain visualization) ----
+// ---- Per-piece price tape for the board MAP (the chain visualization) ----
 
-export type BoardTrend = { change30d: number | null; spark: number[] };
-
-/** A 30-day price trend (sparkline + % change) for every company in the board MAP that carries a
- *  ticker — so the chain view shows, at a glance, which pieces are rising vs falling. Keyed by bare
- *  ticker. Reuses the exact data path The Hunt / buildPlayViews use (getCloses → refreshBars for gaps
- *  → the trailing 30-close window), so a board piece and the same name as a ranked play read the same.
- *  A private/foreign/uncovered piece with no listed bars is simply absent (no indicator). Pure
- *  read/derive — a board is Alfred's reasoning, never a trade. */
+/** The price series for every company in the board MAP that carries a ticker — so the chain view can
+ *  render a small price tape per piece with a shared 1D…1Y range toggle (sliced client-side in
+ *  <ChessBoard>, like the stock page's PriceChart). Keyed by bare ticker. Reuses the same data path
+ *  The Hunt / buildPlayViews use (getCloses + getQuotes). We pull ~1y of daily closes (backfilling
+ *  "1y" for names we've never charted, < 8 closes), TOP UP any piece that's fallen behind the freshest
+ *  name (uncovered pieces aren't in the nightly bars job), and APPEND today's live quote as the final
+ *  point — so the default 1D view shows how each name is doing TODAY at a glance, and the longer ranges
+ *  read as-of-now. One batched getQuotes call, no per-name intraday fetch. A private/foreign piece with
+ *  no listed bars is simply absent (no tape). Pure read/derive — a board is Alfred's reasoning, never a
+ *  trade. */
 export async function buildBoardTrends(board: ChessBoardData): Promise<Map<string, BoardTrend>> {
   // Distinct board-item tickers (the flow-links reuse these same symbols).
   const bySym = new Map<string, string>(); // bareKey → first raw symbol seen
@@ -278,19 +249,52 @@ export async function buildBoardTrends(board: ChessBoardData): Promise<Map<strin
   const resolved = Array.from(bySym.entries()).map(([k, raw]) => ({ k, listing: uBy.get(k)?.symbol ?? yahooForListing(raw) }));
 
   const listings = Array.from(new Set(resolved.map((r) => r.listing)));
+  // ~1y of daily closes so the 1D…1Y toggle can slice locally. Backfill "1y" only for names we've
+  // never charted (< 8 closes) — a single call grabs the whole window; covered names already have it.
   const closesByListing = new Map<string, { date: Date; closeCents: number }[]>();
-  await Promise.all(listings.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
+  await Promise.all(listings.map(async (s) => closesByListing.set(s, await getCloses(s, 300))));
   const missing = listings.filter((s) => (closesByListing.get(s)?.length ?? 0) < 8);
   if (missing.length) {
-    await refreshBars(missing, "3mo").catch(() => 0);
-    await Promise.all(missing.map(async (s) => closesByListing.set(s, await getCloses(s, 40))));
+    await refreshBars(missing, "1y").catch(() => 0);
+    await Promise.all(missing.map(async (s) => closesByListing.set(s, await getCloses(s, 300))));
   }
+
+  // Freshen STALE pieces (Cam 2026-07-02): board names we don't track aren't in the nightly bars
+  // job, so an uncovered piece backfilled once can sit days behind — which would make its "1D"
+  // tape the move on some old date, not yesterday. Top up any listing whose newest close trails
+  // the freshest name on the board with a cheap "5d" fetch, so every series ends at the last close.
+  const newestMs = (s: string) => { const r = closesByListing.get(s); return r?.length ? r[r.length - 1].date.getTime() : 0; };
+  const freshest = Math.max(0, ...listings.map(newestMs));
+  const stale = listings.filter((s) => { const r = closesByListing.get(s); return !!r && r.length >= 8 && newestMs(s) < freshest; });
+  if (stale.length) {
+    await refreshBars(stale, "5d").catch(() => 0);
+    await Promise.all(stale.map(async (s) => closesByListing.set(s, await getCloses(s, 300))));
+  }
+
+  // Live quotes so the DEFAULT 1D view shows how each name is doing TODAY at a glance — not the
+  // last completed session. We append today's live price to the series as its final point (when
+  // today's daily bar isn't stored yet), so 1D = today's move and the longer ranges are as-of-now.
+  // One batched getQuotes call (the same feed buildPlayViews uses) — no per-name intraday fetch.
+  const quotes = await getQuotes(listings);
+  const nowMs = Date.now();
+  const todayEt = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // YYYY-MM-DD
+  const barDay = (d: Date) => d.toISOString().slice(0, 10); // bars are the ET day at UTC midnight
 
   const out = new Map<string, BoardTrend>();
   for (const { k, listing } of resolved) {
-    const spark = (closesByListing.get(listing) ?? []).slice(-30).map((c) => c.closeCents);
-    if (spark.length < 2 || spark[0] <= 0) continue; // no usable history → no indicator
-    out.set(k, { change30d: (spark[spark.length - 1] - spark[0]) / spark[0], spark });
+    const rows = closesByListing.get(listing) ?? [];
+    if (rows.length < 2) continue; // no usable history → no tape
+    const series = rows.map((r) => ({ t: r.date.getTime(), c: r.closeCents }));
+    const q = quotes.get(listing);
+    // Append the live price as "now" so the longer ranges reflect today — but only if today's close
+    // isn't already stored (else we'd double-count it and today would read ~0%).
+    const live = q?.midCents;
+    if (live != null && live > 0 && barDay(rows[rows.length - 1].date) !== todayEt) {
+      series.push({ t: nowMs, c: live });
+    }
+    // todayBps = the quote's authoritative move since the prior session's close — 1D uses this so it
+    // means "since yesterday's close" exactly, unaffected by a missing/holiday-gapped daily bar.
+    out.set(k, { series, todayBps: q?.dayChangeBps ?? null });
   }
   return out;
 }

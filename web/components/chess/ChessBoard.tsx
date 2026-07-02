@@ -1,16 +1,31 @@
+"use client";
+
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Card } from "@/components/ui";
 import Sparkline from "@/components/Sparkline";
 import { pct } from "@/lib/money";
-import { parseBoard, bareChainKey, type ChessBoardData, type BoardTrend } from "@/lib/chess";
+import {
+  parseBoard,
+  bareChainKey,
+  sliceBoardRange,
+  BOARD_RANGES,
+  type BoardRangeKey,
+  type ChessBoardData,
+  type BoardTrend,
+} from "@/lib/chess-board";
 
 // The board — the value chain as a HORIZONTAL left→right rail. Each stage is a column in chain
 // order (upstream → downstream), the companies inside link to their stock page, and the stages
 // are joined by → arrows so you read the supply chain across the page. Below it, "How it flows"
 // names the specific company-to-company links. Horizontally scrollable on narrow screens;
-// dependency-free (a force-directed SVG graph is still a follow-up). Pure display — the chain
-// is Alfred's reasoning, never imported data.
+// dependency-free (a force-directed SVG graph is still a follow-up). The chain is Alfred's
+// reasoning, never imported data.
+//
+// When trendBySym is supplied (the /chess board page), every piece with listed history shows a
+// small price TAPE and one shared range toggle (1D…1Y, default 1D) drives them all — the same
+// range set as the stock page tape, sliced client-side from the daily closes. 1D is the last
+// session's move (no per-name intraday fetch, so a dense board stays fast).
 export default function ChessBoard({
   board,
   hrefBySym,
@@ -21,12 +36,15 @@ export default function ChessBoard({
   hrefBySym?: Map<string, string>;
   /** Bare ticker to highlight on the board (e.g. the stock page you're viewing). */
   highlightKey?: string;
-  /** 30-day price trend per piece (bare ticker → sparkline + % change), from buildBoardTrends.
-   *  When present, each company with listed history shows a mini trend indicator. */
+  /** Daily-close series per piece (bare ticker → series), from buildBoardTrends. When present,
+   *  each company with listed history shows a range-aware price tape. */
   trendBySym?: Map<string, BoardTrend>;
 }) {
   const data = typeof board === "string" || board == null ? parseBoard(board ?? null) : board;
+  const [range, setRange] = useState<BoardRangeKey>("1D");
   if (data.stages.length === 0) return null;
+
+  const hasTrends = !!trendBySym && trendBySym.size > 0;
 
   // Every ticker links to its stock page — the play's resolved href when we have it, else the
   // bare-ticker page (which kicks off research on open, D46).
@@ -39,6 +57,27 @@ export default function ChessBoard({
 
   return (
     <div className="space-y-3">
+      {/* Shared range toggle — one control sets the period for every tape on the board. */}
+      {hasTrends && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-teal-200/40">Price move per name</span>
+          <div className="flex gap-1">
+            {BOARD_RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
+                  range === r.key ? "bg-teal-400/15 text-teal-200" : "text-teal-200/40 hover:text-teal-200/70"
+                }`}
+              >
+                {r.key}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* The horizontal chain — stages left→right, joined by flow arrows. Scrolls sideways
           when the chain is longer than the viewport. */}
       <div className="overflow-x-auto pb-2">
@@ -56,7 +95,12 @@ export default function ChessBoard({
                       const href = stockHref(it.symbol);
                       const hot = isHot(it.symbol);
                       const trend = it.symbol ? trendBySym?.get(bareChainKey(it.symbol)) : undefined;
-                      const up = (trend?.change30d ?? 0) >= 0;
+                      // Slice the piece's daily series to the selected range → the tape line + its % move.
+                      const tape = trend ? sliceBoardRange(trend.series, range) : null;
+                      // For 1D, prefer the quote's authoritative day-change (% since the prior close) so
+                      // it's exact across holiday/missing-bar gaps; other ranges use the sliced series.
+                      const changePct = range === "1D" && trend?.todayBps != null ? trend.todayBps / 10_000 : tape?.changePct ?? null;
+                      const up = (changePct ?? 0) >= 0;
                       // Hover underlines only the SYMBOL (the link affordance), never the
                       // company name — house convention (docs/DESIGN.md §1.7).
                       const head = (
@@ -78,18 +122,17 @@ export default function ChessBoard({
                             head
                           )}
                           {hot && <span className="ml-1 align-middle text-[9px] font-bold uppercase tracking-wider text-teal-300/80">← this name</span>}
-                          {/* 30-day trend — a mini price sparkline + % so the chain shows which pieces
-                              are rising vs falling at a glance. Only for pieces with listed history. */}
-                          {trend && trend.spark.length >= 2 && (
+                          {/* The price tape — a small line over the selected range + the % move,
+                              so the chain shows which pieces are rising vs falling at a glance.
+                              Only for pieces with enough listed history for the chosen range. */}
+                          {tape && changePct != null && (
                             <span className="mt-1 flex items-center gap-1.5">
-                              <Sparkline values={trend.spark} width={72} height={22} className="h-[22px] w-[72px] shrink-0" />
-                              {trend.change30d != null && (
-                                <span className={`font-mono text-[11px] font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
-                                  {up ? "+" : ""}
-                                  {pct(trend.change30d, 0)}
-                                </span>
-                              )}
-                              <span className="text-[9px] uppercase tracking-wider text-teal-200/30">30d</span>
+                              <Sparkline values={tape.pts.map((p) => p.c)} width={96} height={26} className="h-[26px] w-24 shrink-0" />
+                              <span className={`font-mono text-[11px] font-semibold tabular-nums ${up ? "text-emerald-400" : "text-red-400"}`}>
+                                {up ? "+" : ""}
+                                {pct(changePct, 1)}
+                              </span>
+                              <span className="text-[9px] uppercase tracking-wider text-teal-200/30">{range}</span>
                             </span>
                           )}
                           {it.note && <span className="block text-[11px] text-teal-200/45">{it.note}</span>}
