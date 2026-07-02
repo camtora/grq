@@ -57,6 +57,34 @@ async function ensureDossierQueued(key: string): Promise<"inflight" | "current" 
  *  of bars so the liquidity screen can run later, queues a fresh dossier if none is
  *  current, and alerts the members. Mirrors the human "watch" action, attributed to
  *  the agent. */
+/** Resolve a bare ticker to its PRIMARY listing by liquidity — so a US name isn't trapped by a thin
+ *  same-ticker junk listing on the TSX/TSXV (D105: addCandidate used to probe .TO/.V FIRST and take
+ *  the first that quoted, so e.g. "JPM" grabbed a $42 Toronto look-alike instead of the $334 NYSE JPM).
+ *  Probes the US (bare) + Canadian (.TO/.V) listings, picks the most-liquid by dollar-volume, but KEEPS
+ *  a Canadian listing when it's genuinely liquid (a real dual-listing like ENB.TO), not a look-alike.
+ *  Returns null if nothing quotes. Used by addCandidate + the one-off repair script. */
+export async function resolvePrimaryListing(
+  bareKey: string,
+): Promise<{ yahoo: string; priceCents: number; name: string | null; currency: "CAD" | "USD" } | null> {
+  const key = bareTicker(bareKey);
+  const isCa = (y: string) => /\.(TO|V|NE|CN)$/i.test(y);
+  const probed = await Promise.all(
+    [key, `${key}.TO`, `${key}.V`].map(async (y) => {
+      const p = await probeYahooSymbol(y).catch(() => null);
+      return p ? { yahoo: y, ...p, dollarVol: p.priceCents * (p.volume || 0) } : null;
+    }),
+  );
+  const ok = probed.filter((x): x is NonNullable<typeof x> => !!x);
+  if (ok.length === 0) return null;
+  const best = ok.reduce((a, b) => (b.dollarVol > a.dollarVol ? b : a));
+  const caBest = ok.filter((x) => isCa(x.yahoo)).sort((a, b) => b.dollarVol - a.dollarVol)[0];
+  // Prefer a Canadian listing only when it's genuinely liquid (≥10% of the most-liquid listing's
+  // dollar-volume) — a junk look-alike (JPM.TO is ~0.1% of NYSE JPM) falls through to the US listing.
+  // The ~1000× gap dwarfs CAD/USD FX, so no conversion is needed to compare.
+  const pick = caBest && caBest.dollarVol >= 0.1 * best.dollarVol ? caBest : best;
+  return { yahoo: pick.yahoo, priceCents: pick.priceCents, name: pick.name, currency: isCa(pick.yahoo) ? "CAD" : "USD" };
+}
+
 export async function addCandidate(symbol: string, reason: string, name?: string): Promise<CandidateResult> {
   const key = bareTicker(symbol);
 
@@ -78,18 +106,18 @@ export async function addCandidate(symbol: string, reason: string, name?: string
   const candidates = await prisma.universeMember.count({ where: { status: "CANDIDATE" } });
   if (candidates >= CANDIDATE_CAP) return { ok: false, reason: `candidate cap reached (${CANDIDATE_CAP}) — retire something first.` };
 
-  // Resolve the listing — hunt finds are TSX/TSXV, so try CAD listings first.
-  const tries = symbol.includes(".") ? [symbol.toUpperCase()] : [`${key}.TO`, `${key}.V`, key];
-  let resolved: { yahoo: string; priceCents: number; name: string | null } | null = null;
-  for (const y of tries) {
-    const p = await probeYahooSymbol(y).catch(() => null);
-    if (p) {
-      resolved = { yahoo: y, ...p };
-      break;
-    }
+  // Resolve the listing by LIQUIDITY (D105) so a US name isn't trapped by a thin junk CA look-alike.
+  // An explicit suffixed input (JPM.TO) is trusted as-is; a bare ticker resolves to its primary listing.
+  let resolved: { yahoo: string; priceCents: number; name: string | null; currency: "CAD" | "USD" } | null;
+  if (symbol.includes(".")) {
+    const p = await probeYahooSymbol(symbol.toUpperCase()).catch(() => null);
+    resolved = p ? { yahoo: symbol.toUpperCase(), priceCents: p.priceCents, name: p.name, currency: /\.(TO|V|NE|CN)$/i.test(symbol) ? "CAD" : "USD" } : null;
+  } else {
+    resolved = await resolvePrimaryListing(key);
   }
-  if (!resolved) return { ok: false, reason: `couldn't find a live quote for ${key} (tried ${tries.join(", ")}).` };
-  const currency = /\.(TO|V|NE|CN)$/i.test(resolved.yahoo) ? "CAD" : null;
+  if (!resolved) return { ok: false, reason: `couldn't find a live quote for ${key}.` };
+  // Keep the old storage semantics: CAD is explicit, US stays null (inferred as USD downstream).
+  const currency = resolved.currency === "CAD" ? "CAD" : null;
 
   if (existing) {
     await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: "agent" } });

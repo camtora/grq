@@ -2676,3 +2676,21 @@ the DB for the human `/accounts` page, the `/portfolio` "Yours" lane, and the `E
 None of that ever enters the LLM's context. The app still shows household value; the agents simply can't see it.
 The hard no-execution wall (D97/guardrail #1) was already structural and is untouched. `AGENT_VERSION` →
 **v2.41-phase4**.
+
+### D105 — Fix: US large-caps trapped by junk Canadian same-ticker listings (Cam, 2026-07-02)
+
+The agent flagged that quality US large-caps it wanted were "trapped by our feed" — JPM showed $42.54, V
+$0.44, MA $32.56, PG $24.99 — every one a thin same-ticker look-alike on the TSX/TSXV, not the real company.
+**Root cause:** `addCandidate` (`agent/promote.ts`) resolved a bare ticker by probing `.TO`, then `.V`, then
+the bare US ticker — IN THAT ORDER — and took the FIRST listing that returned any quote. A US name that also
+has a junk Canadian listing (JPM.TO ~$42, ~23k shares/day vs NYSE JPM ~$334, ~3.2M shares/day) got the junk,
+and every downstream quote/bar resolved to it. ~39 US large-caps were stored with a Canadian `yahoo` suffix.
+
+**Fix:** resolve by LIQUIDITY. `resolvePrimaryListing` probes the US (bare) + Canadian (.TO/.V) listings and
+picks the most-liquid by dollar-volume, keeping a Canadian listing ONLY when it's genuinely liquid (≥10% of
+the top listing's dollar-volume) — so a real dual-listing (ENB.TO, SHOP.TO) stays CAD while a junk look-alike
+(JPM.TO, ~0.1% of NYSE JPM) falls through to the real US listing. `probeYahooSymbol` now returns
+volume/exchange/currency. A one-off repair (`scripts/fix-mislisted-candidates.ts`, dry-run by default)
+re-resolved every CA-suffixed member, flipped the **39** mis-listed US names to their bare US listing, purged
+the junk bars/quotes, and refetched the real data — **0 held (ACTIVE) positions affected**, all legitimately
+Canadian names untouched. `AGENT_VERSION` → **v2.43-phase4**.

@@ -26,6 +26,9 @@ type ChartMeta = {
   chartPreviousClose?: number;
   previousClose?: number;
   regularMarketTime?: number; // epoch seconds
+  regularMarketVolume?: number;
+  exchangeName?: string;
+  currency?: string;
 };
 
 async function fetchOne(symbol: string): Promise<FetchedQuote | null> {
@@ -84,7 +87,7 @@ export async function fetchYahooQuotes(symbols: string[]): Promise<FetchedQuote[
  *  the right suffix). Returns price + best-effort name, or null. */
 export async function probeYahooSymbol(
   yahooSymbol: string,
-): Promise<{ priceCents: number; name: string | null } | null> {
+): Promise<{ priceCents: number; name: string | null; volume: number; exchange: string | null; currency: string | null } | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -97,7 +100,13 @@ export async function probeYahooSymbol(
     const meta = json.chart?.result?.[0]?.meta;
     const price = meta?.regularMarketPrice;
     if (!meta || typeof price !== "number" || !(price > 0)) return null;
-    return { priceCents: Math.round(price * 100), name: meta.shortName ?? meta.longName ?? null };
+    return {
+      priceCents: Math.round(price * 100),
+      name: meta.shortName ?? meta.longName ?? null,
+      volume: typeof meta.regularMarketVolume === "number" ? meta.regularMarketVolume : 0,
+      exchange: meta.exchangeName ?? null,
+      currency: meta.currency ?? null,
+    };
   } catch {
     return null;
   } finally {
