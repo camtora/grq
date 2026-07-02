@@ -62,6 +62,7 @@ let lastOptionsMs = 0;
 let lastSocialMs = 0;
 let lastMacroEventDay = "";
 let lastNewsRun = 0;
+let lastNoonNewsDay = "";
 let lastPredSnapshotDay = "";
 let lastExperimentCheckDay = "";
 let startupReviewChecked = false;
@@ -851,6 +852,23 @@ async function tick() {
         if (t.triaged > 0) console.log(`[news] triaged ${t.triaged}`);
       })
       .catch((e) => console.error("[news] ingest/triage failed:", e instanceof Error ? e.message : e));
+  }
+
+  // Guaranteed midday headline refresh (Cam 2026-07-02) — the ~90-min cadence above can leave the
+  // Today page's headlines stale right at the lunchtime read, so force one capture + triage in the
+  // noon-ET hour, once per day, independent of that timer. Realigns lastNewsRun off noon so the
+  // afternoon cadence stays fresh too. Runs before maybeScheduledSessions() so the noon check-in
+  // can't starve it. Background (must NOT block the tick); feeds the digest, off the Opus quota.
+  if (p.minutesSinceMidnight >= 12 * 60 && p.minutesSinceMidnight < 13 * 60 && lastNoonNewsDay !== p.dateStr) {
+    lastNoonNewsDay = p.dateStr;
+    lastNewsRun = Date.now();
+    runNewsIngest()
+      .then(async (r) => {
+        console.log(`[news] noon refresh — captured ${r.captured} new across ${r.symbols} names`);
+        const t = await triageNews();
+        if (t.triaged > 0) console.log(`[news] noon refresh — triaged ${t.triaged}`);
+      })
+      .catch((e) => console.error("[news] noon refresh failed:", e instanceof Error ? e.message : e));
   }
 
   await maybeScheduledSessions();
