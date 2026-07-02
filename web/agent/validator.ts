@@ -15,7 +15,7 @@ import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import type { OptionLeg } from "../lib/broker/types";
 import { resolveOpenContract } from "../lib/options/order";
-import { universeEntry } from "../lib/universe";
+import { universeEntry, currencyForSymbol } from "../lib/universe";
 import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
 import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay, etDateStr } from "./calendar";
 import { HARD, DIALS, OPTIONS, AGENT_VERSION } from "./policy";
@@ -127,7 +127,10 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
 
   // -- session/time rails --
   if (Date.now() - bootTime < HARD.warmupMs) return refuse("Agent warm-up: no trading within 5 minutes of a restart.");
-  if (!isMarketOpen()) return refuse("Market is closed (9:30–16:00 ET trading window).");
+  // Exchange-aware: a US name trades when NYSE is open, a CA name when the TSX is open — so the fund can
+  // work the US sleeve on a TSX-only holiday (Canada Day) and vice-versa. Holidays differ by exchange.
+  const market: "US" | "CA" = (await currencyForSymbol(symbol)) === "USD" ? "US" : "CA";
+  if (!isMarketOpen(new Date(), market)) return refuse(`${market === "US" ? "US market (NYSE)" : "Canadian market (TSX)"} is closed (9:30–16:00 ET; holidays differ by exchange).`);
   if (order.side === "BUY") {
     if (minutesSinceOpen() < HARD.noEntriesFirstMin) return refuse(`No new entries in the first ${HARD.noEntriesFirstMin} minutes (open is noisy).`);
     if (minutesToClose() < HARD.noEntriesLastMin) return refuse(`No new entries in the last ${HARD.noEntriesLastMin} minutes before close.`);
@@ -363,9 +366,9 @@ export async function validateAndPlaceOption(o: AgentOptionOrder, thesis: Thesis
     return refuse("Options are off: a member must enable allowOptions on Settings first — Alfred can't (guardrail #3).");
   }
 
-  // -- session/time rails (shared with stocks) --
+  // -- session/time rails (shared with stocks) — options are US-only, so check NYSE --
   if (Date.now() - bootTime < HARD.warmupMs) return refuse("Agent warm-up: no trading within 5 minutes of a restart.");
-  if (!isMarketOpen()) return refuse("Market is closed (9:30–16:00 ET trading window).");
+  if (!isMarketOpen(new Date(), "US")) return refuse("US market (NYSE) is closed (9:30–16:00 ET).");
   if (opening) {
     if (minutesSinceOpen() < HARD.noEntriesFirstMin) return refuse(`No new entries in the first ${HARD.noEntriesFirstMin} minutes (open is noisy).`);
     if (minutesToClose() < HARD.noEntriesLastMin) return refuse(`No new entries in the last ${HARD.noEntriesLastMin} minutes before close.`);

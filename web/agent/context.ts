@@ -1,6 +1,6 @@
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
-import { etParts, isMarketOpen, minutesToClose } from "./calendar";
+import { etParts, isMarketOpen, minutesToClose, openExchanges } from "./calendar";
 import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
 import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
@@ -219,10 +219,17 @@ export async function buildContext(): Promise<string> {
     `  ${w.symbol}${callOf(w.symbol)}${w.note ? ` · your note: ${w.note}` : ""}`;
 
   const shortLesson = await shortLessonLine().catch(() => null);
+  const ex = openExchanges();
+  const marketNote =
+    ex.ca === ex.us
+      ? ""
+      : ex.us
+        ? "\n⚠️ TODAY: the TSX (Canadian market) is CLOSED for a holiday — ONLY US-listed names (USD) can trade; any CA/.TO order is REJECTED by the gate. Work the US sleeve today.\n"
+        : "\n⚠️ TODAY: the US market (NYSE) is CLOSED for a holiday — ONLY Canadian names (CAD/.TO) can trade; any US order is REJECTED by the gate. Work the CA sleeve today.\n";
 
   return `# GRQ FUND STATE (generated ${p.dateStr} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET)
 
-Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — TSX session 9:30–16:00 ET.
+Market: ${isMarketOpen() ? `OPEN (closes in ${minutesToClose()} min)` : "CLOSED"} — session 9:30–16:00 ET. Exchanges: NYSE ${ex.us ? "open" : "closed"} · TSX ${ex.ca ? "open" : "closed"}.${marketNote}
 Kill switch: ${pf.killSwitch ? "ENGAGED — no order will fill" : "off"}.
 
 ## Account

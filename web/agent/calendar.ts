@@ -1,10 +1,13 @@
-// Market calendar for the TSX, computed in ET via Intl (no OS tzdata needed).
-// Regular session 9:30–16:00 ET. Extend HOLIDAYS each December.
+// Market calendar for the TSX + NYSE, computed in ET via Intl (no OS tzdata needed). Both exchanges
+// share the 9:30–16:00 ET session; only the HOLIDAY lists differ — so the fund can trade the US sleeve
+// on a TSX-only holiday (e.g. Canada Day) and the CA sleeve on a US-only holiday (e.g. July 4). The §6
+// gate checks the ORDER's exchange (by currency). Extend both lists each December.
 
 const ET = "America/Toronto";
+export type Market = "CA" | "US" | "ANY";
 
 // TSX full-closure holidays, 2026. (2027: add before New Year's.)
-const HOLIDAYS = new Set([
+const CA_HOLIDAYS = new Set([
   "2026-01-01", // New Year's Day
   "2026-02-16", // Family Day
   "2026-04-03", // Good Friday
@@ -12,9 +15,23 @@ const HOLIDAYS = new Set([
   "2026-07-01", // Canada Day
   "2026-08-03", // Civic Holiday
   "2026-09-07", // Labour Day
-  "2026-10-12", // Thanksgiving
+  "2026-10-12", // Thanksgiving (CA)
   "2026-12-25", // Christmas
   "2026-12-28", // Boxing Day (observed)
+]);
+
+// NYSE full-closure holidays, 2026. (2027: add before New Year's.)
+const US_HOLIDAYS = new Set([
+  "2026-01-01", // New Year's Day
+  "2026-01-19", // Martin Luther King Jr. Day
+  "2026-02-16", // Washington's Birthday (Presidents' Day)
+  "2026-04-03", // Good Friday
+  "2026-05-25", // Memorial Day
+  "2026-06-19", // Juneteenth
+  "2026-07-03", // Independence Day (observed — July 4 is a Saturday)
+  "2026-09-07", // Labor Day
+  "2026-11-26", // Thanksgiving (US)
+  "2026-12-25", // Christmas
 ]);
 
 export type ETParts = {
@@ -49,18 +66,28 @@ export function etParts(d: Date = new Date()): ETParts {
   };
 }
 
-export function isMarketDay(d: Date = new Date()): boolean {
+/** Is the given exchange trading `d`? `market` = "CA" (TSX), "US" (NYSE), or "ANY" (either open — the
+ *  default, so a TSX-only holiday like Canada Day still counts as a trading day for the US sleeve). */
+export function isMarketDay(d: Date = new Date(), market: Market = "ANY"): boolean {
   const p = etParts(d);
-  return p.weekday >= 1 && p.weekday <= 5 && !HOLIDAYS.has(p.dateStr);
+  if (p.weekday < 1 || p.weekday > 5) return false;
+  const ca = !CA_HOLIDAYS.has(p.dateStr);
+  const us = !US_HOLIDAYS.has(p.dateStr);
+  return market === "CA" ? ca : market === "US" ? us : ca || us;
 }
 
 const OPEN_MIN = 9 * 60 + 30;
 const CLOSE_MIN = 16 * 60;
 
-export function isMarketOpen(d: Date = new Date()): boolean {
-  if (!isMarketDay(d)) return false;
+export function isMarketOpen(d: Date = new Date(), market: Market = "ANY"): boolean {
+  if (!isMarketDay(d, market)) return false;
   const m = etParts(d).minutesSinceMidnight;
   return m >= OPEN_MIN && m < CLOSE_MIN;
+}
+
+/** Which exchanges are trading `d` (for the agent's context note + honest UI). */
+export function openExchanges(d: Date = new Date()): { ca: boolean; us: boolean } {
+  return { ca: isMarketDay(d, "CA"), us: isMarketDay(d, "US") };
 }
 
 /** Minutes since the 9:30 open (negative before open). */
