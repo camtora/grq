@@ -20,7 +20,6 @@ const PRIMARY: NavLink[] = [
   { href: "/market/smart-money", label: "Smart Money" },
   { href: "/universe", label: "Universe" },
   { href: "/market/browse", label: "Browse" },
-  { href: "/options", label: "Options" },
 ];
 const SECONDARY: NavLink[] = [{ href: "/reports", label: "Reports" }];
 // The model bake-offs / sandboxes live under one "Experiments" dropdown (Cam & Graham, 2026-06-27).
@@ -31,6 +30,7 @@ const EXPERIMENTS: NavLink[] = [
   { href: "/bulls", label: "Bull Race" },
   { href: "/options-desk", label: "Options Desk" },
   { href: "/short-lab", label: "Short Lab" },
+  { href: "/day-lab", label: "Day-Trading Lab" },
   { href: "/chess", label: "Chess Moves" },
   { href: "/report-card", label: "Report Card" },
 ];

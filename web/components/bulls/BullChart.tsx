@@ -8,7 +8,7 @@ export type ChartSeries = { label: string; color: string; points: { at: Date; re
 const fmtX = (d: Date) =>
   d.toLocaleString("en-US", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export default function BullChart({ series, height = 380 }: { series: ChartSeries[]; height?: number }) {
+export default function BullChart({ series, height = 380, width = 640 }: { series: ChartSeries[]; height?: number; width?: number }) {
   const all = series.flatMap((s) => s.points);
   if (all.length < 2) {
     return (
@@ -25,9 +25,11 @@ export default function BullChart({ series, height = 380 }: { series: ChartSerie
   const maxY = Math.max(0, ...ys);
   const spanX = maxX - minX || 1;
   const spanY = maxY - minY || 1;
-  const W = 640;
-  const H = height; // viewBox aspect → rendered height = container width × H/W. Default 380 (the
-  // leaderboard-column aspect on /bulls); callers can pass a flatter banner aspect (full-width on top).
+  const W = width; // viewBox width. Rendered height = container width × H/W, and text/strokes scale by
+  // container width / W — so a WIDER viewBox on a full-width banner keeps the chart short AND stops the
+  // axis text blowing up. Default 640 (the /bulls leaderboard-column aspect); the Options Desk passes a
+  // wide value so its full-width chart stays a compact strip (Cam 2026-07-01).
+  const H = height;
   const padL = 46;
   const padR = 18;
   const padT = 18;

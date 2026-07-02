@@ -19,6 +19,8 @@ export type Section =
   | "Second Opinions"
   | "Bull Race"
   | "Options Desk"
+  | "Short Lab"
+  | "Day-Trading Lab"
   | "Chess Moves"
   | "Report Card"
   | "Settings"
@@ -49,7 +51,18 @@ export function sectionForPath(pathRaw: string): Section {
   if (path === "/reports" || path.startsWith("/reports/")) return "Reports";
   if (path === "/race" || path.startsWith("/race/")) return "Second Opinions"; // nav: renamed from "Race"
   if (path === "/bulls" || path.startsWith("/bulls/")) return "Bull Race";
-  if (path === "/options-desk" || path.startsWith("/options-desk/")) return "Options Desk";
+  // The options education portal (/options) was folded into the Options Desk (Cam
+  // 2026-07-01) — its standalone nav tab is gone and it's now reached from the desk
+  // header, so both bucket as one section.
+  if (
+    path === "/options-desk" ||
+    path.startsWith("/options-desk/") ||
+    path === "/options" ||
+    path.startsWith("/options/")
+  )
+    return "Options Desk";
+  if (path === "/short-lab" || path.startsWith("/short-lab/")) return "Short Lab";
+  if (path === "/day-lab" || path.startsWith("/day-lab/")) return "Day-Trading Lab";
   if (path === "/chess" || path.startsWith("/chess/")) return "Chess Moves";
   if (path === "/report-card" || path.startsWith("/report-card/")) return "Report Card";
   if (path === "/settings" || path.startsWith("/settings/")) return "Settings";

@@ -26,7 +26,27 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
       <PageHeader
         title="The Options Desk"
         sub="Same money, same menu, one difference: one Opus can only buy and sell stocks (exactly what the fund does today); the other can ALSO buy call and put options. Which one compounds better? A pure sandbox — and a place to learn how options actually work, on real names."
-        right={isMember ? <NewDeskForm /> : null}
+        right={
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {/* The options learning portal, folded in here (Cam 2026-07-01): its four pages as
+                buttons in the header. Open to everyone — viewers can learn/play. */}
+            {[
+              { href: "/options?tab=learn", label: "Learn" },
+              { href: "/options?tab=calculator", label: "Calculator" },
+              { href: "/options?tab=experiment", label: "Experiment" },
+              { href: "/options?tab=ask", label: "Ask" },
+            ].map((p) => (
+              <Link
+                key={p.href}
+                href={p.href}
+                className="rounded-lg border border-teal-400/15 bg-teal-400/[0.03] px-2.5 py-1 text-xs font-semibold text-teal-300/80 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+              >
+                {p.label}
+              </Link>
+            ))}
+            {isMember ? <NewDeskForm /> : null}
+          </div>
+        }
       />
 
       {!data || data.arms.length === 0 ? (
@@ -51,7 +71,7 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
             </div>
           ) : null}
 
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-teal-200/50">
               <span className="font-semibold text-teal-50">{data.desk.name}</span>
               <span>{data.arms.length} arms</span>
@@ -67,12 +87,10 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
               they're easy to compare position-for-position (Cam 2026-06-30). */}
           <div className="mb-4">
             <div className="mb-2"><PanelHeader>Return over time</PanelHeader></div>
-            {/* Cap the width: the SVG scales to its container, so on the 1700px-wide layout a
-                full-bleed chart blows up both its height AND its axis labels (~2.6×). Holding it
-                to ~768px keeps it a compact, readable strip (Cam 2026-06-30). */}
-            <div className="max-w-3xl">
-              <BullChart height={200} series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "var(--spark-up)", points: a.navHistory }))} />
-            </div>
+            {/* Full page width, held to a compact height (Cam 2026-07-01): a WIDE viewBox (width=1400)
+                keeps the rendered strip short and the axis text normal-sized even full-bleed on the
+                1700px layout — the flatter aspect is what stops the old height/text blowup. */}
+            <BullChart width={1400} height={200} series={data.arms.map((a) => ({ label: a.label, color: ARM_COLORS[a.arm] ?? "var(--spark-up)", points: a.navHistory }))} />
           </div>
           <div>
             <div className="mb-2"><PanelHeader>The two arms</PanelHeader></div>
