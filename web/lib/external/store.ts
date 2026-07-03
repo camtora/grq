@@ -156,6 +156,7 @@ type ParsedHolding = {
   marketValueCents: number;
   currency: string;
   openPnlCents: number | null;
+  avgCostCents: number | null;
 };
 
 /** Real cash from SnapTrade's balances endpoint (per-currency rows). Take the entry
@@ -189,6 +190,9 @@ function parsePositions(rows: unknown[], acctCurrency: string): ParsedHolding[] 
       marketValueCents: Math.round(price * units * 100),
       currency,
       openPnlCents: p.open_pnl == null ? null : toCents(p.open_pnl),
+      // The explicit per-share buy price ("bought @") — reconciles exactly with
+      // marketValue − openPnl on TD, but this is the honest source, not a derivation.
+      avgCostCents: p.average_purchase_price == null ? null : toCents(p.average_purchase_price),
     });
   }
   return out;
@@ -348,6 +352,56 @@ export async function externalDayBaselineCadCents(email: string): Promise<number
   return row?.totalCadCents ?? null;
 }
 
+export type PersonalPositionView = {
+  email: string;
+  institution: string;
+  accountName: string;
+  accountType: string | null;
+  qty: string;
+  currency: string;
+  priceCents: number;
+  marketValueCents: number;
+  openPnlCents: number | null;
+  avgCostCents: number | null;
+};
+
+/** The MEMBERS' personal (external, read-only) positions in ONE name — the stock-page
+ *  "in our own accounts" panel. Matched on bare ticker + listing currency (a CAD holding
+ *  only claims a CA listing, USD only a US one) so a US name never shows on its CDR
+ *  shell's page or vice versa (Graham holds Nasdaq SPCX; the universe's SPCX is the CDR).
+ *  DISPLAY-ONLY (D97): rendered server-side for members; never imported by agent
+ *  context/tools — the agents stay blind to personal money. */
+export async function personalPositionsFor(
+  emails: string[],
+  quoteSymbol: string,
+): Promise<PersonalPositionView[]> {
+  const bare = bareTicker(quoteSymbol).toUpperCase();
+  const wantCad = /\.(TO|V|NE|CN)$/i.test(quoteSymbol);
+  const views = await accountsForMembers(emails);
+  const out: PersonalPositionView[] = [];
+  for (const v of views) {
+    for (const a of v.accounts) {
+      for (const h of a.holdings) {
+        if (bareTicker(h.symbol).toUpperCase() !== bare) continue;
+        if ((h.currency.toUpperCase() === "CAD") !== wantCad) continue;
+        out.push({
+          email: v.email,
+          institution: a.institution,
+          accountName: a.name,
+          accountType: a.accountType,
+          qty: h.qty,
+          currency: h.currency,
+          priceCents: h.priceCents,
+          marketValueCents: h.marketValueCents,
+          openPnlCents: h.openPnlCents,
+          avgCostCents: h.avgCostCents,
+        });
+      }
+    }
+  }
+  return out.sort((x, y) => y.marketValueCents - x.marketValueCents);
+}
+
 /** Forget a member's external data locally (privacy / unlink). For Personal keys
  *  we do NOT delete the SnapTrade user — it's the member's own auto-provisioned
  *  account and lives independent of GRQ; we just drop our mirror + cached userId. */
@@ -371,6 +425,7 @@ export type HoldingView = {
   marketValueCents: number;
   currency: string;
   openPnlCents: number | null;
+  avgCostCents: number | null; // per-share buy price, from the brokerage
 };
 
 export type AccountView = {
@@ -472,6 +527,7 @@ export async function accountsForMembers(emails: string[]): Promise<MemberAccoun
             marketValueCents: h.marketValueCents,
             currency: h.currency,
             openPnlCents: h.openPnlCents,
+            avgCostCents: h.avgCostCents,
           })),
         };
       }),

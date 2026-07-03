@@ -27,6 +27,7 @@ import { stockNewsCards } from "@/lib/news/queries";
 import { NewsRow } from "@/components/NewsList";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
 import StockSmartMoney from "@/components/smart-money/StockSmartMoney";
+import StockPersonalPositions from "@/components/StockPersonalPositions";
 import OptionsPanel from "@/components/OptionsPanel";
 import SocialPanel from "@/components/SocialPanel";
 import StockChessBoards from "@/components/chess/StockChessBoards";
@@ -720,6 +721,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           )}
         </section>
       )}
+
+      {/* Members' personal positions in this name (members-only — viewers never see it;
+          the agents never see it either, D97). */}
+      {isMember && <StockPersonalPositions quoteSymbol={entry.yahoo} />}
 
       {watch?.note && (
         <Card className="mb-6 p-4">

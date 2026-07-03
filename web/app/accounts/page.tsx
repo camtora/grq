@@ -154,6 +154,14 @@ function MemberSection({
   );
 }
 
+/** Cost basis for the Unrealized column: the brokerage's explicit avg buy price × shares
+ *  when reported (the honest source), else derived from sync-time value − open P&L. */
+function bookCostFor(h: { qty: string; avgCostCents: number | null; marketValueCents: number; openPnlCents: number | null }): number | null {
+  const units = Number(h.qty);
+  if (h.avgCostCents != null && Number.isFinite(units) && units > 0) return Math.round(units * h.avgCostCents);
+  return h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents;
+}
+
 function AccountCard({ account: a }: { account: AccountView }) {
   return (
     <Card className="overflow-hidden">
@@ -243,7 +251,7 @@ function AccountCard({ account: a }: { account: AccountView }) {
                     symbol={h.quoteSymbol}
                     qty={Number(h.qty)}
                     priceCents={h.priceCents}
-                    bookCostCents={h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents}
+                    bookCostCents={bookCostFor(h)}
                     currency={h.currency}
                   />
                 </td>

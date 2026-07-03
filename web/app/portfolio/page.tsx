@@ -166,7 +166,13 @@ export default async function Portfolio() {
           qty: h.qty,
           priceCents: h.priceCents,
           marketValueCents: h.marketValueCents,
-          bookCostCents: h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents,
+          // Explicit avg buy price × shares when the brokerage reports it; else the old derivation.
+          bookCostCents:
+            h.avgCostCents != null && Number.isFinite(Number(h.qty)) && Number(h.qty) > 0
+              ? Math.round(Number(h.qty) * h.avgCostCents)
+              : h.openPnlCents == null
+                ? null
+                : h.marketValueCents - h.openPnlCents,
           openPnlCents: h.openPnlCents,
           currency: h.currency,
           stance: stanceByBare.get(bareKey(h.symbol)) ?? null,
