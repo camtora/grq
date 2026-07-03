@@ -42,7 +42,8 @@ open ~/Developer/Projects/personal/grqgo-build/ios/GRQGo.xcworkspace
 
 ```bash
 # On the Mac; leaves Mac-localhost:8081 pointing at Ubuntu's Metro on 8082
-ssh -N -L 8081:localhost:8082 camerontora@192.168.2.34 &
+ssh -N -L 8081:localhost:8082 camerontora@192.168.2.34 &                # from the LAN
+ssh -N -L 8081:localhost:8082 -p 2222 camerontora@camerontora.ca &     # from anywhere else
 ```
 
 A Debug build looks for Metro at `localhost:8081` by default, so with the tunnel up it
