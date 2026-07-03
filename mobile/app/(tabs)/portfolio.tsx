@@ -286,7 +286,8 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
 
   return (
     <View>
-      {data.members.map((m) => {
+      {/* Only the signed-in member's own accounts (Cam 2026-07-03). */}
+      {data.members.filter((m) => m.isSelf).map((m) => {
         const accounts = m.connected ? m.accounts.filter((a) => !a.disabled) : [];
         const cad = accounts.filter((a) => a.currency === 'CAD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
         const usd = accounts.filter((a) => a.currency === 'USD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
@@ -317,25 +318,20 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
 
         if (!(m.connected && accounts.length > 0)) {
           return (
-            <View key={m.email}>
-              <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
+            <View key={m.email} style={{ marginTop: 16 }}>
               <Card>
                 <Text style={[s.empty, { color: p.textMuted }]}>
-                  {m.isSelf
-                    ? 'Not connected yet — link your brokerage on the web Accounts page.'
-                    : `${m.name} hasn't connected an account yet.`}
+                  Not connected yet — link your brokerage on the web Accounts page.
                 </Text>
               </Card>
             </View>
           );
         }
 
-        // Every member's section is structurally IDENTICAL to Alfred's view:
-        // hero (NET ASSET VALUE) → The Tape → The book.
+        // Structurally IDENTICAL to Alfred's view: hero (NET ASSET VALUE) →
+        // The Tape → The book.
         return (
           <View key={m.email}>
-            <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
-
             <View style={s.hero}>
               <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
               <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(total)}</Text>
@@ -364,9 +360,7 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
               </View>
             )}
 
-            <SectionTitle sub={m.isSelf ? "what you're holding" : `what ${m.name} is holding`}>
-              The book
-            </SectionTitle>
+            <SectionTitle sub="what you're holding">The book</SectionTitle>
             <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
             <View style={{ marginTop: 10 }}>
               <CountryBook groups={bookGroups} empty="No holdings synced yet." />
