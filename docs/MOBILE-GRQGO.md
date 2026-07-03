@@ -78,31 +78,56 @@ expansion of the shared cert, a conf.d file proxying to host port 8082, and the
 AppDelegate patch. The tunnel makes this optional — do it if the tunnel gets annoying
 or when a physical device (which can't see the Mac's localhost) needs the dev loop.
 
-## Status (2026-07-03)
+## Status (2026-07-03, end of day one)
 
-All five pages SHIPPED: Today (the newspaper) · Portfolio (Alfred | Personal, CA/US books)
-· The Wire (full-screen paged feed, five card kinds) · Watchlist (D78 parity + add-ticker)
-· Search (jump-to-stock index) — plus the stock page (`/stock/[symbol]`, hidden tab screen,
-web section order incl. RatingBar/mascots, no-dossier → Research → poll flow). Google auth,
-member-keyed themes, markdown rendering, universal stock linking: all live.
+THE FULL APP SHIPPED IN A DAY: five tabs (Today · Portfolio w/ Alfred|Personal +
+From-the-desk briefings · The Wire · Watchlist · More), the stock page (dossier
+parity incl. no-dossier→Research→poll), search overlay, Ask Alfred (bull, SSE),
+Cam↔Graham chat + sharing everywhere, notifications (feed + options + verified
+push incl. sandbox), Settings (kill switch · risk dial · FX approvals · appearance
+override), More (Smart Money · Browse · Reports · Second Opinions · Bull Race ·
+Options Desk · Report Card · Chess Moves). Live hot-reload on both phones via
+metro.grq.camerontora.ca.
 
-## Backlog — next up (teed 2026-07-03)
+## Backlog (noted 2026-07-03 EOD — Cam)
 
-**Stock page gaps (each needs a small dossier-feed addition unless noted):**
-1. **Options positioning panel** (Tier 3, D88) — `getOptions`/`optionsLine` exist server-side;
-   add an `options` block to `dossierResponse` + a panel (US names only, CA dark).
-2. **Social sentiment panel** (Tier 8, D89) — `getSocial`/`socialLine`; same pattern, mark
-   "on probation" honestly like the web.
-3. **Related names** (D-KG Slice 1) — the web computes on-the-fly in the page; needs a
-   `related` block in the feed.
-4. **Journal / the record** — `record[]` is ALREADY on the wire (typed journal history);
-   render as a collapsible section. No backend change.
-5. **Scoreboard** — `scoreboard[]` already on the wire; render when non-empty.
-6. **Tappable [[glossary]] terms** — MdText tints them; wire to the shared glossary for
-   inline explainers (the literacy pillar).
+**Stock page — the missed pieces:**
+1. Options positioning panel (Tier 3, D88) — add an `options` block to
+   `dossierResponse` (`getOptions`/`optionsLine` exist); US names only.
+2. Social sentiment panel (Tier 8, D89) — `social` block; keep the "on probation"
+   honesty label.
+3. Related names (knowledge-graph Slice 1) — needs a `related` block in the feed.
+4. The record — `record[]` is ALREADY on the wire (typed journal history); render
+   as a collapsible section. No backend change.
+5. Scoreboard — `scoreboard[]` already on the wire; render when non-empty.
+6. Tappable [[glossary]] terms → inline explainers (the literacy pillar).
+7. Confidence levers ("what would change our mind", D93) — not on the wire yet.
+8. Personal positions + bought-at price on dossiers (the web got this in v2.46) —
+   check/mirror on the mobile wire.
+9. Watch/unwatch + pin/block directives ON the stock page (watch lives only on
+   Watchlist rows today); price-chart range selector (30/90/180d).
 
-**Functional gaps (bigger):** notifications center + push registration (bundle-id/APNs
-decision needed — grqgo ≠ the native app's bundle), Ask Alfred chat (SSE), a home for
-kill switch/risk dial/FX/share (avatar sheet or settings screen), live quote polling,
-Today's date archive, shared/contract.ts imports via metro watchFolders, TestFlight
-device build, native `ios/` retirement at parity.
+**Experiments — build out to match the site:**
+10. Second Opinions: per-day/per-call detail (web `race/[date]`), call browser.
+11. Bull Race: past races (the feed's `races[]`), per-bull trade history, richer
+    holdings (avg cost, market value).
+12. Options Desk: member desk controls + muteable nudge (D92), per-option decay
+    sparkline, expiry/punchline cards; link the options education portal.
+13. Report Card: the web's filters (source · verdict · ticker · latest-per-name),
+    full-ledger paging.
+14. Chess Moves: theme DETAIL (`/api/chess/[id]` — the parsed board + heat-ranked
+    plays + levers), brief/research actions.
+15. Short Lab · Day-Trading Lab · options portal — web-only; want mobile feeds +
+    screens eventually.
+
+**Platform:**
+16. Cache /api/today server-side (~9s per load today; FMP quota).
+17. Today date archive (the web's ?d= day-changer).
+18. Live quote polling (the web's <LiveQuote>) on stock pages + Today.
+19. The Hunt as a page (heat board) — feed exists; the Wire carries finds meanwhile.
+20. Ask Alfred: thread switcher (each other's threads) + symbol-aimed chat from
+    stock pages.
+21. Agent container rebuild picks up per-token push topics (until then agent-
+    originated pushes reach only native-app tokens; web-originated are correct).
+22. shared/contract.ts direct imports (metro watchFolders); TestFlight/EAS-Update
+    distribution for release builds; retire ios/ + GRQNext at parity.
