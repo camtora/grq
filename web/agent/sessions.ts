@@ -467,6 +467,37 @@ Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no sy
   if (body) await sendDiscord("info", `Pre-morning read — ${etDateStr()}`, body.slice(0, 1500));
 }
 
+/** Daily market brief (Today page, under Headlines) — ONE plain paragraph of what's moving the whole
+ *  market, written via WebSearch. Two editions/day: AM (~8:00 ET, the morning read) and PM (~18:00 ET,
+ *  the evening wrap that ends the day). Market-wide context, NOT about the fund; stored in MarketBrief.
+ *  The final assistant text IS the paragraph (like the EOD report) — no journal write. */
+export async function runMarketBrief(edition: "AM" | "PM"): Promise<void> {
+  const ctx = await buildContext();
+  const when = edition === "AM" ? "~8:00 AM ET, the morning read as the day begins" : "~6:00 PM ET, the evening wrap that ends the day";
+  const prompt = `${ctx}
+
+# TASK: Daily market brief — ${edition} edition (${when}), ${etDateStr()}
+
+Write ONE tight paragraph (4–7 sentences, ~90–150 words) telling Cam & Graham everything they need to know about the market ${edition === "AM" ? "as the day begins" : "now that the day is closing"} — the things actually being talked about. Use WebSearch (and WebFetch a source or two) to get it RIGHT and CURRENT; do not rely on memory for today's events.
+
+Cover, in order of importance (only what's genuinely true/notable today — don't pad):
+- Whether the US/Canadian markets are OPEN or CLOSED today and why (a holiday like Independence Day / Canada Day, an early close).
+- The 1–3 biggest forces moving markets: a Fed decision or speech, a major economic print (jobs / CPI / PPI / GDP), a big earnings wave, a policy move (an executive order, tariffs), or a geopolitical event (a war, an election).
+- What's SCHEDULED that matters (a print due at 8:30 ET, an FOMC meeting, a marquee earnings name after the close).
+- The overall tone — risk-on / risk-off, and what the major indices and yields are doing.
+
+Rules: ONE paragraph of plain prose. No title, no headers, no bullet points, no markdown. Be specific and concrete (name the number, the company, the country); never vague filler like "markets are mixed." Honest and readable; never glib about losses. This is market-wide context, NOT about our fund or our holdings. Your ENTIRE final response is that single paragraph — nothing before or after it, and do not write a journal entry.`;
+  const body = await runSession({ label: `market-brief-${edition.toLowerCase()}`, prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 12 });
+  const clean = (body ?? "").trim();
+  if (!clean) return;
+  await prisma.marketBrief.upsert({
+    where: { date_edition: { date: etDateStr(), edition } },
+    create: { date: etDateStr(), edition, body: clean },
+    update: { body: clean },
+  });
+  await sendDiscord("info", `Market brief — ${edition} · ${etDateStr()}`, clean.slice(0, 1500));
+}
+
 export async function runMorningResearch(): Promise<void> {
   const startedAt = new Date();
   const ctx = await buildContext();

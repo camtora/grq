@@ -1744,3 +1744,18 @@ model ExternalDailyValue {
   @@unique([ownerEmail, date])
   @@index([ownerEmail])
 }
+
+// The daily market brief (Today page, under Headlines) — a single-paragraph read of the
+// whole market: what's moving, what's scheduled (jobs/CPI/Fed), holidays, big policy/geo
+// items. Alfred writes it via WebSearch twice a day: an AM edition ~8:00 ET and a PM edition
+// ~18:00 ET that "ends the day." The Today page shows the latest edition for the viewed date.
+model MarketBrief {
+  id        Int      @id @default(autoincrement())
+  date      String // ET date "YYYY-MM-DD" (sortable)
+  edition   String // "AM" | "PM"
+  body      String // the single-paragraph summary
+  createdAt DateTime @default(now())
+
+  @@unique([date, edition])
+  @@index([date])
+}

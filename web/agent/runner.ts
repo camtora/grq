@@ -28,7 +28,7 @@ import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
-import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves } from "./sessions";
+import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves, runMarketBrief } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
 import { runShortLabTick } from "./short-lab/tick";
@@ -498,6 +498,26 @@ async function maybeScheduledSessions() {
         sessionRunning = false;
       }
       return;
+    }
+  }
+
+  // Daily market brief — the "what you need to know about the market" paragraph on Today, under
+  // Headlines. TWO editions, EVERY day (incl. weekends/holidays — the July-4th-closed note is the
+  // point): AM ~7:30 ET (lands before the 8:00 hunt, Cam 2026-07-02) and PM ~18:00 ET (ends the day).
+  // WebSearch-backed Opus; once/day each; runs on any free tick in the window.
+  {
+    const brief = m >= 7 * 60 + 30 && m < 8 * 60 ? ("AM" as const) : m >= 18 * 60 && m < 18 * 60 + 45 ? ("PM" as const) : null;
+    if (brief) {
+      const existing = await prisma.marketBrief.count({ where: { date: etDateStr(), edition: brief } });
+      if (existing === 0) {
+        sessionRunning = true;
+        try {
+          await runMarketBrief(brief);
+        } finally {
+          sessionRunning = false;
+        }
+        return;
+      }
     }
   }
 

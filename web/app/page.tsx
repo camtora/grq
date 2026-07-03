@@ -180,52 +180,44 @@ function relDay(d: string, today: string): string {
   return n < 0 ? `${-n}d ago` : `in ${n}d`;
 }
 
-function EarningRow({ e, mode, today }: { e: EarnView; mode: "reported" | "upcoming"; today: string }) {
-  // Beat/miss on the reported side — EPS first, revenue as the fallback.
+// A reported-earnings BUBBLE — a small clickable card (like a headline, smaller): who reported,
+// beat/miss, the day reaction, a one-line read of what it means, our call, and a link to the full
+// report on the stock page. The plain-English "read" is templated from the data we have; a richer
+// agent-written earnings take can enrich `read` later.
+function EarningBubble({ e, stance, today }: { e: EarnView; stance: string | null; today: string }) {
   const beat =
     e.epsActual != null && e.epsEstimated != null
       ? e.epsActual >= e.epsEstimated
       : e.revenueActual != null && e.revenueEstimated != null
         ? e.revenueActual >= e.revenueEstimated
         : null;
-  const soon = mode === "upcoming" && (e.date === today || relDay(e.date, today) === "tomorrow");
+  const epsPart = e.epsActual != null && e.epsEstimated != null ? ` (EPS ${fmtEps(e.epsActual)} vs ${fmtEps(e.epsEstimated)} est)` : "";
+  const movePart = e.dayBps != null ? `; the stock is ${signedPct(e.dayBps)} on the print` : "";
+  const read =
+    beat == null ? "Just reported — the numbers and the market's reaction are on the stock page." : `${beat ? "Beat" : "Missed"} estimates${epsPart}${movePart}.`;
   return (
-    <li className="flex items-center gap-3 px-3 py-2">
-      <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-8 w-8 text-[11px]" />
-      <div className="min-w-0">
-        <Link href={`/stocks/${e.symbol}`} className="font-semibold text-teal-200 hover:underline">
-          {e.symbol}
-        </Link>
-        <div className="truncate text-xs text-teal-200/40">{e.name}</div>
+    <Link
+      href={`/stocks/${e.symbol}`}
+      className="group flex flex-col rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-3 transition-colors hover:border-teal-400/30 hover:bg-teal-400/[0.03]"
+    >
+      <div className="flex items-center gap-2">
+        <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-7 w-7 text-[10px]" />
+        <div className="min-w-0">
+          <div className="font-semibold text-teal-100 group-hover:text-teal-200">{e.symbol}</div>
+          <div className="truncate text-[10px] text-teal-200/40">{e.name}</div>
+        </div>
+        <div className="ml-auto shrink-0 text-right tabular-nums">
+          {beat != null && <div className={`text-[10px] font-black ${beat ? "text-emerald-400" : "text-red-400"}`}>{beat ? "beat ✓" : "miss ✗"}</div>}
+          {e.dayBps != null && <div className={`text-xs ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)}</div>}
+        </div>
       </div>
-      <div className="ml-auto shrink-0 text-right">
-        {mode === "reported" ? (
-          <>
-            <div className="flex items-center justify-end gap-1.5 tabular-nums">
-              {beat != null && (
-                <span className={`text-[10px] font-black ${beat ? "text-emerald-400" : "text-red-400"}`}>
-                  {beat ? "beat ✓" : "miss ✗"}
-                </span>
-              )}
-              {e.dayBps != null && <span className={`text-xs ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)}</span>}
-            </div>
-            <div className="text-[10px] text-teal-200/40">
-              {fmtEarnDate(e.date)} · EPS {fmtEps(e.epsActual)} vs {fmtEps(e.epsEstimated)} est
-            </div>
-          </>
-        ) : (
-          <>
-            <div className={`text-xs font-semibold tabular-nums ${soon ? "text-amber-300" : "text-teal-200/70"}`}>
-              {relDay(e.date, today)}
-            </div>
-            <div className="text-[10px] text-teal-200/40">
-              {fmtEarnDate(e.date)}
-              {e.epsEstimated != null && ` · EPS est ${fmtEps(e.epsEstimated)}`}
-            </div>
-          </>
-        )}
+      <p className="mt-2 text-[11.5px] leading-snug text-teal-200/60">{read}</p>
+      <div className="mt-1.5 flex items-center gap-2 text-[10px] text-teal-200/35">
+        <span>{fmtEarnDate(e.date)}</span>
+        {stance && <span className="rounded bg-teal-400/10 px-1.5 py-0.5 font-semibold text-teal-200/70">Alfred: {stance}</span>}
+        <span className="ml-auto text-teal-300/60 group-hover:underline">full report →</span>
       </div>
-    </li>
+    </Link>
   );
 }
 
@@ -474,6 +466,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     .slice(0, 8);
   const hasEarnings = recentEarn.length > 0 || upcomingEarn.length > 0;
 
+  // The daily market brief — latest edition (PM after 6pm, else AM) for the viewed date. The
+  // single paragraph under Headlines. Written by Alfred at ~7:30 AM + ~6:00 PM ET (runMarketBrief).
+  const marketBrief = await prisma.marketBrief
+    .findFirst({ where: { date: dateStr }, orderBy: { createdAt: "desc" } })
+    .catch(() => null);
+
   const edition = isToday ? editionLabel() : "Archive";
 
   const viewer = await getSession();
@@ -615,40 +613,21 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </section>
       )}
 
-      {/* Market pulse — more headlines, 3×3. Live, so today only (Cam 2026-06-16) */}
-      {isToday && marketNews.length > 3 && (
+      {/* The Market Today — Alfred's daily brief paragraph, right under the headlines (Cam 2026-07-02).
+          AM (~7:30 ET) + PM (~6:00 ET) editions; the latest for the day is shown. Market-wide, not the fund. */}
+      {marketBrief && (
         <section className="mb-6">
-          <SectionTitle>Market pulse · more headlines</SectionTitle>
-          <div className="grid gap-x-6 sm:grid-cols-3">
-            {marketNews.slice(3, 12).map((n, i) => (
-              <div key={i} className="border-t border-teal-400/10">
-              <a
-                href={n.url || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="block py-2 hover:bg-teal-400/[0.03]"
-              >
-                <div className="flex items-start gap-1.5">
-                  <span className="mt-1.5">
-                    <SentimentDot sentiment={n.sentiment} />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
-                    {n.summary ? <div className="mt-0.5 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
-                    <div className="mt-0.5 text-[11px] text-teal-200/40">
-                      {n.publisher}
-                      {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
-                    </div>
-                  </div>
-                </div>
-              </a>
-              {n.touches?.length ? <div className="pb-2"><NewsTouches touches={n.touches} /></div> : null}
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[10px] text-teal-200/40">Headlines captured &amp; summarized by GRQ — context, not signals.</p>
+          <SectionTitle>The Market Today · {marketBrief.edition === "PM" ? "evening read" : "morning read"}</SectionTitle>
+          <Card className="p-5">
+            <p className="text-sm leading-relaxed text-teal-100/80">{marketBrief.body}</p>
+            <p className="mt-2.5 text-[10px] text-teal-200/40">
+              Alfred&apos;s read of the whole market · {marketBrief.edition === "PM" ? "evening" : "morning"} edition · {marketBrief.date}
+            </p>
+          </Card>
         </section>
       )}
+
+      {/* Market pulse now renders at the BOTTOM of the page, under the movers (Cam 2026-07-02). */}
 
       {weekly && (
         <Card className="mb-6 border-teal-400/30 p-5">
@@ -705,39 +684,58 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
       </section>
 
-      {/* Earnings — recently reported (beat/miss) + upcoming, for names we track or watch (Cam 2026-06-25) */}
+      {/* Earnings — one consolidated headline: who REPORTED (clickable summary bubbles, 3/4) +
+          who's NEXT (a 1/4-width right rail, clearly labelled as earnings reports) (Cam 2026-07-02). */}
       {isToday && hasEarnings && (
-        <section className="mt-8 grid items-start gap-6 lg:grid-cols-2">
-          <div>
-            <SectionTitle>Recently reported · <Term k="earnings">earnings</Term></SectionTitle>
-            <Card className="overflow-hidden p-1">
+        <section className="mt-8">
+          <SectionTitle>
+            <Term k="earnings">Earnings</Term> · who reported, who&apos;s next
+          </SectionTitle>
+          <div className="grid items-start gap-6 lg:grid-cols-4">
+            {/* Reported — summary bubbles */}
+            <div className="lg:col-span-3">
+              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Reported this week</div>
               {recentEarn.length > 0 ? (
-                <ul className="divide-y divide-teal-400/10">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {recentEarn.map((e) => (
-                    <EarningRow key={`r-${e.symbol}-${e.date}`} e={e} mode="reported" today={todayStr} />
+                    <EarningBubble key={`r-${e.symbol}-${e.date}`} e={e} stance={stanceBy.get(e.symbol) ?? null} today={todayStr} />
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p className="p-3 text-sm text-teal-200/40">None of our names reported in the last week.</p>
+                <Card className="p-4 text-sm text-teal-200/40">None of our names reported in the last week.</Card>
               )}
-            </Card>
-          </div>
-          <div>
-            <SectionTitle>On the calendar · upcoming</SectionTitle>
-            <Card className="overflow-hidden p-1">
-              {upcomingEarn.length > 0 ? (
-                <ul className="divide-y divide-teal-400/10">
-                  {upcomingEarn.map((e) => (
-                    <EarningRow key={`u-${e.symbol}-${e.date}`} e={e} mode="upcoming" today={todayStr} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="p-3 text-sm text-teal-200/40">Nothing scheduled in the next two weeks.</p>
-              )}
-            </Card>
-            <p className="mt-2 px-1 text-[10px] text-teal-200/40">
-              earnings for the names we track or watch · <Term k="eps">EPS</Term> figures from FMP · beat/miss is the actual vs the analyst estimate
-            </p>
+              <p className="mt-2 px-1 text-[10px] text-teal-200/40">
+                earnings for names we track or watch · beat/miss is actual vs the analyst <Term k="eps">EPS</Term> estimate · tap a card for the full report
+              </p>
+            </div>
+            {/* Upcoming — the 1/4 right rail (labelled so it's clear these are earnings reports) */}
+            <div className="lg:col-span-1">
+              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Upcoming reports</div>
+              <Card className="overflow-hidden p-1">
+                {upcomingEarn.length > 0 ? (
+                  <ul className="divide-y divide-teal-400/10">
+                    {upcomingEarn.map((e) => {
+                      const soon = e.date === todayStr || relDay(e.date, todayStr) === "tomorrow";
+                      return (
+                        <li key={`u-${e.symbol}-${e.date}`} className="flex items-center gap-2 px-2.5 py-2">
+                          <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-6 w-6 text-[9px]" />
+                          <Link href={`/stocks/${e.symbol}`} className="text-sm font-semibold text-teal-200 hover:underline">
+                            {e.symbol}
+                          </Link>
+                          <span className="ml-auto text-right">
+                            <span className={`block text-[11px] font-semibold ${soon ? "text-amber-300" : "text-teal-200/60"}`}>{relDay(e.date, todayStr)}</span>
+                            <span className="block text-[9px] text-teal-200/40">{fmtEarnDate(e.date)}</span>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="p-3 text-xs text-teal-200/40">Nothing scheduled in the next two weeks.</p>
+                )}
+              </Card>
+              <p className="mt-2 px-1 text-[10px] text-teal-200/40">the next earnings reports on the calendar</p>
+            </div>
           </div>
         </section>
       )}
@@ -830,6 +828,34 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </section>
       )}
       </div>
+      )}
+
+      {/* Market pulse — the rest of the day's headlines, at the BOTTOM under the movers (Cam 2026-07-02). */}
+      {marketNews.length > 3 && (
+        <section className="mt-8">
+          <SectionTitle>Market pulse · more headlines</SectionTitle>
+          <div className="grid gap-x-6 sm:grid-cols-3">
+            {marketNews.slice(3, 12).map((n, i) => (
+              <div key={i} className="border-t border-teal-400/10">
+                <a href={n.url || "#"} target="_blank" rel="noreferrer" className="block py-2 hover:bg-teal-400/[0.03]">
+                  <div className="flex items-start gap-1.5">
+                    <span className="mt-1.5"><SentimentDot sentiment={n.sentiment} /></span>
+                    <div className="min-w-0">
+                      <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
+                      {n.summary ? <div className="mt-0.5 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
+                      <div className="mt-0.5 text-[11px] text-teal-200/40">
+                        {n.publisher}
+                        {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                </a>
+                {n.touches?.length ? <div className="pb-2"><NewsTouches touches={n.touches} /></div> : null}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-teal-200/40">Headlines captured &amp; summarized by GRQ — context, not signals.</p>
+        </section>
       )}
         </>
       )}
