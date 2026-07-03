@@ -35,6 +35,7 @@ export default function WatchlistScreen() {
   const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
 
   const [tab, setTab] = useState<'all' | 'cam' | 'graham'>('all');
+  const [sort, setSort] = useState<'ticker' | 'change'>('ticker');
   const tabInitialized = useRef(false);
 
   const rows = data?.rows ?? [];
@@ -53,7 +54,13 @@ export default function WatchlistScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  const visible = tab === 'all' ? rows : rows.filter((r) => r.watchers.some((w) => w.key === tab));
+  const filtered = tab === 'all' ? rows : rows.filter((r) => r.watchers.some((w) => w.key === tab));
+  // 'ticker' keeps the server order (pinned first, then A–Z); '% change' ranks
+  // biggest gain → biggest loss, unquoted names last (Cam 2026-07-03).
+  const visible =
+    sort === 'ticker'
+      ? filtered
+      : [...filtered].sort((a, b) => (b.dayBps ?? Number.NEGATIVE_INFINITY) - (a.dayBps ?? Number.NEGATIVE_INFINITY));
 
   return (
     <Screen title="Watchlist" refreshing={refreshing} onRefresh={refresh}>
@@ -71,6 +78,35 @@ export default function WatchlistScreen() {
             value={tab}
             onChange={setTab}
           />
+          <View style={s.sortRow}>
+            <Text style={[s.sortLabel, { color: p.textMuted }]}>SORT</Text>
+            {(
+              [
+                { key: 'ticker', label: 'A–Z' },
+                { key: 'change', label: '% change' },
+              ] as const
+            ).map((o) => (
+              <Pressable
+                key={o.key}
+                onPress={() => setSort(o.key)}
+                style={[
+                  s.sortChip,
+                  { borderColor: p.cardBorder },
+                  sort === o.key && { backgroundColor: p.accent + '26', borderColor: p.accent + '55' },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: sort === o.key ? p.accentText : p.textMuted,
+                    fontFamily: sort === o.key ? F.semi : F.med,
+                    fontSize: 11.5,
+                  }}
+                >
+                  {o.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           {visible.length === 0 ? (
             <Card style={{ marginTop: 12 }}>
               <Text style={[s.empty, { color: p.textMuted }]}>
@@ -368,6 +404,9 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
 
 const s = StyleSheet.create({
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingHorizontal: 2 },
+  sortLabel: { fontFamily: F.semi, fontSize: 9, letterSpacing: 1.5 },
+  sortChip: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   rowMain: { flex: 1, minWidth: 0 },
   rowRight: { alignItems: 'flex-end', gap: 1 },
