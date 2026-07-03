@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
+import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor } from '../../lib/format';
 import { useApi } from '../../services/hooks';
@@ -240,37 +241,9 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
         <View>
           <SectionTitle sub="the latest fund-level read">{t.leadTitle.split('·')[0].trim()}</SectionTitle>
           <Card>
-            <Briefing body={t.leadStoryMarkdown} />
+            <MdText body={t.leadStoryMarkdown} />
           </Card>
         </View>
-      )}
-    </View>
-  );
-}
-
-/** Markdown briefing, shown as plain text with a read-more fold. */
-function Briefing({ body }: { body: string }) {
-  const { p } = usePalette();
-  const [open, setOpen] = useState(false);
-  const text = body
-    .replace(/^#+\s*/gm, '')
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/\*(.+?)\*/g, '$1')
-    .replace(/`/g, '')
-    .trim();
-  const folded = !open && text.length > 420;
-  return (
-    <View>
-      <Text style={{ color: p.textPrimary, fontFamily: F.reg, fontSize: 13, lineHeight: 20 }}>
-        {folded ? `${text.slice(0, 420).trimEnd()}…` : text}
-      </Text>
-      {text.length > 420 && (
-        <Text
-          onPress={() => setOpen(!open)}
-          style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12, marginTop: 8 }}
-        >
-          {open ? 'show less' : 'read more'}
-        </Text>
       )}
     </View>
   );

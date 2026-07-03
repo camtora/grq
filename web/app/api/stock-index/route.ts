@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
+import { sessionFromRequest } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,11 @@ export type StockIndexItem = {
 
 const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Self-guard for the mobile Bearer path (GRQ Go's Search tab); the web door
+  // already authenticated browser traffic, so this only 403s a no-identity hit.
+  const session = sessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Sign in to view this fund." }, { status: 403 });
   const universe = await allUniverse();
   const byKey = new Map<string, Omit<StockIndexItem, "seenAt">>();
 

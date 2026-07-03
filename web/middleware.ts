@@ -43,6 +43,7 @@ const MOBILE_API = [
   "/api/stock-extras",    // A7 (lazy earnings/grades)
   "/api/symbol-search",   // A7 (Browse; member-guarded in-route)
   "/api/watchlist",       // GRQ Go — the watch-driven list (D78 semantics)
+  "/api/stock-index",     // GRQ Go — the jump-to-stock index (Search tab; self-guards)
   "/api/quotes",          // live FMP ticker for the app's price overlay (self-guards via sessionFromRequest)
   // Member writes (self-guard via memberFromRequest; the order gate still disposes).
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)

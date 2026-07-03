@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import { usePalette, F, type Palette } from '../../constants/theme';
@@ -196,6 +197,7 @@ function AddTicker({ onAdded }: { onAdded: () => void }) {
 
 function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onChanged: () => void }) {
   const { p } = usePalette();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [extras, setExtras] = useState<StockExtras | null>(null);
   const [extrasLoading, setExtrasLoading] = useState(false);
@@ -331,15 +333,23 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
               {extras.grades.sell + extras.grades.strongSell}
             </Text>
           )}
-          <Pressable
-            onPress={toggleWatch}
-            disabled={busy}
-            style={[s.watchBtn, { borderColor: p.cardBorder, alignSelf: 'flex-start', marginTop: 10, opacity: busy ? 0.5 : 1 }]}
-          >
-            <Text style={{ color: iWatch ? p.neg : p.accentText, fontFamily: F.semi, fontSize: 12 }}>
-              {busy ? '…' : iWatch ? 'Unwatch' : '+ Watch too'}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <Pressable
+              onPress={toggleWatch}
+              disabled={busy}
+              style={[s.watchBtn, { borderColor: p.cardBorder, opacity: busy ? 0.5 : 1 }]}
+            >
+              <Text style={{ color: iWatch ? p.neg : p.accentText, fontFamily: F.semi, fontSize: 12 }}>
+                {busy ? '…' : iWatch ? 'Unwatch' : '+ Watch too'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/stock/${r.symbol}`)}
+              style={[s.watchBtn, { borderColor: p.cardBorder }]}
+            >
+              <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12 }}>full dossier →</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </Pressable>

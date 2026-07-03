@@ -162,6 +162,54 @@ export type SymbolMatch = {
   currency: string | null;
 };
 
+export type StockIndexItem = {
+  symbol: string;
+  name: string;
+  kind: 'active' | 'watching' | 'retired' | 'researched' | 'screened';
+  seenAt: number;
+};
+
+/** The subset of /api/dossier/[symbol] the stock screen renders (the feed is
+ * full web-parity, D60 — grow this as sections land). */
+export type Dossier = {
+  symbol: string;
+  name: string;
+  currency: string;
+  lastCents: number | null;
+  logoUrl: string | null;
+  status: string;
+  researching: boolean;
+  rating: { label: string; abbr: string; tone: 'emerald' | 'teal' | 'amber' | 'red'; pos: number; blurb: string } | null;
+  target: {
+    nearCents: number | null;
+    nearHorizon: string | null;
+    farCents: number | null;
+    expectedReturnBps: number | null;
+    confidence: number | null;
+  } | null;
+  bottomLine: string | null;
+  bodyMarkdown: string | null;
+  marketCapCents: number | null;
+  peRatio: number | null;
+  position: {
+    qty: number;
+    avgCostCents: number;
+    marketValueCents: number;
+    unrealizedPnlCents: number;
+    autoStopCents: number;
+    takeProfitCents: number;
+  } | null;
+  earnings: {
+    next: { date: string; epsEstimated: number | null } | null;
+    last: { date: string; epsEstimated: number | null; epsActual: number | null } | null;
+  } | null;
+  grades: StockExtras['grades'] | null;
+  news: { title: string; url: string; publisher: string; at?: string | null }[];
+  closes: { t: number; c: number }[];
+  signals: { recommendationPct: number | null; trend: string | null; rsi: number | null; macd: string | null } | null;
+  watchers: { key: string; name: string }[];
+};
+
 export type Today = {
   edition: 'morning' | 'midday' | 'evening' | 'weekend';
   dateISO: string;
