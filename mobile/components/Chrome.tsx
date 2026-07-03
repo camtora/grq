@@ -134,6 +134,43 @@ export function Footnote({ children }: { children: React.ReactNode }) {
   return <Text style={[styles.footnote, { color: p.textMuted }]}>{children}</Text>;
 }
 
+/** Segmented toggle — the house two-way switch (docs/MOBILE-DESIGN.md §4). */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const { p } = usePalette();
+  return (
+    <View style={[styles.seg, { backgroundColor: p.cardBg, borderColor: p.cardBorder }]}>
+      {options.map((o) => {
+        const active = o.key === value;
+        return (
+          <Pressable
+            key={o.key}
+            onPress={() => onChange(o.key)}
+            style={[styles.segItem, active && { backgroundColor: p.accent + '26' }]}
+          >
+            <Text
+              style={{
+                fontFamily: active ? F.semi : F.med,
+                fontSize: 13,
+                color: active ? p.accentText : p.textMuted,
+              }}
+            >
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 /** Hairline list divider inside cards. */
 export function Divider() {
   const { p } = usePalette();
@@ -189,4 +226,6 @@ const styles = StyleSheet.create({
   },
   footnote: { fontSize: 10, marginTop: 6, paddingHorizontal: 2, opacity: 0.8 },
   loading: { paddingVertical: 48, alignItems: 'center' },
+  seg: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3 },
+  segItem: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9 },
 });

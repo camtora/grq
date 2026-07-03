@@ -47,6 +47,72 @@ export type MarketGainer = {
   inUniverse: boolean;
 };
 
+export type PortfolioPosition = {
+  symbol: string;
+  qty: number;
+  avgCostCents: number;
+  lastCents: number;
+  marketValueCents: number;
+  unrealizedPnlCents: number;
+  dayChangeBps: number;
+  openedAt: string;
+  currency: string;
+  logoUrl: string | null;
+};
+
+export type Portfolio = {
+  cashCents: number;
+  cadCashCents: number;
+  usdCashCents: number;
+  fxUsdCad: number | null;
+  positions: PortfolioPosition[];
+  positionsCents: number;
+  navCents: number;
+  contributionsCents: number;
+  totalPnlCents: number;
+  benchmarkCents: number | null;
+  feeSpentMonthCents: number;
+  feeBudgetCentsMonth: number;
+  riskLevel: string;
+  killSwitch: boolean;
+  killSwitchBy: string | null;
+  quotesAsOf: string | null;
+};
+
+export type ExternalHolding = {
+  symbol: string;
+  description: string | null;
+  qty: number;
+  priceCents: number | null;
+  marketValueCents: number | null;
+  currency: string;
+  openPnlCents: number | null;
+};
+
+export type ExternalAccount = {
+  id: string;
+  institution: string;
+  name: string | null;
+  numberMasked: string | null;
+  accountType: string | null;
+  currency: string;
+  totalValueCents: number | null;
+  cashCents: number | null;
+  disabled: boolean;
+  syncedAt: string | null;
+  holdings: ExternalHolding[];
+};
+
+export type AccountsResponse = {
+  members: {
+    email: string;
+    name: string;
+    isSelf: boolean;
+    connected: boolean;
+    accounts: ExternalAccount[];
+  }[];
+};
+
 export type Today = {
   edition: 'morning' | 'midday' | 'evening' | 'weekend';
   dateISO: string;

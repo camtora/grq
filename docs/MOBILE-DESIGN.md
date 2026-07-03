@@ -58,6 +58,9 @@ The splash and sign-in screens are the only chrome-less surfaces.
 - Section spacing: 24 between sections, 8 header→card.
 - **Row** pattern (movers/hitters/earnings): logo 32 → symbol (Inter 600, `p.accentText`)
   over muted name (11) → right-aligned numbers (tabular).
+- **Segmented toggle** (`Segmented` in Chrome.tsx): the house two-way switch — pill
+  container on `p.cardBg`, active segment `p.accent` @ 15% with `p.accentText` label.
+  Used for Portfolio's Alfred | Personal split; reuse it for any in-page view switch.
 
 ## 5. Money & numbers
 
@@ -84,3 +87,9 @@ position."), errors state what happened plainly.
 Today · Portfolio · The Wire · Watchlist · Search — tab bar in that order, Ionicons
 outline set, active tint `p.accent`. Each page is designed for the phone (not a port
 of the web layout), but reuses the web's *content order* where it exists.
+
+- **Today** — the newspaper (shipped; see `components/today/sections.tsx`).
+- **Portfolio** — split **Alfred | Personal** via `Segmented`, defaulting to Alfred.
+  Alfred = NAV hero → the Tape → the book (cash + positions) → latest fund-level
+  briefing. Personal = each member's SnapTrade accounts, read-only, with the honest
+  footer that Alfred can neither see nor trade them (D97).
