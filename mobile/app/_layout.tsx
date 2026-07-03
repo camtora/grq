@@ -19,6 +19,7 @@ import { usePalette } from '../constants/theme';
 import { useAuth } from '../store/auth';
 import { useMessages } from '../store/messages';
 import { useNotifications } from '../store/notifications';
+import { useThemeStore } from '../store/theme';
 import { registerForPush } from '../services/push';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
@@ -57,9 +58,11 @@ export default function RootLayout() {
   const router = useRouter();
 
   // Hydration races the splash's intro phase; by the tap it's usually settled.
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateTheme();
+  }, [hydrate, hydrateTheme]);
 
   // Signed in → register this device for push (no-op on the simulator).
   useEffect(() => {
@@ -113,6 +116,7 @@ export default function RootLayout() {
           <Stack.Screen name="messages" options={{ presentation: 'modal' }} />
           <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
           <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="notification-settings" options={{ presentation: 'modal' }} />
         </Stack>
       )}
       {ready && splashDone && status !== 'signedIn' && <SignIn />}

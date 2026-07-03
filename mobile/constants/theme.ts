@@ -1,5 +1,6 @@
 import { useColorScheme } from 'react-native';
 import { useAuth } from '../store/auth';
+import { useThemeStore } from '../store/theme';
 
 /**
  * GRQ palette — ported from ios/GRQ/Theme/Theme.swift (which itself mirrors
@@ -69,6 +70,8 @@ export const F = {
 export function usePalette(): { p: Palette; scheme: 'light' | 'dark' } {
   const device = useColorScheme() === 'light' ? 'light' : 'dark';
   const memberTheme = useAuth((s) => s.me?.theme);
-  const scheme = memberTheme === 'light' || memberTheme === 'dark' ? memberTheme : device;
+  const override = useThemeStore((s) => s.override);
+  const scheme =
+    override ?? (memberTheme === 'light' || memberTheme === 'dark' ? memberTheme : device);
   return { p: scheme === 'light' ? light : dark, scheme };
 }

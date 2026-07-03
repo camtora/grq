@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Divider, SectionTitle, Footnote, Loading } from '../components/Chrome';
+import { Card, Divider, Loading } from '../components/Chrome';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { api } from '../services/api';
 import { useNotifications } from '../store/notifications';
@@ -20,20 +20,6 @@ type NotificationItem = {
   read: boolean;
 };
 
-// Mirror of web/lib/push/categories.ts TOGGLEABLE_CATEGORIES (server ignores
-// unknown keys, so drift is harmless).
-const TOGGLES: { key: string; label: string; desc: string }[] = [
-  { key: 'dossiers', label: 'Research dossiers', desc: 'A dossier you or the agent requested is ready.' },
-  { key: 'hunt', label: 'The Hunt & ideas', desc: 'New hunt names and directed-hunt results.' },
-  { key: 'agentMoves', label: 'Agent universe moves', desc: 'The agent tracks or self-promotes a name.' },
-  { key: 'reports', label: 'Daily reports', desc: 'Morning plan, midday brief, EOD close, weekly review.' },
-  { key: 'checkins', label: 'Intraday check-ins', desc: "The agent's fund-level reads through the day." },
-  { key: 'holdingChecks', label: 'Position notes', desc: 'A per-name read when a holding moves ±4%.' },
-  { key: 'members', label: 'Member activity', desc: 'Blocks, pins, promotes, demotes by the other member.' },
-  { key: 'system', label: 'System health', desc: 'Agent restarts and feed/broker hiccups (non-critical).' },
-  { key: 'priceTargets', label: 'Price alerts', desc: 'A stock you set an alert on crosses your target.' },
-  { key: 'optionsDesk', label: 'Options Desk', desc: 'The sandbox desk opens or settles an option.' },
-];
 
 function severityColor(sev: string, p: Palette): string {
   if (sev === 'critical') return p.neg;
@@ -55,7 +41,6 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const setUnread = useNotifications((s) => s.setUnread);
   const [items, setItems] = useState<NotificationItem[] | null>(null);
-  const [prefs, setPrefs] = useState<Record<string, boolean> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,19 +51,7 @@ export default function NotificationsScreen() {
         setUnread(0);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load notifications.'));
-    api<Record<string, boolean>>('/api/notifications/preferences')
-      .then(setPrefs)
-      .catch(() => setPrefs(null));
   }, [setUnread]);
-
-  const toggle = async (key: string, value: boolean) => {
-    setPrefs((prev) => (prev ? { ...prev, [key]: value } : prev));
-    try {
-      await api('/api/notifications/preferences', { method: 'PUT', body: JSON.stringify({ [key]: value }) });
-    } catch {
-      setPrefs((prev) => (prev ? { ...prev, [key]: !value } : prev)); // revert on failure
-    }
-  };
 
   return (
     <SafeAreaView edges={['top']} style={[s.fill, { backgroundColor: p.bodyBg }]}>
@@ -88,7 +61,12 @@ export default function NotificationsScreen() {
           <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
         </Pressable>
         <Text style={[s.title, { color: p.textPrimary }]}>Notifications</Text>
-        <View style={s.back} />
+        <View style={[s.back, { justifyContent: 'flex-end' }]}>
+          {/* Delivery OPTIONS live in their own screen (Cam 2026-07-03). */}
+          <Pressable onPress={() => router.push('/notification-settings')} hitSlop={8}>
+            <Ionicons name="options-outline" size={20} color={p.textMuted} />
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={s.body}>
         {items === null && !error && <Loading />}
@@ -132,34 +110,6 @@ export default function NotificationsScreen() {
               </Card>
             )}
 
-            {/* Delivery toggles (per-member; trades/risk/FX/messages are force-on in code) */}
-            {prefs && (
-              <View>
-                <SectionTitle sub="what pushes your phone">Delivery</SectionTitle>
-                <Card style={s.listCard}>
-                  {TOGGLES.map((t, i) => (
-                    <View key={t.key}>
-                      {i > 0 && <Divider />}
-                      <View style={s.prefRow}>
-                        <View style={s.rowMain}>
-                          <Text style={[s.rowTitle, { color: p.textPrimary }]}>{t.label}</Text>
-                          <Text style={[s.rowBody, { color: p.textMuted }]} numberOfLines={2}>{t.desc}</Text>
-                        </View>
-                        <Switch
-                          value={prefs[t.key] !== false}
-                          onValueChange={(v) => toggle(t.key, v)}
-                          trackColor={{ true: p.accent, false: undefined }}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                </Card>
-                <Footnote>
-                  trades · risk & safety · FX approvals · messages · critical outages are always
-                  on — those are the money ones
-                </Footnote>
-              </View>
-            )}
           </View>
         )}
       </ScrollView>

@@ -10,6 +10,7 @@ import { money } from '../lib/format';
 import { api } from '../services/api';
 import { useApi } from '../services/hooks';
 import { useAuth } from '../store/auth';
+import { useThemeStore } from '../store/theme';
 import type { FundSettings, FxState, FxRequest, Health } from '../services/types';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
@@ -26,6 +27,8 @@ export default function SettingsScreen() {
   const { p } = usePalette();
   const router = useRouter();
   const { me, signOut } = useAuth();
+  const themeOverride = useThemeStore((s) => s.override);
+  const setThemeOverride = useThemeStore((s) => s.setOverride);
   const fund = useApi<FundSettings>('/api/fund-settings');
   const fx = useApi<FxState>('/api/fx');
   const health = useApi<Health>('/api/health');
@@ -215,13 +218,28 @@ export default function SettingsScreen() {
               <Card><Text style={[st.mutedSmall, { color: p.textMuted }]}>loading…</Text></Card>
             )}
 
-            {/* Notifications link */}
+            {/* Appearance — member default, overridable per device (Cam 2026-07-03) */}
+            <SectionTitle sub="light for Cam · dark for Graham, by default">Appearance</SectionTitle>
+            <Card>
+              <Segmented
+                options={[
+                  { key: 'light', label: 'Light' },
+                  { key: 'dark', label: 'Dark' },
+                  { key: 'default', label: 'My default' },
+                ]}
+                value={themeOverride ?? 'default'}
+                onChange={(v) => setThemeOverride(v === 'default' ? null : (v as 'light' | 'dark'))}
+              />
+              <Footnote>remembered on this device</Footnote>
+            </Card>
+
+            {/* Notification options */}
             <SectionTitle sub="what pushes your phone">Notifications</SectionTitle>
-            <Pressable onPress={() => router.push('/notifications')}>
+            <Pressable onPress={() => router.push('/notification-settings')}>
               <Card>
                 <View style={st.linkRow}>
                   <Text style={{ color: p.textPrimary, fontFamily: F.med, fontSize: 13.5 }}>
-                    Delivery toggles & the feed
+                    Delivery options
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={p.textMuted} />
                 </View>
