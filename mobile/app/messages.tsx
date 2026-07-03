@@ -247,14 +247,14 @@ const s = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 20,
     marginHorizontal: 12,
     marginBottom: 8,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
-  input: { flex: 1, fontFamily: F.reg, fontSize: 15, maxHeight: 110, paddingTop: 4 },
+  input: { flex: 1, fontFamily: F.reg, fontSize: 15, maxHeight: 110, paddingVertical: 5 },
 });
