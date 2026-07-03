@@ -203,11 +203,48 @@ export type Dossier = {
     next: { date: string; epsEstimated: number | null } | null;
     last: { date: string; epsEstimated: number | null; epsActual: number | null } | null;
   } | null;
-  grades: StockExtras['grades'] | null;
+  grades:
+    | (NonNullable<StockExtras['grades']> & {
+        trendDirection?: string | null;
+        buyDelta?: number | null;
+        sellDelta?: number | null;
+        trendMonths?: number | null;
+        actions?: { date: string; company: string; action: string; fromGrade: string; toGrade: string }[];
+      })
+    | null;
   news: { title: string; url: string; publisher: string; at?: string | null }[];
   closes: { t: number; c: number }[];
   signals: { recommendationPct: number | null; trend: string | null; rsi: number | null; macd: string | null } | null;
   watchers: { key: string; name: string }[];
+  recLabel: string | null; // the technical-signal lean (an input, not a verdict)
+  recPos: number | null;
+  analystBand: {
+    nowCents: number;
+    consensusCents: number;
+    lowCents: number;
+    highCents: number;
+    currency: string;
+    upsidePct: number;
+    reanchored: boolean;
+  } | null;
+  signalFamilies: { family: string; signal: string; confidence: number; rationale: string }[];
+  peers: { symbol: string; name: string; self: boolean; peTtm: number | null; pbTtm: number | null; marketCapM: number | null }[];
+  institutional: {
+    investorsHolding: number;
+    investorsHoldingChange: number;
+    date: string;
+    holders: { name: string; isNew: boolean; ownershipPct: number; sharesChangePct: number }[];
+  } | null;
+  smartMoney: {
+    hasAny: boolean;
+    congressBuyers: number;
+    congressSellers: number;
+    insiderBuyers: number;
+    insiderBuyValueUsd: number | null;
+    fundHolders: { name: string; firm: string; asOf: string; pctOfPort: number; action?: string | null }[];
+  } | null;
+  trades: { id: number; side: string; qty: number; priceCents: number; realizedPnlCents: number | null; at: string }[];
+  coverage: { tier: number; name: string; status: string; detail: string }[];
 };
 
 export type Today = {

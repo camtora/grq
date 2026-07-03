@@ -7,6 +7,7 @@ import { Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../..
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
 import MdText from '../../components/MdText';
+import RatingBar, { toneColor } from '../../components/RatingBar';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../lib/format';
 import { useApi } from '../../services/hooks';
@@ -19,15 +20,18 @@ const AVATARS: Record<string, number> = {
   graham: require('../../assets/people/graham.png'),
 };
 
-function toneColor(tone: string | undefined, p: Palette): string {
-  if (tone === 'emerald') return p.pos;
-  if (tone === 'red') return p.neg;
-  if (tone === 'amber') return p.warn;
-  return p.accentText;
+// Tone for a 7-point label when the feed carries only the label (the technical lean).
+function labelTone(label: string | null): string {
+  if (!label) return 'teal';
+  if (/strong buy|^buy/i.test(label)) return 'emerald';
+  if (/weak buy/i.test(label)) return 'teal';
+  if (/hold|weak sell/i.test(label)) return 'amber';
+  return 'red';
 }
 
-/** The stock page — fed by /api/dossier/[symbol] (full web parity, D60);
- * this screen renders the core read and grows section by section. */
+/** The stock page — mirrors the web app/stocks/[symbol] section order, fed by
+ * /api/dossier (D60 full web parity). Options/social/related panels are web-only
+ * for now (not on the dossier wire). */
 export default function StockScreen() {
   const { p } = usePalette();
   const router = useRouter();
@@ -59,7 +63,7 @@ export default function StockScreen() {
         {error && !loading && <ErrorNote message={error} />}
         {d && (
           <View>
-            {/* Hero */}
+            {/* ---- Hero ---- */}
             <View style={s.hero}>
               <StockLogo symbol={d.symbol} logoUrl={d.logoUrl} size={44} />
               <View style={s.heroMain}>
@@ -99,50 +103,48 @@ export default function StockScreen() {
               </Card>
             )}
 
-            {/* Price chart */}
-            {closes.length >= 2 && (
-              <View>
-                <SectionTitle sub="daily closes">Price</SectionTitle>
-                <Card>
-                  <Sparkline values={closes.map((x) => x.c)} height={72} />
-                  <View style={s.chartLabels}>
-                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                      {new Date(closes[0].t).toISOString().slice(0, 10)}
-                    </Text>
-                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                      {new Date(closes[closes.length - 1].t).toISOString().slice(0, 10)}
-                    </Text>
-                  </View>
-                </Card>
-              </View>
-            )}
-
-            {/* Alfred's call */}
-            {d.rating && (
+            {/* ---- Alfred's call: the verdict box + the bull/bear gauge (web hero) ---- */}
+            {d.rating ? (
               <View>
                 <SectionTitle sub="the verdict">Alfred's call</SectionTitle>
                 <Card>
                   <View style={s.callRow}>
                     <Text style={[s.callLabel, { color: toneColor(d.rating.tone, p) }]}>{d.rating.label}</Text>
                     {d.target?.confidence != null && (
-                      <Text style={[s.meta, tabular, { color: p.textMuted }]}>conf {d.target.confidence}%</Text>
+                      <Text style={[s.callConf, tabular, { color: p.textPrimary }]}>
+                        {d.target.confidence}%
+                        <Text style={[s.meta, { color: p.textMuted }]}> conf</Text>
+                      </Text>
                     )}
                   </View>
                   <Text style={[s.blurb, { color: p.textMuted }]}>{d.rating.blurb}</Text>
+                  <View style={{ marginTop: 12 }}>
+                    <RatingBar label={d.rating.label} tone={d.rating.tone} pos={d.rating.pos} hideLabel mascots />
+                  </View>
                   {(nearPct != null || farPct != null) && (
-                    <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 8 }]}>
+                    <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 12 }]}>
                       {nearPct != null
-                        ? `near${d.target?.nearHorizon ? ` (${d.target.nearHorizon})` : ''} ${nearPct > 0 ? '+' : ''}${(nearPct * 100).toFixed(0)}%`
+                        ? `near${d.target?.nearHorizon ? ` (${d.target.nearHorizon})` : ''} ${nearPct > 0 ? '+' : ''}${(nearPct * 100).toFixed(0)}% → ${money(d.target!.nearCents!)}`
                         : ''}
                       {nearPct != null && farPct != null ? '   ·   ' : ''}
-                      {farPct != null ? `12-mo ${farPct > 0 ? '+' : ''}${(farPct * 100).toFixed(0)}%` : ''}
+                      {farPct != null ? `12-mo ${farPct > 0 ? '+' : ''}${(farPct * 100).toFixed(0)}% → ${money(d.target!.farCents!)}` : ''}
                     </Text>
                   )}
                 </Card>
               </View>
-            )}
+            ) : d.recLabel && d.recPos != null ? (
+              <View>
+                <SectionTitle sub="technical signal only — an input, not a verdict">Signal</SectionTitle>
+                <Card>
+                  <RatingBar label={d.recLabel} tone={labelTone(d.recLabel)} pos={d.recPos} mascots />
+                  <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 10 }]}>
+                    No Alfred call yet on this name.
+                  </Text>
+                </Card>
+              </View>
+            ) : null}
 
-            {/* The bottom line */}
+            {/* ---- The bottom line ---- */}
             {d.bottomLine && (
               <View>
                 <SectionTitle sub="the plain-English why">The bottom line</SectionTitle>
@@ -152,7 +154,7 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* Held position + bracket */}
+            {/* ---- Held position + the deterministic bracket ---- */}
             {d.position && (
               <View>
                 <SectionTitle sub="what the fund holds">Position</SectionTitle>
@@ -170,29 +172,119 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* Signals */}
-            {d.signals && (d.signals.trend || d.signals.rsi != null) && (
+            {/* ---- Price chart ---- */}
+            {closes.length >= 2 && (
               <View>
-                <SectionTitle sub="technicals">Signals</SectionTitle>
+                <SectionTitle sub="daily closes">Price</SectionTitle>
                 <Card>
-                  <Text style={[s.meta, tabular, { color: p.textMuted }]}>
-                    {[
-                      d.signals.trend ? `trend ${d.signals.trend}` : null,
-                      d.signals.rsi != null ? `RSI ${d.signals.rsi}` : null,
-                      d.signals.macd ? `MACD ${d.signals.macd}` : null,
-                      d.signals.recommendationPct != null ? `signal ${d.signals.recommendationPct}%` : null,
-                    ]
-                      .filter(Boolean)
-                      .join('   ·   ')}
-                  </Text>
+                  <Sparkline values={closes.map((x) => x.c)} height={72} />
+                  <View style={s.chartLabels}>
+                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
+                      {new Date(closes[0].t).toISOString().slice(0, 10)}
+                    </Text>
+                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
+                      {new Date(closes[closes.length - 1].t).toISOString().slice(0, 10)}
+                    </Text>
+                  </View>
                 </Card>
               </View>
             )}
 
-            {/* Earnings + analysts */}
-            {(d.earnings?.next || d.earnings?.last || d.grades) && (
+            {/* ---- Analyst ratings (Tier 2) ---- */}
+            {d.grades && (
               <View>
-                <SectionTitle sub="reports & the street">Earnings & analysts</SectionTitle>
+                <SectionTitle sub="the street's grades">Analyst ratings</SectionTitle>
+                <Card>
+                  <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
+                    {d.grades.consensus} consensus · {d.grades.total} analysts
+                  </Text>
+                  <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 4 }]}>
+                    SB {d.grades.strongBuy} / B {d.grades.buy} / H {d.grades.hold} / S {d.grades.sell} / SS {d.grades.strongSell}
+                  </Text>
+                  {d.grades.trendMonths != null && (d.grades.buyDelta ?? 0) + (d.grades.sellDelta ?? 0) !== 0 && (
+                    <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 4 }]}>
+                      last {d.grades.trendMonths}mo: buys {(d.grades.buyDelta ?? 0) > 0 ? '+' : ''}{d.grades.buyDelta ?? 0} · sells{' '}
+                      {(d.grades.sellDelta ?? 0) > 0 ? '+' : ''}{d.grades.sellDelta ?? 0}
+                    </Text>
+                  )}
+                  {(d.grades.actions ?? []).slice(0, 4).map((a, i) => (
+                    <View key={i}>
+                      {i === 0 && <View style={{ height: 8 }} />}
+                      <Text style={[s.metaSmall, { color: p.textMuted }]}>
+                        {a.company} {a.action}{a.toGrade ? ` → ${a.toGrade}` : ''} · {a.date.slice(0, 10)}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Price targets (Tier 2) ---- */}
+            {d.analystBand && cur != null && (
+              <View>
+                <SectionTitle sub="the street's band">Price targets</SectionTitle>
+                <Card>
+                  <TargetBand band={d.analystBand} p={p} />
+                </Card>
+              </View>
+            )}
+
+            {/* ---- 13F institutions (Tier 5) ---- */}
+            {d.institutional && (
+              <View>
+                <SectionTitle sub="13F filers · quarterly, ~45-day lag">Institutions</SectionTitle>
+                <Card>
+                  <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
+                    {d.institutional.investorsHolding.toLocaleString()} institutions hold it
+                    {d.institutional.investorsHoldingChange !== 0
+                      ? ` (${d.institutional.investorsHoldingChange > 0 ? '+' : ''}${d.institutional.investorsHoldingChange} QoQ)`
+                      : ''}
+                  </Text>
+                  {d.institutional.holders.slice(0, 5).map((h, i) => (
+                    <Text key={i} style={[s.metaSmall, tabular, { color: p.textMuted, marginTop: i === 0 ? 8 : 3 }]}>
+                      {h.name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())} · {h.ownershipPct.toFixed(2)}%
+                      {h.isNew ? '  NEW' : h.sharesChangePct ? `  ${h.sharesChangePct > 0 ? '+' : ''}${h.sharesChangePct.toFixed(1)}% shs` : ''}
+                    </Text>
+                  ))}
+                  <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 6, opacity: 0.7 }]}>as of {d.institutional.date}</Text>
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Technical signals ---- */}
+            {d.signalFamilies.length > 0 && (
+              <View>
+                <SectionTitle sub="computed from price bars">Signals</SectionTitle>
+                <Card style={s.listCard}>
+                  {d.signalFamilies.map((f, i) => (
+                    <View key={f.family}>
+                      {i > 0 && <Divider />}
+                      <View style={s.sigRow}>
+                        <Text style={[s.sigFamily, { color: p.textPrimary }]}>{f.family}</Text>
+                        <Text
+                          style={[
+                            s.sigSignal,
+                            {
+                              color:
+                                f.signal === 'BUY' ? p.pos : f.signal === 'SELL' ? p.neg : p.warn,
+                            },
+                          ]}
+                        >
+                          {f.signal}
+                        </Text>
+                        <Text style={[s.metaSmall, tabular, { color: p.textMuted }]}>{f.confidence}%</Text>
+                      </View>
+                      <Text style={[s.metaSmall, { color: p.textMuted, paddingBottom: 8 }]}>{f.rationale}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Earnings (Tier 6) ---- */}
+            {(d.earnings?.next || d.earnings?.last) && (
+              <View>
+                <SectionTitle sub="reports">Earnings</SectionTitle>
                 <Card>
                   {d.earnings?.next?.date && (
                     <Text style={[s.meta, { color: p.textMuted }]}>next report {fmtDate(d.earnings.next.date)}</Text>
@@ -206,17 +298,98 @@ export default function StockScreen() {
                       · {fmtDate(d.earnings.last.date)}
                     </Text>
                   )}
-                  {d.grades && (
-                    <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 4 }]}>
-                      analysts {d.grades.consensus} · SB {d.grades.strongBuy} / B {d.grades.buy} / H {d.grades.hold} / S{' '}
-                      {d.grades.sell + d.grades.strongSell}
-                    </Text>
-                  )}
                 </Card>
               </View>
             )}
 
-            {/* News */}
+            {/* ---- Valuation vs peers ---- */}
+            {d.peers.length > 1 && (
+              <View>
+                <SectionTitle sub="P/E · P/B, trailing">Valuation vs peers</SectionTitle>
+                <Card style={s.listCard}>
+                  <View style={s.peerRow}>
+                    <Text style={[s.peerHead, { color: p.textMuted, flex: 1 }]}> </Text>
+                    <Text style={[s.peerHead, { color: p.textMuted, width: 64, textAlign: 'right' }]}>P/E</Text>
+                    <Text style={[s.peerHead, { color: p.textMuted, width: 64, textAlign: 'right' }]}>P/B</Text>
+                  </View>
+                  {d.peers.map((peer, i) => (
+                    <View key={peer.symbol}>
+                      <Divider />
+                      <View style={s.peerRow}>
+                        <Text
+                          style={[
+                            s.meta,
+                            { flex: 1, color: peer.self ? p.accentText : p.textMuted, fontFamily: peer.self ? F.bold : F.reg },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {peer.symbol}{peer.self ? ' (this)' : ''}
+                        </Text>
+                        <Text style={[s.meta, tabular, { width: 64, textAlign: 'right', color: p.textPrimary }]}>
+                          {peer.peTtm != null ? peer.peTtm.toFixed(1) : '—'}
+                        </Text>
+                        <Text style={[s.meta, tabular, { width: 64, textAlign: 'right', color: p.textPrimary }]}>
+                          {peer.pbTtm != null ? peer.pbTtm.toFixed(1) : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Smart money ---- */}
+            {d.smartMoney?.hasAny && (
+              <View>
+                <SectionTitle sub="13F funds · congress · insiders — leads, not trades">Smart money</SectionTitle>
+                <Card>
+                  <Text style={[s.meta, tabular, { color: p.textMuted }]}>
+                    {[
+                      d.smartMoney.congressBuyers > 0 ? `congress ${d.smartMoney.congressBuyers} buy${d.smartMoney.congressBuyers > 1 ? 's' : ''}` : null,
+                      d.smartMoney.congressSellers > 0 ? `${d.smartMoney.congressSellers} sell${d.smartMoney.congressSellers > 1 ? 's' : ''}` : null,
+                      d.smartMoney.insiderBuyers > 0
+                        ? `insiders ${d.smartMoney.insiderBuyers} buy${d.smartMoney.insiderBuyers > 1 ? 's' : ''}${d.smartMoney.insiderBuyValueUsd ? ` (US$${Math.round(d.smartMoney.insiderBuyValueUsd / 1000)}k)` : ''}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || 'tracked-fund holdings below'}
+                  </Text>
+                  {d.smartMoney.fundHolders.slice(0, 4).map((h, i) => (
+                    <Text key={i} style={[s.metaSmall, tabular, { color: p.textMuted, marginTop: i === 0 ? 8 : 3 }]}>
+                      {h.name} ({h.firm}) · {(h.pctOfPort * 100).toFixed(1)}% of book{h.action ? ` · ${h.action}` : ''}
+                    </Text>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Trades (the fund's own) ---- */}
+            {d.trades.length > 0 && (
+              <View>
+                <SectionTitle sub="the fund's fills">Trades</SectionTitle>
+                <Card style={s.listCard}>
+                  {d.trades.slice(0, 8).map((t, i) => (
+                    <View key={t.id}>
+                      {i > 0 && <Divider />}
+                      <View style={s.tradeRow}>
+                        <Text style={[s.sigSignal, { color: t.side === 'BUY' ? p.pos : p.neg, width: 40 }]}>{t.side}</Text>
+                        <Text style={[s.meta, tabular, { color: p.textPrimary, flex: 1 }]}>
+                          {t.qty} sh @ {money(t.priceCents)}
+                        </Text>
+                        {t.realizedPnlCents != null && (
+                          <Text style={[s.metaSmall, tabular, { color: pnlColor(t.realizedPnlCents, p) }]}>
+                            {signedMoney(t.realizedPnlCents)}
+                          </Text>
+                        )}
+                        <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- News ---- */}
             {d.news.length > 0 && (
               <View>
                 <SectionTitle sub="recent coverage">News</SectionTitle>
@@ -236,12 +409,41 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* The full read */}
+            {/* ---- The full read ---- */}
             {d.bodyMarkdown && (
               <View>
                 <SectionTitle sub="Alfred's full dossier">The full read</SectionTitle>
                 <Card>
                   <MdText body={d.bodyMarkdown} foldAt={600} />
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Data coverage (honest 10-tier map) ---- */}
+            {d.coverage.length > 0 && (
+              <View>
+                <SectionTitle sub="what feeds this page — honest about the gaps">Data coverage</SectionTitle>
+                <Card style={s.listCard}>
+                  {d.coverage.map((c, i) => (
+                    <View key={c.tier}>
+                      {i > 0 && <Divider />}
+                      <View style={s.covRow}>
+                        <Text style={[s.metaSmall, tabular, { color: p.textMuted, width: 18 }]}>{c.tier}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.meta, { color: p.textPrimary }]}>{c.name}</Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted }]} numberOfLines={2}>{c.detail}</Text>
+                        </View>
+                        <Text
+                          style={[
+                            s.covStatus,
+                            { color: c.status === 'live' ? p.pos : c.status === 'dark' ? p.textMuted : p.warn },
+                          ]}
+                        >
+                          {c.status}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
                 </Card>
               </View>
             )}
@@ -267,6 +469,48 @@ export default function StockScreen() {
   );
 }
 
+/** The analyst target band — low → consensus → high with "now" marked. */
+function TargetBand({ band, p }: { band: NonNullable<Dossier['analystBand']>; p: Palette }) {
+  const lo = Math.min(band.lowCents, band.nowCents);
+  const hi = Math.max(band.highCents, band.nowCents);
+  const span = hi - lo || 1;
+  const x = (v: number) => Math.max(2, Math.min(98, ((v - lo) / span) * 100));
+  return (
+    <View>
+      <Text style={[bs.line, { color: p.textPrimary }, tabular]}>
+        consensus {money(band.consensusCents)}{' '}
+        <Text style={{ color: band.upsidePct > 0 ? p.pos : p.neg }}>
+          ({band.upsidePct > 0 ? '+' : ''}{(band.upsidePct * 100).toFixed(0)}%)
+        </Text>
+      </Text>
+      <View style={[bs.track, { backgroundColor: p.cardHi }]}>
+        <View style={[bs.range, { left: `${x(band.lowCents)}%`, width: `${x(band.highCents) - x(band.lowCents)}%`, backgroundColor: p.accent + '40' }]} />
+        <View style={[bs.mark, { left: `${x(band.nowCents)}%`, backgroundColor: p.textPrimary }]} />
+        <View style={[bs.mark, { left: `${x(band.consensusCents)}%`, backgroundColor: p.accent }]} />
+      </View>
+      <View style={bs.labels}>
+        <Text style={[bs.label, { color: p.textMuted }, tabular]}>low {money(band.lowCents)}</Text>
+        <Text style={[bs.label, { color: p.textMuted }, tabular]}>now {money(band.nowCents)}</Text>
+        <Text style={[bs.label, { color: p.textMuted }, tabular]}>high {money(band.highCents)}</Text>
+      </View>
+      {band.reanchored && (
+        <Text style={[bs.label, { color: p.textMuted, marginTop: 4, opacity: 0.7 }]}>
+          re-anchored to this listing's currency
+        </Text>
+      )}
+    </View>
+  );
+}
+
+const bs = StyleSheet.create({
+  line: { fontFamily: F.semi, fontSize: 14 },
+  track: { height: 8, borderRadius: 4, marginTop: 10, overflow: 'visible' },
+  range: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4 },
+  mark: { position: 'absolute', top: -3, width: 3, height: 14, borderRadius: 1.5, marginLeft: -1.5 },
+  labels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  label: { fontFamily: F.reg, fontSize: 9.5 },
+});
+
 const s = StyleSheet.create({
   fill: { flex: 1 },
   bar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
@@ -286,11 +530,21 @@ const s = StyleSheet.create({
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   chartLabel: { fontFamily: F.reg, fontSize: 9.5 },
   callRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  callLabel: { fontFamily: F.display, fontSize: 20 },
+  callLabel: { fontFamily: F.black, fontSize: 26 },
+  callConf: { fontFamily: F.black, fontSize: 18 },
   blurb: { fontFamily: F.reg, fontStyle: 'italic', fontSize: 12.5, lineHeight: 18, marginTop: 4 },
   meta: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
+  metaSmall: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 15 },
   mutedBody: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18 },
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
   newsRow: { paddingVertical: 9 },
   newsTitle: { fontFamily: F.med, fontSize: 13, lineHeight: 18 },
+  sigRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 9, paddingBottom: 3 },
+  sigFamily: { fontFamily: F.semi, fontSize: 13, textTransform: 'capitalize', flex: 1 },
+  sigSignal: { fontFamily: F.black, fontSize: 12 },
+  peerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  peerHead: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9 },
+  covRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  covStatus: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
 });
