@@ -134,6 +134,12 @@ export function Footnote({ children }: { children: React.ReactNode }) {
   return <Text style={[styles.footnote, { color: p.textMuted }]}>{children}</Text>;
 }
 
+/** Small uppercase per-column/per-group label above a card (under a SectionTitle). */
+export function MiniLabel({ children }: { children: React.ReactNode }) {
+  const { p } = usePalette();
+  return <Text style={[styles.miniLabel, { color: p.textMuted }]}>{children}</Text>;
+}
+
 /** Segmented toggle — the house two-way switch (docs/MOBILE-DESIGN.md §4). */
 export function Segmented<T extends string>({
   options,
@@ -228,4 +234,5 @@ const styles = StyleSheet.create({
   loading: { paddingVertical: 48, alignItems: 'center' },
   seg: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9 },
+  miniLabel: { fontFamily: F.semi, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 2, paddingHorizontal: 2 },
 });

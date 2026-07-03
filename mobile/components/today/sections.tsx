@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { usePalette, F, type Palette } from '../../constants/theme';
-import { Card, SectionTitle, Footnote, Divider } from '../Chrome';
+import { Card, SectionTitle, Footnote, Divider, MiniLabel } from '../Chrome';
 import StockLogo from '../StockLogo';
 import { money, signedMoney, signedPctFromBps, pnlColor, relDay, fmtDate, fmtEps } from '../../lib/format';
 import type { Today, Headline, EarningReported, Mover } from '../../services/types';
@@ -9,11 +9,6 @@ import type { Today, Headline, EarningReported, Mover } from '../../services/typ
 /* ---------- small shared bits ---------- */
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
-
-function MiniLabel({ children }: { children: React.ReactNode }) {
-  const { p } = usePalette();
-  return <Text style={[s.miniLabel, { color: p.textMuted }]}>{children}</Text>;
-}
 
 function SentimentDot({ sentiment, p }: { sentiment: string | null; p: Palette }) {
   const c = sentiment === 'POS' ? p.pos : sentiment === 'NEG' ? p.neg : p.textMuted;
@@ -484,6 +479,5 @@ const s = StyleSheet.create({
   pulseRow: { flexDirection: 'row', gap: 8, paddingVertical: 9 },
   pulseTitle: { fontFamily: F.med, fontSize: 13, lineHeight: 18 },
   // shared
-  miniLabel: { fontFamily: F.semi, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, paddingHorizontal: 2 },
   dot: { width: 6, height: 6, borderRadius: 3 },
 });

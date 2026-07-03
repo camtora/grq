@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, Loading, ErrorNote } from '../../components/Chrome';
+import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor } from '../../lib/format';
 import { useApi } from '../../services/hooks';
-import type { Portfolio, PortfolioPosition, AccountsResponse, Today } from '../../services/types';
+import type { Portfolio, AccountsResponse, Today } from '../../services/types';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
 
 /** Portfolio — split between the fund (Alfred, default) and the members' own
- * TD accounts (Personal, read-only via SnapTrade; Alfred can't see these — D97). */
+ * brokerage accounts (Personal, read-only via SnapTrade; Alfred can't see
+ * these — D97). Both views share the same book structure: cash strip, then
+ * holdings under Canada / United States headers. */
 export default function PortfolioScreen() {
   const [view, setView] = useState<'alfred' | 'personal'>('alfred');
   const pf = useApi<Portfolio>('/api/portfolio');
@@ -46,6 +48,111 @@ export default function PortfolioScreen() {
   );
 }
 
+/* ---------- the shared book: rows split by country ---------- */
+
+type BookRow = {
+  symbol: string;
+  logoUrl: string | null;
+  qtyLine: string;
+  valueCents: number | null;
+  dayBps?: number | null;
+  pnlCents?: number | null;
+};
+
+function countryOf(currency: string): string {
+  if (currency === 'USD') return 'United States';
+  if (currency === 'CAD') return 'Canada';
+  return 'Other';
+}
+
+function BookRowView({ r }: { r: BookRow }) {
+  const { p } = usePalette();
+  return (
+    <View style={s.row}>
+      <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
+      <View style={s.rowMain}>
+        <Text style={[s.sym, { color: p.accentText }]}>{r.symbol}</Text>
+        <Text style={[s.sub, tabular, { color: p.textMuted }]} numberOfLines={1}>{r.qtyLine}</Text>
+      </View>
+      <View style={s.rowRight}>
+        {r.valueCents != null && (
+          <Text style={[s.val, tabular, { color: p.textPrimary }]}>{money(r.valueCents)}</Text>
+        )}
+        <View style={s.rowRightSub}>
+          {r.dayBps != null && (
+            <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>
+              {signedPctFromBps(r.dayBps)}
+            </Text>
+          )}
+          {r.pnlCents != null && (
+            <Text style={[s.subPct, tabular, { color: pnlColor(r.pnlCents, p) }]}>
+              {signedMoney(r.pnlCents)}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Holdings under Canada / United States headers (docs/MOBILE-DESIGN.md §8). */
+function CountryBook({ groups, empty }: { groups: Map<string, BookRow[]>; empty: string }) {
+  const { p } = usePalette();
+  const order = ['Canada', 'United States', 'Other'].filter((c) => (groups.get(c)?.length ?? 0) > 0);
+  if (!order.length) {
+    return (
+      <Card style={s.listCard}>
+        <Text style={[s.empty, { color: p.textMuted }]}>{empty}</Text>
+      </Card>
+    );
+  }
+  return (
+    <View style={{ gap: 12 }}>
+      {order.map((country) => (
+        <View key={country}>
+          <MiniLabel>{country}</MiniLabel>
+          <Card style={s.listCard}>
+            {(groups.get(country) ?? []).map((r, i) => (
+              <View key={`${r.symbol}-${i}`}>
+                {i > 0 && <Divider />}
+                <BookRowView r={r} />
+              </View>
+            ))}
+          </Card>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function CashStrip({ cad, usd, positions, p }: { cad: number; usd: number; positions: number; p: Palette }) {
+  return (
+    <Card style={s.cashCard}>
+      <View style={s.cashStat}>
+        <Text style={[s.cashLabel, { color: p.textMuted }]}>CAD cash</Text>
+        <Text style={[s.cashValue, tabular, { color: p.textPrimary }]}>{money(cad)}</Text>
+      </View>
+      <View style={s.cashStat}>
+        <Text style={[s.cashLabel, { color: p.textMuted }]}>USD cash</Text>
+        <Text style={[s.cashValue, tabular, { color: p.textPrimary }]}>US{money(usd)}</Text>
+      </View>
+      <View style={s.cashStat}>
+        <Text style={[s.cashLabel, { color: p.textMuted }]}>Positions</Text>
+        <Text style={[s.cashValue, tabular, { color: p.textPrimary }]}>{money(positions)}</Text>
+      </View>
+    </Card>
+  );
+}
+
+function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    m.set(k, [...(m.get(k) ?? []), r]);
+  }
+  return m;
+}
+
 /* ---------- Alfred (the fund) ---------- */
 
 function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today | null; loading: boolean; error: string | null }) {
@@ -54,7 +161,21 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
   if (error && !pf) return <View style={{ marginTop: 16 }}><ErrorNote message={error} /></View>;
   if (!pf) return null;
 
-  const positions = [...pf.positions].sort((a, b) => b.marketValueCents - a.marketValueCents);
+  const rows = [...pf.positions]
+    .sort((a, b) => b.marketValueCents - a.marketValueCents)
+    .map((pos) => ({
+      row: {
+        symbol: pos.symbol,
+        logoUrl: pos.logoUrl,
+        qtyLine: `${pos.qty} sh @ ${money(pos.avgCostCents)}${pos.currency === 'USD' ? ' US' : ''}`,
+        valueCents: pos.marketValueCents,
+        dayBps: pos.dayChangeBps,
+        pnlCents: pos.unrealizedPnlCents,
+      },
+      country: countryOf(pos.currency),
+    }));
+  const groups = groupBy(rows, (r) => r.country);
+  const bookGroups = new Map([...groups.entries()].map(([k, v]) => [k, v.map((x) => x.row)]));
   const tape = t?.tape ?? [];
 
   return (
@@ -100,31 +221,14 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
         </View>
       )}
 
-      {/* Cash & book */}
+      {/* The book — cash strip, then holdings by country */}
       <SectionTitle sub="what the fund is holding">The book</SectionTitle>
-      <Card style={s.cashCard}>
-        <CashStat label="CAD cash" cents={pf.cadCashCents} p={p} />
-        <CashStat label="USD cash" cents={pf.usdCashCents} p={p} usd />
-        <CashStat label="Positions" cents={pf.positionsCents} p={p} />
-      </Card>
-
-      {/* Positions */}
+      <CashStrip cad={pf.cadCashCents} usd={pf.usdCashCents} positions={pf.positionsCents} p={p} />
       <View style={{ marginTop: 10 }}>
-        <Card style={s.listCard}>
-          {positions.length ? (
-            positions.map((pos, i) => (
-              <View key={pos.symbol}>
-                {i > 0 && <Divider />}
-                <PositionRow pos={pos} />
-              </View>
-            ))
-          ) : (
-            <Text style={[s.empty, { color: p.textMuted }]}>
-              All cash — Alfred only buys when a thesis clears every guardrail. Patience is a
-              position.
-            </Text>
-          )}
-        </Card>
+        <CountryBook
+          groups={bookGroups}
+          empty="All cash — Alfred only buys when a thesis clears every guardrail. Patience is a position."
+        />
         <Footnote>
           risk dial {pf.riskLevel.toLowerCase()} · fees {money(pf.feeSpentMonthCents)} of {money(pf.feeBudgetCentsMonth)} this month
           {pf.quotesAsOf ? ` · quotes ${pf.quotesAsOf.slice(11, 16)}Z` : ''}
@@ -140,44 +244,6 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
           </Card>
         </View>
       )}
-    </View>
-  );
-}
-
-function CashStat({ label, cents, p, usd }: { label: string; cents: number; p: Palette; usd?: boolean }) {
-  return (
-    <View style={s.cashStat}>
-      <Text style={[s.cashLabel, { color: p.textMuted }]}>{label}</Text>
-      <Text style={[s.cashValue, tabular, { color: p.textPrimary }]}>
-        {usd ? 'US' : ''}
-        {money(cents)}
-      </Text>
-    </View>
-  );
-}
-
-function PositionRow({ pos }: { pos: PortfolioPosition }) {
-  const { p } = usePalette();
-  return (
-    <View style={s.row}>
-      <StockLogo symbol={pos.symbol} logoUrl={pos.logoUrl} size={32} />
-      <View style={s.rowMain}>
-        <Text style={[s.sym, { color: p.accentText }]}>{pos.symbol}</Text>
-        <Text style={[s.sub, tabular, { color: p.textMuted }]}>
-          {pos.qty} sh @ {money(pos.avgCostCents)}{pos.currency === 'USD' ? ' US' : ''}
-        </Text>
-      </View>
-      <View style={s.rowRight}>
-        <Text style={[s.val, tabular, { color: p.textPrimary }]}>{money(pos.marketValueCents)}</Text>
-        <View style={s.rowRightSub}>
-          <Text style={[s.subPct, tabular, { color: pnlColor(pos.dayChangeBps, p) }]}>
-            {signedPctFromBps(pos.dayChangeBps)}
-          </Text>
-          <Text style={[s.subPct, tabular, { color: pnlColor(pos.unrealizedPnlCents, p) }]}>
-            {signedMoney(pos.unrealizedPnlCents)}
-          </Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -210,7 +276,7 @@ function Briefing({ body }: { body: string }) {
   );
 }
 
-/* ---------- Personal (SnapTrade — read-only) ---------- */
+/* ---------- Personal (SnapTrade — read-only, same book structure) ---------- */
 
 function PersonalView({ data, loading, error }: { data: AccountsResponse | null; loading: boolean; error: string | null }) {
   const { p } = usePalette();
@@ -220,66 +286,53 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
 
   return (
     <View>
-      {data.members.map((m) => (
-        <View key={m.email}>
-          <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
-          {m.connected && m.accounts.length > 0 ? (
-            m.accounts.map((a) => (
-              <Card key={a.id} style={{ marginBottom: 10 }}>
-                <View style={s.acctHead}>
-                  <View style={s.rowMain}>
-                    <Text style={[s.sym, { color: p.textPrimary }]}>
-                      {a.institution}
-                      {a.accountType ? ` · ${a.accountType}` : ''}
-                    </Text>
-                    <Text style={[s.sub, { color: p.textMuted }]}>
-                      {a.name ?? ''}{a.numberMasked ? `  ${a.numberMasked}` : ''}
-                    </Text>
-                  </View>
-                  {a.totalValueCents != null && (
-                    <Text style={[s.val, tabular, { color: p.textPrimary }]}>{money(a.totalValueCents)}</Text>
-                  )}
+      {data.members.map((m) => {
+        const accounts = m.connected ? m.accounts.filter((a) => !a.disabled) : [];
+        const cad = accounts.filter((a) => a.currency === 'CAD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
+        const usd = accounts.filter((a) => a.currency === 'USD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
+        const holdings = accounts.flatMap((a) => a.holdings);
+        const positions = holdings.reduce((s2, h) => s2 + (h.marketValueCents ?? 0), 0);
+        const rows = holdings
+          .sort((a, b) => (b.marketValueCents ?? 0) - (a.marketValueCents ?? 0))
+          .map((h) => ({
+            row: {
+              symbol: h.symbol,
+              logoUrl: null,
+              qtyLine: `${h.qty} sh${h.priceCents != null ? ` @ ${money(h.priceCents)}` : ''}${h.currency === 'USD' ? ' US' : ''}`,
+              valueCents: h.marketValueCents,
+              pnlCents: h.openPnlCents,
+            },
+            country: countryOf(h.currency),
+          }));
+        const groups = groupBy(rows, (r) => r.country);
+        const bookGroups = new Map([...groups.entries()].map(([k, v]) => [k, v.map((x) => x.row)]));
+        const synced = accounts.map((a) => a.syncedAt).filter(Boolean).sort().pop();
+
+        return (
+          <View key={m.email}>
+            <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
+            {m.connected && accounts.length > 0 ? (
+              <View>
+                <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
+                <View style={{ marginTop: 10 }}>
+                  <CountryBook groups={bookGroups} empty="No holdings synced yet." />
                 </View>
-                {a.holdings.map((h, i) => (
-                  <View key={`${h.symbol}-${i}`}>
-                    <Divider />
-                    <View style={s.row}>
-                      <StockLogo symbol={h.symbol} logoUrl={null} size={26} />
-                      <View style={s.rowMain}>
-                        <Text style={[s.sym, { color: p.accentText }]}>{h.symbol}</Text>
-                        <Text style={[s.sub, tabular, { color: p.textMuted }]} numberOfLines={1}>
-                          {h.qty} sh{h.priceCents != null ? ` @ ${money(h.priceCents)}` : ''}
-                        </Text>
-                      </View>
-                      <View style={s.rowRight}>
-                        {h.marketValueCents != null && (
-                          <Text style={[s.val, tabular, { color: p.textPrimary }]}>{money(h.marketValueCents)}</Text>
-                        )}
-                        {h.openPnlCents != null && (
-                          <Text style={[s.subPct, tabular, { color: pnlColor(h.openPnlCents, p) }]}>
-                            {signedMoney(h.openPnlCents)}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                ))}
-                {a.syncedAt && (
-                  <Text style={[s.synced, { color: p.textMuted }]}>synced {a.syncedAt.slice(0, 10)}</Text>
+                {synced && (
+                  <Footnote>synced {String(synced).slice(0, 10)}</Footnote>
                 )}
+              </View>
+            ) : (
+              <Card>
+                <Text style={[s.empty, { color: p.textMuted }]}>
+                  {m.isSelf
+                    ? 'Not connected yet — link your brokerage on the web Accounts page.'
+                    : `${m.name} hasn't connected an account yet.`}
+                </Text>
               </Card>
-            ))
-          ) : (
-            <Card style={{ marginBottom: 10 }}>
-              <Text style={[s.empty, { color: p.textMuted }]}>
-                {m.isSelf
-                  ? 'Not connected yet — link your brokerage on the web Accounts page.'
-                  : `${m.name} hasn't connected an account yet.`}
-              </Text>
-            </Card>
-          )}
-        </View>
-      ))}
+            )}
+          </View>
+        );
+      })}
       <Footnote>
         read-only via SnapTrade — Alfred can neither see nor trade these accounts, ever
       </Footnote>
@@ -309,6 +362,4 @@ const s = StyleSheet.create({
   subPct: { fontFamily: F.semi, fontSize: 11 },
   val: { fontFamily: F.semi, fontSize: 13.5 },
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 6 },
-  acctHead: { flexDirection: 'row', alignItems: 'center', paddingBottom: 8 },
-  synced: { fontFamily: F.reg, fontSize: 9.5, marginTop: 8, opacity: 0.7 },
 });
