@@ -36,25 +36,30 @@ export default function Splash({ done }: { done: () => void }) {
   useEffect(() => {
     hint.value = withRepeat(withTiming(1, { duration: 1100 }), -1, true);
   }, [hint]);
-  const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value }));
 
-  // Scrim + content cross-fade on phase change.
+  // Cross-fades: intro elements fade OUT as the welcome fades IN (both stay
+  // mounted — unmounting is what made the old version hard-cut), and the whole
+  // splash fades out over the app before unmount.
   const welcome = useSharedValue(0);
+  const leaving = useSharedValue(0);
   const scrimStyle = useAnimatedStyle(() => ({ opacity: welcome.value }));
   const introStyle = useAnimatedStyle(() => ({ opacity: 1 - welcome.value }));
+  const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value * (1 - welcome.value) }));
   const welcomeStyle = useAnimatedStyle(() => ({ opacity: welcome.value }));
+  const rootStyle = useAnimatedStyle(() => ({ opacity: 1 - leaving.value }));
 
   const finish = () => {
     if (dismissed.current) return;
     dismissed.current = true;
-    done();
+    leaving.value = withTiming(1, { duration: 450 });
+    setTimeout(done, 480); // unmount after the fade-out lands
   };
 
   const onTap = () => {
     if (phase === 'intro') {
       setPhase('welcome');
       welcome.value = withTiming(1, { duration: 500 });
-      setTimeout(finish, 1900); // 0.5s fade + the 1.4s beat from the native app
+      setTimeout(finish, 1900); // 0.5s cross-fade + the 1.4s beat from the native app
     } else {
       finish();
     }
@@ -65,6 +70,7 @@ export default function Splash({ done }: { done: () => void }) {
     : require('../assets/grq-logo-light.png');
 
   return (
+    <Animated.View style={[StyleSheet.absoluteFill, rootStyle]} pointerEvents={dismissed.current ? 'none' : 'auto'}>
     <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.bodyBg }]} onPress={onTap}>
       <MoneyRain reduceMotion={reduceMotion} />
 
@@ -84,30 +90,27 @@ export default function Splash({ done }: { done: () => void }) {
       <View style={styles.center} pointerEvents="none">
         <Image source={logo} style={styles.logo} resizeMode="contain" />
         <View style={styles.phaseSlot}>
-          {phase === 'intro' ? (
-            <Animated.Text style={[styles.hint, { color: p.textMuted }, hintStyle]}>
-              Tap to continue
-            </Animated.Text>
-          ) : (
-            <Animated.View style={[styles.welcomeBlock, welcomeStyle]}>
-              <Text style={[styles.welcomeLine, { color: p.textPrimary }]}>{welcomeLine}</Text>
-              <Text style={[styles.subtitle, { color: p.textMuted }]}>Rich quick, slowly.</Text>
-            </Animated.View>
-          )}
+          {/* Both phases stay mounted and cross-fade in place. */}
+          <Animated.Text style={[styles.hint, styles.phaseLayer, { color: p.textMuted }, hintStyle]}>
+            Tap to continue
+          </Animated.Text>
+          <Animated.View style={[styles.welcomeBlock, styles.phaseLayer, welcomeStyle]}>
+            <Text style={[styles.welcomeLine, { color: p.textPrimary }]}>{welcomeLine}</Text>
+            <Text style={[styles.subtitle, { color: p.textMuted }]}>Rich quick, slowly.</Text>
+          </Animated.View>
         </View>
       </View>
 
-      {/* Our faces + credit — pinned to the bottom during the intro. */}
-      {phase === 'intro' && (
-        <Animated.View style={[styles.credit, introStyle]} pointerEvents="none">
-          <View style={styles.avatarRow}>
-            <MemberAvatar source={require('../assets/people/cam.png')} bg={p.bodyBg} ring={p.accent} />
-            <MemberAvatar source={require('../assets/people/graham.png')} bg={p.bodyBg} ring={p.accent} overlap />
-          </View>
-          <Text style={[styles.creditText, { color: p.textMuted }]}>Created by{'\n'}Cam & Graham</Text>
-        </Animated.View>
-      )}
+      {/* Our faces + credit — pinned to the bottom, fading out with the intro. */}
+      <Animated.View style={[styles.credit, introStyle]} pointerEvents="none">
+        <View style={styles.avatarRow}>
+          <MemberAvatar source={require('../assets/people/cam.png')} bg={p.bodyBg} ring={p.accent} />
+          <MemberAvatar source={require('../assets/people/graham.png')} bg={p.bodyBg} ring={p.accent} overlap />
+        </View>
+        <Text style={[styles.creditText, { color: p.textMuted }]}>Created by{'\n'}Cam & Graham</Text>
+      </Animated.View>
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -129,7 +132,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
   },
-  phaseSlot: { marginTop: 16, minHeight: 64, alignItems: 'center', justifyContent: 'flex-start' },
+  phaseSlot: { marginTop: 16, minHeight: 64, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'flex-start' },
+  phaseLayer: { position: 'absolute', top: 0 },
   hint: { fontSize: 13, fontWeight: '600' },
   welcomeBlock: { alignItems: 'center', gap: 8 },
   welcomeLine: { fontSize: 20, fontWeight: '600', textAlign: 'center' },
