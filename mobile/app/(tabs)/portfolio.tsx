@@ -241,18 +241,25 @@ function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null
         </Footnote>
       </View>
 
-      {/* From the desk — every fund-level printout, newest first (Cam 2026-07-03) */}
-      {briefings.length > 0 && (
-        <View>
-          <SectionTitle sub="Alfred's printouts — pre-market to close">From the desk</SectionTitle>
-          <Card style={s.listCard}>
-            {briefings.map((b, i) => (
-              <BriefingRow key={b.id} b={b} prev={i > 0 ? briefings[i - 1] : null} first={i === 0} />
-            ))}
-          </Card>
-          <Footnote>fund-level reads only — per-name notes live on each stock page</Footnote>
-        </View>
-      )}
+      {/* From the desk — the current day's printouts, latest auto-opened (Cam
+          2026-07-03). Weekends show the most recent day that HAS printouts. */}
+      {(() => {
+        const dayKey = (iso: string) => new Date(iso).toDateString();
+        const latestDay = briefings.length ? dayKey(briefings[0].at) : null;
+        const todays = briefings.filter((b) => dayKey(b.at) === latestDay);
+        if (!todays.length) return null;
+        return (
+          <View>
+            <SectionTitle sub="Alfred's printouts — pre-market to close">From the desk</SectionTitle>
+            <Card style={s.listCard}>
+              {todays.map((b, i) => (
+                <BriefingRow key={b.id} b={b} prev={i > 0 ? todays[i - 1] : null} first={i === 0} defaultOpen={i === 0} />
+              ))}
+            </Card>
+            <Footnote>fund-level reads only — per-name notes live on each stock page</Footnote>
+          </View>
+        );
+      })()}
     </View>
   );
 }
@@ -268,9 +275,9 @@ const BRIEFING_META: Record<BriefingItem['kind'], { label: string; tone: 'accent
   weekly: { label: 'Weekly review', tone: 'pos' },
 };
 
-function BriefingRow({ b, prev, first }: { b: BriefingItem; prev: BriefingItem | null; first: boolean }) {
+function BriefingRow({ b, prev, first, defaultOpen = false }: { b: BriefingItem; prev: BriefingItem | null; first: boolean; defaultOpen?: boolean }) {
   const { p } = usePalette();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const meta = BRIEFING_META[b.kind];
   const tone = meta.tone === 'pos' ? p.pos : meta.tone === 'warn' ? p.warn : meta.tone === 'accent' ? p.accentText : p.textMuted;
   const d = new Date(b.at);
