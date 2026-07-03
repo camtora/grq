@@ -247,6 +247,15 @@ export type Dossier = {
   coverage: { tier: number; name: string; status: string; detail: string }[];
 };
 
+/* ---------- Alfred's desk printouts (/api/briefings) ---------- */
+export type BriefingItem = {
+  id: string;
+  at: string;
+  kind: 'premarket' | 'plan' | 'checkin' | 'midday' | 'eod' | 'weekly';
+  title: string;
+  body: string;
+};
+
 /* ---------- fund settings + FX (D62) ---------- */
 export type FundSettings = {
   riskLevel: 'CAUTIOUS' | 'BALANCED' | 'AGGRESSIVE';

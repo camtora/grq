@@ -8,7 +8,7 @@ import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor } from '../../lib/format';
 import { useApi } from '../../services/hooks';
-import type { Portfolio, AccountsResponse, Today } from '../../services/types';
+import type { Portfolio, AccountsResponse, Today, BriefingItem } from '../../services/types';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
 
@@ -21,12 +21,14 @@ export default function PortfolioScreen() {
   const pf = useApi<Portfolio>('/api/portfolio');
   const today = useApi<Today>('/api/today');
   const accounts = useApi<AccountsResponse>('/api/accounts');
+  const briefings = useApi<{ items: BriefingItem[] }>('/api/briefings');
 
-  const refreshing = pf.refreshing || today.refreshing || accounts.refreshing;
+  const refreshing = pf.refreshing || today.refreshing || accounts.refreshing || briefings.refreshing;
   const refresh = () => {
     pf.refresh();
     today.refresh();
     accounts.refresh();
+    briefings.refresh();
   };
 
   return (
@@ -42,7 +44,7 @@ export default function PortfolioScreen() {
         />
       </View>
       {view === 'alfred' ? (
-        <AlfredView pf={pf.data} t={today.data} loading={pf.loading} error={pf.error} />
+        <AlfredView pf={pf.data} t={today.data} briefings={briefings.data?.items ?? []} loading={pf.loading} error={pf.error} />
       ) : (
         <PersonalView data={accounts.data} loading={accounts.loading} error={accounts.error} />
       )}
@@ -159,7 +161,7 @@ function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
 
 /* ---------- Alfred (the fund) ---------- */
 
-function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today | null; loading: boolean; error: string | null }) {
+function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null; t: Today | null; briefings: BriefingItem[]; loading: boolean; error: string | null }) {
   const { p } = usePalette();
   if (loading) return <Loading />;
   if (error && !pf) return <View style={{ marginTop: 16 }}><ErrorNote message={error} /></View>;
@@ -239,15 +241,69 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
         </Footnote>
       </View>
 
-      {/* Latest fund-level briefing (symbol-null reads only — the house rule) */}
-      {t?.leadStoryMarkdown && (
+      {/* From the desk — every fund-level printout, newest first (Cam 2026-07-03) */}
+      {briefings.length > 0 && (
         <View>
-          <SectionTitle sub="the latest fund-level read">{t.leadTitle.split('·')[0].trim()}</SectionTitle>
-          <Card>
-            <MdText body={t.leadStoryMarkdown} />
+          <SectionTitle sub="Alfred's printouts — pre-market to close">From the desk</SectionTitle>
+          <Card style={s.listCard}>
+            {briefings.map((b, i) => (
+              <BriefingRow key={b.id} b={b} prev={i > 0 ? briefings[i - 1] : null} first={i === 0} />
+            ))}
           </Card>
+          <Footnote>fund-level reads only — per-name notes live on each stock page</Footnote>
         </View>
       )}
+    </View>
+  );
+}
+
+/* ---------- From the desk ---------- */
+
+const BRIEFING_META: Record<BriefingItem['kind'], { label: string; tone: 'accent' | 'pos' | 'warn' | 'muted' }> = {
+  premarket: { label: 'Pre-market', tone: 'warn' },
+  plan: { label: 'Morning plan', tone: 'accent' },
+  checkin: { label: 'Check-in', tone: 'muted' },
+  midday: { label: 'Midday', tone: 'accent' },
+  eod: { label: 'Evening', tone: 'pos' },
+  weekly: { label: 'Weekly review', tone: 'pos' },
+};
+
+function BriefingRow({ b, prev, first }: { b: BriefingItem; prev: BriefingItem | null; first: boolean }) {
+  const { p } = usePalette();
+  const [open, setOpen] = useState(false);
+  const meta = BRIEFING_META[b.kind];
+  const tone = meta.tone === 'pos' ? p.pos : meta.tone === 'warn' ? p.warn : meta.tone === 'accent' ? p.accentText : p.textMuted;
+  const d = new Date(b.at);
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const dayOf = (iso: string) => new Date(iso).toDateString();
+  const newDay = !prev || dayOf(prev.at) !== dayOf(b.at);
+  const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  // The title's tail is the summary ("Intraday Check-in — US closed, …");
+  // a bare-date tail (e.g. "Midday brief — 2026-07-03") isn't worth showing.
+  const tail = b.title.split('—').slice(1).join('—').trim();
+  const summary = /^\d{4}-\d{2}-\d{2}$/.test(tail) ? '' : tail;
+
+  return (
+    <View>
+      {newDay && (
+        <Text style={[s.briefDay, { color: p.textMuted, marginTop: first ? 4 : 10 }]}>{dayLabel}</Text>
+      )}
+      {!newDay && <Divider />}
+      <Pressable onPress={() => setOpen(!open)} style={s.briefRow}>
+        <View style={s.briefHead}>
+          <Text style={[s.briefKind, { color: tone }]}>{meta.label}</Text>
+          <Text style={[s.briefTime, { color: p.textMuted }]}>{time}</Text>
+          <Text style={[s.briefTime, { color: p.accentText, marginLeft: 'auto' }]}>{open ? 'close' : 'read'}</Text>
+        </View>
+        {!open && summary ? (
+          <Text style={[s.briefSummary, { color: p.textMuted }]} numberOfLines={2}>{summary}</Text>
+        ) : null}
+        {open && (
+          <View style={{ marginTop: 6 }}>
+            <MdText body={b.body} foldAt={100_000} />
+          </View>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -396,4 +452,10 @@ const s = StyleSheet.create({
   subPct: { fontFamily: F.semi, fontSize: 11 },
   val: { fontFamily: F.semi, fontSize: 13.5 },
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 6 },
+  briefDay: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, paddingHorizontal: 2, marginBottom: 2 },
+  briefRow: { paddingVertical: 9 },
+  briefHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  briefKind: { fontFamily: F.bold, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5 },
+  briefTime: { fontFamily: F.reg, fontSize: 10.5 },
+  briefSummary: { fontFamily: F.reg, fontSize: 12, lineHeight: 17, marginTop: 3 },
 });

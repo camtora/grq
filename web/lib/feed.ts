@@ -1336,6 +1336,49 @@ export async function reportsResponse(limit = 40) {
   };
 }
 
+/* ---------- /api/briefings — Alfred's printouts (GRQ Go's Portfolio) ----------
+ * The full desk output, newest first: pre-market read → morning plan → intraday
+ * check-ins (fund-level only, symbol:null — the house rule) → midday brief →
+ * EOD close → weekly review. Journal rows carry the intraday kinds; the Report
+ * table carries EOD/WEEKLY. */
+export async function briefingsResponse(limit = 20) {
+  const [journal, reports] = await Promise.all([
+    prisma.journalEntry.findMany({
+      where: {
+        kind: "RESEARCH",
+        symbol: null,
+        OR: [
+          { title: { startsWith: "Pre-morning read" } },
+          { title: { startsWith: "Game plan" } },
+          { title: { startsWith: "Midday brief" } },
+          { title: { contains: "check-in", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { at: "desc" },
+      take: limit,
+    }),
+    prisma.report.findMany({ where: { kind: { in: ["EOD", "WEEKLY"] } }, orderBy: { date: "desc" }, take: 10 }),
+  ]);
+  const kindOf = (t: string): string =>
+    t.startsWith("Pre-morning read") ? "premarket"
+    : t.startsWith("Game plan") ? "plan"
+    : t.startsWith("Midday brief") ? "midday"
+    : "checkin";
+  const items = [
+    ...journal.map((j) => ({ id: `j${j.id}`, at: j.at.toISOString(), kind: kindOf(j.title), title: j.title, body: j.body })),
+    ...reports.map((r) => ({
+      id: `r${r.id}`,
+      at: (r.createdAt ?? r.date).toISOString(),
+      kind: r.kind === "EOD" ? "eod" : "weekly",
+      title: r.title,
+      body: r.body,
+    })),
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, limit);
+  return { items };
+}
+
 export async function reportDayResponse(date: string) {
   // date = YYYY-MM-DD (ET). Match the EOD report whose ET calendar date matches.
   const reports = await prisma.report.findMany({ where: { kind: "EOD" }, orderBy: { date: "desc" }, take: 120 });
