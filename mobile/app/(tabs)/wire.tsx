@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -17,6 +17,7 @@ import RatingBar from '../../components/RatingBar';
 import ShareButton from '../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedPctFromBps, pnlColor } from '../../lib/format';
+import { api } from '../../services/api';
 import { useApi } from '../../services/hooks';
 import type { WireItem } from '../../services/types';
 
@@ -65,6 +66,36 @@ export default function WireScreen() {
   const { p } = usePalette();
   const [pageH, setPageH] = useState(0);
 
+  // The infinite research shelf (Cam 2026-07-03): past the curated feed, keep
+  // scrolling through every dossier'd name, shuffled per session, forever.
+  const seed = useRef(Math.floor(Math.random() * 1e9) + 1);
+  const shelfPage = useRef(0);
+  const loadingMore = useRef(false);
+  const [shelf, setShelf] = useState<WireItem[]>([]);
+
+  const loadMore = async () => {
+    if (loadingMore.current || !data) return;
+    loadingMore.current = true;
+    try {
+      const d = await api<{ items: WireItem[] }>(`/api/wire?seed=${seed.current}&page=${shelfPage.current}`);
+      shelfPage.current += 1;
+      if (d.items.length) setShelf((prev) => [...prev, ...d.items]);
+    } catch {
+      /* the next end-reach retries */
+    } finally {
+      loadingMore.current = false;
+    }
+  };
+
+  const onRefresh = () => {
+    setShelf([]);
+    shelfPage.current = 0;
+    seed.current = Math.floor(Math.random() * 1e9) + 1;
+    refresh();
+  };
+
+  const items = [...(data?.items ?? []), ...shelf];
+
   return (
     <Screen title="The Wire" scroll={false}>
       <View style={{ flex: 1, marginHorizontal: -16 }} onLayout={(e) => setPageH(e.nativeEvent.layout.height)}>
@@ -76,7 +107,7 @@ export default function WireScreen() {
         )}
         {data && pageH > 0 && (
           <FlatList
-            data={data.items}
+            data={items}
             keyExtractor={(it) => it.id}
             renderItem={({ item }) => (
               <View style={{ height: pageH }}>
@@ -88,7 +119,9 @@ export default function WireScreen() {
             decelerationRate="fast"
             showsVerticalScrollIndicator={false}
             getItemLayout={(_, index) => ({ length: pageH, offset: pageH * index, index })}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={p.accent} />}
+            onEndReached={loadMore}
+            onEndReachedThreshold={2}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={p.accent} />}
           />
         )}
       </View>

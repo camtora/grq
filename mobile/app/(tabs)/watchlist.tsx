@@ -35,8 +35,17 @@ export default function WatchlistScreen() {
   const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
 
   const [tab, setTab] = useState<'all' | 'cam' | 'graham'>('all');
-  const [sort, setSort] = useState<'ticker' | 'change'>('ticker');
+  // Tap a sort chip again to reverse it (Cam 2026-07-03).
+  const [sort, setSort] = useState<{ key: 'ticker' | 'change'; dir: 'asc' | 'desc' }>({ key: 'ticker', dir: 'asc' });
   const tabInitialized = useRef(false);
+
+  const tapSort = (key: 'ticker' | 'change') => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'change' ? 'desc' : 'asc' }, // change starts best-first
+    );
+  };
 
   const rows = data?.rows ?? [];
   const counts = {
@@ -55,12 +64,17 @@ export default function WatchlistScreen() {
   }, [data]);
 
   const filtered = tab === 'all' ? rows : rows.filter((r) => r.watchers.some((w) => w.key === tab));
-  // 'ticker' keeps the server order (pinned first, then A–Z); '% change' ranks
-  // biggest gain → biggest loss, unquoted names last (Cam 2026-07-03).
-  const visible =
-    sort === 'ticker'
-      ? filtered
-      : [...filtered].sort((a, b) => (b.dayBps ?? Number.NEGATIVE_INFINITY) - (a.dayBps ?? Number.NEGATIVE_INFINITY));
+  // ticker asc = the server order (pinned first, then A–Z); ticker desc = Z–A.
+  // change desc = biggest gain → biggest loss (unquoted last); asc = the reverse.
+  const visible = (() => {
+    if (sort.key === 'ticker') {
+      return sort.dir === 'asc' ? filtered : [...filtered].sort((a, b) => b.symbol.localeCompare(a.symbol));
+    }
+    const missing = sort.dir === 'desc' ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+    return [...filtered].sort((a, b) =>
+      sort.dir === 'desc' ? (b.dayBps ?? missing) - (a.dayBps ?? missing) : (a.dayBps ?? missing) - (b.dayBps ?? missing),
+    );
+  })();
 
   return (
     <Screen title="Watchlist" refreshing={refreshing} onRefresh={refresh}>
@@ -82,23 +96,23 @@ export default function WatchlistScreen() {
             <Text style={[s.sortLabel, { color: p.textMuted }]}>SORT</Text>
             {(
               [
-                { key: 'ticker', label: 'A–Z' },
-                { key: 'change', label: '% change' },
+                { key: 'ticker', label: sort.key === 'ticker' && sort.dir === 'desc' ? 'Z–A' : 'A–Z' },
+                { key: 'change', label: sort.key === 'change' && sort.dir === 'asc' ? '% change ↑' : '% change ↓' },
               ] as const
             ).map((o) => (
               <Pressable
                 key={o.key}
-                onPress={() => setSort(o.key)}
+                onPress={() => tapSort(o.key)}
                 style={[
                   s.sortChip,
                   { borderColor: p.cardBorder },
-                  sort === o.key && { backgroundColor: p.accent + '26', borderColor: p.accent + '55' },
+                  sort.key === o.key && { backgroundColor: p.accent + '26', borderColor: p.accent + '55' },
                 ]}
               >
                 <Text
                   style={{
-                    color: sort === o.key ? p.accentText : p.textMuted,
-                    fontFamily: sort === o.key ? F.semi : F.med,
+                    color: sort.key === o.key ? p.accentText : p.textMuted,
+                    fontFamily: sort.key === o.key ? F.semi : F.med,
                     fontSize: 11.5,
                   }}
                 >
@@ -404,7 +418,7 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
 
 const s = StyleSheet.create({
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
-  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingHorizontal: 2 },
+  sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
   sortLabel: { fontFamily: F.semi, fontSize: 9, letterSpacing: 1.5 },
   sortChip: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },

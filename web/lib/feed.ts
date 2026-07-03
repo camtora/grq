@@ -298,6 +298,88 @@ export async function marketResponse() {
   };
 }
 
+/* ---------- /api/wire?seed&page — the infinite research shelf (GRQ Go) ----------
+ * Once the curated wire runs out, the app keeps scrolling: every name we hold a
+ * dossier on, shuffled deterministically by the client's session seed, served in
+ * pages that wrap around forever. Latest dossier per symbol + a live quote. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export async function wireMoreResponse(seed: number, page: number, take = 15) {
+  const dossiers = await prisma.journalEntry.findMany({
+    where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { not: null } },
+    orderBy: { at: "desc" },
+    distinct: ["symbol"],
+    select: {
+      symbol: true, companyName: true, stance: true, confidence: true, at: true,
+      targetNearCents: true, targetFarCents: true, targetNearDays: true, bottomLine: true,
+    },
+  });
+  if (dossiers.length === 0) return { items: [], pool: 0 };
+
+  // Deterministic shuffle by the session seed, then slice with wraparound —
+  // the shelf never runs dry.
+  const rand = mulberry32(seed || 1);
+  const shuffled = [...dossiers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const start = (page * take) % shuffled.length;
+  const slice = [...shuffled, ...shuffled].slice(start, start + Math.min(take, shuffled.length));
+
+  const all = await allUniverse();
+  const uBy = new Map(all.map((u) => [u.symbol, u]));
+  const quotes = await getQuotes(slice.map((d) => d.symbol as string));
+
+  const items = slice.map((d) => {
+    const sym = d.symbol as string;
+    const u = uBy.get(sym);
+    const q = quotes.get(sym);
+    const cur = q?.midCents ?? null;
+    const nearBps = cur && d.targetNearCents ? Math.round(((d.targetNearCents - cur) / cur) * 10_000) : null;
+    const farBps = cur && d.targetFarCents ? Math.round(((d.targetFarCents - cur) / cur) * 10_000) : null;
+    // The bottom line is bullet-markdown — lift clean bullets for the card body.
+    const bullets = (d.bottomLine ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.slice(2).replace(/\[\[(.+?)\]\]/g, "$1").replace(/\*\*/g, "").trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    return {
+      id: `shelf:${sym}:${page}`,
+      kind: "dossier" as const,
+      at: d.at.toISOString(),
+      symbol: sym,
+      name: u?.name ?? d.companyName ?? sym,
+      currency: u?.currency ?? null,
+      logoUrl: u?.logoUrl || fmpLogo(sym),
+      lastCents: cur,
+      dayChangeBps: q?.dayChangeBps ?? null,
+      call: stanceToCall(d.stance),
+      nearBps,
+      farBps,
+      nearDays: d.targetNearDays ?? null,
+      nearHorizon: d.targetNearDays ? `~${Math.max(1, Math.round(d.targetNearDays / 5))} weeks` : null,
+      targetNearCents: d.targetNearCents ?? null,
+      targetFarCents: d.targetFarCents ?? null,
+      confidence: d.confidence ?? null,
+      bullets: bullets.length ? bullets : undefined,
+      tag: "from the research shelf",
+    };
+  });
+  return { items, pool: dossiers.length };
+}
+
 /* ---------- /api/watchlist — the watch-driven list (D78), GRQ Go's Watchlist ----------
  * Mirrors web/app/market/watchlist/page.tsx: names any member personally watches
  * (candidates AND promoted names), pinned first then alphabetical, with Alfred's
