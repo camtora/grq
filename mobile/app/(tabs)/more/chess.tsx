@@ -15,7 +15,7 @@ type ChessTheme = {
   bottomLine: string | null;
   createdAt: string;
   playCount: number;
-  plays: { symbol: string }[];
+  tickers: string[];
 };
 
 function statusColor(status: string, p: Palette): string {
@@ -58,19 +58,19 @@ export default function ChessScreen() {
                       <MdText body={t.bottomLine} foldAt={800} />
                     </View>
                   )}
-                  {t.plays.length > 0 && (
+                  {(t.tickers ?? []).length > 0 && (
                     <View style={s.chipRow}>
-                      {t.plays.map((pl) => (
+                      {(t.tickers ?? []).map((sym) => (
                         <Pressable
-                          key={pl.symbol}
-                          onPress={() => router.push(`/stock/${pl.symbol}`)}
+                          key={sym}
+                          onPress={() => router.push(`/stock/${sym}`)}
                           style={[s.chip, { borderColor: p.cardBorder }]}
                         >
-                          <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 11.5 }}>{pl.symbol}</Text>
+                          <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 11.5 }}>{sym}</Text>
                         </Pressable>
                       ))}
-                      {t.playCount > t.plays.length && (
-                        <Text style={[s.morePlays, { color: p.textMuted }]}>+{t.playCount - t.plays.length} more</Text>
+                      {t.playCount > (t.tickers ?? []).length && (
+                        <Text style={[s.morePlays, { color: p.textMuted }]}>+{t.playCount - (t.tickers ?? []).length} more</Text>
                       )}
                     </View>
                   )}
