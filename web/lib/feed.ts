@@ -22,7 +22,9 @@ import { GLOSSARY } from "./glossary";
 import { watchersFor, allWatches } from "./watch";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails } from "./users";
-import { accountsForMembers } from "./external/store";
+import { accountsForMembers, personalPositionsFor } from "./external/store";
+import { getOptions, optionsLine } from "./options/store";
+import { getSocial, socialLine } from "./social/store";
 import { parseBoard, buildPlayViews } from "./chess";
 import { parseConfidenceLevers } from "./confidence-levers";
 import { loadStandings } from "./race/standings";
@@ -1554,6 +1556,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peersRaw,
     position, tradesRaw, watch, settings, grades, gradeActionsRaw, gradesTrend, targetTrend,
     earnings, newsRaw, institutional, holdersRaw, scoreboardRaw, closesRaw, smart,
+    optionsRow, socialRow, personalRaw,
   ] = await Promise.all([
     getQuote(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }),
@@ -1578,6 +1581,11 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     getScoreboard(sym).catch(() => []),
     getCloses(sym, 180).catch(() => []),
     getSmartMoneyForSymbol(bareTicker(sym)).catch(() => null),
+    // Tier 3/8 — US-centric feeds; CA names come back uncovered (null).
+    getOptions(bareTicker(sym)).catch(() => null),
+    getSocial(bareTicker(sym)).catch(() => null),
+    // Members' own money in this name (members-only — viewers/agents never see it, D97).
+    opts?.requestedBy ? personalPositionsFor(memberEmails(), y).catch(() => []) : Promise.resolve([]),
   ]);
 
   const currentReadEntry = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
@@ -1781,5 +1789,44 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
       ? { title: currentReadEntry.title, body: currentReadEntry.body, at: currentReadEntry.at.toISOString(), sources: parseSources(currentReadEntry.sourcesJson) }
       : null,
     watchers: stockWatchers,
+    // What would change our mind (D93): the agent-filed levers + the structural
+    // data gaps the coverage map exposes (web page parity).
+    confidenceLevers: parseConfidenceLevers(journal.find((j) => j.confidenceLeversJson)?.confidenceLeversJson),
+    structuralGaps: coverage
+      .filter((c) => c.status !== "live" && [2, 4, 5, 6, 7].includes(c.tier))
+      .map((c) => ({ name: c.name, detail: c.detail })),
+    // Tier 3 — options positioning (D88): a signal Alfred weighs; NEVER traded.
+    options: optionsRow
+      ? {
+          line: optionsLine(optionsRow),
+          regime: optionsRow.regime,
+          pcOI: optionsRow.pcOI,
+          pcVol: optionsRow.pcVol,
+          atmIvBps: optionsRow.atmIvBps,
+          asOf: optionsRow.fetchedAt.toISOString().slice(0, 10),
+        }
+      : null,
+    // Tier 8 — social crowding (D89): a RISK signal on probation; never gates a trade.
+    social: socialRow
+      ? {
+          line: socialLine(socialRow),
+          rank: socialRow.rank,
+          velocity: socialRow.velocity,
+          bullPct: socialRow.bullPct,
+          asOf: socialRow.fetchedAt.toISOString().slice(0, 10),
+        }
+      : null,
+    // Members' own money in this name (bought-at = avg cost). Empty for viewers.
+    personalPositions: personalRaw.map((pp) => ({
+      owner: personByEmail(pp.email)?.name ?? pp.email,
+      ownerKey: ownerKeyFor(pp.email),
+      institution: pp.institution,
+      accountType: pp.accountType,
+      qty: pp.qty,
+      currency: pp.currency,
+      avgCostCents: pp.avgCostCents,
+      marketValueCents: pp.marketValueCents,
+      openPnlCents: pp.openPnlCents,
+    })),
   };
 }

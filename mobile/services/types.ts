@@ -218,6 +218,41 @@ export type Dossier = {
   watchers: { key: string; name: string }[];
   recLabel: string | null; // the technical-signal lean (an input, not a verdict)
   recPos: number | null;
+  confidenceLevers?: {
+    gap: string;
+    direction: 'up' | 'down' | 'tighten';
+    magnitude: 'small' | 'moderate' | 'large';
+    kind: 'data-gap' | 'catalyst';
+    trigger: string;
+    retrievable: boolean;
+  }[];
+  structuralGaps?: { name: string; detail: string }[];
+  options?: {
+    line: string;
+    regime: string | null;
+    pcOI: number | null;
+    pcVol: number | null;
+    atmIvBps: number | null;
+    asOf: string;
+  } | null;
+  social?: {
+    line: string;
+    rank: number | null;
+    velocity: number | null;
+    bullPct: number | null;
+    asOf: string;
+  } | null;
+  personalPositions?: {
+    owner: string;
+    ownerKey: string | null;
+    institution: string;
+    accountType: string | null;
+    qty: number;
+    currency: string;
+    avgCostCents: number | null;
+    marketValueCents: number | null;
+    openPnlCents: number | null;
+  }[];
   analystBand: {
     nowCents: number;
     consensusCents: number;
@@ -245,6 +280,7 @@ export type Dossier = {
   } | null;
   trades: { id: number; side: string; qty: number; priceCents: number; realizedPnlCents: number | null; at: string }[];
   coverage: { tier: number; name: string; status: string; detail: string }[];
+  scoreboard: { source: string; grades: number; hits: number; misses: number; neutral: number; hitRate: number | null }[];
 };
 
 /* ---------- Alfred's desk printouts (/api/briefings) ---------- */

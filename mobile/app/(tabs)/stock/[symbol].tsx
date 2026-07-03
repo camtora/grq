@@ -214,6 +214,86 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- What would change our mind (D93) ---- */}
+            {((d.confidenceLevers ?? []).length > 0 || (d.structuralGaps ?? []).length > 0) && (
+              <View>
+                <SectionTitle sub="what's pinning confidence below 100">What would change our mind</SectionTitle>
+                <Card style={s.listCard}>
+                  {(d.confidenceLevers ?? []).map((l, i) => (
+                    <View key={i}>
+                      {i > 0 && <Divider />}
+                      <View style={s.leverRow}>
+                        <Text
+                          style={[
+                            s.leverDir,
+                            { color: l.direction === 'up' ? p.pos : l.direction === 'down' ? p.neg : p.textMuted },
+                          ]}
+                        >
+                          {l.direction === 'up' ? '▲' : l.direction === 'down' ? '▼' : '◆'}
+                        </Text>
+                        <View style={s.rowMainWide}>
+                          <Text style={[s.leverGap, { color: p.textPrimary }]}>{l.gap}</Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>
+                            {l.kind === 'catalyst' ? '⏱ ' : '🔎 '}{l.trigger} · {l.magnitude} move
+                            {l.retrievable ? ' · retrievable now' : ''}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                  {(d.structuralGaps ?? []).map((g, i) => (
+                    <View key={`g-${i}`}>
+                      {((d.confidenceLevers ?? []).length > 0 || i > 0) && <Divider />}
+                      <View style={s.leverRow}>
+                        <Text style={[s.leverDir, { color: p.textMuted }]}>∅</Text>
+                        <View style={s.rowMainWide}>
+                          <Text style={[s.leverGap, { color: p.textMuted }]}>{g.name} is dark</Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>{g.detail}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Members' own money in this name (members-only; agents never see it, D97) ---- */}
+            {(d.personalPositions ?? []).length > 0 && (
+              <View>
+                <SectionTitle sub="your own accounts — Alfred can't see this">Your money</SectionTitle>
+                <Card style={s.listCard}>
+                  {(d.personalPositions ?? []).map((pp, i) => (
+                    <View key={i}>
+                      {i > 0 && <Divider />}
+                      <View style={s.personalRow}>
+                        {pp.ownerKey && AVATARS[pp.ownerKey] ? (
+                          <Image source={AVATARS[pp.ownerKey]} style={[s.personalAvatar, { borderColor: p.accent + '55' }]} />
+                        ) : null}
+                        <View style={s.rowMainWide}>
+                          <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
+                            {pp.owner} · {pp.qty} sh{pp.avgCostCents != null ? ` @ ${money(pp.avgCostCents)}` : ''}
+                          </Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]}>
+                            {pp.institution}{pp.accountType ? ` ${pp.accountType}` : ''}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {pp.marketValueCents != null && (
+                            <Text style={[s.meta, tabular, { color: p.textPrimary }]}>{money(pp.marketValueCents)}</Text>
+                          )}
+                          {pp.openPnlCents != null && (
+                            <Text style={[s.metaSmall, tabular, { color: pnlColor(pp.openPnlCents, p) }]}>
+                              {signedMoney(pp.openPnlCents)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
             {/* ---- Held position + the deterministic bracket ---- */}
             {d.position && (
               <View>
@@ -341,6 +421,35 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- Options positioning (Tier 3, D88) — a signal, NEVER traded ---- */}
+            {d.options && (
+              <View>
+                <SectionTitle sub="dealer positioning · computed from CBOE, free">Options positioning</SectionTitle>
+                <Card>
+                  <Text style={[s.regime, { color: d.options.regime === 'negative' ? p.warn : p.pos }]}>
+                    GEX {d.options.regime === 'negative' ? 'NEGATIVE — amplifies moves' : 'POSITIVE — dampens moves'}
+                  </Text>
+                  <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 6 }]}>{d.options.line}</Text>
+                  <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 8, opacity: 0.7 }]}>
+                    as of {d.options.asOf} · the fund never trades options — this is an input Alfred weighs
+                  </Text>
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Social crowding (Tier 8, D89) — on probation ---- */}
+            {d.social && (
+              <View>
+                <SectionTitle sub="Reddit + Stocktwits · a RISK signal, on probation">Social chatter</SectionTitle>
+                <Card>
+                  <Text style={[s.mutedBody, { color: p.textPrimary }]}>{d.social.line}</Text>
+                  <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 8, opacity: 0.7 }]}>
+                    as of {d.social.asOf} · noisy and gameable by design — it never gates a trade
+                  </Text>
+                </Card>
+              </View>
+            )}
+
             {/* ---- Earnings (Tier 6) ---- */}
             {(d.earnings?.next || d.earnings?.last) && (
               <View>
@@ -444,6 +553,27 @@ export default function StockScreen() {
                           </Text>
                         )}
                         <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Scoreboard — which sources earned their keep on this name ---- */}
+            {(d.scoreboard ?? []).length > 0 && (
+              <View>
+                <SectionTitle sub="from retros — which sources earned their keep">Scoreboard</SectionTitle>
+                <Card style={s.listCard}>
+                  {(d.scoreboard ?? []).map((sb, i) => (
+                    <View key={sb.source}>
+                      {i > 0 && <Divider />}
+                      <View style={s.personalRow}>
+                        <Text style={[s.meta, { color: p.textPrimary, flex: 1 }]} numberOfLines={1}>{sb.source}</Text>
+                        <Text style={[s.metaSmall, tabular, { color: p.textMuted }]}>
+                          {sb.hits}✓ {sb.misses}✗ {sb.neutral}—
+                          {sb.hitRate != null ? `  ·  ${Math.round(sb.hitRate * 100)}%` : ''}
+                        </Text>
                       </View>
                     </View>
                   ))}
@@ -610,4 +740,11 @@ const s = StyleSheet.create({
   covRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   covStatus: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   researchBtn: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, marginTop: 10 },
+  rowMainWide: { flex: 1, minWidth: 0 },
+  leverRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9 },
+  leverDir: { fontFamily: F.bold, fontSize: 12, width: 16, marginTop: 1 },
+  leverGap: { fontFamily: F.med, fontSize: 12.5, lineHeight: 18 },
+  personalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  personalAvatar: { width: 26, height: 26, borderRadius: 13, borderWidth: 1 },
+  regime: { fontFamily: F.black, fontSize: 13, letterSpacing: 0.3 },
 });
