@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { Card, SectionTitle, Footnote, Divider, MiniLabel } from '../Chrome';
 import StockLogo from '../StockLogo';
@@ -172,6 +173,7 @@ export function MarketBriefSection({ t }: { t: Today }) {
 
 function EarningBubble({ e }: { e: EarningReported }) {
   const { p } = usePalette();
+  const router = useRouter();
   const beat =
     e.epsActual != null && e.epsEstimated != null
       ? e.epsActual >= e.epsEstimated
@@ -184,6 +186,7 @@ function EarningBubble({ e }: { e: EarningReported }) {
     ? 'Just reported — numbers and the market’s reaction are on the stock page.'
     : `${beat ? 'Beat' : 'Missed'} estimates${epsPart}${movePart}.`;
   return (
+    <Pressable onPress={() => router.push(`/stock/${e.symbol}`)}>
     <Card style={s.bubble}>
       <View style={s.row}>
         <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={28} />
@@ -210,11 +213,13 @@ function EarningBubble({ e }: { e: EarningReported }) {
         ) : null}
       </View>
     </Card>
+    </Pressable>
   );
 }
 
 export function EarningsSection({ t }: { t: Today }) {
   const { p } = usePalette();
+  const router = useRouter();
   const reported = t.earningsReported ?? [];
   const upcoming = t.earningsUpcoming ?? [];
   const today = t.dateISO;
@@ -238,14 +243,14 @@ export function EarningsSection({ t }: { t: Today }) {
               return (
                 <View key={`${e.symbol}-${e.date}`}>
                   {i > 0 && <Divider />}
-                  <View style={s.row}>
+                  <Pressable onPress={() => router.push(`/stock/${e.symbol}`)} style={s.row}>
                     <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
                     <Text style={[s.sym, { color: p.accentText }]}>{e.symbol}</Text>
                     <View style={s.rowRight}>
                       <Text style={[s.relDay, { color: soon ? p.warn : p.textMuted }]}>{rel}</Text>
                       <Text style={[s.metaText, { color: p.textMuted }]}>{fmtDate(e.date)}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 </View>
               );
             })}
@@ -261,8 +266,9 @@ export function EarningsSection({ t }: { t: Today }) {
 
 function MoverRow({ m }: { m: Mover }) {
   const { p } = usePalette();
+  const router = useRouter();
   return (
-    <View style={s.row}>
+    <Pressable onPress={() => router.push(`/stock/${m.symbol}`)} style={s.row}>
       <StockLogo symbol={m.symbol} logoUrl={null} size={28} />
       <View style={s.rowMain}>
         <Text style={[s.sym, { color: p.accentText }]}>{m.symbol}</Text>
@@ -276,7 +282,7 @@ function MoverRow({ m }: { m: Mover }) {
           {m.currency === 'USD' ? 'US' : ''}{money(m.lastCents)}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -326,6 +332,7 @@ export function OurMarket({ t }: { t: Today }) {
 
 export function WholeMarket({ t }: { t: Today }) {
   const { p } = usePalette();
+  const router = useRouter();
   const gainers = t.marketGainers ?? [];
   const sectors = t.sectors ?? [];
   if (!gainers.length && !sectors.length) return null;
@@ -339,7 +346,7 @@ export function WholeMarket({ t }: { t: Today }) {
             {gainers.map((g, i) => (
               <View key={g.symbol}>
                 {i > 0 && <Divider />}
-                <View style={s.row}>
+                <Pressable onPress={() => router.push(`/stock/${g.symbol}`)} style={s.row}>
                   <View style={s.rowMain}>
                     <Text style={[s.sym, { color: p.accentText }]}>
                       {g.symbol}
@@ -353,7 +360,7 @@ export function WholeMarket({ t }: { t: Today }) {
                     <Text style={[s.rowPct, tabular, { color: p.pos }]}>{signedPctFromBps(g.changeBps, 0)}</Text>
                     <Text style={[s.metaText, tabular, { color: p.textMuted }]}>{money(g.priceCents)}</Text>
                   </View>
-                </View>
+                </Pressable>
               </View>
             ))}
           </Card>

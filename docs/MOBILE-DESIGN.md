@@ -58,6 +58,12 @@ The splash and sign-in screens are the only chrome-less surfaces.
 - Section spacing: 24 between sections, 8 header→card.
 - **Row** pattern (movers/hitters/earnings): logo 32 → symbol (Inter 600, `p.accentText`)
   over muted name (11) → right-aligned numbers (tabular).
+- **Every stock listed anywhere links to `/stock/[symbol]`** (Cam 2026-07-03). Plain
+  rows: the whole row is the Pressable. Rows with their own tap behavior (e.g. the
+  Watchlist's expand-on-tap): the *symbol* is the link, underlined (web §1.7 — the
+  symbol is the affordance). Back always returns to the originating screen
+  (`router.push` history; the stock route is a hidden tab screen so the bottom nav
+  stays visible).
 - **Segmented toggle** (`Segmented` in Chrome.tsx): the house two-way switch — pill
   container on `p.cardBg`, active segment `p.accent` @ 15% with `p.accentText` label.
   Used for Portfolio's Alfred | Personal split; reuse it for any in-page view switch.

@@ -242,7 +242,13 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
         <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
         <View style={s.rowMain}>
           <View style={s.symRow}>
-            <Text style={[s.sym, { color: p.accentText }]}>{r.symbol}</Text>
+            {/* The symbol is the link (web §1.7); the rest of the row expands. */}
+            <Text
+              onPress={() => router.push(`/stock/${r.symbol}`)}
+              style={[s.sym, { color: p.accentText, textDecorationLine: 'underline' }]}
+            >
+              {r.symbol}
+            </Text>
             {r.pinnedBy && <Text style={s.flag}>📌</Text>}
             {r.status === 'ACTIVE' && (
               <Text style={[s.tag, { color: p.pos }]}>in universe</Text>

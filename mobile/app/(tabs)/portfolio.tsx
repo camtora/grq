@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
@@ -68,8 +69,9 @@ function countryOf(currency: string): string {
 
 function BookRowView({ r }: { r: BookRow }) {
   const { p } = usePalette();
+  const router = useRouter();
   return (
-    <View style={s.row}>
+    <Pressable onPress={() => router.push(`/stock/${r.symbol}`)} style={s.row}>
       <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
       <View style={s.rowMain}>
         <Text style={[s.sym, { color: p.accentText }]}>{r.symbol}</Text>
@@ -92,7 +94,7 @@ function BookRowView({ r }: { r: BookRow }) {
           )}
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

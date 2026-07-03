@@ -369,14 +369,16 @@ export default function StockScreen() {
                     <Text style={[s.peerHead, { color: p.textMuted, width: 64, textAlign: 'right' }]}>P/E</Text>
                     <Text style={[s.peerHead, { color: p.textMuted, width: 64, textAlign: 'right' }]}>P/B</Text>
                   </View>
-                  {d.peers.map((peer, i) => (
+                  {d.peers.map((peer) => (
                     <View key={peer.symbol}>
                       <Divider />
                       <View style={s.peerRow}>
                         <Text
+                          onPress={peer.self ? undefined : () => router.push(`/stock/${peer.symbol}`)}
                           style={[
                             s.meta,
                             { flex: 1, color: peer.self ? p.accentText : p.textMuted, fontFamily: peer.self ? F.bold : F.reg },
+                            !peer.self && { textDecorationLine: 'underline' },
                           ]}
                           numberOfLines={1}
                         >
