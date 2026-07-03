@@ -109,6 +109,7 @@ export type AccountsResponse = {
     name: string;
     isSelf: boolean;
     connected: boolean;
+    dailyValues?: { date: string; valueCents: number }[]; // nightly CAD-valued series
     accounts: ExternalAccount[];
   }[];
 };

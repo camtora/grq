@@ -1073,13 +1073,28 @@ function toBullets(primary: string | null | undefined, fallback: string | null |
 export async function accountsResponse(meEmail: string) {
   const everyone = memberEmails();
   const ordered = [meEmail, ...everyone.filter((e) => e !== meEmail)];
-  const views = await accountsForMembers(ordered);
+  const [views, dailyRows] = await Promise.all([
+    accountsForMembers(ordered),
+    // The nightly personal-value series (ExternalDailyValue) — powers the app's
+    // Personal tape. Last ~30 points per member, CAD-valued.
+    prisma.externalDailyValue.findMany({
+      where: { ownerEmail: { in: ordered } },
+      orderBy: { date: "asc" },
+    }),
+  ]);
+  const dailyBy = new Map<string, { date: string; valueCents: number }[]>();
+  for (const d of dailyRows) {
+    const arr = dailyBy.get(d.ownerEmail) ?? [];
+    arr.push({ date: d.date, valueCents: d.totalCadCents });
+    dailyBy.set(d.ownerEmail, arr);
+  }
   return {
     members: views.map((v) => ({
       email: v.email,
       name: personByEmail(v.email)?.name ?? v.email,
       isSelf: v.email === meEmail,
       connected: v.connected,
+      dailyValues: (dailyBy.get(v.email) ?? []).slice(-30),
       accounts: v.accounts.map((a) => ({
         id: a.id,
         institution: a.institution,

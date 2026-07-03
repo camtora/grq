@@ -162,7 +162,7 @@ function AlfredView({ pf, t, loading, error }: { pf: Portfolio | null; t: Today 
   if (!pf) return null;
 
   const rows = [...pf.positions]
-    .sort((a, b) => b.marketValueCents - a.marketValueCents)
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
     .map((pos) => ({
       row: {
         symbol: pos.symbol,
@@ -292,8 +292,15 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
         const usd = accounts.filter((a) => a.currency === 'USD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
         const holdings = accounts.flatMap((a) => a.holdings);
         const positions = holdings.reduce((s2, h) => s2 + (h.marketValueCents ?? 0), 0);
+        const total = accounts.reduce((s2, a) => s2 + (a.totalValueCents ?? 0), 0);
+        const openPnl = holdings.reduce((s2, h) => s2 + (h.openPnlCents ?? 0), 0);
+        const daily = m.dailyValues ?? [];
+        const prev = daily.length >= 2 ? daily[daily.length - 2].valueCents : null;
+        const last = daily.length >= 1 ? daily[daily.length - 1].valueCents : null;
+        const dayDelta = prev != null && last != null ? last - prev : null;
+        const dayBps = prev && dayDelta != null ? Math.round((dayDelta / prev) * 10_000) : null;
         const rows = holdings
-          .sort((a, b) => (b.marketValueCents ?? 0) - (a.marketValueCents ?? 0))
+          .sort((a, b) => a.symbol.localeCompare(b.symbol))
           .map((h) => ({
             row: {
               symbol: h.symbol,
@@ -308,20 +315,10 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
         const bookGroups = new Map([...groups.entries()].map(([k, v]) => [k, v.map((x) => x.row)]));
         const synced = accounts.map((a) => a.syncedAt).filter(Boolean).sort().pop();
 
-        return (
-          <View key={m.email}>
-            <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
-            {m.connected && accounts.length > 0 ? (
-              <View>
-                <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
-                <View style={{ marginTop: 10 }}>
-                  <CountryBook groups={bookGroups} empty="No holdings synced yet." />
-                </View>
-                {synced && (
-                  <Footnote>synced {String(synced).slice(0, 10)}</Footnote>
-                )}
-              </View>
-            ) : (
+        if (!(m.connected && accounts.length > 0)) {
+          return (
+            <View key={m.email}>
+              <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
               <Card>
                 <Text style={[s.empty, { color: p.textMuted }]}>
                   {m.isSelf
@@ -329,7 +326,52 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
                     : `${m.name} hasn't connected an account yet.`}
                 </Text>
               </Card>
+            </View>
+          );
+        }
+
+        // Self mirrors Alfred exactly: hero → the Tape → the book. Other members
+        // get their name as the section, then the same book structure.
+        return (
+          <View key={m.email}>
+            {m.isSelf ? (
+              <View style={s.hero}>
+                <Text style={[s.heroLabel, { color: p.textMuted }]}>TOTAL VALUE</Text>
+                <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(total)}</Text>
+                <View style={s.heroRow}>
+                  {dayDelta != null && dayBps != null && (
+                    <Text style={[s.heroPnl, tabular, { color: pnlColor(dayDelta, p) }]}>
+                      {signedMoney(dayDelta)} ({signedPctFromBps(dayBps)}) vs yesterday
+                    </Text>
+                  )}
+                  <Text style={[s.heroPnl, tabular, { color: pnlColor(openPnl, p) }]}>
+                    {signedMoney(openPnl)} open P&L
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <SectionTitle>{m.name}</SectionTitle>
             )}
+
+            {m.isSelf && daily.length >= 2 && (
+              <View>
+                <SectionTitle sub="value over time · nightly sync">The Tape</SectionTitle>
+                <Card>
+                  <Sparkline values={daily.map((d) => d.valueCents)} height={64} />
+                  <View style={s.tapeLabels}>
+                    <Text style={[s.tapeLabel, { color: p.textMuted }]}>{daily[0].date}</Text>
+                    <Text style={[s.tapeLabel, { color: p.textMuted }]}>{daily[daily.length - 1].date}</Text>
+                  </View>
+                </Card>
+              </View>
+            )}
+
+            {m.isSelf && <SectionTitle sub="what you're holding">The book</SectionTitle>}
+            <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
+            <View style={{ marginTop: 10 }}>
+              <CountryBook groups={bookGroups} empty="No holdings synced yet." />
+            </View>
+            {synced && <Footnote>synced {String(synced).slice(0, 10)}</Footnote>}
           </View>
         );
       })}
