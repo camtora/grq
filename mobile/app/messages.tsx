@@ -185,33 +185,34 @@ function Bubble({
 }) {
   const { p, scheme } = usePalette();
   const router = useRouter();
-  // Mine = a solid accent bubble (text flips for contrast per theme);
-  // theirs = a quiet raised surface. No borders, no per-bubble clutter.
-  const mineText = scheme === 'dark' ? '#04211d' : '#ffffff';
+  // Mine = a light accent tint; theirs = a quiet raised surface. No borders,
+  // no per-bubble clutter. (Cam 2026-07-03: mine lighter, not solid.)
   return (
     <View style={[s.bubbleRow, m.mine && s.mineRow, { marginTop: tight ? 2 : 10 }]}>
       <View
         style={[
           s.bubble,
-          m.mine ? { backgroundColor: p.accent } : { backgroundColor: scheme === 'dark' ? p.cardHi : '#e2edeb' },
+          m.mine
+            ? { backgroundColor: p.accent + (scheme === 'dark' ? '2b' : '24') }
+            : { backgroundColor: scheme === 'dark' ? p.cardHi : '#e2edeb' },
         ]}
       >
         {m.symbol && (
           <Pressable
             onPress={() => router.push(`/stock/${m.symbol}`)}
-            style={[s.shareChip, { backgroundColor: m.mine ? '#ffffff2e' : p.cardBg }]}
+            style={[s.shareChip, { backgroundColor: m.mine ? p.accent + '1f' : p.cardBg }]}
           >
             <StockLogo symbol={m.symbol} logoUrl={null} size={22} />
-            <Text style={{ color: m.mine ? mineText : p.accentText, fontFamily: F.bold, fontSize: 13 }}>
+            <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 13 }}>
               {m.symbol}
             </Text>
-            <Text style={{ color: m.mine ? mineText : p.textMuted, fontFamily: F.reg, fontSize: 11, marginLeft: 'auto', opacity: 0.75 }}>
+            <Text style={{ color: p.textMuted, fontFamily: F.reg, fontSize: 11, marginLeft: 'auto', opacity: 0.75 }}>
               open →
             </Text>
           </Pressable>
         )}
         {m.body ? (
-          <Text style={[s.bubbleText, { color: m.mine ? mineText : p.textPrimary }]}>{m.body}</Text>
+          <Text style={[s.bubbleText, { color: p.textPrimary }]}>{m.body}</Text>
         ) : null}
       </View>
       {lastRead && lastOfCluster && (
