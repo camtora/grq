@@ -61,7 +61,21 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 
   override func bundleURL() -> URL? {
 #if DEBUG
-    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
+    // Debug JS loads from OUR Metro over the internet (the sbca pattern) so
+    // both phones + the simulator hot-reload from anywhere — no tunnel, no
+    // local packager. ⚠️ expo prebuild regenerates this file; re-apply this
+    // block after any prebuild (docs/MOBILE-GRQGO.md).
+    return RCTBundleURLProvider.jsBundleURL(
+      forBundleRoot: ".expo/.virtual-metro-entry",
+      packagerHost: "metro.grq.camerontora.ca:443",
+      packagerScheme: "https",
+      enableDev: true,
+      enableMinification: false,
+      inlineSourceMap: false,
+      modulesOnly: false,
+      runModule: true,
+      additionalOptions: nil
+    )
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif

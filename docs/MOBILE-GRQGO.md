@@ -38,19 +38,26 @@ open ~/Developer/Projects/personal/grqgo-build/ios/GRQGo.xcworkspace
 # optional: alias grq-metro='~/grq/scripts/grq-metro.sh' in ~/.bashrc
 ```
 
-**Connecting the simulator to Ubuntu's Metro — SSH tunnel (no infra changes):**
+**Metro is a permanent Docker service** (`grq-metro`, port 8082 — `sbca-metro` owns
+8081) with `mobile/` bind-mounted, so it's always on and edits hot-reload without
+touching the container. Rebuild it only when `mobile/package.json` changes:
+`docker-compose build metro && docker-compose up -d metro`.
+
+**Connecting devices — the domain (primary, 2026-07-03):** Debug builds load JS from
+`https://metro.grq.camerontora.ca` (nginx `31-grq-metro.conf` → :8082, WebSocket
+hot reload) via the `bundleURL()` patch in `mobile/ios/GRQGo/AppDelegate.swift` —
+the sbca pattern. **Both phones and the simulator hot-reload from anywhere**; a
+phone needs ONE Debug install via Xcode (cable), then never again until a native
+change. ⚠️ `expo prebuild` regenerates AppDelegate — re-apply the patch after.
+
+**Fallback — SSH tunnel** (works without DNS/cert/nginx):
 
 ```bash
-# On the Mac; leaves Mac-localhost:8081 pointing at Ubuntu's Metro on 8082
 ssh -N -L 8081:localhost:8082 camerontora@192.168.2.34 &                # from the LAN
 ssh -N -L 8081:localhost:8082 -p 2222 camerontora@camerontora.ca &     # from anywhere else
 ```
 
-A Debug build looks for Metro at `localhost:8081` by default, so with the tunnel up it
-just works — and Xcode's "Start Packager" phase sees 8081 occupied and skips launching
-a local one. Edit any `.tsx` here and the simulator refreshes in ~a second.
-
-Port **8082** because `sbca-metro` permanently holds 8081 on this box.
+(then revert the AppDelegate patch so Debug looks at localhost:8081 as stock).
 
 **After adding a native package** (`npx expo install <pkg>` here): re-run `grqgo-sync`
 on the Mac — the package-hash check triggers `npm ci` + `pod install` automatically.

@@ -76,6 +76,25 @@ services:
       - ibeam
     command: ["TCP-LISTEN:5002,fork,reuseaddr", "TCP:127.0.0.1:5000"]
 
+  # GRQ Go's Metro dev server — permanent, like sbca-metro. Phones + simulator
+  # load Debug JS from https://metro.grq.camerontora.ca (nginx → :8082); the
+  # bind mount means edits hot-reload without touching this container. Rebuild
+  # only when mobile/package.json changes (the image holds node_modules).
+  metro:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile.metro
+    container_name: grq-metro
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      REACT_NATIVE_PACKAGER_HOSTNAME: metro.grq.camerontora.ca
+    volumes:
+      - ./mobile:/app
+      - /app/node_modules
+      - grq-metro-expo:/app/.expo
+
   db:
     image: postgres:16-alpine
     container_name: grq-db
@@ -93,3 +112,4 @@ services:
 
 volumes:
   grq-db-data:
+  grq-metro-expo:
