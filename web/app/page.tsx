@@ -4,7 +4,7 @@ import { getPortfolio, PAPER_INCEPTION, type PositionView } from "@/lib/portfoli
 import { allUniverse } from "@/lib/universe";
 import { startOfEtDay, etDateStr, etParts, isMarketDay, isMarketOpen } from "@/agent/calendar";
 import { money, signedMoney, pct } from "@/lib/money";
-import { Card, Chip, Pnl } from "@/components/ui";
+import { Card, Chip, Pnl, SectionHeader } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import StockLogo from "@/components/StockLogo";
 import EarningBubble, { type EarnView } from "@/components/EarningBubble";
@@ -32,17 +32,9 @@ function dayClass(bps: number): string {
   return bps > 0 ? "text-emerald-400" : bps < 0 ? "text-red-400" : "text-teal-200/50";
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  // Today's section headers — bolder, larger and brighter than the shared PanelHeader so the
-  // newspaper sections actually stand out (Cam 2026-07-02). For a "Title · descriptor" header,
-  // wrap the descriptor in <SectionSub> so the main word dominates.
-  return <h2 className="mb-3 text-lg font-bold uppercase tracking-wide text-teal-100">{children}</h2>;
-}
-
-// The lighter, smaller, normal-case descriptor that trails a SectionTitle's main word.
-function SectionSub({ children }: { children: React.ReactNode }) {
-  return <span className="ml-2 text-sm font-normal normal-case tracking-normal text-teal-200/45">{children}</span>;
-}
+// Section headers live in the shared kit now — <SectionHeader sub="…"> (components/ui.tsx),
+// promoted from this page's local SectionTitle/SectionSub when Portfolio adopted the same
+// style (Cam 2026-07-03). Title dominates; `sub` is the lighter trailing descriptor.
 
 function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null; stance?: string | null }) {
   const sm = stance ? stanceMeta(stance) : null;
@@ -522,7 +514,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Headlines — today's news. Live, so today only — archive hides stale headlines (Cam 2026-06-16) */}
       {isToday && marketNews.length > 0 && (
         <section className="mb-6">
-          <SectionTitle>Headlines<SectionSub>· what&apos;s moving the market today</SectionSub></SectionTitle>
+          <SectionHeader sub={<>· what&apos;s moving the market today</>}>Headlines</SectionHeader>
           <div className="grid gap-4 sm:grid-cols-3">
             {marketNews.slice(0, 3).map((n, i) => (
               <div key={i} className="flex flex-col gap-1.5">
@@ -565,7 +557,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           AM (~7:30 ET) + PM (~6:00 ET) editions; the latest for the day is shown. Market-wide, not the fund. */}
       {marketBrief && (
         <section className="mb-6">
-          <SectionTitle>The Market Today<SectionSub>· {marketBrief.edition === "PM" ? "evening read" : "morning read"}</SectionSub></SectionTitle>
+          <SectionHeader sub={<>· {marketBrief.edition === "PM" ? "evening read" : "morning read"}</>}>The Market Today</SectionHeader>
           <Card className="p-5">
             <p className="text-sm leading-relaxed text-teal-100/80">{marketBrief.body}</p>
             <p className="mt-2.5 text-[10px] text-teal-200/40">
@@ -591,10 +583,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           (clickable summary bubbles, 3/4) + who's NEXT (a 1/4-width right rail, clearly labelled). */}
       {isToday && hasEarnings && (
         <section className="mt-8">
-          <SectionTitle>
+          <SectionHeader sub={<>· who reported, who&apos;s next</>}>
             <Term k="earnings">Earnings</Term>
-            <SectionSub>· who reported, who&apos;s next</SectionSub>
-          </SectionTitle>
+          </SectionHeader>
           <div className="grid items-start gap-6 lg:grid-cols-4">
             {/* Reported — summary bubbles */}
             <div className="lg:col-span-3">
@@ -658,9 +649,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           (Cam 2026-07-03). Movers are today-only; on an archived day only the hitters column shows
           (its numbers are the snapshot's). */}
       <section className="mt-8">
-        <SectionTitle>
-          Our market<SectionSub>· your holdings{isToday ? <> &amp; the names we track</> : null}</SectionSub>
-        </SectionTitle>
+        <SectionHeader sub={<>· your holdings{isToday ? <> &amp; the names we track</> : null}</>}>
+          Our market
+        </SectionHeader>
         <div className={`grid items-start gap-6 ${isToday ? "lg:grid-cols-2" : ""}`}>
           <div>
             <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Top hitters</div>
@@ -708,7 +699,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           title, the two columns matched to the same number of rows + row height (Cam 2026-07-02). */}
       {(marketGainers.length > 0 || sectors.length > 0) && (
       <section className="mt-8">
-      <SectionTitle>The whole market<SectionSub>· today&apos;s biggest movers &amp; how sectors are moving</SectionSub></SectionTitle>
+      <SectionHeader sub={<>· today&apos;s biggest movers &amp; how sectors are moving</>}>The whole market</SectionHeader>
       <div className="grid items-start gap-6 lg:grid-cols-2">
       {marketGainers.length > 0 && (
         <div>
@@ -776,7 +767,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Market pulse — the rest of the day's headlines, at the BOTTOM under the movers (Cam 2026-07-02). */}
       {marketNews.length > 3 && (
         <section className="mt-8">
-          <SectionTitle>Market pulse<SectionSub>· more headlines</SectionSub></SectionTitle>
+          <SectionHeader sub={<>· more headlines</>}>Market pulse</SectionHeader>
           <div className="grid gap-x-6 sm:grid-cols-3">
             {marketNews.slice(3, 12).map((n, i) => (
               <div key={i} className="border-t border-teal-400/10">

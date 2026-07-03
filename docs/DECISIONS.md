@@ -2711,3 +2711,32 @@ rsyncs + pod-installs for the one-time native build. Native modules that auth/pu
 (google-signin, secure-store, notifications, svg) are baked into the first pod install to avoid repeat
 20-min pod cycles. All four tabs are placeholders — content migrates page by page next. The native app
 stays in `ios/` untouched until GRQ Go reaches parity. Runbook: `docs/MOBILE-GRQGO.md`.
+
+### D107 — SnapTrade break detection + one-tap reconnect, alerts go per-user app/web (Cam, 2026-07-03)
+
+**Problem:** BOTH members' TD Direct Investing connections went `disabled` on SnapTrade's side on
+2026-07-02 (Graham 17:43Z, Cam 20:07Z — same-day, so a TD-side grant revocation; TD fronts third-party
+access via its Plaid data-access agreement, and re-auth always needs the human). A disabled connection
+still serves cached accounts/positions WITHOUT erroring, so the sync kept writing `disabled: false`,
+`syncedAt` kept updating (we timestamped OUR cache read, not TD's), and /accounts showed week-old
+holdings as fresh — Graham's 2026-07-02 TSM buy was invisible. Prevention isn't possible (the disable
+is TD invalidating the access grant); the ceiling is detect → alert → make the fix one tap.
+
+**Decision:** wire the full loop, with alerts going **per-user to the app + web bell (pushNotify), not
+Discord** — a broken personal-account link is the owner's business, not fund-channel noise.
+
+- **Detect:** `listSnaptradeAuthorizations` (verified working on Personal keys) is called in every
+  `syncMember`; `ExternalAccount.disabled` now mirrors the authorization's TRUE `disabled` flag instead
+  of being inferred from a thrown positions call (which never throws on a cached-but-dead connection).
+  `syncedAt` now stores SnapTrade's `sync_status.holdings.last_successful_sync` — the honest
+  "holdings as of" (a broken link shows its real, stale date).
+- **Alert:** new toggleable `accounts` push category (default on). Edge-triggered per CONNECTION
+  (healthy→broken and broken→restored), `onlyEmail` = the owner — each member gets only their own,
+  on their phone (APNs) + the web bell. Runs from the nightly agent sync AND the /accounts mount sync.
+- **Fix:** `loginSnapTradeUser` + `reconnect=<authorizationId>` (verified on Personal keys — mints an
+  app.snaptrade.com portal URL straight into that broker's re-auth). `/api/external/connect` accepts
+  `{reconnect}` (ownership-checked), and the owner's broken account card shows a **⚡ Reconnect**
+  button in place of the red chip (the other member still sees the chip). `AGENT_VERSION` → v2.47.
+
+Diagnostic probe: `cd web && npx tsx scripts/snaptrade-connections-probe.ts`. If TD breaks the link
+more often than ~weekly, revisit providers (Plaid direct / Wealthica — both researched, both costlier).

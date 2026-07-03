@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { Card } from "@/components/ui";
-import PanelHeader from "@/components/PanelHeader";
+import { Card, SectionHeader } from "@/components/ui";
 
 // The agent's research pipeline — what Alfred is auto-researching right now (QUEUED/RUNNING)
 // plus recently finished/failed. Self-fetching server component so it can be dropped onto any
@@ -26,11 +25,9 @@ export default async function ResearchQueueCard({ heading = true }: { heading?: 
   const joinLinks = (syms: string[]) => syms.map((s, i) => <span key={s}>{i > 0 && ", "}{tickerLink(s)}</span>);
 
   return (
-    <div className="space-y-2">
+    <div>
       {heading && (
-        <PanelHeader>
-          Pending research <span className="font-normal normal-case text-teal-200/40">· what Alfred&apos;s auto-researching</span>
-        </PanelHeader>
+        <SectionHeader sub={<>· what Alfred&apos;s auto-researching</>}>Pending research</SectionHeader>
       )}
       <Card className="border-teal-400/30 p-4">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

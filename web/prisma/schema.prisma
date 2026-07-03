@@ -860,6 +860,7 @@ model NotificationPreference {
   system       Boolean  @default(true) // agent restarts, data-feed/broker hiccups (non-critical)
   priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
   optionsDesk  Boolean  @default(true) // the experimental Options Desk opened/settled an option (sandbox nudge)
+  accounts     Boolean  @default(true) // a linked personal brokerage connection broke / was fixed (SnapTrade reconnect)
   updatedAt    DateTime @updatedAt
 }
 

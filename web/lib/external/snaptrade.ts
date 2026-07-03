@@ -51,7 +51,10 @@ export async function listSnaptradeUsers(p: SnaptradePartner): Promise<string[]>
 
 /** Generate the Connection Portal URL for a member to connect a brokerage.
  *  ALWAYS read-only: connectionType "read" is the provider-enforced lock — the
- *  connection it produces can fetch data but can never place a trade. */
+ *  connection it produces can fetch data but can never place a trade.
+ *  With `reconnect` (an existing authorization id) the portal drops the member
+ *  straight into the re-auth flow for that broken connection instead of a fresh
+ *  connect — verified working on Personal keys 2026-07-03. */
 export async function readOnlyConnectUrl(
   p: SnaptradePartner,
   args: {
@@ -60,6 +63,7 @@ export async function readOnlyConnectUrl(
     customRedirect?: string;
     broker?: string;
     darkMode?: boolean;
+    reconnect?: string;
   },
 ): Promise<string> {
   const r = await clientFor(p).authentication.loginSnapTradeUser({
@@ -69,6 +73,7 @@ export async function readOnlyConnectUrl(
     customRedirect: args.customRedirect,
     broker: args.broker,
     darkMode: args.darkMode,
+    reconnect: args.reconnect,
     connectionPortalVersion: "v4",
   });
   const data = r.data as unknown;
@@ -78,6 +83,44 @@ export async function readOnlyConnectUrl(
       : (data as { redirectURI?: string } | null)?.redirectURI;
   if (!url) throw new Error("SnapTrade did not return a redirect URI");
   return url;
+}
+
+export type SnaptradeAuthorization = {
+  id: string;
+  disabled: boolean;
+  disabledDate: string | null;
+  brokerName: string | null;
+};
+
+/** The member's brokerage connections with their TRUE health flag. This is the only
+ *  honest "is the link alive" signal — a DISABLED connection still serves cached
+ *  accounts/positions without erroring, so the data endpoints can't tell you. */
+export async function listSnaptradeAuthorizations(
+  p: SnaptradePartner,
+  args: { userId: string; userSecret: string },
+): Promise<SnaptradeAuthorization[]> {
+  const r = await clientFor(p).connections.listBrokerageAuthorizations({
+    userId: args.userId,
+    userSecret: args.userSecret,
+  });
+  const rows = (Array.isArray(r.data) ? r.data : []) as Array<Record<string, unknown>>;
+  const out: SnaptradeAuthorization[] = [];
+  for (const a of rows) {
+    if (typeof a?.id !== "string" || !a.id) continue;
+    const brokerage = (a.brokerage ?? {}) as { name?: unknown };
+    out.push({
+      id: a.id,
+      disabled: a.disabled === true,
+      disabledDate: typeof a.disabled_date === "string" ? a.disabled_date : null,
+      brokerName:
+        typeof brokerage.name === "string" && brokerage.name
+          ? brokerage.name
+          : typeof a.name === "string" && a.name
+            ? a.name
+            : null,
+    });
+  }
+  return out;
 }
 
 /** All brokerage accounts SnapTrade knows for this member (across connections). */

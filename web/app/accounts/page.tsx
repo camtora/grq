@@ -7,6 +7,7 @@ import { money, fmtWhen } from "@/lib/money";
 import { PageHeader, Card, Chip, EmptyState } from "@/components/ui";
 import Avatar from "@/components/Avatar";
 import MyAccountControls from "@/components/accounts/MyAccountControls";
+import ReconnectButton from "@/components/accounts/ReconnectButton";
 import ConnectSplash from "@/components/accounts/ConnectSplash";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import {
@@ -146,7 +147,7 @@ function MemberSection({
       ) : (
         <div className="space-y-4">
           {view.accounts.map((a) => (
-            <AccountCard key={a.id} account={a} />
+            <AccountCard key={a.id} account={a} canReconnect={isSelf} />
           ))}
         </div>
       )}
@@ -162,7 +163,7 @@ function bookCostFor(h: { qty: string; avgCostCents: number | null; marketValueC
   return h.openPnlCents == null ? null : h.marketValueCents - h.openPnlCents;
 }
 
-function AccountCard({ account: a }: { account: AccountView }) {
+function AccountCard({ account: a, canReconnect }: { account: AccountView; canReconnect: boolean }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-400/10 px-5 py-3">
@@ -173,7 +174,14 @@ function AccountCard({ account: a }: { account: AccountView }) {
           {a.numberMasked ? (
             <span className="text-xs text-teal-200/40 tabular-nums">{a.numberMasked}</span>
           ) : null}
-          {a.disabled ? <Chip tone="red">reconnect needed</Chip> : null}
+          {/* Broken SnapTrade link: the owner gets the one-tap fix, the other member the chip. */}
+          {a.disabled ? (
+            canReconnect && a.authorizationId ? (
+              <ReconnectButton authorizationId={a.authorizationId} />
+            ) : (
+              <Chip tone="red">reconnect needed</Chip>
+            )
+          ) : null}
         </div>
         <div className="text-right">
           <div className="flex items-center justify-end gap-1.5 font-semibold tabular-nums text-teal-50">

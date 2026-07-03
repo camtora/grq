@@ -4,7 +4,7 @@ import { greeting } from "@/lib/greetings";
 import { getPortfolio, PAPER_INCEPTION } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { Card, StatCard, Chip } from "@/components/ui";
+import { Card, StatCard, Chip, SectionHeader } from "@/components/ui";
 import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
@@ -13,7 +13,6 @@ import PersonalLane, { type PersonalRow, type PersonalCash, type PersonalOwner }
 import ConnectSplash from "@/components/accounts/ConnectSplash";
 import ResearchQueueCard from "@/components/ResearchQueueCard";
 import Avatar from "@/components/Avatar";
-import PanelHeader from "@/components/PanelHeader";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import {
   LiveTotal,
@@ -225,12 +224,12 @@ export default async function Portfolio() {
   // only the single newest so a stale prior-day brief never lingers (Cam 2026-06-17).
   const dayHref = (at: Date) => `/reports/day/${etDateStr(at)}`;
   const briefs = [
-    premorning && { kicker: "Pre-Morning Read · what changed overnight", title: premorning.title, body: premorning.body, at: premorning.at, sourcesJson: premorning.sourcesJson, href: dayHref(premorning.at), cta: "View full day" },
-    latestPlan && { kicker: "Morning Brief · the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson, href: dayHref(latestPlan.at), cta: "View full day" },
-    midday && { kicker: "Midday Review · the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson, href: dayHref(midday.at), cta: "View full day" },
-    checkin && { kicker: "Intraday Check-in · the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson, href: dayHref(checkin.at), cta: "View full day" },
-    latestEod && { kicker: "Evening Brief · the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null, href: dayHref(latestEod.createdAt), cta: "View full day" },
-    weekly && { kicker: "Weekly Review · the week in receipts", title: weekly.title, body: weekly.body, at: weekly.createdAt, sourcesJson: null as string | null, href: `/reports/${weekly.id}`, cta: "View full review" },
+    premorning && { kicker: "Pre-Morning Read", kickerSub: "what changed overnight", title: premorning.title, body: premorning.body, at: premorning.at, sourcesJson: premorning.sourcesJson, href: dayHref(premorning.at), cta: "View full day" },
+    latestPlan && { kicker: "Morning Brief", kickerSub: "the pre-market read", title: latestPlan.title, body: latestPlan.body, at: latestPlan.at, sourcesJson: latestPlan.sourcesJson, href: dayHref(latestPlan.at), cta: "View full day" },
+    midday && { kicker: "Midday Review", kickerSub: "the afternoon read", title: midday.title, body: midday.body, at: midday.at, sourcesJson: midday.sourcesJson, href: dayHref(midday.at), cta: "View full day" },
+    checkin && { kicker: "Intraday Check-in", kickerSub: "the latest read", title: checkin.title, body: checkin.body, at: checkin.at, sourcesJson: checkin.sourcesJson, href: dayHref(checkin.at), cta: "View full day" },
+    latestEod && { kicker: "Evening Brief", kickerSub: "the day's close", title: latestEod.title, body: latestEod.body, at: latestEod.createdAt, sourcesJson: null as string | null, href: dayHref(latestEod.createdAt), cta: "View full day" },
+    weekly && { kicker: "Weekly Review", kickerSub: "the week in receipts", title: weekly.title, body: weekly.body, at: weekly.createdAt, sourcesJson: null as string | null, href: `/reports/${weekly.id}`, cta: "View full review" },
   ].filter((b): b is NonNullable<typeof b> => Boolean(b));
   const latestBrief = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
   const pnlPct = pf.contributionsCents > 0 ? pf.totalPnlCents / pf.contributionsCents : 0;
@@ -263,8 +262,9 @@ export default async function Portfolio() {
   // grid row (Activity matches the Positions height) and brief/journal + Agenda drop to
   // the row below; without one, the classic single-column-of-cards + full-height rail.
   const positionsPanel = (
-    <div className="space-y-2">
-      <PanelHeader
+    <div>
+      <SectionHeader
+        sub={<>· the fund&apos;s book</>}
         right={
           <span className="text-teal-200/40">
             {pf.quotesAsOf
@@ -282,7 +282,7 @@ export default async function Portfolio() {
           </span>
           Alfred&apos;s positions
         </span>
-      </PanelHeader>
+      </SectionHeader>
       <Card className="overflow-x-auto">
         {pf.positions.length === 0 ? (
           <p className="px-5 py-6 text-sm text-teal-200/40">
@@ -388,10 +388,10 @@ export default async function Portfolio() {
   );
 
   const briefPanel = latestBrief && (
-    <div className="space-y-2">
-      <PanelHeader right={<span className="text-teal-200/40">{fmtWhen(latestBrief.at)}</span>}>
+    <div>
+      <SectionHeader sub={<>· {latestBrief.kickerSub}</>} right={<span className="text-teal-200/40">{fmtWhen(latestBrief.at)}</span>}>
         {latestBrief.kicker}
-      </PanelHeader>
+      </SectionHeader>
       <Card className="p-5">
         <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
         <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
@@ -407,8 +407,9 @@ export default async function Portfolio() {
   );
 
   const journalPanel = (
-    <div className="space-y-2">
-      <PanelHeader
+    <div>
+      <SectionHeader
+        sub={<>· the agent&apos;s newest entries</>}
         right={
           <Link href="/journal" className="text-teal-300 hover:underline">
             journal →
@@ -416,7 +417,7 @@ export default async function Portfolio() {
         }
       >
         Latest journal
-      </PanelHeader>
+      </SectionHeader>
       <Card className="p-5">
       {recentJournal.length === 0 ? (
         <p className="text-sm text-teal-200/40">Quiet so far.</p>
@@ -436,8 +437,8 @@ export default async function Portfolio() {
   );
 
   const agendaPanel = (
-    <div className="space-y-2">
-      <PanelHeader
+    <div>
+      <SectionHeader
         right={
           <span className="text-teal-200/40">
             {agenda.length} open · what the agent&apos;s watching for
@@ -445,7 +446,7 @@ export default async function Portfolio() {
         }
       >
         Agenda
-      </PanelHeader>
+      </SectionHeader>
       <Card className="overflow-hidden">
       <ul className="divide-y divide-teal-400/10">
         {agenda.map((a) => (
@@ -476,8 +477,9 @@ export default async function Portfolio() {
     personalGroups.length > 0 ? (
       <div className="space-y-6">
         {personalGroups.map((g) => (
-          <div key={g.key} className="space-y-2">
-            <PanelHeader
+          <div key={g.key}>
+            <SectionHeader
+              sub={<>· outside the fund · read-only · Alfred can&apos;t trade these</>}
               right={
                 <span className="tabular-nums text-teal-200/50">
                   <LiveExternalValue accounts={g.extAccounts} fx={fxUsdCad} /> <span className="text-teal-200/35">total</span>
@@ -487,9 +489,8 @@ export default async function Portfolio() {
               <span className="inline-flex items-center gap-2">
                 <Avatar src={g.owner.photo} name={g.owner.name} size="h-6 w-6" />
                 {g.owner.name}&apos;s positions
-                <span className="font-normal normal-case text-teal-200/40">· outside the fund · read-only · Alfred can&apos;t trade these</span>
               </span>
-            </PanelHeader>
+            </SectionHeader>
             <PersonalLane rows={g.rows} cash={g.cash} fx={fxUsdCad} />
           </div>
         ))}
@@ -623,8 +624,8 @@ export default async function Portfolio() {
         </div>
 
         <div className="lg:relative lg:col-span-1 lg:self-stretch">
-          <div className="flex flex-col space-y-2 lg:absolute lg:inset-0">
-            <PanelHeader
+          <div className="flex flex-col lg:absolute lg:inset-0">
+            <SectionHeader
               right={
                 <Link href="/journal" className="text-teal-300 hover:underline">
                   ledger →
@@ -632,7 +633,7 @@ export default async function Portfolio() {
               }
             >
               Activity
-            </PanelHeader>
+            </SectionHeader>
             <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <ActivityFeed limit={20} compact />

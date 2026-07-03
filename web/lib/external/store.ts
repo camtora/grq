@@ -6,11 +6,13 @@ import { memberKeyForEmail } from "@/lib/users";
 import { bareTicker } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { toCadCents, usdCadRate } from "@/lib/fx";
+import { pushNotify } from "@/lib/push/notify";
 import {
   type SnaptradePartner,
   listSnaptradeUsers,
   readOnlyConnectUrl,
   listSnaptradeAccounts,
+  listSnaptradeAuthorizations,
   listSnaptradePositions,
   getSnaptradeBalances,
 } from "./snaptrade";
@@ -134,8 +136,10 @@ function qtyString(units: number): string {
 
 /** Build the read-only Connection Portal URL — used only for the INITIAL brokerage
  *  connect / a reconnect (the steady state is a backend read). Read-only at the
- *  source via connectionType "read". */
-export async function buildConnectUrl(email: string, origin: string): Promise<string> {
+ *  source via connectionType "read". Pass `reconnect` (a broken connection's
+ *  authorizationId — ownership checked by the caller) to drop the member straight
+ *  into the re-auth flow for THAT connection instead of a fresh connect. */
+export async function buildConnectUrl(email: string, origin: string, reconnect?: string): Promise<string> {
   const { partner, userId, userSecret } = await resolveUser(email);
   const dark = memberKeyForEmail(email) === "graham"; // Graham runs dark theme
   return readOnlyConnectUrl(partner, {
@@ -143,6 +147,7 @@ export async function buildConnectUrl(email: string, origin: string): Promise<st
     userSecret,
     customRedirect: `${origin}/accounts?connected=1`,
     darkMode: dark,
+    reconnect,
   });
 }
 
@@ -204,6 +209,31 @@ export async function syncMember(email: string): Promise<number> {
   const { partner, userId, userSecret } = await resolveUser(email);
   const accounts = await listSnaptradeAccounts(partner, { userId, userSecret });
 
+  // The TRUE connection-health flags, per authorization. A disabled connection still
+  // serves cached accounts + positions WITHOUT erroring, so this lookup is the only
+  // way to see a break (2026-07-03: both members' TD links died silently the same day).
+  // Best-effort: null = the endpoint failed → keep each row's stored flag untouched.
+  let authHealth: Map<string, { disabled: boolean; brokerName: string | null }> | null = null;
+  try {
+    const auths = await listSnaptradeAuthorizations(partner, { userId, userSecret });
+    authHealth = new Map(auths.map((x) => [x.id, { disabled: x.disabled, brokerName: x.brokerName }]));
+  } catch {
+    /* keep stored flags */
+  }
+
+  // Prior flags so alerts fire on the EDGE (healthy→broken and back), not on every
+  // sync of an already-broken link. One alert per CONNECTION, not per account.
+  const priorDisabled = new Map(
+    (
+      await prisma.externalAccount.findMany({
+        where: { ownerEmail: email },
+        select: { id: true, disabled: true },
+      })
+    ).map((r) => [r.id, r.disabled]),
+  );
+  const broke = new Map<string, string>(); // authorizationId → institution label
+  const restored = new Map<string, string>();
+
   const seenIds: string[] = [];
   for (const raw of accounts) {
     const a = obj(raw);
@@ -215,6 +245,12 @@ export async function syncMember(email: string): Promise<number> {
     const currency = str(balance.currency) ?? "CAD";
     const auth = a.brokerage_authorization;
     const authorizationId = str(auth) ?? str(obj(auth).id);
+    const health = authorizationId && authHealth ? (authHealth.get(authorizationId) ?? null) : null;
+    // SnapTrade's own last successful pull FROM the brokerage — the honest "holdings
+    // as of". Our previous `new Date()` was just when WE read SnapTrade's cache, which
+    // kept "as of" fresh while a broken connection served week-old data.
+    const lastSync = str(obj(obj(a.sync_status).holdings).last_successful_sync);
+    const syncedAt = lastSync ? new Date(lastSync) : new Date();
 
     // Real cash needs the balances endpoint — the account object has NO cash field
     // (reading `a.cash` silently stored $0 for every account until 2026-07-03).
@@ -229,31 +265,42 @@ export async function syncMember(email: string): Promise<number> {
       /* keep last stored cash */
     }
 
+    const institution = str(a.institution_name) ?? health?.brokerName ?? "Brokerage";
+    // Health transitions, per connection. `health` null (auth lookup failed / no
+    // authorizationId) → leave the stored flag alone rather than faking "healthy".
+    if (health) {
+      const was = priorDisabled.get(id) === true;
+      if (health.disabled && !was && authorizationId) broke.set(authorizationId, institution);
+      if (!health.disabled && was && authorizationId) restored.set(authorizationId, institution);
+    }
+
     await prisma.externalAccount.upsert({
       where: { id },
       create: {
         id,
         ownerEmail: email,
         authorizationId,
-        institution: str(a.institution_name) ?? "Brokerage",
+        institution,
         name: str(a.name) ?? "Account",
         numberMasked: str(a.number),
         accountType: str(obj(a.meta).type) ?? str(a.raw_type),
         currency,
         totalValueCents: toCents(balance.amount),
         cashCents: cashCents ?? 0,
+        disabled: health?.disabled ?? false,
+        syncedAt,
       },
       update: {
         authorizationId,
-        institution: str(a.institution_name) ?? "Brokerage",
+        institution,
         name: str(a.name) ?? "Account",
         numberMasked: str(a.number),
         accountType: str(obj(a.meta).type) ?? str(a.raw_type),
         currency,
         totalValueCents: toCents(balance.amount),
         ...(cashCents == null ? {} : { cashCents }),
-        syncedAt: new Date(),
-        disabled: false,
+        syncedAt,
+        ...(health ? { disabled: health.disabled } : {}),
       },
     });
 
@@ -284,6 +331,32 @@ export async function syncMember(email: string): Promise<number> {
   await prisma.externalAccount.deleteMany({
     where: { ownerEmail: email, id: { notIn: seenIds.length ? seenIds : ["__none__"] } },
   });
+
+  // Tell the OWNER (only them — app push + the web bell, no Discord) when their
+  // connection breaks or comes back. Edge-triggered above, so an already-broken
+  // link doesn't re-ping on every sync. Best-effort: never fails the sync.
+  try {
+    for (const institution of new Set(broke.values())) {
+      await pushNotify({
+        category: "accounts",
+        severity: "warning",
+        onlyEmail: email,
+        title: `${institution} link needs a reconnect`,
+        body: "SnapTrade lost access, so these holdings are frozen at their last sync. Accounts → Reconnect fixes it in about a minute.",
+      });
+    }
+    for (const institution of new Set(restored.values())) {
+      await pushNotify({
+        category: "accounts",
+        severity: "info",
+        onlyEmail: email,
+        title: `${institution} reconnected`,
+        body: "The connection is live again — holdings are back in sync.",
+      });
+    }
+  } catch (e) {
+    console.error("external connection-health notify failed", e);
+  }
 
   return seenIds.length;
 }
@@ -438,6 +511,7 @@ export type AccountView = {
   totalValueCents: number;
   cashCents: number;
   disabled: boolean;
+  authorizationId: string | null; // the SnapTrade connection — the one-tap Reconnect key
   syncedAt: string;
   holdings: HoldingView[];
 };
@@ -516,6 +590,7 @@ export async function accountsForMembers(emails: string[]): Promise<MemberAccoun
           totalValueCents: a.cashCents + holdingsValue,
           cashCents: a.cashCents,
           disabled: a.disabled,
+          authorizationId: a.authorizationId,
           syncedAt: a.syncedAt.toISOString(),
           holdings: holdings.map((h) => ({
             symbol: h.symbol,

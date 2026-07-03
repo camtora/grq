@@ -62,6 +62,33 @@ export function PageHeader({
   );
 }
 
+// The page-level section title — the Today page's newspaper header, promoted to the
+// shared kit (Cam 2026-07-03: bolder/larger/brighter than PanelHeader so top-of-page
+// sections stand out; PanelHeader remains the smaller in-panel heading, e.g. the stock
+// page's panels). `sub` is the lighter normal-case descriptor trailing the main word
+// ("· your holdings"); `right` is the optional meta/link slot PanelHeader also offers.
+export function SectionHeader({
+  children,
+  sub,
+  right,
+}: {
+  children: React.ReactNode;
+  sub?: React.ReactNode;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+      <h2 className="text-lg font-bold uppercase tracking-wide text-teal-100">
+        {children}
+        {sub ? (
+          <span className="ml-2 text-sm font-normal normal-case tracking-normal text-teal-200/45">{sub}</span>
+        ) : null}
+      </h2>
+      {right ? <div className="shrink-0 pb-1 text-xs">{right}</div> : null}
+    </div>
+  );
+}
+
 // The house button. Matches the header KillSwitch control: compact, uppercase,
 // rounded-lg. `solid` is the accented default; `ghost` is the bordered/quiet
 // variant. Spreads native button props (type, disabled, formAction, …). For
