@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Avatar from "./Avatar";
-import { personByName } from "@/lib/people";
 
 // The Cam↔Graham direct-message pane (D63 — the web side of the iOS member chat).
 // Loads /api/messages, polls for new rows by id, sends via POST, and marks the
@@ -25,8 +23,13 @@ type DM = {
 
 const POLL_MS = 4_000;
 
+// GRQ Go's quiet time label (mobile/app/messages.tsx): time only for today,
+// "Thu, Jul 3 · 1:24 PM" for older pauses.
 function timeLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const d = new Date(iso);
+  const today = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return today ? time : `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${time}`;
 }
 
 export default function MemberChat({ active, heightClass = "h-full" }: { active: boolean; heightClass?: string }) {
@@ -136,65 +139,90 @@ export default function MemberChat({ active, heightClass = "h-full" }: { active:
     }
   }
 
+  // GRQ Go's messages styling (mobile/app/messages.tsx, Cam 2026-07-03): borderless
+  // iMessage-style bubbles — mine = a light accent tint, theirs = a quiet raised surface —
+  // clustered when the same side sends consecutively, a centered time label when the
+  // conversation pauses (>20 min), a "read" receipt under my last read message, and a
+  // pill input with a circular ↑ send. No per-bubble names/avatars — two people, two sides.
   return (
     <div className={`flex flex-col ${heightClass}`}>
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto pr-1">
+      <div ref={listRef} className="flex-1 overflow-y-auto pr-1">
         {loaded && messages.length === 0 && (
           <p className="pt-10 text-center text-sm text-teal-200/40">
-            No messages yet. Say hi, or share a stock from its page.
+            No messages yet — say something, or share a stock from its page.
           </p>
         )}
-        {messages.map((m) => {
-          const photo = personByName(m.fromName)?.photo ?? null;
+        {messages.map((m, i) => {
+          const prev = i > 0 ? messages[i - 1] : null;
+          const next = i < messages.length - 1 ? messages[i + 1] : null;
+          const gap = !prev || Date.parse(m.at) - Date.parse(prev.at) > 20 * 60_000;
+          const tight = !!prev && prev.mine === m.mine && !gap;
+          const lastOfCluster = !next || next.mine !== m.mine;
+          const lastRead = m.mine && !!m.readAt && !messages.slice(i + 1).some((x) => x.mine && x.readAt);
           return (
-            <div key={m.id} className={m.mine ? "flex justify-end" : "flex justify-start"}>
-              <div
-                className={`max-w-[85%] rounded-2xl border p-3 ${
-                  m.mine ? "border-teal-400/25 bg-teal-400/10" : "border-teal-400/15 bg-teal-400/[0.04]"
-                }`}
-              >
-                <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-teal-200/40">
-                  <Avatar src={photo} name={m.fromName} size="h-5 w-5" />
-                  {m.mine ? "You" : m.fromName}
-                  <span className="ml-1 font-normal tracking-normal text-teal-200/30">{timeLabel(m.at)}</span>
+            <div key={m.id}>
+              {gap && (
+                <div className="mt-4 mb-0.5 text-center text-[10px] font-medium text-teal-200/50">{timeLabel(m.at)}</div>
+              )}
+              <div className={`flex ${m.mine ? "justify-end" : "justify-start"} ${tight ? "mt-0.5" : "mt-2.5"}`}>
+                <div
+                  className={`max-w-[78%] rounded-[18px] px-3.5 py-2 ${
+                    m.mine ? "bg-teal-400/[0.16]" : "bg-teal-400/[0.07]"
+                  }`}
+                >
+                  {m.symbol && (
+                    <Link
+                      href={m.panel ? `/stocks/${m.symbol}#${m.panel}` : `/stocks/${m.symbol}`}
+                      className={`group my-0.5 flex min-w-[170px] items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors ${
+                        m.mine ? "bg-teal-400/[0.12] hover:bg-teal-400/20" : "bg-(--card-bg) hover:bg-teal-400/10"
+                      }`}
+                    >
+                      <span className="text-[13px] font-bold text-teal-300 group-hover:underline">{m.symbol}</span>
+                      <span className="ml-auto text-[11px] text-teal-200/50">{m.panelLabel ?? "open"} →</span>
+                    </Link>
+                  )}
+                  {m.body && <p className="whitespace-pre-wrap text-[15px] leading-snug text-teal-50">{m.body}</p>}
                 </div>
-                {m.symbol && (
-                  <Link
-                    href={m.panel ? `/stocks/${m.symbol}#${m.panel}` : `/stocks/${m.symbol}`}
-                    className="mb-1.5 flex items-center gap-2 rounded-lg border border-teal-400/20 bg-teal-400/[0.06] px-2.5 py-1.5 transition-colors hover:bg-teal-400/15"
-                  >
-                    <span className="rounded bg-teal-400/15 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-teal-200">{m.symbol}</span>
-                    <span className="text-xs text-teal-200/70">{m.panelLabel ?? "Shared a stock"} →</span>
-                  </Link>
-                )}
-                {m.body && <p className="whitespace-pre-wrap text-sm text-teal-50">{m.body}</p>}
               </div>
+              {lastRead && lastOfCluster && (
+                <div className="mt-0.5 text-right text-[10px] font-medium text-teal-200/50">read</div>
+              )}
             </div>
           );
         })}
       </div>
 
-      <div className="mt-3 flex items-end gap-2">
+      <div className="mt-3 flex items-end gap-2 rounded-[20px] border border-(--card-border) bg-(--card-bg) py-1.5 pr-1.5 pl-3.5">
         <textarea
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 112)}px`;
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               send();
             }
           }}
-          rows={2}
-          placeholder={`Message ${otherName} (Enter to send)`}
+          rows={1}
+          placeholder={`Message ${otherName}…`}
           disabled={busy}
-          className="flex-1 resize-none rounded-xl border border-teal-400/20 bg-(--field-bg) px-3 py-2.5 text-sm text-teal-50 outline-none placeholder:text-teal-200/30 disabled:opacity-60"
+          className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-[15px] text-teal-50 outline-none placeholder:text-teal-200/30 disabled:opacity-60"
         />
         <button
           onClick={send}
           disabled={busy || draft.trim().length === 0}
-          className="rounded-xl border border-teal-400/40 bg-teal-400/15 px-5 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25 disabled:opacity-40"
+          aria-label="Send"
+          className={`mb-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors ${
+            draft.trim() && !busy ? "bg-teal-400 text-teal-950 hover:bg-teal-300" : "bg-teal-400/15 text-teal-200/40"
+          }`}
         >
-          {busy ? "…" : "Send"}
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
         </button>
       </div>
     </div>

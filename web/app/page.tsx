@@ -7,6 +7,7 @@ import { money, signedMoney, pct } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
 import StockLogo from "@/components/StockLogo";
+import EarningBubble, { type EarnView } from "@/components/EarningBubble";
 import Term from "@/components/Term";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpGainers, fmpIndices, fmpCadUsd, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
@@ -67,40 +68,36 @@ function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol:
   );
 }
 
+// Compact single-line row (Cam 2026-07-03: the Our-market / whole-market sections read
+// oversized next to the rest of the page — small logo, one line, 11–13px type).
 function HitterRow({ p, logoUrl }: { p: PositionView; logoUrl: string | null }) {
   return (
-    <li className="flex items-center gap-3 px-3 py-2">
-      <StockLogo symbol={p.symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
-      <div className="min-w-0">
-        <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-200 hover:underline">
-          {p.symbol}
-        </Link>
-        <div className="text-xs text-teal-200/40">{p.qty} sh · {money(p.marketValueCents)}</div>
-      </div>
-      <div className="ml-auto text-right">
-        <div className={`text-xs tabular-nums ${dayClass(p.dayChangeBps)}`}>{signedPct(p.dayChangeBps)} today</div>
-        <Pnl cents={p.unrealizedPnlCents} className="text-xs" />
-      </div>
+    <li className="flex items-center gap-2 px-2.5 py-1.5 text-[13px]">
+      <StockLogo symbol={p.symbol} logoUrl={logoUrl} className="h-5 w-5 text-[8px]" />
+      <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-200 hover:underline">
+        {p.symbol}
+      </Link>
+      <span className="min-w-0 flex-1 truncate text-[11px] text-teal-200/40">
+        {p.qty} sh · {money(p.marketValueCents)}
+      </span>
+      <span className={`tabular-nums text-[11px] ${dayClass(p.dayChangeBps)}`}>{signedPct(p.dayChangeBps)}</span>
+      <Pnl cents={p.unrealizedPnlCents} className="w-20 text-right tabular-nums text-[11px]" />
     </li>
   );
 }
 
-// A tracked-name mover in the SAME format as HitterRow (Cam 2026-07-02) — logo + symbol + name,
-// with the day move + price stacked on the right (no P&L, since these aren't held).
+// A tracked-name mover in the SAME compact format as HitterRow — symbol + name on one line,
+// day move + price on the right (no P&L, since these aren't held).
 function MoverHitterRow({ symbol, name, midCents, dayBps, logoUrl }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null }) {
   return (
-    <li className="flex items-center gap-3 px-3 py-2">
-      <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
-      <div className="min-w-0">
-        <Link href={`/stocks/${symbol}`} className="font-semibold text-teal-200 hover:underline">
-          {symbol}
-        </Link>
-        <div className="truncate text-xs text-teal-200/40">{name}</div>
-      </div>
-      <div className="ml-auto text-right">
-        <div className={`text-xs tabular-nums ${dayClass(dayBps)}`}>{signedPct(dayBps)} today</div>
-        <div className="text-xs tabular-nums text-teal-100/70">{money(midCents)}</div>
-      </div>
+    <li className="flex items-center gap-2 px-2.5 py-1.5 text-[13px]">
+      <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-5 w-5 text-[8px]" />
+      <Link href={`/stocks/${symbol}`} className="font-semibold text-teal-200 hover:underline">
+        {symbol}
+      </Link>
+      <span className="min-w-0 flex-1 truncate text-[11px] text-teal-200/40">{name}</span>
+      <span className={`tabular-nums text-[11px] ${dayClass(dayBps)}`}>{signedPct(dayBps)}</span>
+      <span className="w-20 text-right tabular-nums text-[11px] text-teal-100/70">{money(midCents)}</span>
     </li>
   );
 }
@@ -175,19 +172,6 @@ function IdeaRow({ idea }: { idea: Idea }) {
   );
 }
 
-type EarnView = {
-  symbol: string;
-  name: string;
-  logoUrl: string | null;
-  date: string; // YYYY-MM-DD
-  epsEstimated: number | null;
-  epsActual: number | null;
-  revenueEstimated: number | null;
-  revenueActual: number | null;
-  dayBps: number | null;
-};
-
-const fmtEps = (v: number | null) => (v == null ? "—" : `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`);
 function fmtEarnDate(d: string): string {
   return new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
@@ -199,46 +183,9 @@ function relDay(d: string, today: string): string {
   return n < 0 ? `${-n}d ago` : `in ${n}d`;
 }
 
-// A reported-earnings BUBBLE — a small clickable card (like a headline, smaller): who reported,
-// beat/miss, the day reaction, a one-line read of what it means, our call, and a link to the full
-// report on the stock page. The plain-English "read" is templated from the data we have; a richer
-// agent-written earnings take can enrich `read` later.
-function EarningBubble({ e, stance, today }: { e: EarnView; stance: string | null; today: string }) {
-  const beat =
-    e.epsActual != null && e.epsEstimated != null
-      ? e.epsActual >= e.epsEstimated
-      : e.revenueActual != null && e.revenueEstimated != null
-        ? e.revenueActual >= e.revenueEstimated
-        : null;
-  const epsPart = e.epsActual != null && e.epsEstimated != null ? ` (EPS ${fmtEps(e.epsActual)} vs ${fmtEps(e.epsEstimated)} est)` : "";
-  const movePart = e.dayBps != null ? `; the stock is ${signedPct(e.dayBps)} on the print` : "";
-  const read =
-    beat == null ? "Just reported — the numbers and the market's reaction are on the stock page." : `${beat ? "Beat" : "Missed"} estimates${epsPart}${movePart}.`;
-  return (
-    <Link
-      href={`/stocks/${e.symbol}`}
-      className="group flex flex-col rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-3 transition-colors hover:border-teal-400/30 hover:bg-teal-400/[0.03]"
-    >
-      <div className="flex items-center gap-2">
-        <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-7 w-7 text-[10px]" />
-        <div className="min-w-0">
-          <div className="font-semibold text-teal-100 group-hover:text-teal-200">{e.symbol}</div>
-          <div className="truncate text-[10px] text-teal-200/40">{e.name}</div>
-        </div>
-        <div className="ml-auto shrink-0 text-right tabular-nums">
-          {beat != null && <div className={`text-[10px] font-black ${beat ? "text-emerald-400" : "text-red-400"}`}>{beat ? "beat ✓" : "miss ✗"}</div>}
-          {e.dayBps != null && <div className={`text-xs ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)}</div>}
-        </div>
-      </div>
-      <p className="mt-2 text-[11.5px] leading-snug text-teal-200/60">{read}</p>
-      <div className="mt-1.5 flex items-center gap-2 text-[10px] text-teal-200/35">
-        <span>{fmtEarnDate(e.date)}</span>
-        {stance && <span className="rounded bg-teal-400/10 px-1.5 py-0.5 font-semibold text-teal-200/70">Alfred: {stance}</span>}
-        <span className="ml-auto text-teal-300/60 group-hover:underline">full report →</span>
-      </div>
-    </Link>
-  );
-}
+// The reported-earnings bubble moved to components/EarningBubble.tsx (a client component) so a
+// card click can EXPAND it in place — the watchlist row-expand interaction — into the captured
+// report numbers (EPS/revenue vs estimate + surprise). The `EarnView` shape lives there too.
 
 function editionLabel(): string {
   if (!isMarketDay()) return "Weekend Edition";
@@ -668,25 +615,34 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             {/* Upcoming — the 1/4 right rail (labelled so it's clear these are earnings reports) */}
             <div className="lg:col-span-1">
               <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Upcoming reports</div>
-              <Card className="overflow-hidden p-1">
+              <Card className="overflow-hidden p-1.5">
                 {upcomingEarn.length > 0 ? (
-                  <ul className="divide-y divide-teal-400/10">
+                  // 2-per-row tiles to halve the rail's height (Cam 2026-07-03).
+                  <div className="grid grid-cols-2 gap-1.5">
                     {upcomingEarn.map((e) => {
                       const soon = e.date === todayStr || relDay(e.date, todayStr) === "tomorrow";
                       return (
-                        <li key={`u-${e.symbol}-${e.date}`} className="flex items-center gap-2 px-2.5 py-2">
-                          <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-6 w-6 text-[9px]" />
-                          <Link href={`/stocks/${e.symbol}`} className="text-sm font-semibold text-teal-200 hover:underline">
-                            {e.symbol}
-                          </Link>
-                          <span className="ml-auto text-right">
-                            <span className={`block text-[11px] font-semibold ${soon ? "text-amber-300" : "text-teal-200/60"}`}>{relDay(e.date, todayStr)}</span>
-                            <span className="block text-[9px] text-teal-200/40">{fmtEarnDate(e.date)}</span>
+                        <Link
+                          key={`u-${e.symbol}-${e.date}`}
+                          href={`/stocks/${e.symbol}`}
+                          className="group rounded-lg bg-teal-400/[0.04] px-2 py-1.5 hover:bg-teal-400/[0.08]"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-5 w-5 text-[8px]" />
+                            <span className="truncate text-[13px] font-semibold text-teal-200 group-hover:underline">
+                              {e.symbol}
+                            </span>
                           </span>
-                        </li>
+                          <span className="mt-0.5 flex items-baseline justify-between gap-1">
+                            <span className={`text-[11px] font-semibold ${soon ? "text-amber-300" : "text-teal-200/60"}`}>
+                              {relDay(e.date, todayStr)}
+                            </span>
+                            <span className="text-[9px] text-teal-200/40">{fmtEarnDate(e.date)}</span>
+                          </span>
+                        </Link>
                       );
                     })}
-                  </ul>
+                  </div>
                 ) : (
                   <p className="p-3 text-xs text-teal-200/40">Nothing scheduled in the next two weeks.</p>
                 )}
@@ -769,16 +725,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   : null;
               return (
                 <details key={m.symbol} className="group border-t border-teal-400/10 first:border-t-0">
-                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
-                    <span className="text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-[13px] hover:bg-teal-400/[0.03] [&::-webkit-details-marker]:hidden">
+                    <span className="text-xs text-teal-200/30 transition-transform group-open:rotate-90">▸</span>
                     <Link href={`/stocks/${m.symbol}`} className="font-bold text-teal-300 hover:underline">
                       {m.symbol}
                     </Link>
-                    <span className="min-w-0 flex-1 truncate text-xs text-teal-200/50">{m.name}</span>
-                    <span className="tabular-nums text-teal-100/70">{money(m.priceCents)}</span>
-                    <span className="font-semibold tabular-nums text-emerald-400">+{pct(m.changePct, 0)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-teal-200/50">{m.name}</span>
+                    <span className="tabular-nums text-[11px] text-teal-100/70">{money(m.priceCents)}</span>
+                    <span className="font-semibold tabular-nums text-[11px] text-emerald-400">+{pct(m.changePct, 0)}</span>
                   </summary>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-2.5 pl-9 text-[11px] text-teal-200/55">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 pb-2 pl-8 text-[11px] text-teal-200/55">
                     {prof?.sector && <span className="text-teal-200/70">{prof.sector}</span>}
                     {prof?.industry && <span>{prof.industry}</span>}
                     {cap && <span>cap {cap}</span>}
@@ -800,12 +756,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <Card className="overflow-hidden p-1">
             <ul className="divide-y divide-teal-400/10">
               {sectors.slice(0, wholeMarketN).map((s) => (
-                <li key={s.name} className="flex items-center gap-3 px-3 py-2">
-                  <span className="font-semibold text-teal-100/80">{s.name}</span>
+                <li key={s.name} className="flex items-center gap-2 px-2.5 py-1.5">
+                  <span className="text-[13px] font-semibold text-teal-100/80">{s.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-teal-200/30">
                     {s.n} {s.n === 1 ? "name" : "names"}
                   </span>
-                  <span className={`ml-auto text-sm font-bold tabular-nums ${dayClass(s.avgBps)}`}>{signedPct(s.avgBps)}</span>
+                  <span className={`ml-auto font-bold tabular-nums text-[13px] ${dayClass(s.avgBps)}`}>{signedPct(s.avgBps)}</span>
                 </li>
               ))}
             </ul>
