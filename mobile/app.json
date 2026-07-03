@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "GRQGo",
+    "slug": "grq-go",
+    "version": "1.0.0",
+    "scheme": "grqgo",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/grq-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#060d0c"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.camerontora.grqgo",
+      "infoPlist": {
+        "CFBundleDisplayName": "GRQ"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#14b8a6"
+        }
+      ]
+    ]
+  }
+}

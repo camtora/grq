@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Mac-generated native artifacts (pod install / Xcode) — never on Ubuntu
+ios/Pods/
+ios/build/
+ios/*.xcworkspace
+ios/Podfile.lock
+ios/.xcode.env.local
+
+.DS_Store
+._*
+*.log

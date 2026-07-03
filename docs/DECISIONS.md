@@ -2694,3 +2694,20 @@ volume/exchange/currency. A one-off repair (`scripts/fix-mislisted-candidates.ts
 re-resolved every CA-suffixed member, flipped the **39** mis-listed US names to their bare US listing, purged
 the junk bars/quotes, and refetched the real data — **0 held (ACTIVE) positions affected**, all legitimately
 Canadian names untouched. `AGENT_VERSION` → **v2.43-phase4**.
+
+### D106 — GRQ Go: rebuild the iOS app on Expo/React Native (Cam, 2026-07-03)
+
+The native SwiftUI app (two iterations: `ios/GRQ`, `ios/GRQNext`) required a full Xcode rebuild per UI
+change — the SBCA app proved the alternative: **Expo + expo-router with Metro on Ubuntu**, where frontend
+edits hot-reload live on the Mac simulator in ~a second. Cam also preferred SBCA's cleaner, less "bubbly"
+look. Decision: scaffold a third iteration, **GRQ Go** (`mobile/` — project `GRQGo`, display name "GRQ",
+bundle `com.camerontora.grqgo`), keeping ONLY the splash from the native app (the falling-💵 money rain +
+tap-to-continue + welcome cross-fade, faithfully ported to reanimated worklets) and reusing the existing
+mobile backend unchanged (GRQ-JWT auth, `/api/portfolio` etc., `shared/contract.ts`). Versions pinned to
+match `sbca/app` (Expo SDK 55 / RN 0.83) so the proven Mac pod pipeline behaves identically. Dev split:
+edit on Ubuntu → `scripts/grq-metro.sh` (port 8082; sbca-metro owns 8081) → Mac connects via SSH tunnel
+(`ssh -L 8081:localhost:8082`; a metro.grq domain is a later infra option) → `scripts/grqgo-mac-sync.sh`
+rsyncs + pod-installs for the one-time native build. Native modules that auth/push will need
+(google-signin, secure-store, notifications, svg) are baked into the first pod install to avoid repeat
+20-min pod cycles. All four tabs are placeholders — content migrates page by page next. The native app
+stays in `ios/` untouched until GRQ Go reaches parity. Runbook: `docs/MOBILE-GRQGO.md`.
