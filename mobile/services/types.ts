@@ -247,6 +247,22 @@ export type Dossier = {
   coverage: { tier: number; name: string; status: string; detail: string }[];
 };
 
+/* ---------- member-to-member messages (D61) ---------- */
+export type DirectMessage = {
+  id: number;
+  at: string;
+  fromKey: 'cam' | 'graham' | null;
+  fromName: string;
+  mine: boolean;
+  body: string; // may be empty for a bare share
+  symbol: string | null; // attached dossier, if a share
+  panel: string | null;
+  panelLabel: string | null;
+  readAt: string | null;
+};
+
+export type DirectThread = { messages: DirectMessage[]; unread: number; otherName: string };
+
 /* ---------- The Wire — the discovery feed (shared/contract.ts WireItem) ---------- */
 export type WireKind = 'find' | 'dossier' | 'watch' | 'article' | 'lesson';
 export type WireItem = {

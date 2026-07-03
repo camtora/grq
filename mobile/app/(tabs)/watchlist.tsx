@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View 
 import { useRouter } from 'expo-router';
 import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
+import ShareButton from '../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedPctFromBps, pctFromFrac, pnlColor, fmtDate, fmtEps } from '../../lib/format';
 import { api } from '../../services/api';
@@ -355,6 +356,9 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
             >
               <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12 }}>full dossier →</Text>
             </Pressable>
+            <View style={[s.watchBtn, { borderColor: p.cardBorder }]}>
+              <ShareButton symbol={r.symbol} size={15} />
+            </View>
           </View>
         </View>
       )}

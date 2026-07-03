@@ -9,6 +9,7 @@ import StockLogo from '../../../components/StockLogo';
 import Sparkline from '../../../components/Sparkline';
 import MdText from '../../../components/MdText';
 import RatingBar, { toneColor } from '../../../components/RatingBar';
+import ShareButton from '../../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../../lib/format';
 import { useApi } from '../../../services/hooks';
@@ -84,7 +85,9 @@ export default function StockScreen() {
           <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
         </Pressable>
         <Text style={[s.barTitle, { color: p.textPrimary }]}>{sym}</Text>
-        <View style={s.back} />
+        <View style={[s.back, { justifyContent: 'flex-end' }]}>
+          <ShareButton symbol={sym} />
+        </View>
       </View>
       <ScrollView contentContainerStyle={s.body}>
         {loading && <Loading />}

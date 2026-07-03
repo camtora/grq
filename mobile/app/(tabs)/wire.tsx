@@ -14,6 +14,7 @@ import { Screen, Card, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
 import RatingBar from '../../components/RatingBar';
+import ShareButton from '../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedPctFromBps, pnlColor } from '../../lib/format';
 import { useApi } from '../../services/hooks';
@@ -164,11 +165,18 @@ function Bullets({ bullets, p, limit = 4 }: { bullets: string[] | null | undefin
   );
 }
 
-function Cta({ text, onPress, p }: { text: string; onPress: () => void; p: Palette }) {
+function Cta({ text, onPress, p, shareSymbol }: { text: string; onPress: () => void; p: Palette; shareSymbol?: string | null }) {
   return (
-    <Pressable onPress={onPress} style={[s.cta, { backgroundColor: p.accent + '26' }]}>
-      <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 13 }}>{text}</Text>
-    </Pressable>
+    <View style={s.ctaRow}>
+      <Pressable onPress={onPress} style={[s.cta, { backgroundColor: p.accent + '26' }]}>
+        <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 13 }}>{text}</Text>
+      </Pressable>
+      {shareSymbol ? (
+        <View style={[s.ctaShare, { backgroundColor: p.accent + '14' }]}>
+          <ShareButton symbol={shareSymbol} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -225,7 +233,7 @@ function FindCard({ item, p }: { item: WireItem; p: Palette }) {
         <Text style={[s.metaLine, tabular, { color: p.textMuted }]}>conviction {item.confidence}%{item.sources?.length ? ` · via ${item.sources.slice(0, 2).join(', ')}` : ''}</Text>
       )}
       <View style={s.spacer} />
-      <Cta text="Read the full dossier →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} />
+      <Cta text="Read the full dossier →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} shareSymbol={item.symbol} />
       <Text style={[s.dateLine, { color: p.textMuted }]}>a lead, not a verdict · {shortDate(item.at)}</Text>
     </View>
   );
@@ -267,7 +275,7 @@ function DossierCard({ item, p }: { item: WireItem; p: Palette }) {
         <Text style={[s.metaLine, tabular, { color: p.textMuted }]}>confidence {item.confidence}%</Text>
       )}
       <View style={s.spacer} />
-      <Cta text="Open the dossier →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} />
+      <Cta text="Open the dossier →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} shareSymbol={item.symbol} />
       <Text style={[s.dateLine, { color: p.textMuted }]}>researched {shortDate(item.at)}</Text>
     </View>
   );
@@ -303,7 +311,7 @@ function WatchCard({ item, p }: { item: WireItem; p: Palette }) {
       </View>
       <Bullets bullets={item.bullets} p={p} />
       <View style={s.spacer} />
-      <Cta text="See why →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} />
+      <Cta text="See why →" onPress={() => router.push(`/stock/${item.symbol}`)} p={p} shareSymbol={item.symbol} />
       <Text style={[s.dateLine, { color: p.textMuted }]}>watched since {shortDate(item.at)}</Text>
     </View>
   );
@@ -405,7 +413,9 @@ const s = StyleSheet.create({
   bulletText: { flex: 1, fontFamily: F.reg, fontSize: 12.5, lineHeight: 18 },
   metaLine: { fontFamily: F.reg, fontSize: 11, marginTop: 10 },
   spacer: { flex: 1 },
-  cta: { alignSelf: 'stretch', alignItems: 'center', borderRadius: 12, paddingVertical: 12, marginTop: 12 },
+  ctaRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cta: { flex: 1, alignItems: 'center', borderRadius: 12, paddingVertical: 12 },
+  ctaShare: { width: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   dateLine: { fontFamily: F.reg, fontSize: 9.5, textAlign: 'center', marginTop: 8, opacity: 0.8 },
   watchHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   watchAvatar: { width: 26, height: 26, borderRadius: 13, borderWidth: 1 },

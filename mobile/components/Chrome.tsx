@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePalette, F } from '../constants/theme';
 import { useAuth } from '../store/auth';
+import { useMessages } from '../store/messages';
 
 /**
  * The chrome (docs/MOBILE-DESIGN.md §3): every tab screen renders inside
@@ -32,7 +33,13 @@ function avatarFor(email: string | undefined) {
 export function Header({ title }: { title: string }) {
   const { p, scheme } = usePalette();
   const { me, signOut } = useAuth();
+  const { unread, refreshUnread } = useMessages();
   const router = useRouter();
+
+  // The DM badge — refreshed whenever a screen's chrome mounts (cheap GET).
+  useEffect(() => {
+    if (me) refreshUnread();
+  }, [me, refreshUnread]);
 
   const logo = scheme === 'dark'
     ? require('../assets/grq-logo.png')
@@ -60,6 +67,12 @@ export function Header({ title }: { title: string }) {
       <View style={[styles.side, styles.right]}>
         <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
           <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
+        </Pressable>
+        <Pressable onPress={() => router.push('/messages')} hitSlop={8}>
+          <View>
+            <Ionicons name="chatbubble-outline" size={21} color={p.textMuted} />
+            {unread > 0 && <View style={[styles.badge, { backgroundColor: p.neg, borderColor: p.bodyBg }]} />}
+          </View>
         </Pressable>
         <Pressable onPress={onAvatar} hitSlop={8}>
           <Image
@@ -210,7 +223,8 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 16,
   },
-  side: { width: 84, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  side: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  badge: { position: 'absolute', top: -2, right: -3, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
   right: { justifyContent: 'flex-end' },
   logo: { height: 20, width: 93 },
   title: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
