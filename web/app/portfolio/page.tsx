@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { greeting } from "@/lib/greetings";
-import { getPortfolio } from "@/lib/portfolio";
+import { getPortfolio, PAPER_INCEPTION } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
 import { Card, StatCard, Chip } from "@/components/ui";
@@ -29,7 +29,8 @@ import {
 import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents } from "@/lib/external/store";
 import { personByEmail } from "@/lib/people";
-import { etDateStr } from "@/agent/calendar";
+import { etDateStr, startOfEtDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
+import LiveTape from "@/components/LiveTape";
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
 // midday review from the Today page, Cam 2026-06-16).
@@ -93,6 +94,21 @@ export default async function Portfolio() {
   ]);
   const hasAgenda = agenda.length > 0;
   const name = session?.user?.name ?? "friend";
+
+  // The Tape — the day's NAV on a fixed 9:30→16:00 axis. Moved here from Today, to sit above Alfred's
+  // positions (Cam 2026-07-02). Seed the intraday points from today's NAV snapshots; LiveTape polls
+  // /api/nav-tape forward while the market's open.
+  const tapeStart = startOfEtDay(new Date());
+  const tapeEnd = new Date(tapeStart.getTime() + 24 * 60 * 60 * 1000);
+  const [tapeDayOpen, tapeSnaps] = await Promise.all([
+    prisma.navSnapshot.findFirst({ where: { at: { lt: tapeStart, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
+    prisma.navSnapshot.findMany({ where: { at: { gte: tapeStart, lt: tapeEnd } }, orderBy: { at: "asc" } }),
+  ]);
+  const tapeDayOpenNav = tapeDayOpen?.navCents ?? pf.contributionsCents;
+  const tapePts = tapeSnaps.map((s) => ({ t: s.at.getTime(), c: s.navCents }));
+  if (tapeDayOpen) tapePts.unshift({ t: tapeDayOpen.at.getTime(), c: tapeDayOpen.navCents });
+  if (tapePts.length >= 1 && tapePts[tapePts.length - 1].c !== pf.navCents) tapePts.push({ t: Date.now(), c: pf.navCents });
+  const tapeWin = etSessionBounds(new Date());
 
   // ── Personal accounts: each member's external holdings in a SEPARATE lane (Graham first,
   // then Cam — Cam 2026-06-29), rendered with the SAME columns + spacing as Alfred's positions
@@ -572,6 +588,23 @@ export default async function Portfolio() {
         )}
       </section>
 
+      {/* The Tape — the day's NAV, moved here from Today (Cam 2026-07-02): full width, above Alfred's
+          positions + activity, a compact strip roughly matching the value panels' height. */}
+      <div className="mt-4">
+        <LiveTape
+          initialPoints={tapePts}
+          navCents={pf.navCents}
+          dayOpenNavCents={tapeDayOpenNav}
+          benchmarkCents={pf.benchmarkCents}
+          windowStart={tapeWin.open}
+          windowEnd={tapeWin.close}
+          marketOpen={isMarketOpen()}
+          hasPositions={pf.positions.length > 0}
+          live
+          heightClass="h-32"
+        />
+      </div>
+
       {/* Positions + Your accounts stack in the left column; Activity fills the
           rail across the height of BOTH (on lg it's absolutely-filled so the row
           track is set by the left column, then scrolls internally; on mobile it's
@@ -602,16 +635,17 @@ export default async function Portfolio() {
         </div>
       </section>
 
-      {/* The agent's latest briefing + journal, with the Agenda alongside when open.
-          Pending research sits under the Agenda and above the intraday check-in/brief
-          (Cam 2026-06-29). */}
+      {/* The agent's latest briefing + journal (left), with the pending research queue ABOVE the
+          Agenda in the right rail (Cam 2026-07-02 — research queue over agenda). */}
       <section className="mt-6 grid items-start gap-4 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <ResearchQueueCard />
           {briefPanel}
           {journalPanel}
         </div>
-        {hasAgenda ? <aside className="lg:col-span-1">{agendaPanel}</aside> : null}
+        <aside className="space-y-6 lg:col-span-1">
+          <ResearchQueueCard />
+          {hasAgenda ? agendaPanel : null}
+        </aside>
       </section>
       </LiveQuotesProvider>
     </main>

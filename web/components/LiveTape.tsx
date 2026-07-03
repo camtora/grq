@@ -24,6 +24,7 @@ type Props = {
   marketOpen: boolean; // is the market open right now (gates polling)
   hasPositions: boolean;
   live: boolean; // the live "today" view (poll forward) vs an archived day (static)
+  heightClass?: string; // plot height — default h-56; Portfolio passes a shorter strip
 };
 
 function dayClass(cents: number): string {
@@ -40,6 +41,7 @@ export default function LiveTape({
   marketOpen,
   hasPositions,
   live,
+  heightClass = "h-56",
 }: Props) {
   const [points, setPoints] = useState<Pt[]>(initialPoints);
   const [nav, setNav] = useState(navCents);
@@ -105,6 +107,7 @@ export default function LiveTape({
           windowStart={windowStart}
           windowEnd={windowEnd}
           live={live && marketOpen}
+          heightClass={heightClass}
           bare
         />
       ) : hasPos ? (

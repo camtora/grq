@@ -2,14 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getPortfolio, PAPER_INCEPTION, type PositionView } from "@/lib/portfolio";
 import { allUniverse } from "@/lib/universe";
-import { startOfEtDay, etDateStr, etParts, isMarketDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
+import { startOfEtDay, etDateStr, etParts, isMarketDay, isMarketOpen } from "@/agent/calendar";
 import { money, signedMoney, pct } from "@/lib/money";
 import { Card, Chip, Pnl } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
-import LiveTape from "@/components/LiveTape";
 import StockLogo from "@/components/StockLogo";
 import Term from "@/components/Term";
-import PanelHeader from "@/components/PanelHeader";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { fmpEnabled, fmpGainers, fmpIndices, fmpCadUsd, fmpProfile, fmpEarningsCalendar, stripSuffix, type EarningsCalRow } from "@/lib/fmp";
 import { todayHeadlines, type NewsCard } from "@/lib/news/queries";
@@ -35,13 +33,15 @@ function dayClass(bps: number): string {
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  // Same heading treatment as the stock page's panels (shared PanelHeader), with
-  // Today's section spacing kept below it.
-  return (
-    <div className="mb-3">
-      <PanelHeader>{children}</PanelHeader>
-    </div>
-  );
+  // Today's section headers — bolder, larger and brighter than the shared PanelHeader so the
+  // newspaper sections actually stand out (Cam 2026-07-02). For a "Title · descriptor" header,
+  // wrap the descriptor in <SectionSub> so the main word dominates.
+  return <h2 className="mb-3 text-lg font-bold uppercase tracking-wide text-teal-100">{children}</h2>;
+}
+
+// The lighter, smaller, normal-case descriptor that trails a SectionTitle's main word.
+function SectionSub({ children }: { children: React.ReactNode }) {
+  return <span className="ml-2 text-sm font-normal normal-case tracking-normal text-teal-200/45">{children}</span>;
 }
 
 function MoverRow({ symbol, name, midCents, dayBps, logoUrl, stance }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null; stance?: string | null }) {
@@ -251,12 +251,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     day: "numeric",
   });
 
-  const [pf, weekly, dayOpenSnap, todaySnaps, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, marketCadUsd, macro, earnCal] =
+  const [pf, weekly, dayOpenSnap, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, marketCadUsd, macro, earnCal] =
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
       prisma.navSnapshot.findFirst({ where: { at: { lt: start, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
-      prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
       prisma.quote.findMany(),
       allUniverse(),
       prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } }),
@@ -330,19 +329,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const dayPnl = marketDay ? pf.navCents - dayOpenNav : 0;
   const dayPnlPct = marketDay && dayOpenNav > 0 ? dayPnl / dayOpenNav : 0;
 
-  // The tape as {t,c} points (ms epoch · navCents) so the interactive chart can show
-  // the time + NAV of any point on hover — the same chart the stock pages use, in its
-  // intraday mode, so a post-buy dip can be read off to the minute.
-  const tapePts = todaySnaps.map((s) => ({ t: s.at.getTime(), c: s.navCents }));
-  if (dayOpenSnap) tapePts.unshift({ t: dayOpenSnap.at.getTime(), c: dayOpenSnap.navCents });
-  // Close the tape on the live NAV so a quiet day (sparse snapshots / market closed)
-  // still draws open→now instead of a misleading flat line (Cam 2026-06-19).
-  if (isToday && tapePts.length >= 1 && tapePts[tapePts.length - 1].c !== pf.navCents) {
-    tapePts.push({ t: Date.now(), c: pf.navCents });
-  }
-  // The fixed 9:30→16:00 window the tape's x-axis is pinned to, so the line sits at its real
-  // clock-time and grows rightward through the session (the live "today" view polls it forward).
-  const tapeWin = etSessionBounds(anchor);
+  // The Tape moved to the Portfolio page (Cam 2026-07-02) — it now lives above Alfred's positions.
 
   const nameBy = new Map(universeRows.map((u) => [u.symbol, u.name]));
   const logoBy = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
@@ -548,21 +535,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           so today only — archived days hide the stale ticker (Cam 2026-06-16) */}
       {isToday && <MarketIndices initial={marketIndices} initialFx={marketCadUsd} fundDayPct={marketDay ? dayPnlPct : null} />}
 
-      {/* The Tape — the day's NAV on a fixed 9:30→16:00 axis, creeping right as the session
-          runs (the live "today" view polls it forward). Above the headlines (Cam 2026-06-16) */}
-      <LiveTape
-        initialPoints={tapePts}
-        navCents={pf.navCents}
-        dayOpenNavCents={dayOpenNav}
-        benchmarkCents={pf.benchmarkCents}
-        windowStart={tapeWin.open}
-        windowEnd={tapeWin.close}
-        marketOpen={isMarketOpen()}
-        hasPositions={pf.positions.length > 0}
-        live={isToday}
-      />
+      {/* The Tape moved to the Portfolio page (Cam 2026-07-02) — above Alfred's positions. */}
 
-      {/* Macro strip — rates/CPI/FX context, below the tape (Cam 2026-06-26) */}
+      {/* Macro strip — rates/CPI/FX context (Cam 2026-06-26) */}
       {isToday && macro && (
         <div className="mb-6 mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
           <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
@@ -639,57 +614,13 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </Card>
       )}
 
-      {/* Top Hitters + On the Radar — moved above the market movers (Cam 2026-06-16) */}
-      <section className="mt-8 grid items-start gap-6 lg:grid-cols-2">
-        <div>
-          <SectionTitle>Top Hitters · your holdings</SectionTitle>
-          <Card className="overflow-hidden p-1">
-            {hitters.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {hitters.map((p) => (
-                  <HitterRow key={p.symbol} p={p} logoUrl={logoBy.get(p.symbol) ?? null} />
-                ))}
-              </ul>
-            ) : (
-              <p className="p-3 text-sm text-teal-200/40">
-                All cash — no hitters today. The agent only buys when a thesis clears every guardrail. Patience is a position.
-              </p>
-            )}
-          </Card>
-        </div>
-        <div>
-          <SectionTitle>On the Radar · ideas with upside</SectionTitle>
-          <Card className="overflow-hidden p-1">
-            {ideas.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {ideas.map((idea) => (
-                  <IdeaRow key={idea.sym} idea={idea} />
-                ))}
-              </ul>
-            ) : radar.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {radar.map((r) => (
-                  <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} logoUrl={r.logoUrl} />
-                ))}
-              </ul>
-            ) : (
-              <p className="p-3 text-sm text-teal-200/40">Nothing yet — the agent's dossiers populate this.</p>
-            )}
-          </Card>
-          <p className="mt-2 px-1 text-[10px] text-teal-200/40">
-            {ideas.length > 0
-              ? "names you may not know, first · the agent's targets are hypotheses, not promises — a track record builds as they resolve"
-              : "expected upside appears here once the agent files dossiers with price targets (it's re-running them now)"}
-          </p>
-        </div>
-      </section>
-
-      {/* Earnings — one consolidated headline: who REPORTED (clickable summary bubbles, 3/4) +
-          who's NEXT (a 1/4-width right rail, clearly labelled as earnings reports) (Cam 2026-07-02). */}
+      {/* Earnings — above Top Hitters (Cam 2026-07-02). One consolidated headline: who REPORTED
+          (clickable summary bubbles, 3/4) + who's NEXT (a 1/4-width right rail, clearly labelled). */}
       {isToday && hasEarnings && (
         <section className="mt-8">
           <SectionTitle>
-            <Term k="earnings">Earnings</Term> · who reported, who&apos;s next
+            <Term k="earnings">Earnings</Term>
+            <SectionSub>· who reported, who&apos;s next</SectionSub>
           </SectionTitle>
           <div className="grid items-start gap-6 lg:grid-cols-4">
             {/* Reported — summary bubbles */}
@@ -739,6 +670,51 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           </div>
         </section>
       )}
+
+      {/* Top Hitters + On the Radar — moved above the market movers (Cam 2026-06-16) */}
+      <section className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+        <div>
+          <SectionTitle>Top Hitters · your holdings</SectionTitle>
+          <Card className="overflow-hidden p-1">
+            {hitters.length > 0 ? (
+              <ul className="divide-y divide-teal-400/10">
+                {hitters.map((p) => (
+                  <HitterRow key={p.symbol} p={p} logoUrl={logoBy.get(p.symbol) ?? null} />
+                ))}
+              </ul>
+            ) : (
+              <p className="p-3 text-sm text-teal-200/40">
+                All cash — no hitters today. The agent only buys when a thesis clears every guardrail. Patience is a position.
+              </p>
+            )}
+          </Card>
+        </div>
+        <div>
+          <SectionTitle>On the Radar · ideas with upside</SectionTitle>
+          <Card className="overflow-hidden p-1">
+            {ideas.length > 0 ? (
+              <ul className="divide-y divide-teal-400/10">
+                {ideas.map((idea) => (
+                  <IdeaRow key={idea.sym} idea={idea} />
+                ))}
+              </ul>
+            ) : radar.length > 0 ? (
+              <ul className="divide-y divide-teal-400/10">
+                {radar.map((r) => (
+                  <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} logoUrl={r.logoUrl} />
+                ))}
+              </ul>
+            ) : (
+              <p className="p-3 text-sm text-teal-200/40">Nothing yet — the agent's dossiers populate this.</p>
+            )}
+          </Card>
+          <p className="mt-2 px-1 text-[10px] text-teal-200/40">
+            {ideas.length > 0
+              ? "names you may not know, first · the agent's targets are hypotheses, not promises — a track record builds as they resolve"
+              : "expected upside appears here once the agent files dossiers with price targets (it's re-running them now)"}
+          </p>
+        </div>
+      </section>
 
       {/* Live market data below — today only; archived days hide it (stale otherwise) (Cam 2026-06-16) */}
       {isToday && (
