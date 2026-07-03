@@ -245,7 +245,8 @@ export function EarningsSection({ t }: { t: Today }) {
                   {i > 0 && <Divider />}
                   <Pressable onPress={() => router.push(`/stock/${e.symbol}`)} style={s.row}>
                     <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
-                    <Text style={[s.sym, { color: p.accentText }]}>{e.symbol}</Text>
+                    <Text style={[s.sym, { color: p.accentText, flex: 1 }]} numberOfLines={1}>{e.symbol}</Text>
+                    {/* timeframe/date pinned to the row's right edge (Cam 2026-07-03) */}
                     <View style={s.rowRight}>
                       <Text style={[s.relDay, { color: soon ? p.warn : p.textMuted }]}>{rel}</Text>
                       <Text style={[s.metaText, { color: p.textMuted }]}>{fmtDate(e.date)}</Text>

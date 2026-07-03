@@ -71,12 +71,31 @@ expansion of the shared cert, a conf.d file proxying to host port 8082, and the
 AppDelegate patch. The tunnel makes this optional — do it if the tunnel gets annoying
 or when a physical device (which can't see the Mac's localhost) needs the dev loop.
 
-## What's deliberately NOT here yet (scaffold phase)
+## Status (2026-07-03)
 
-- Google Sign-In wiring (`@react-native-google-signin` is installed so its pod is already
-  baked; `configure()` + the iOS URL-scheme plugin entry come with the auth phase).
-- Push registration (`expo-notifications` installed + plugin configured; the backend
-  `DeviceToken`/APNs plumbing is D53 and unchanged).
-- Real content — all four tabs (Today · Portfolio · The Wire · More) are themed
-  placeholders. The splash greeting says "Welcome back." until auth lands.
-- EAS builds; the Wire tab's feed; `shared/contract.ts` type imports.
+All five pages SHIPPED: Today (the newspaper) · Portfolio (Alfred | Personal, CA/US books)
+· The Wire (full-screen paged feed, five card kinds) · Watchlist (D78 parity + add-ticker)
+· Search (jump-to-stock index) — plus the stock page (`/stock/[symbol]`, hidden tab screen,
+web section order incl. RatingBar/mascots, no-dossier → Research → poll flow). Google auth,
+member-keyed themes, markdown rendering, universal stock linking: all live.
+
+## Backlog — next up (teed 2026-07-03)
+
+**Stock page gaps (each needs a small dossier-feed addition unless noted):**
+1. **Options positioning panel** (Tier 3, D88) — `getOptions`/`optionsLine` exist server-side;
+   add an `options` block to `dossierResponse` + a panel (US names only, CA dark).
+2. **Social sentiment panel** (Tier 8, D89) — `getSocial`/`socialLine`; same pattern, mark
+   "on probation" honestly like the web.
+3. **Related names** (D-KG Slice 1) — the web computes on-the-fly in the page; needs a
+   `related` block in the feed.
+4. **Journal / the record** — `record[]` is ALREADY on the wire (typed journal history);
+   render as a collapsible section. No backend change.
+5. **Scoreboard** — `scoreboard[]` already on the wire; render when non-empty.
+6. **Tappable [[glossary]] terms** — MdText tints them; wire to the shared glossary for
+   inline explainers (the literacy pillar).
+
+**Functional gaps (bigger):** notifications center + push registration (bundle-id/APNs
+decision needed — grqgo ≠ the native app's bundle), Ask Alfred chat (SSE), a home for
+kill switch/risk dial/FX/share (avatar sheet or settings screen), live quote polling,
+Today's date archive, shared/contract.ts imports via metro watchFolders, TestFlight
+device build, native `ios/` retirement at parity.

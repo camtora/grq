@@ -247,6 +247,49 @@ export type Dossier = {
   coverage: { tier: number; name: string; status: string; detail: string }[];
 };
 
+/* ---------- The Wire — the discovery feed (shared/contract.ts WireItem) ---------- */
+export type WireKind = 'find' | 'dossier' | 'watch' | 'article' | 'lesson';
+export type WireItem = {
+  id: string;
+  kind: WireKind;
+  at: string;
+  symbol?: string | null;
+  name?: string | null;
+  currency?: string | null;
+  logoUrl?: string | null;
+  lastCents?: number | null;
+  dayChangeBps?: number | null;
+  call?: string | null; // strong_buy … strong_sell
+  farBps?: number | null;
+  nearBps?: number | null;
+  nearDays?: number | null;
+  nearHorizon?: string | null;
+  targetNearCents?: number | null;
+  targetFarCents?: number | null;
+  confidence?: number | null;
+  heat?: number | null;
+  obscurity?: number | null;
+  change30d?: number | null;
+  spark?: number[] | null;
+  signals?: { recommendationPct?: number | null; trend?: string | null; rsi?: number | null; macd?: string | null } | null;
+  sources?: string[] | null;
+  blurb?: string | null;
+  bullets?: string[] | null;
+  tag?: string | null;
+  watcher?: string | null;
+  watcherKey?: string | null;
+  title?: string | null;
+  publisher?: string | null;
+  imageUrl?: string | null;
+  url?: string | null;
+  relatedTickers?: string[] | null;
+  lessonTerm?: string | null;
+  lessonBody?: string | null;
+  lessonSlug?: string | null;
+  lessonExample?: string | null;
+  lessonRelated?: { slug: string; term: string; def: string }[] | null;
+};
+
 export type Today = {
   edition: 'morning' | 'midday' | 'evening' | 'weekend';
   dateISO: string;
