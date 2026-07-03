@@ -112,6 +112,7 @@ export default function RootLayout() {
           <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
           <Stack.Screen name="messages" options={{ presentation: 'modal' }} />
           <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         </Stack>
       )}
       {ready && splashDone && status !== 'signedIn' && <SignIn />}

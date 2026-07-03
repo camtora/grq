@@ -247,6 +247,59 @@ export type Dossier = {
   coverage: { tier: number; name: string; status: string; detail: string }[];
 };
 
+/* ---------- fund settings + FX (D62) ---------- */
+export type FundSettings = {
+  riskLevel: 'CAUTIOUS' | 'BALANCED' | 'AGGRESSIVE';
+  cashFloorBps: number;
+  maxPositionBps: number;
+  stopLossBps: number;
+  takeProfitBps: number;
+  feeBudgetCentsMonth: number;
+  feeSpentMonthCents: number;
+  killSwitch: boolean;
+  killSwitchBy: string | null;
+  soakDaysClean: number;
+  soakDaysRequired: number;
+  soakPaperDaysClean: number;
+  soakPaperDaysRequired: number;
+};
+
+export type FxRequest = {
+  id: number;
+  createdAt: string;
+  fromCurrency: string;
+  toCurrency: string;
+  amountUsdCents: number | null;
+  estCadCents: number | null;
+  reason: string | null;
+  symbol: string | null;
+  status: string; // PENDING | EXECUTED | REJECTED | FAILED
+  requestedBy: string | null;
+  executedRate: number | null;
+  executedCadCents: number | null;
+  failReason: string | null;
+};
+
+export type FxState = {
+  cadCashCents: number;
+  usdCashCents: number;
+  fxUsdCad: number | null;
+  usdPct: number;
+  fxMaxPerRequestCents: number;
+  fxMaxPerWeekCents: number;
+  usdAllocationCapPct: number;
+  pending: FxRequest[];
+  recent: FxRequest[];
+};
+
+export type Health = {
+  status: string;
+  broker: string;
+  phase: number;
+  killSwitch: boolean;
+  agent: { bootAt: string | null; lastTickAt: string | null; lastSessionAt: string | null } | null;
+};
+
 /* ---------- member-to-member messages (D61) ---------- */
 export type DirectMessage = {
   id: number;

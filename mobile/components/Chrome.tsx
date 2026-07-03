@@ -43,8 +43,8 @@ function CountBadge({ n }: { n: number }) {
 }
 
 export function Header({ title }: { title: string }) {
-  const { p, scheme } = usePalette();
-  const { me, signOut } = useAuth();
+  const { p } = usePalette();
+  const { me } = useAuth();
   const { unread, refreshUnread } = useMessages();
   const { unread: bellUnread, refreshUnread: refreshBell } = useNotifications();
   const router = useRouter();
@@ -56,17 +56,6 @@ export function Header({ title }: { title: string }) {
       refreshBell();
     }
   }, [me, refreshUnread, refreshBell]);
-
-  const onAvatar = () => {
-    Alert.alert(
-      me?.name ? `Signed in as ${me.name}` : 'Signed in',
-      me?.email ?? '',
-      [
-        { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-        { text: 'Close', style: 'cancel' },
-      ],
-    );
-  };
 
   return (
     <View style={[styles.header, { backgroundColor: p.bodyBg }]}>
@@ -95,7 +84,7 @@ export function Header({ title }: { title: string }) {
             <CountBadge n={unread} />
           </View>
         </Pressable>
-        <Pressable onPress={onAvatar} hitSlop={8}>
+        <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
           <Image
             source={avatarFor(me?.email)}
             style={[styles.avatar, { borderColor: p.accent + '73' }]}

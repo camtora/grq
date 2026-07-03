@@ -42,7 +42,8 @@ Every tab screen renders inside `<Screen title="...">` (`components/Chrome.tsx`)
   (`/chat`); the **page title centered** (Space Grotesk 700, 17); top-right the
   **notifications bell**, the **chat icon** (unread red dot; → `/messages`, the
   Cam↔Graham thread), then the **signed-in member's avatar** (28, circular, accent
-  ring) → identity sheet (signed in as… / sign out).
+  ring) → **Settings** (`/settings` — me/sign-out, kill switch, risk dial, fees,
+  Currency & FX approvals, notifications link, the soak gate, system).
 - Body: `ScrollView` with pull-to-refresh (`RefreshControl` tinted `p.accent`) unless
   the screen is a list that scrolls itself.
 - Background `p.bodyBg` everywhere; content padding 16 horizontal.
