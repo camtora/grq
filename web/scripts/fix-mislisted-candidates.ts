@@ -11,6 +11,7 @@ import { resolvePrimaryListing } from "../agent/promote";
 import { invalidateUniverseCache } from "../lib/universe";
 import { refreshBars } from "../lib/bars";
 import { refreshQuotesFor } from "../lib/broker/quotes";
+import { fmpProfile } from "../lib/fmp";
 
 const APPLY = process.argv.includes("--apply");
 const isCa = (y: string) => /\.(TO|V|NE|CN)$/i.test(y);
@@ -40,7 +41,28 @@ async function main() {
   if (!APPLY) { console.log(`\n[fix] DRY RUN — pass --apply to write. Would fix: ${fixable.map((f) => f.symbol).join(", ") || "(none)"}`); return; }
 
   for (const f of fixable) {
-    await prisma.universeMember.update({ where: { symbol: f.symbol }, data: { yahoo: f.neu, currency: null } }); // US → null (inferred USD)
+    // Flip to the US listing AND reconcile IDENTITY (name/exchange/currency/sector) from the US
+    // profile in the same write. The original D105 pass only wrote yahoo+currency, which left the
+    // stale CA/CDR name + exchange behind (the residue reconcile-us-identities.ts had to repair by
+    // hand). Doing both here keeps any future re-run clean.
+    const p = await fmpProfile(f.neu).catch(() => null);
+    await prisma.universeMember.update({
+      where: { symbol: f.symbol },
+      data:
+        p && p.companyName
+          ? {
+              yahoo: f.neu,
+              name: p.companyName,
+              sector: p.sector,
+              industry: p.industry,
+              country: p.country,
+              currency: p.currency || null,
+              exchange: p.exchange || null,
+              marketCapM: p.marketCap > 0 ? Math.round(p.marketCap / 1_000_000) : null,
+              fmpAt: new Date(),
+            }
+          : { yahoo: f.neu, currency: null }, // no profile → at least fix the listing (US → null = inferred USD)
+    });
     await prisma.bar.deleteMany({ where: { symbol: f.symbol } });   // purge the junk history under the bare key…
     await prisma.quote.deleteMany({ where: { symbol: f.symbol } }); // …and the junk quote
   }
