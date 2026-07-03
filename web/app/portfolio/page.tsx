@@ -148,13 +148,6 @@ export default async function Portfolio() {
       if (!stanceByBare.has(k)) stanceByBare.set(k, s.stance as string);
     }
 
-    // CAD↔account-currency convert (CAD↔USD via the CAD leg) for the derived per-currency cash.
-    const toAcctCents = (cents: number, fromCcy: string, acctCcy: string) => {
-      if (fromCcy === acctCcy) return cents;
-      const cad = toCadCents(cents, fromCcy, fxUsdCad);
-      return acctCcy === "CAD" ? cad : Math.round(cad / (fxUsdCad || 1)); // CAD → USD
-    };
-
     // Build one group per member. Graham's lane first, then Cam's (Cam 2026-06-29).
     const ORDER: Record<string, number> = { graham: 0, cam: 1 };
     for (const v of views) {
@@ -180,14 +173,12 @@ export default async function Portfolio() {
         }))
         .sort((a, b) => toCadCents(b.marketValueCents, b.currency, fxUsdCad) - toCadCents(a.marketValueCents, a.currency, fxUsdCad));
 
-      // Static per-currency cash (the lane's footer anchor): derived as account total − converted
-      // holdings, keyed by ACCOUNT currency, because TD-via-SnapTrade reports the explicit cash
-      // field as 0 (Cam 2026-06-29). The lane recomputes holdings/total/change live off this cash.
+      // Static per-currency cash (the lane's footer anchor), keyed by ACCOUNT currency. Real
+      // cash straight from the sync (SnapTrade balances endpoint, 2026-07-03) — replaces the
+      // old total−holdings derivation from when the explicit cash field read as 0.
       const cashByCur = new Map<string, number>();
       for (const a of v.accounts ?? []) {
-        let held = 0;
-        for (const h of a.holdings ?? []) held += toAcctCents(h.marketValueCents, h.currency, a.currency);
-        cashByCur.set(a.currency, (cashByCur.get(a.currency) ?? 0) + Math.max(0, a.totalValueCents - held));
+        cashByCur.set(a.currency, (cashByCur.get(a.currency) ?? 0) + a.cashCents);
       }
       const cash: PersonalCash[] = [...cashByCur.entries()]
         .map(([currency, cashCents]) => ({ currency, cashCents }))

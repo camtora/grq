@@ -176,6 +176,12 @@ function AccountCard({ account: a }: { account: AccountView }) {
               holdings={a.holdings.map((h) => ({ quoteSymbol: h.quoteSymbol, qty: Number(h.qty), priceCents: h.priceCents }))}
             />
           </div>
+          {/* Cash shown on its own, not silently folded into the total (Cam 2026-07-03). */}
+          {a.cashCents > 0 ? (
+            <div className="text-[11px] tabular-nums text-teal-200/60">
+              incl. cash {money(a.cashCents, a.currency)}
+            </div>
+          ) : null}
           <div className="text-[10px] uppercase tracking-wider text-teal-200/40">
             <span className="text-emerald-400/70">prices live</span> · holdings as of {fmtWhen(new Date(a.syncedAt))}
           </div>
@@ -183,7 +189,15 @@ function AccountCard({ account: a }: { account: AccountView }) {
       </div>
 
       {a.holdings.length === 0 ? (
-        <div className="px-5 py-4 text-sm text-teal-200/40">No holdings reported.</div>
+        <div className="px-5 py-4 text-sm text-teal-200/40">
+          {a.cashCents > 0 ? (
+            <>
+              All cash — <span className="tabular-nums text-teal-100/70">{money(a.cashCents, a.currency)}</span> uninvested, no holdings.
+            </>
+          ) : (
+            "No holdings reported."
+          )}
+        </div>
       ) : (
         <table className="w-full text-sm">
           <thead>
@@ -235,6 +249,21 @@ function AccountCard({ account: a }: { account: AccountView }) {
                 </td>
               </tr>
             ))}
+            {/* Cash as its own row (like the portfolio lane) so it's a visible value,
+                not just a bump in the account total. */}
+            {a.cashCents > 0 ? (
+              <tr className="border-t border-teal-400/[0.06]">
+                <td className="px-5 py-2 font-semibold text-teal-200/70">Cash</td>
+                <td className="px-3 py-2 text-teal-200/40">uninvested cash</td>
+                <td className="px-3 py-2 text-right text-teal-200/30">—</td>
+                <td className="px-3 py-2 text-right text-teal-200/30">—</td>
+                <td className="px-3 py-2 text-right text-teal-200/30">—</td>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold text-teal-50">
+                  {money(a.cashCents, a.currency)}
+                </td>
+                <td className="px-5 py-2 text-right text-teal-200/30">—</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       )}
