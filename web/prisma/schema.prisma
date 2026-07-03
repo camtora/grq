@@ -830,6 +830,10 @@ model DeviceToken {
   // or "sandbox" (Xcode debug build) — they use DIFFERENT APNs gateways, so a
   // token must be sent to the gateway that minted it.
   apnsEnv      String   @default("production")
+  // The app bundle that minted the token == its apns-topic. Two apps exist now:
+  // the native ca.camerontora.grq (TestFlight) and GRQ Go com.camerontora.grqgo —
+  // a push MUST go out with the token's own topic or APNs rejects it.
+  bundleId     String   @default("ca.camerontora.grq")
   registeredAt DateTime @default(now())
   lastUsedAt   DateTime @updatedAt
 
@@ -1722,6 +1726,7 @@ model ExternalHolding {
   marketValueCents Int             @default(0) // position market value, in `currency` cents
   currency         String          @default("CAD")
   openPnlCents     Int? // unrealized P&L if the brokerage reports it
+  avgCostCents     Int? // average purchase price per share (SnapTrade average_purchase_price), in `currency` cents
   updatedAt        DateTime        @updatedAt
 
   @@unique([accountId, symbol])

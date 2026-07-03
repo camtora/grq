@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as Notifications from 'expo-notifications';
 import {
   useFonts,
   Inter_400Regular,
@@ -16,11 +17,22 @@ import Splash from '../components/Splash';
 import SignIn from '../components/SignIn';
 import { usePalette } from '../constants/theme';
 import { useAuth } from '../store/auth';
+import { registerForPush } from '../services/push';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
 // so iosClientId only — no webClientId (that would flip the audience).
 GoogleSignin.configure({
   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+});
+
+// Show pushes as banners even while the app is foregrounded.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
 });
 
 export default function RootLayout() {
@@ -40,10 +52,26 @@ export default function RootLayout() {
     SpaceGrotesk_700Bold,
   });
 
+  const router = useRouter();
+
   // Hydration races the splash's intro phase; by the tap it's usually settled.
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Signed in → register this device for push (no-op on the simulator).
+  useEffect(() => {
+    if (status === 'signedIn') registerForPush();
+  }, [status]);
+
+  // Tapping a push deep-links: a symbol lands on its stock page.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((res) => {
+      const symbol = res.notification.request.content.data?.symbol;
+      if (typeof symbol === 'string' && symbol) router.push(`/stock/${symbol}`);
+    });
+    return () => sub.remove();
+  }, [router]);
 
   const ready = fontsLoaded;
 

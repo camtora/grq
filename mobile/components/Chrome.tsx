@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePalette, F } from '../constants/theme';
 import { useAuth } from '../store/auth';
 import { useMessages } from '../store/messages';
+import { useNotifications } from '../store/notifications';
 
 /**
  * The chrome (docs/MOBILE-DESIGN.md §3): every tab screen renders inside
@@ -34,12 +35,16 @@ export function Header({ title }: { title: string }) {
   const { p, scheme } = usePalette();
   const { me, signOut } = useAuth();
   const { unread, refreshUnread } = useMessages();
+  const { unread: bellUnread, refreshUnread: refreshBell } = useNotifications();
   const router = useRouter();
 
-  // The DM badge — refreshed whenever a screen's chrome mounts (cheap GET).
+  // Badges — refreshed whenever a screen's chrome mounts (cheap GETs).
   useEffect(() => {
-    if (me) refreshUnread();
-  }, [me, refreshUnread]);
+    if (me) {
+      refreshUnread();
+      refreshBell();
+    }
+  }, [me, refreshUnread, refreshBell]);
 
   const onAvatar = () => {
     Alert.alert(
@@ -68,7 +73,10 @@ export function Header({ title }: { title: string }) {
       </Text>
       <View style={[styles.side, styles.right]}>
         <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
-          <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
+          <View>
+            <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
+            {bellUnread > 0 && <View style={[styles.badge, { backgroundColor: p.neg, borderColor: p.bodyBg }]} />}
+          </View>
         </Pressable>
         <Pressable onPress={() => router.push('/messages')} hitSlop={8}>
           <View>

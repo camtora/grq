@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const session = memberFromRequest(req);
   if (!session) return NextResponse.json({ error: "Members only." }, { status: 403 });
 
-  let body: { token?: unknown; platform?: unknown; apnsEnv?: unknown };
+  let body: { token?: unknown; platform?: unknown; apnsEnv?: unknown; bundleId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -26,11 +26,16 @@ export async function POST(req: Request) {
   }
   const platform = body.platform === "android" ? "android" : "ios";
   const apnsEnv = body.apnsEnv === "sandbox" ? "sandbox" : "production";
+  // The registering app's bundle == the token's apns-topic (GRQ Go vs the native app).
+  const bundleId =
+    typeof body.bundleId === "string" && /^[a-zA-Z0-9.\-]{3,80}$/.test(body.bundleId.trim())
+      ? body.bundleId.trim()
+      : "ca.camerontora.grq";
 
   await prisma.deviceToken.upsert({
     where: { email_token: { email: session.email, token } },
-    update: { platform, apnsEnv, lastUsedAt: new Date() },
-    create: { email: session.email, token, platform, apnsEnv },
+    update: { platform, apnsEnv, bundleId, lastUsedAt: new Date() },
+    create: { email: session.email, token, platform, apnsEnv, bundleId },
   });
 
   return NextResponse.json({ ok: true });

@@ -59,7 +59,15 @@ export type ApnsResult = {
   deliveredEnv?: ApnsEnv;
 };
 
-function keyId(): string | null {
+// The two Apple keys are ENV-SPLIT (docs/PUSH-NOTIFICATIONS.md): 93LXUPS3V6 signs
+// only for the PRODUCTION gateway, 9VAQ4T6CYS only for SANDBOX (Xcode/dev-client
+// builds — how GRQ Go runs in dev). Each gateway gets a provider JWT minted with
+// its own key; without APNS_SANDBOX_KEY_* set, sandbox tokens simply don't deliver
+// (the old behavior).
+function keyId(env: ApnsEnv = "production"): string | null {
+  if (env === "sandbox" && process.env.APNS_SANDBOX_KEY_ID?.trim()) {
+    return process.env.APNS_SANDBOX_KEY_ID.trim();
+  }
   return process.env.APNS_KEY_ID?.trim() || null;
 }
 
@@ -72,7 +80,14 @@ function bundleId(): string {
 }
 
 /** The .p8 private key as PEM, from whichever env form is set. */
-function signingKey(): string | null {
+function signingKey(env: ApnsEnv = "production"): string | null {
+  if (env === "sandbox" && process.env.APNS_SANDBOX_KEY_B64) {
+    try {
+      return Buffer.from(process.env.APNS_SANDBOX_KEY_B64, "base64").toString("utf8");
+    } catch {
+      return null;
+    }
+  }
   if (process.env.APNS_KEY_B64) {
     try {
       return Buffer.from(process.env.APNS_KEY_B64, "base64").toString("utf8");
@@ -100,17 +115,18 @@ export function apnsConfigured(): boolean {
   return !!(keyId() && signingKey());
 }
 
-// Provider JWT cache. Apple wants it refreshed at most every 20 min and at least
-// every 60; we mint a fresh one every ~50 min.
-let cachedToken: { jwt: string; mintedAtMs: number } | null = null;
+// Provider JWT cache, PER ENV (each gateway has its own signing key). Apple wants
+// the JWT refreshed at most every 20 min and at least every 60; we re-mint ~50.
+const cachedTokens: Partial<Record<ApnsEnv, { jwt: string; mintedAtMs: number }>> = {};
 const TOKEN_TTL_MS = 50 * 60 * 1000;
 
-function providerToken(): string | null {
-  const kid = keyId();
-  const key = signingKey();
+function providerToken(env: ApnsEnv = "production"): string | null {
+  const kid = keyId(env);
+  const key = signingKey(env);
   if (!kid || !key) return null;
   const now = Date.now();
-  if (cachedToken && now - cachedToken.mintedAtMs < TOKEN_TTL_MS) return cachedToken.jwt;
+  const cached = cachedTokens[env];
+  if (cached && now - cached.mintedAtMs < TOKEN_TTL_MS) return cached.jwt;
   try {
     const token = jwt.sign({}, key, {
       algorithm: "ES256",
@@ -118,7 +134,7 @@ function providerToken(): string | null {
       issuer: teamId(),
       // `iat` is added automatically; APNs rejects a token older than 1h.
     });
-    cachedToken = { jwt: token, mintedAtMs: now };
+    cachedTokens[env] = { jwt: token, mintedAtMs: now };
     return token;
   } catch (e) {
     console.error("apns: failed to sign provider token (check the .p8 key)", e);
@@ -143,15 +159,22 @@ function apsBody(payload: ApnsPayload): string {
  *  other gateway and report which one delivered so the caller can self-heal the record.
  *  Returns a per-token result so the caller can also prune dead tokens (410 / BadDeviceToken). */
 export async function sendApns(
-  devices: { token: string; apnsEnv: string }[],
+  devices: { token: string; apnsEnv: string; bundleId?: string | null }[],
   payload: ApnsPayload,
 ): Promise<ApnsResult[]> {
   if (!apnsConfigured() || devices.length === 0) return [];
-  const token = providerToken();
-  if (!token) return [];
+  // A provider JWT per gateway — each env may sign with a different key.
+  const authFor: Record<ApnsEnv, string | null> = {
+    production: providerToken("production"),
+    sandbox: providerToken("sandbox"),
+  };
+  if (!authFor.production && !authFor.sandbox) return [];
 
   const http2 = await import("node:http2");
-  const topic = bundleId();
+  // Each token goes out with ITS OWN app's topic (GRQ Go com.camerontora.grqgo vs
+  // the native app) — APNs rejects a token pushed under another app's topic. The
+  // env default covers legacy rows registered before bundleId existed.
+  const defaultTopic = bundleId();
   const body = apsBody(payload);
   // A background push must declare apns-push-type: background + a low priority (5);
   // a visible alert is type "alert" at priority 10.
@@ -170,7 +193,7 @@ export async function sendApns(
     return s;
   };
 
-  const postOne = (host: string, deviceToken: string): Promise<{ status: number; reason?: string }> =>
+  const postOne = (host: string, deviceToken: string, topic: string, auth: string): Promise<{ status: number; reason?: string }> =>
     new Promise((resolve) => {
       const req = sessionFor(host).request({
         ":method": "POST",
@@ -178,7 +201,7 @@ export async function sendApns(
         "apns-topic": topic,
         "apns-push-type": pushType,
         "apns-priority": priority,
-        authorization: `bearer ${token}`,
+        authorization: `bearer ${auth}`,
         "content-type": "application/json",
         "content-length": Buffer.byteLength(body),
       });
@@ -212,10 +235,15 @@ export async function sendApns(
     devices.map(async (d): Promise<ApnsResult> => {
       const primary = envOf(d.apnsEnv);
       const other: ApnsEnv = primary === "sandbox" ? "production" : "sandbox";
-      let r = await postOne(HOSTS[primary], d.token);
+      const topic = d.bundleId?.trim() || defaultTopic;
+      const primaryAuth = authFor[primary];
+      if (!primaryAuth) {
+        return { token: d.token, ok: false, status: 0, reason: `NoKeyFor:${primary}` };
+      }
+      let r = await postOne(HOSTS[primary], d.token, topic, primaryAuth);
       let deliveredEnv: ApnsEnv | undefined = r.status === 200 ? primary : undefined;
-      if (r.status === 403 && r.reason === "BadEnvironmentKeyInToken") {
-        const r2 = await postOne(HOSTS[other], d.token);
+      if (r.status === 403 && r.reason === "BadEnvironmentKeyInToken" && authFor[other]) {
+        const r2 = await postOne(HOSTS[other], d.token, topic, authFor[other]!);
         if (r2.status === 200) {
           r = r2;
           deliveredEnv = other;

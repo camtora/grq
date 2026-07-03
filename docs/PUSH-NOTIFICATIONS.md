@@ -272,3 +272,25 @@ production token* finally existed to test against. Fix: `APNS_KEY_ID=93LXUPS3V6`
 | `ios/GRQ/App/GRQApp.swift` | `@UIApplicationDelegateAdaptor`, register-after-auth, tap deep-link |
 | `ios/GRQ/Views/Settings.swift` | `NotificationSettingsView` + the More-tab link |
 | `ios/GRQ/Models/Models.swift` | `NotificationPreferences` + catalog |
+
+## GRQ Go (the Expo app) — 2026-07-03
+
+Two apps now push: the native `ca.camerontora.grq` (TestFlight, production tokens) and
+**GRQ Go `com.camerontora.grqgo`** (dev builds → SANDBOX tokens; Apple-silicon simulators
+register real APNs tokens). Three things make that work:
+
+1. **Per-token topic** — `DeviceToken.bundleId` (default the native bundle) is sent as
+   `apns-topic` per token; the register route accepts `bundleId` from the app.
+2. **Per-gateway keys** — the env-split keys both live in `.env` now:
+   `APNS_KEY_ID=93LXUPS3V6` (production) + `APNS_SANDBOX_KEY_ID=9VAQ4T6CYS` /
+   `APNS_SANDBOX_KEY_B64` (sandbox). `apns.ts` mints a provider JWT per gateway; without
+   the sandbox pair, sandbox tokens just don't deliver (old behavior).
+3. **App-side** — `mobile/services/push.ts` registers on sign-in (`__DEV__` → sandbox);
+   taps deep-link via the payload's `symbol`; the bell screen is the D63 feed + the
+   per-category delivery toggles.
+
+Delivery verified end-to-end 2026-07-03: `web/scripts/test-push.ts` → APNs 200 →
+banner on Cam's simulator (sandbox gateway, grqgo topic). NB the AGENT container sends
+most pushes — it picks up the per-token topic code + sandbox env at its next rebuild;
+until then agent-originated pushes reach only native-app tokens (web-originated ones,
+e.g. messages/shares, are already correct).
