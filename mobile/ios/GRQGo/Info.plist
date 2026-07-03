@@ -31,6 +31,12 @@
           <string>com.camerontora.grqgo</string>
         </array>
       </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>com.googleusercontent.apps.848530510810-hgickglorbd8ql2kh5kcoq3q04dj1isf</string>
+        </array>
+      </dict>
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>

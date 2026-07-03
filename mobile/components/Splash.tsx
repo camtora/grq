@@ -10,6 +10,8 @@ import Animated, {
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import MoneyRain from './MoneyRain';
 import { usePalette } from '../constants/theme';
+import { greeting } from '../constants/greetings';
+import { useAuth } from '../store/auth';
 
 /**
  * The GRQ splash — ported from ios/GRQ/Views/Splash.swift.
@@ -22,6 +24,12 @@ export default function Splash({ done }: { done: () => void }) {
   const reduceMotion = useReducedMotion();
   const [phase, setPhase] = useState<'intro' | 'welcome'>('intro');
   const dismissed = useRef(false);
+  const me = useAuth((s) => s.me);
+
+  // The wealth-aware greeting — same bands as the web (web/lib/greetings.ts).
+  const welcomeLine = me?.name
+    ? greeting(me.name, me.totalPnlCents, me.contributionsCents)
+    : 'Welcome back.';
 
   // Pulsing "Tap to continue" hint.
   const hint = useSharedValue(0.35);
@@ -82,7 +90,7 @@ export default function Splash({ done }: { done: () => void }) {
             </Animated.Text>
           ) : (
             <Animated.View style={[styles.welcomeBlock, welcomeStyle]}>
-              <Text style={[styles.welcomeLine, { color: p.textPrimary }]}>Welcome back.</Text>
+              <Text style={[styles.welcomeLine, { color: p.textPrimary }]}>{welcomeLine}</Text>
               <Text style={[styles.subtitle, { color: p.textMuted }]}>Rich quick, slowly.</Text>
             </Animated.View>
           )}

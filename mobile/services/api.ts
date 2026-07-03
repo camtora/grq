@@ -28,7 +28,16 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`GRQ API ${res.status} on ${path}`);
+  if (!res.ok) {
+    // Backend errors carry a plain-English {error} — surface it (e.g. the
+    // members-only 403) instead of a bare status code.
+    let detail = '';
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) detail = ` — ${body.error}`;
+    } catch {}
+    throw new Error(`GRQ API ${res.status} on ${path}${detail}`);
+  }
   return res.json() as Promise<T>;
 }
 

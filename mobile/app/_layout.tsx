@@ -1,13 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import Splash from '../components/Splash';
+import SignIn from '../components/SignIn';
 import { usePalette } from '../constants/theme';
+import { useAuth } from '../store/auth';
+
+// The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
+// so iosClientId only — no webClientId (that would flip the audience).
+GoogleSignin.configure({
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+});
 
 export default function RootLayout() {
   const { p } = usePalette();
   const [splashDone, setSplashDone] = useState(false);
+  const { status, hydrate } = useAuth();
+
+  // Hydration races the splash's intro phase; by the tap it's usually settled.
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
 
   return (
     <View style={{ flex: 1, backgroundColor: p.bodyBg }}>
@@ -20,6 +35,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(tabs)" />
       </Stack>
+      {splashDone && status !== 'signedIn' && <SignIn />}
       {!splashDone && <Splash done={() => setSplashDone(true)} />}
     </View>
   );
