@@ -1,20 +1,19 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import StockLogo from '../components/StockLogo';
 import { usePalette, F } from '../constants/theme';
 import { api } from '../services/api';
+import { useKeyboardHeight } from '../services/hooks';
 import { useMessages } from '../store/messages';
 import type { DirectMessage, DirectThread } from '../services/types';
 
@@ -24,6 +23,9 @@ import type { DirectMessage, DirectThread } from '../services/types';
 export default function MessagesScreen() {
   const { p } = usePalette();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const kb = useKeyboardHeight();
+  const kbPad = Math.max(0, kb - insets.bottom);
   const setUnread = useMessages((s) => s.setUnread);
   const [messages, setMessagesState] = useState<DirectMessage[]>([]);
   const [otherName, setOtherName] = useState('your partner');
@@ -107,11 +109,7 @@ export default function MessagesScreen() {
         <View style={s.back} />
       </View>
 
-      <KeyboardAvoidingView
-        style={s.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}
-      >
+      <View style={[s.fill, { paddingBottom: kbPad }]}>
         <FlatList
           ref={listRef}
           data={messages}
@@ -160,7 +158,7 @@ export default function MessagesScreen() {
             />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

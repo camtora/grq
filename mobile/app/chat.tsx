@@ -2,20 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MdText from '../components/MdText';
 import { usePalette, F } from '../constants/theme';
 import { api, streamChat } from '../services/api';
+import { useKeyboardHeight } from '../services/hooks';
 
 type ChatMsg = { id: string; role: 'user' | 'assistant'; content: string };
 
@@ -24,6 +23,9 @@ type ChatMsg = { id: string; role: 'user' | 'assistant'; content: string };
 export default function ChatScreen() {
   const { p, scheme } = usePalette();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const kb = useKeyboardHeight();
+  const kbPad = Math.max(0, kb - insets.bottom);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<string | null>(null);
@@ -90,11 +92,7 @@ export default function ChatScreen() {
       </View>
       <Text style={[s.honesty, { color: p.textMuted }]}>reads everything · trades nothing</Text>
 
-      <KeyboardAvoidingView
-        style={s.fill}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}
-      >
+      <View style={[s.fill, { paddingBottom: kbPad }]}>
         <FlatList
           ref={listRef}
           data={messages}
@@ -158,7 +156,7 @@ export default function ChatScreen() {
             />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

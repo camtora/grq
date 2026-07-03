@@ -1,6 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dimensions, Keyboard } from 'react-native';
 import { api } from './api';
 import { useAuth } from '../store/auth';
+
+/** The keyboard's overlap with the window, in px — reliable inside modal
+ * sheets where KeyboardAvoidingView mis-measures (endCoordinates are window
+ * coords, and a sheet's bottom == the window's bottom). */
+export function useKeyboardHeight(): number {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardWillChangeFrame', (e) => {
+      const win = Dimensions.get('window').height;
+      setH(Math.max(0, win - e.endCoordinates.screenY));
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', () => setH(0));
+    return () => {
+      sub.remove();
+      hide.remove();
+    };
+  }, []);
+  return h;
+}
 
 /** The one data hook (docs/MOBILE-DESIGN.md §6): loading / error / pull-to-refresh.
  *
