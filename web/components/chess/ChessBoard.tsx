@@ -31,6 +31,7 @@ export default function ChessBoard({
   hrefBySym,
   highlightKey,
   trendBySym,
+  showLinks = true,
 }: {
   board: ChessBoardData | string | null;
   hrefBySym?: Map<string, string>;
@@ -39,6 +40,9 @@ export default function ChessBoard({
   /** Daily-close series per piece (bare ticker → series), from buildBoardTrends. When present,
    *  each company with listed history shows a range-aware price tape. */
   trendBySym?: Map<string, BoardTrend>;
+  /** Show the "How it flows" company-to-company link list below the chain. Off on the stock
+   *  page, where we surface just the value-chain panels; on for the full board page. */
+  showLinks?: boolean;
 }) {
   const data = typeof board === "string" || board == null ? parseBoard(board ?? null) : board;
   const [range, setRange] = useState<BoardRangeKey>("1D");
@@ -154,7 +158,7 @@ export default function ChessBoard({
         </div>
       </div>
 
-      {data.links.length > 0 && (
+      {showLinks && data.links.length > 0 && (
         <Card className="p-4">
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-teal-200/40">How it flows</div>
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-teal-100/75">

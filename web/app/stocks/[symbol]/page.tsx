@@ -1114,8 +1114,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
         <SocialPanel s={socialData} />
       </section>
 
-      {/* Chess Moves — the supply-chain/thematic boards this name is a play on (under
-          Options, Cam 2026-06-29). Self-hides when there are none. */}
+      {/* The Supply Chain — the value-chain panels this name sits on (from the Chess Moves
+          boards; renamed + stripped to just the panels, Cam 2026-07-02). Self-hides when none. */}
       {chessRefs.length > 0 && (
         <section className="mb-6">
           <StockChessBoards symbol={symbol} refs={chessRefs} />

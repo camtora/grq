@@ -21,6 +21,7 @@ import {
   LivePosLast,
   LivePosValue,
   LivePosUnrealized,
+  LivePosToday,
   LiveExternalValue,
   LiveExternalTiles,
   type LivePos,
@@ -305,6 +306,7 @@ export default async function Portfolio() {
             { key: "qty", label: "Qty", align: "right", numeric: true },
             { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
             { key: "last", label: "Last", align: "right", numeric: true },
+            { key: "today", label: "Today", align: "right", numeric: true },
             { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
             { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
             { key: "weight", label: <Term k="weight" align="right">Weight</Term>, align: "right", numeric: true },
@@ -320,6 +322,11 @@ export default async function Portfolio() {
               // Market value + weight sort on the CAD-normalised value so a USD
               // holding sorts against a CAD one apples-to-apples.
               value: p.marketValueCadCents,
+              // Today's $ move (native) — qty × (last − prior close), prior = last/(1+dayFrac).
+              today: (() => {
+                const f = p.dayChangeBps / 10_000;
+                return 1 + f !== 0 ? Math.round(p.qty * (p.lastCents - p.lastCents / (1 + f))) : 0;
+              })(),
               unrealized: p.unrealizedPnlCents,
               weight: p.marketValueCadCents,
             },
@@ -334,6 +341,9 @@ export default async function Portfolio() {
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">
                   <LivePosLast symbol={p.symbol} lastCents={p.lastCents} currency={p.currency} />
+                </td>
+                <td className="px-5 py-2.5 text-right text-sm">
+                  <LivePosToday symbol={p.symbol} qty={p.qty} lastCents={p.lastCents} initialBps={p.dayChangeBps} currency={p.currency} />
                 </td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
                   <LivePosValue symbol={p.symbol} qty={p.qty} lastCents={p.lastCents} currency={p.currency} />
@@ -353,7 +363,7 @@ export default async function Portfolio() {
             CAD: (
               <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
                 <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
-                <td className="px-5 py-2.5" colSpan={3} />
+                <td className="px-5 py-2.5" colSpan={4} />
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
                 <td className="px-5 py-2.5" />
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
@@ -365,7 +375,7 @@ export default async function Portfolio() {
               pf.usdCashCents > 0 ? (
                 <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
                   <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
-                  <td className="px-5 py-2.5" colSpan={3} />
+                  <td className="px-5 py-2.5" colSpan={4} />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{usd(pf.usdCashCents)}</td>
                   <td className="px-5 py-2.5" />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-200/60">
@@ -601,7 +611,7 @@ export default async function Portfolio() {
           marketOpen={isMarketOpen()}
           hasPositions={pf.positions.length > 0}
           live
-          heightClass="h-32"
+          heightClass="h-16"
         />
       </div>
 

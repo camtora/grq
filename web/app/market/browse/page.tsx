@@ -166,7 +166,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
   // flight (→ "Researching…"), or neither (→ "Research"). Keyed by the bare ticker, which
   // is the dossier/researchRequest key + the stock-page route (Cam 2026-06-19).
   const keys = [...new Set(rows.map((r) => bareTicker(r.symbol).toUpperCase()))];
-  const [dossierRows, inflightRows] = keys.length
+  const [dossierRows, inflightRows, stanceRows] = keys.length
     ? await Promise.all([
         prisma.journalEntry.findMany({
           where: {
@@ -180,14 +180,30 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
           where: { symbol: { in: keys }, status: { in: ["QUEUED", "RUNNING"] } },
           select: { symbol: true },
         }),
+        // Latest dossier stance per name — the same "Alfred's call" the watchlist/stock page show.
+        prisma.journalEntry.findMany({
+          where: { stance: { not: null }, symbol: { in: keys } },
+          orderBy: { at: "desc" },
+          select: { symbol: true, stance: true },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
   const hasDossier = new Set(dossierRows.map((d) => d.symbol));
   const inFlight = new Set(inflightRows.map((r) => r.symbol));
   const researchState = (sym: string): ResearchState => {
     const k = bareTicker(sym).toUpperCase();
     return hasDossier.has(k) ? "done" : inFlight.has(k) ? "inflight" : "none";
   };
+  // Alfred's call for names we already TRACK: for a tracked row (in the universe/watchlist),
+  // the GRQ column shows this name's real dossier call instead of the cheap Haiku screen tag —
+  // "from the stock itself" (Cam 2026-07-02). Untracked names keep the INTERESTING/WATCH/PASS tag.
+  const stanceByKey = new Map<string, string>();
+  for (const s of stanceRows) {
+    const k = (s.symbol ?? "").toUpperCase();
+    if (k && s.stance && !stanceByKey.has(k)) stanceByKey.set(k, s.stance);
+  }
+  const callFor = (sym: string): string | null =>
+    trackingOf(sym).state === "none" ? null : stanceByKey.get(bareTicker(sym).toUpperCase()) ?? null;
 
   return (
     <main>
@@ -281,7 +297,7 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               { key: "cap", label: "Cap", align: "right", numeric: true },
               { key: "score", label: "Score", align: "right", numeric: true },
               { key: "price", label: "Price", align: "right", numeric: true },
-              { key: "tracking", label: "Tracking", align: "left" },
+              { key: "tracking", label: "Watching", align: "left" },
               { label: null, align: "left" },
             ]}
             rows={rows.map((r) => ({
@@ -289,7 +305,13 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
               sort: {
                 symbol: r.symbol,
                 name: r.name,
-                grq: ({ INTERESTING: 3, WATCH: 2, PASS: 1 } as Record<string, number>)[r.tag ?? ""] ?? 0,
+                // A tracked name sorts by its real call (offset above the triage tags); an
+                // untracked name by its INTERESTING/WATCH/PASS tag rank.
+                grq: (() => {
+                  const call = callFor(r.symbol);
+                  if (call) return 10 + (stanceMeta(call)?.pos ?? 0);
+                  return ({ INTERESTING: 3, WATCH: 2, PASS: 1 } as Record<string, number>)[r.tag ?? ""] ?? 0;
+                })(),
                 tech: stanceMeta(r.signal)?.pos ?? -1,
                 sector: r.sector,
                 exchange: r.exchange,
@@ -313,13 +335,30 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                     {r.take && <div className="mt-0.5 max-w-[22rem] truncate text-[11px] text-teal-200/40">{r.take}</div>}
                   </td>
                   <td className="px-4 py-2.5">
-                    {r.tag ? (
-                      <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}>
-                        {r.tag}
-                      </span>
-                    ) : (
-                      <span className="text-teal-200/30">—</span>
-                    )}
+                    {(() => {
+                      // Tracked name → its real dossier call ("Alfred's call"), stance-coloured.
+                      const call = callFor(r.symbol);
+                      const cm = call ? stanceMeta(call) : null;
+                      if (cm) {
+                        const t = STANCE_TONE_CLASSES[cm.tone];
+                        return (
+                          <span
+                            title="Alfred's call — from this name's dossier (it's on the watchlist/universe)"
+                            className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${t?.border ?? ""} ${t?.bg ?? ""} ${t?.text ?? "text-teal-200/60"}`}
+                          >
+                            {cm.label}
+                          </span>
+                        );
+                      }
+                      // Untracked → the Haiku first-pass screen tag.
+                      return r.tag ? (
+                        <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${TAG_CLS[r.tag] ?? TAG_CLS.PASS}`}>
+                          {r.tag}
+                        </span>
+                      ) : (
+                        <span className="text-teal-200/30">—</span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-2.5">
                     {(() => {
@@ -339,24 +378,13 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
                   <LiveLastCell symbol={r.symbol} initialCents={r.priceCents} currency={r.currency} />
                   <td className="px-4 py-2.5">
                     {(() => {
+                      // Just the face(s) watching it — no status pill (Cam 2026-07-02). Alfred's
+                      // face shows when the fund tracks it (it's in the universe); Cam/Graham's
+                      // faces when they personally watch it. Nothing if neither.
                       const { state, watchers } = trackingOf(r.symbol);
-                      if (state === "none" && watchers.length === 0) return <span className="text-teal-200/30">—</span>;
-                      return (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {state !== "none" && (
-                            <span
-                              className={
-                                state === "universe"
-                                  ? "rounded-full border border-teal-400/30 bg-teal-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-200"
-                                  : "rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200"
-                              }
-                            >
-                              {state === "universe" ? "Universe" : "Tracked"}
-                            </span>
-                          )}
-                          <AvatarStack people={watchers} />
-                        </div>
-                      );
+                      const agentWatches = state !== "none";
+                      if (!agentWatches && watchers.length === 0) return <span className="text-teal-200/30">—</span>;
+                      return <AvatarStack people={watchers} agent={agentWatches} />;
                     })()}
                   </td>
                   <td className="px-4 py-2.5">
@@ -374,15 +402,14 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
       )}
       <div className="mt-3 space-y-2 text-xs text-teal-200/40">
         <p>
-          <b className="text-teal-200/60">What you&apos;re seeing —</b> a first-pass scan of the WHOLE market, three automated reads per name (not the researched watchlist):{" "}
-          <b className="text-teal-300/70">Score</b> = our quality/liquidity rank (is it a real, tradeable name?);{" "}
-          <b className="text-teal-300/70">GRQ</b> = a one-line first-pass read —{" "}
+          <b className="text-teal-200/60">What you&apos;re seeing —</b> a first-pass scan of the WHOLE market, automated reads per name (not the researched watchlist):{" "}
+          <b className="text-teal-300/70">Score</b> = a deterministic 0–100 quality/liquidity rank (is it a real, liquid, mid-cap-ish name worth a look?) — it de-junks the long tail, it is <b>not</b> a buy signal.{" "}
+          <b className="text-teal-300/70">GRQ</b> = for a name we already <b>track</b>, <b>Alfred&apos;s real call</b> from its dossier; otherwise a cheap one-line Haiku triage —{" "}
           <b className="text-emerald-300/80">INTERESTING</b> (worth a real look) ·{" "}
-          <b className="text-amber-300/80">WATCH</b> (interesting — wait for a catalyst or better entry) ·{" "}
-          <b className="text-teal-200/50">PASS</b> (skip — too big, dull, or no edge);{" "}
-          <b className="text-teal-300/70">Technical</b> = the chart&apos;s signal (a formula, actionable names only).
-          These are a quick triage, <b>not</b> the full <b>Alfred&apos;s call</b> — a name&apos;s real dossier and call live on its stock page.
-          Some names here are already tracked or researched, since this is the entire market.
+          <b className="text-amber-300/80">WATCH</b> (wait for a catalyst or better entry) ·{" "}
+          <b className="text-teal-200/50">PASS</b> (skip — too big, dull, or no edge).{" "}
+          <b className="text-teal-300/70">Technical</b> = the chart&apos;s signal (a formula) — only computed for INTERESTING/WATCH names with enough price history, so it&apos;s blank (&ldquo;—&rdquo;) for PASS/untagged names or ones we haven&apos;t backfilled yet.
+          For an untracked name these are a quick triage, <b>not</b> the full dossier — which lives on its stock page.
         </p>
         <p>
           Powered by FMP. Prices are in each listing&apos;s native currency. <b>Research</b> queues a full dossier without

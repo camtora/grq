@@ -93,7 +93,14 @@ export default function PersonalLane({
     const openPnl = r.bookCostCents == null ? null : haveLive ? mv - r.bookCostCents : r.openPnlCents;
     const avgCost =
       r.bookCostCents == null || !Number.isFinite(qtyNum) || qtyNum === 0 ? null : Math.round(r.bookCostCents / qtyNum);
-    return { price, mv, openPnl, avgCost };
+    // Today's move needs the live day %; external holdings carry no SSR day change, so there's
+    // nothing to show until the first live quote lands. prevClose = price / (1 + dayFrac).
+    const dayFrac = q ? q.changePct / 100 : null;
+    const todayCents =
+      dayFrac !== null && Number.isFinite(qtyNum) && qtyNum !== 0 && 1 + dayFrac !== 0
+        ? Math.round(qtyNum * (price - price / (1 + dayFrac)))
+        : null;
+    return { price, mv, openPnl, avgCost, dayFrac, todayCents };
   };
 
   // Per-currency footer totals (live): holdings roll up into their ACCOUNT-currency bucket,
@@ -104,6 +111,8 @@ export default function PersonalLane({
     let changeCents = 0;
     let costCents = 0;
     let haveCost = false;
+    let todayCents = 0;
+    let haveToday = false;
     for (const r of rowsC) {
       const lv = liveOf(r);
       holdings += toAcct(lv.mv, r.currency, currency, fx);
@@ -112,12 +121,17 @@ export default function PersonalLane({
         costCents += toAcct(r.bookCostCents, r.currency, currency, fx);
         haveCost = true;
       }
+      if (lv.todayCents != null) {
+        todayCents += toAcct(lv.todayCents, r.currency, currency, fx);
+        haveToday = true;
+      }
     }
     return {
       currency,
       totalCents: cashCents + holdings,
       changeCents: haveCost ? changeCents : null,
       changeFrac: haveCost && costCents > 0 ? changeCents / costCents : null,
+      todayCents: haveToday ? todayCents : null,
     };
   });
 
@@ -135,6 +149,7 @@ export default function PersonalLane({
         avgCost: lv.avgCost,
         last: lv.price,
         value: toCad(lv.mv, r.currency, fx), // CAD-normalised so a USD row sorts against a CAD one
+        today: lv.todayCents,
         unrealized: lv.openPnl,
       },
       node: (
@@ -150,6 +165,22 @@ export default function PersonalLane({
           </td>
           <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">
             <RollingNumber value={money(lv.price, r.currency)} />
+          </td>
+          <td className="px-5 py-2.5 text-right text-sm">
+            {lv.todayCents == null ? (
+              <span className="text-teal-200/30">—</span>
+            ) : (
+              <span className={pnlClass(lv.todayCents)}>
+                {lv.todayCents >= 0 ? "+" : "−"}
+                <RollingNumber value={money(Math.abs(lv.todayCents), r.currency)} />
+                {lv.dayFrac != null && (
+                  <span className="ml-1 text-[11px] opacity-70">
+                    ({lv.dayFrac >= 0 ? "+" : ""}
+                    {pct(lv.dayFrac, 1)})
+                  </span>
+                )}
+              </span>
+            )}
           </td>
           <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">
             <RollingNumber value={money(lv.mv, r.currency)} />
@@ -193,6 +224,7 @@ export default function PersonalLane({
           { key: "qty", label: "Qty", align: "right", numeric: true },
           { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
           { key: "last", label: "Last", align: "right", numeric: true },
+          { key: "today", label: "Today", align: "right", numeric: true },
           { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
           { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
           { label: "Alfred's call", align: "left" },
@@ -208,6 +240,7 @@ export default function PersonalLane({
                   <td className="px-5 py-2.5 text-teal-200/55" colSpan={4}>
                     Cash <span className="text-[10px] uppercase text-teal-200/35">{c.currency}</span>
                   </td>
+                  <td className="px-5 py-2.5" />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/70">{money(c.cashCents, c.currency)}</td>
                   <td className="px-5 py-2.5" colSpan={2} />
                 </tr>
@@ -217,6 +250,16 @@ export default function PersonalLane({
               <tr key={t.currency} className={`bg-teal-400/[0.03] ${i === 0 ? "border-t border-teal-400/15" : ""}`}>
                 <td className="px-5 py-2.5 font-semibold text-teal-200/70" colSpan={4}>
                   {i === 0 ? "Total" : ""}
+                </td>
+                <td className="px-5 py-2.5 text-right font-semibold">
+                  {t.todayCents == null ? (
+                    <span className="text-teal-200/30">—</span>
+                  ) : (
+                    <span className={`tabular-nums ${pnlClass(t.todayCents)}`}>
+                      {t.todayCents >= 0 ? "+" : "−"}
+                      <RollingNumber value={money(Math.abs(t.todayCents), t.currency)} />
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-teal-50">
                   <span className="mr-1 text-[10px] uppercase text-teal-200/40">{t.currency}</span>
@@ -246,6 +289,7 @@ export default function PersonalLane({
               <td className="px-5 py-2.5 font-semibold text-teal-100/90" colSpan={4}>
                 Positions <span className="text-[10px] uppercase tracking-wider text-teal-200/40">total · CAD</span>
               </td>
+              <td className="px-5 py-2.5" />
               <td className="px-5 py-2.5 text-right font-bold tabular-nums text-teal-50">
                 <span className="mr-1 text-[10px] uppercase text-teal-200/40">CAD</span>
                 <RollingNumber value={money(cadPositions)} />

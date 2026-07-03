@@ -104,6 +104,26 @@ export function LivePosUnrealized({ symbol, qty, avgCostCents, lastCents, curren
   );
 }
 
+/** One position's TODAY gain/loss = qty × (live price − prior close), native ccy, with the day %
+ *  beside it — same formatting as LivePosUnrealized. prevClose = price / (1 + dayFrac), derived
+ *  from the live day %; falls back to the SSR day bps until the first poll. Rolls + colour. */
+export function LivePosToday({ symbol, qty, lastCents, initialBps, currency }: { symbol: string; qty: number; lastCents: number; initialBps: number; currency: string }) {
+  const q = useLiveQuote(symbol);
+  const f = q ? q.changePct / 100 : initialBps / 10_000; // day change as a fraction
+  const price = q?.priceCents ?? lastCents;
+  const pnl = 1 + f !== 0 ? Math.round(qty * (price - price / (1 + f))) : 0;
+  return (
+    <span className={pnlClass(pnl)}>
+      {pnl >= 0 ? "+" : "−"}
+      <RollingNumber value={money(Math.abs(pnl), currency)} />
+      <span className="ml-1 text-[11px] opacity-70">
+        ({f >= 0 ? "+" : ""}
+        {pct(f, 1)})
+      </span>
+    </span>
+  );
+}
+
 // ── Personal (external) accounts — the same live engine, in CAD ────────────────────
 // The viewer's external holdings tick live off the SAME quote map. We mirror the way the
 // nightly baseline is stored (lib/external/store.ts snapshotExternalValues): each account's

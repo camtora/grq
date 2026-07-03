@@ -17,15 +17,15 @@ const PRIMARY: NavLink[] = [
   { href: "/", label: "Today" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/market/watchlist", label: "Watchlist" },
+  { href: "/market", label: "The Hunt", exact: true },
   { href: "/market/smart-money", label: "Smart Money" },
   { href: "/universe", label: "Universe" },
   { href: "/market/browse", label: "Browse" },
 ];
 const SECONDARY: NavLink[] = [{ href: "/reports", label: "Reports" }];
 // The model bake-offs / sandboxes live under one "Experiments" dropdown (Cam & Graham, 2026-06-27).
-// The Hunt moved in here too (Cam 2026-06-29) — it's an exploratory feed, not core nav.
+// The Hunt moved back into the top-level header between Watchlist and Smart Money (Cam 2026-07-02).
 const EXPERIMENTS: NavLink[] = [
-  { href: "/market", label: "The Hunt", exact: true },
   { href: "/race", label: "Second Opinions" },
   { href: "/bulls", label: "Bull Race" },
   { href: "/options-desk", label: "Options Desk" },

@@ -90,8 +90,9 @@ export default function MarketIndices({
               <span className="font-semibold uppercase tracking-wider text-teal-200/40">CAD/USD</span>{" "}
               <span className="tabular-nums text-teal-100/80">{fx.price.toFixed(4)}</span>
               <span className={`ml-1 tabular-nums ${fxTone}`}>
-                {fx.changePct >= 0 ? "+" : ""}
-                {fx.changePct.toFixed(2)}%
+                {fx.change >= 0 ? "+" : ""}
+                {fx.change.toFixed(4)} ({fx.changePct >= 0 ? "+" : ""}
+                {fx.changePct.toFixed(2)}%)
               </span>
             </span>
           )}
@@ -110,12 +111,13 @@ export default function MarketIndices({
                 <span className="text-sm font-bold text-teal-50">{ix.label}</span>
                 <span className={tone}>{up ? "↗" : down ? "↘" : "→"}</span>
               </div>
-              {/* Value + today's move on one line */}
-              <div className="mt-1 flex items-baseline justify-between gap-2">
+              {/* Value + today's move (price change, then % in brackets); wraps if the cell is tight */}
+              <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                 <span className="tabular-nums text-teal-100/80">{fmtNum(ix.price)}</span>
                 <span className={`text-xs tabular-nums ${tone}`}>
-                  {ix.changePct >= 0 ? "+" : ""}
-                  {ix.changePct.toFixed(2)}%
+                  {ix.change >= 0 ? "+" : ""}
+                  {fmtNum(ix.change)} ({ix.changePct >= 0 ? "+" : ""}
+                  {ix.changePct.toFixed(2)}%)
                 </span>
               </div>
               {/* GRQ vs this market, underneath */}

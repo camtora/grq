@@ -60,8 +60,17 @@ export default function AddTicker() {
     }
   }
 
+  // Dismiss the results overlay without adding — clears the dropdown, the bar, and any note.
+  function clear() {
+    setMatches(null);
+    setQ("");
+    setMsg(null);
+  }
+
   return (
-    <div>
+    // relative + inline-block: the results float in an absolutely-positioned overlay anchored to
+    // this box, so they lay OVER the page instead of pushing it down (Cam 2026-07-02).
+    <div className="relative inline-block">
       {/* As present as the watchlist cards themselves — solid card bg + the card border
           (was near-invisible teal/[0.02] · Cam 2026-06-26). */}
       <div className="inline-flex items-center gap-1 rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-1">
@@ -82,31 +91,58 @@ export default function AddTicker() {
         </button>
       </div>
 
-      {matches && matches.length > 0 && (
-        <div className="mt-3 divide-y divide-teal-400/10 overflow-hidden rounded-xl border border-teal-400/15">
-          {matches.map((m) => (
-            <div key={`${m.symbol}-${m.exchange}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-              <span className="font-bold text-teal-200">{m.symbol}</span>
-              <span className="min-w-0 flex-1 truncate text-teal-100/70">{m.name}</span>
-              <span className="rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-teal-200/60">
-                {m.exchange}
-                {m.currency ? ` · ${m.currency}` : ""}
-              </span>
-              <button
-                onClick={() => add(m)}
-                disabled={adding !== null}
-                className="rounded-lg border border-teal-400/40 bg-teal-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20 disabled:opacity-40"
-              >
-                {adding === m.symbol ? "adding…" : "Add"}
-              </button>
+      {/* Results overlay — floats over the page (does not reflow it). */}
+      {matches && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-teal-400/20 bg-[var(--card-bg)] shadow-xl shadow-black/40">
+          <div className="flex items-center justify-between border-b border-teal-400/10 px-3 py-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-200/45">
+              {matches.length > 0 ? `${matches.length} match${matches.length === 1 ? "" : "es"} — pick a listing` : "No matches"}
+            </span>
+            <button
+              onClick={clear}
+              aria-label="Close results"
+              className="-mr-1 rounded-md px-1.5 py-0.5 text-teal-200/50 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+            >
+              ✕
+            </button>
+          </div>
+          {matches.length > 0 ? (
+            <div className="max-h-72 divide-y divide-teal-400/10 overflow-y-auto">
+              {matches.map((m) => (
+                <div key={`${m.symbol}-${m.exchange}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                  <span className="font-bold text-teal-200">{m.symbol}</span>
+                  <span className="min-w-0 flex-1 truncate text-teal-100/70">{m.name}</span>
+                  <span className="rounded-full border border-teal-400/15 bg-teal-400/5 px-2 py-0.5 text-[10px] uppercase tracking-wider text-teal-200/60">
+                    {m.exchange}
+                    {m.currency ? ` · ${m.currency}` : ""}
+                  </span>
+                  <button
+                    onClick={() => add(m)}
+                    disabled={adding !== null}
+                    className="rounded-lg border border-teal-400/40 bg-teal-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/20 disabled:opacity-40"
+                  >
+                    {adding === m.symbol ? "adding…" : "Add"}
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            !searching && <div className="px-3 py-2.5 text-sm text-teal-200/40">Try the company name or a different ticker.</div>
+          )}
         </div>
       )}
-      {matches && matches.length === 0 && !searching && (
-        <div className="mt-2 text-sm text-teal-200/40">No matches — try the company name or a different ticker.</div>
+
+      {/* Status (add confirmation / error) — also an overlay so it never reflows the page.
+          Hidden while the results dropdown is up. */}
+      {msg && !matches && (
+        <div
+          className={`absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-[var(--card-bg)] px-3 py-2 text-sm shadow-xl shadow-black/40 ${
+            msg.ok ? "border-emerald-400/30 text-emerald-300" : "border-red-400/30 text-red-300"
+          }`}
+        >
+          {msg.text}
+        </div>
       )}
-      {msg && <div className={`mt-2 text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</div>}
     </div>
   );
 }

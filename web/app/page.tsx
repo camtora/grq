@@ -22,7 +22,6 @@ import { getMacro, macroLine } from "@/lib/macro";
 import { getSession } from "@/lib/session";
 import { wireResponse } from "@/lib/feed";
 import WireRail, { type WireCard } from "@/components/wire/WireRail";
-import ResearchQueueCard from "@/components/ResearchQueueCard";
 
 function signedPct(bps: number): string {
   return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
@@ -81,6 +80,26 @@ function HitterRow({ p, logoUrl }: { p: PositionView; logoUrl: string | null }) 
       <div className="ml-auto text-right">
         <div className={`text-xs tabular-nums ${dayClass(p.dayChangeBps)}`}>{signedPct(p.dayChangeBps)} today</div>
         <Pnl cents={p.unrealizedPnlCents} className="text-xs" />
+      </div>
+    </li>
+  );
+}
+
+// A tracked-name mover in the SAME format as HitterRow (Cam 2026-07-02) — logo + symbol + name,
+// with the day move + price stacked on the right (no P&L, since these aren't held).
+function MoverHitterRow({ symbol, name, midCents, dayBps, logoUrl }: { symbol: string; name: string; midCents: number; dayBps: number; logoUrl: string | null }) {
+  return (
+    <li className="flex items-center gap-3 px-3 py-2">
+      <StockLogo symbol={symbol} logoUrl={logoUrl} className="h-8 w-8 text-[11px]" />
+      <div className="min-w-0">
+        <Link href={`/stocks/${symbol}`} className="font-semibold text-teal-200 hover:underline">
+          {symbol}
+        </Link>
+        <div className="truncate text-xs text-teal-200/40">{name}</div>
+      </div>
+      <div className="ml-auto text-right">
+        <div className={`text-xs tabular-nums ${dayClass(dayBps)}`}>{signedPct(dayBps)} today</div>
+        <div className="text-xs tabular-nums text-teal-100/70">{money(midCents)}</div>
       </div>
     </li>
   );
@@ -356,6 +375,13 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     .sort((a, b) => b.avgBps - a.avgBps);
 
   const hitters = [...pf.positions].sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps));
+  // Market movers (tracked names) — biggest movers either way, capped to the SAME count as Top
+  // Hitters so the two lists sit level beside each other (Cam 2026-07-02).
+  const topMovers = [...movers].sort((a, b) => Math.abs(b.dayBps) - Math.abs(a.dayBps)).slice(0, hitters.length || 6);
+  // The whole-market pair (biggest movers · sectors) share ONE row count so the two columns sit level
+  // (Cam 2026-07-02). Both present → the shorter's length; otherwise the longer.
+  const wholeMarketN =
+    marketGainers.length > 0 && sectors.length > 0 ? Math.min(marketGainers.length, sectors.length) : Math.max(marketGainers.length, sectors.length);
 
   // On the radar: the agent's focus first, then today's dossier'd names not already shown.
   const seen = new Set(watchlist.map((w) => w.symbol));
@@ -549,7 +575,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Headlines — today's news. Live, so today only — archive hides stale headlines (Cam 2026-06-16) */}
       {isToday && marketNews.length > 0 && (
         <section className="mb-6">
-          <SectionTitle>Headlines · what&apos;s moving the market today</SectionTitle>
+          <SectionTitle>Headlines<SectionSub>· what&apos;s moving the market today</SectionSub></SectionTitle>
           <div className="grid gap-4 sm:grid-cols-3">
             {marketNews.slice(0, 3).map((n, i) => (
               <div key={i} className="flex flex-col gap-1.5">
@@ -592,7 +618,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           AM (~7:30 ET) + PM (~6:00 ET) editions; the latest for the day is shown. Market-wide, not the fund. */}
       {marketBrief && (
         <section className="mb-6">
-          <SectionTitle>The Market Today · {marketBrief.edition === "PM" ? "evening read" : "morning read"}</SectionTitle>
+          <SectionTitle>The Market Today<SectionSub>· {marketBrief.edition === "PM" ? "evening read" : "morning read"}</SectionSub></SectionTitle>
           <Card className="p-5">
             <p className="text-sm leading-relaxed text-teal-100/80">{marketBrief.body}</p>
             <p className="mt-2.5 text-[10px] text-teal-200/40">
@@ -671,10 +697,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </section>
       )}
 
-      {/* Top Hitters + On the Radar — moved above the market movers (Cam 2026-06-16) */}
-      <section className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+      {/* Top Hitters (your holdings) + Market Movers (tracked names) side by side, same row format +
+          same count (Cam 2026-07-02). "On the Radar" removed. Movers are today-only; on an archived
+          day only Top Hitters shows (its numbers are the snapshot's). */}
+      <section className={`mt-8 grid items-start gap-6 ${isToday ? "lg:grid-cols-2" : ""}`}>
         <div>
-          <SectionTitle>Top Hitters · your holdings</SectionTitle>
+          <SectionTitle>Top Hitters<SectionSub>· your holdings</SectionSub></SectionTitle>
           <Card className="overflow-hidden p-1">
             {hitters.length > 0 ? (
               <ul className="divide-y divide-teal-400/10">
@@ -689,66 +717,41 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             )}
           </Card>
         </div>
-        <div>
-          <SectionTitle>On the Radar · ideas with upside</SectionTitle>
-          <Card className="overflow-hidden p-1">
-            {ideas.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {ideas.map((idea) => (
-                  <IdeaRow key={idea.sym} idea={idea} />
-                ))}
-              </ul>
-            ) : radar.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {radar.map((r) => (
-                  <RadarRow key={r.symbol} symbol={r.symbol} note={r.note} tone={r.tone} logoUrl={r.logoUrl} />
-                ))}
-              </ul>
-            ) : (
-              <p className="p-3 text-sm text-teal-200/40">Nothing yet — the agent's dossiers populate this.</p>
-            )}
-          </Card>
-          <p className="mt-2 px-1 text-[10px] text-teal-200/40">
-            {ideas.length > 0
-              ? "names you may not know, first · the agent's targets are hypotheses, not promises — a track record builds as they resolve"
-              : "expected upside appears here once the agent files dossiers with price targets (it's re-running them now)"}
-          </p>
-        </div>
+        {isToday && (
+          <div>
+            <SectionTitle>Market Movers<SectionSub>· our tracked names</SectionSub></SectionTitle>
+            <Card className="overflow-hidden p-1">
+              {topMovers.length > 0 ? (
+                <ul className="divide-y divide-teal-400/10">
+                  {topMovers.map((m) => (
+                    <MoverHitterRow key={m.symbol} symbol={m.symbol} name={m.name} midCents={m.midCents} dayBps={m.dayBps} logoUrl={m.logoUrl} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
+              )}
+            </Card>
+            <p className="mt-2 px-1 text-[10px] text-teal-200/40">the biggest moves across the {universeRows.length} names we track</p>
+          </div>
+        )}
       </section>
 
       {/* Live market data below — today only; archived days hide it (stale otherwise) (Cam 2026-06-16) */}
       {isToday && (
         <>
-      {/* Market Movers — our tracked names */}
-      <section className="mt-8">
-        <SectionTitle>Market Movers · our tracked names</SectionTitle>
-        <Card className="overflow-hidden p-1">
-          {gainers.length > 0 || losers.length > 0 ? (
-            <LiveQuotesProvider symbols={[...gainers, ...losers].map((m) => m.symbol)}>
-              <ul className="grid gap-x-6 sm:grid-cols-2">
-                {gainers.map((m) => (
-                  <MoverRow key={`g-${m.symbol}`} {...m} />
-                ))}
-                {losers.map((m) => (
-                  <MoverRow key={`l-${m.symbol}`} {...m} />
-                ))}
-              </ul>
-            </LiveQuotesProvider>
-          ) : (
-            <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
-          )}
-        </Card>
-        <p className="mt-2 px-1 text-[10px] text-teal-200/40">biggest moves across the {universeRows.length} names we track</p>
-      </section>
+      {/* Market Movers now sits beside Top Hitters above (Cam 2026-07-02). */}
 
-      {/* Biggest movers + industry breakdown, side by side (Graham 2026-06-16) */}
+      {/* The whole market — today's biggest movers + how sectors are moving, under ONE consolidated
+          title, the two columns matched to the same number of rows + row height (Cam 2026-07-02). */}
       {(marketGainers.length > 0 || sectors.length > 0) && (
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+      <section className="mt-8">
+      <SectionTitle>The whole market<SectionSub>· today&apos;s biggest movers &amp; how sectors are moving</SectionSub></SectionTitle>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
       {marketGainers.length > 0 && (
-        <section>
-          <SectionTitle>Today&apos;s biggest movers · the whole market</SectionTitle>
+        <div>
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Biggest movers</div>
           <Card className="overflow-hidden p-1">
-            {marketGainers.map((m) => {
+            {marketGainers.slice(0, wholeMarketN).map((m) => {
               const inUniverse = universeRows.some((u) => u.symbol === m.symbol);
               const prof = profileBy.get(m.symbol);
               const cap =
@@ -782,14 +785,14 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             })}
           </Card>
           <p className="mt-2 text-[10px] text-teal-200/40">Biggest gainers across the market today (FMP) — each links to a GRQ page; the agent auto-researches the ones we don&apos;t yet track.</p>
-        </section>
+        </div>
       )}
       {sectors.length > 0 && (
-        <section>
-          <SectionTitle>By industry · how sectors are moving</SectionTitle>
+        <div>
+          <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">By industry</div>
           <Card className="overflow-hidden p-1">
             <ul className="divide-y divide-teal-400/10">
-              {sectors.map((s) => (
+              {sectors.slice(0, wholeMarketN).map((s) => (
                 <li key={s.name} className="flex items-center gap-3 px-3 py-2">
                   <span className="font-semibold text-teal-100/80">{s.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-teal-200/30">
@@ -801,15 +804,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             </ul>
           </Card>
           <p className="mt-2 px-1 text-[10px] text-teal-200/40">Average move today across the names we track, grouped by sector.</p>
-        </section>
+        </div>
       )}
       </div>
+      </section>
       )}
 
       {/* Market pulse — the rest of the day's headlines, at the BOTTOM under the movers (Cam 2026-07-02). */}
       {marketNews.length > 3 && (
         <section className="mt-8">
-          <SectionTitle>Market pulse · more headlines</SectionTitle>
+          <SectionTitle>Market pulse<SectionSub>· more headlines</SectionSub></SectionTitle>
           <div className="grid gap-x-6 sm:grid-cols-3">
             {marketNews.slice(3, 12).map((n, i) => (
               <div key={i} className="border-t border-teal-400/10">
@@ -840,11 +844,6 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <aside className="lg:col-span-1">
           <WireRail items={wire.items as unknown as WireCard[]} />
         </aside>
-      </div>
-
-      {/* Pending research — always-on strip at the bottom of Today (Cam 2026-06-29). */}
-      <div className="mt-8 border-t border-teal-400/10 pt-6">
-        <ResearchQueueCard />
       </div>
 
     </main>
