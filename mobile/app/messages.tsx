@@ -118,7 +118,25 @@ export default function MessagesScreen() {
           keyExtractor={(m) => String(m.id)}
           contentContainerStyle={s.thread}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          renderItem={({ item }) => <Bubble m={item} />}
+          renderItem={({ item, index }) => {
+            const prev = index > 0 ? messages[index - 1] : null;
+            const next = index < messages.length - 1 ? messages[index + 1] : null;
+            // A quiet time label when the conversation pauses (>20 min).
+            const gap = !prev || Date.parse(item.at) - Date.parse(prev.at) > 20 * 60_000;
+            // Cluster consecutive messages from the same side.
+            const sameAsPrev = !!prev && prev.mine === item.mine && !gap;
+            // "read" only under my LAST read message.
+            const lastRead =
+              item.mine && !!item.readAt && !messages.slice(index + 1).some((m) => m.mine && m.readAt);
+            return (
+              <View>
+                {gap && (
+                  <Text style={[s.timeLabel, { color: p.textMuted }]}>{timeLabel(item.at)}</Text>
+                )}
+                <Bubble m={item} tight={sameAsPrev} lastRead={lastRead} lastOfCluster={!next || next.mine !== item.mine} />
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <Text style={[s.empty, { color: p.textMuted }]}>
               {error ?? `No messages yet — say something, or share a stock from its page.`}
@@ -147,41 +165,58 @@ export default function MessagesScreen() {
   );
 }
 
-function Bubble({ m }: { m: DirectMessage }) {
-  const { p } = usePalette();
+function timeLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return today ? time : `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
+}
+
+function Bubble({
+  m,
+  tight,
+  lastRead,
+  lastOfCluster,
+}: {
+  m: DirectMessage;
+  tight: boolean;
+  lastRead: boolean;
+  lastOfCluster: boolean;
+}) {
+  const { p, scheme } = usePalette();
   const router = useRouter();
-  const time = m.at.slice(11, 16);
+  // Mine = a solid accent bubble (text flips for contrast per theme);
+  // theirs = a quiet raised surface. No borders, no per-bubble clutter.
+  const mineText = scheme === 'dark' ? '#04211d' : '#ffffff';
   return (
-    <View style={[s.bubbleRow, m.mine ? s.mineRow : null]}>
+    <View style={[s.bubbleRow, m.mine && s.mineRow, { marginTop: tight ? 2 : 10 }]}>
       <View
         style={[
           s.bubble,
-          m.mine
-            ? { backgroundColor: p.accent + '26', borderColor: p.accent + '33' }
-            : { backgroundColor: p.cardBg, borderColor: p.cardBorder },
+          m.mine ? { backgroundColor: p.accent } : { backgroundColor: scheme === 'dark' ? p.cardHi : '#e2edeb' },
         ]}
       >
         {m.symbol && (
           <Pressable
             onPress={() => router.push(`/stock/${m.symbol}`)}
-            style={[s.shareChip, { borderColor: p.cardBorder, backgroundColor: p.cardHi }]}
+            style={[s.shareChip, { backgroundColor: m.mine ? '#ffffff2e' : p.cardBg }]}
           >
             <StockLogo symbol={m.symbol} logoUrl={null} size={22} />
-            <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 13 }}>{m.symbol}</Text>
-            {m.panelLabel && (
-              <Text style={{ color: p.textMuted, fontFamily: F.reg, fontSize: 11 }}>· {m.panelLabel}</Text>
-            )}
-            <Text style={{ color: p.textMuted, fontFamily: F.reg, fontSize: 11, marginLeft: 'auto' }}>open →</Text>
+            <Text style={{ color: m.mine ? mineText : p.accentText, fontFamily: F.bold, fontSize: 13 }}>
+              {m.symbol}
+            </Text>
+            <Text style={{ color: m.mine ? mineText : p.textMuted, fontFamily: F.reg, fontSize: 11, marginLeft: 'auto', opacity: 0.75 }}>
+              open →
+            </Text>
           </Pressable>
         )}
         {m.body ? (
-          <Text style={[s.bubbleText, { color: p.textPrimary }]}>{m.body}</Text>
+          <Text style={[s.bubbleText, { color: m.mine ? mineText : p.textPrimary }]}>{m.body}</Text>
         ) : null}
-        <Text style={[s.bubbleMeta, { color: p.textMuted }]}>
-          {time}
-          {m.mine && m.readAt ? ' · read' : ''}
-        </Text>
       </View>
+      {lastRead && lastOfCluster && (
+        <Text style={[s.readReceipt, { color: p.textMuted }]}>read</Text>
+      )}
     </View>
   );
 }
@@ -191,34 +226,34 @@ const s = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
   barTitle: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
-  thread: { padding: 16, gap: 8, flexGrow: 1 },
+  thread: { padding: 16, flexGrow: 1 },
   empty: { fontFamily: F.reg, fontSize: 12.5, textAlign: 'center', marginTop: 40, lineHeight: 18 },
-  bubbleRow: { flexDirection: 'row' },
+  timeLabel: { fontFamily: F.med, fontSize: 10, textAlign: 'center', marginTop: 16, marginBottom: 2, opacity: 0.7 },
+  bubbleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' },
   mineRow: { justifyContent: 'flex-end' },
-  bubble: { maxWidth: '82%', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
-  bubbleText: { fontFamily: F.reg, fontSize: 14, lineHeight: 20 },
-  bubbleMeta: { fontFamily: F.reg, fontSize: 9, marginTop: 4, opacity: 0.7 },
+  bubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
+  bubbleText: { fontFamily: F.reg, fontSize: 15, lineHeight: 21 },
+  readReceipt: { fontFamily: F.med, fontSize: 9.5, width: '100%', textAlign: 'right', marginTop: 3, opacity: 0.7 },
   shareChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    marginBottom: 6,
+    marginVertical: 3,
     minWidth: 170,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    borderWidth: 1,
-    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
     marginHorizontal: 12,
     marginBottom: 8,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
-  input: { flex: 1, fontFamily: F.reg, fontSize: 14, maxHeight: 110, paddingTop: 2 },
+  input: { flex: 1, fontFamily: F.reg, fontSize: 15, maxHeight: 110, paddingTop: 4 },
 });
