@@ -124,13 +124,11 @@ function MemberAvatar({ source, bg, ring, overlap }: { source: number; bg: strin
 
 const styles = StyleSheet.create({
   center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  // No shadow — iOS projects a RECTANGULAR bounds-shadow behind an Image (it
+  // can't shape to the alpha), which read as a faint grey box on light mode.
   logo: {
     height: 60,
     width: 279, // 687×148 source, scaled to h60
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
   },
   phaseSlot: { marginTop: 16, minHeight: 64, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'flex-start' },
   phaseLayer: { position: 'absolute', top: 0 },

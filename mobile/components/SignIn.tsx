@@ -73,13 +73,10 @@ export default function SignIn() {
 const styles = StyleSheet.create({
   body: { flex: 1, padding: 28, justifyContent: 'space-between' },
   top: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 },
+  // No shadow — an Image shadow renders as a rectangular box on light mode.
   logo: {
     height: 56,
     width: 260,
-    shadowColor: brandAccent,
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
   },
   tagline: { fontSize: 15, textAlign: 'center' },
   bottom: { alignItems: 'center', gap: 12, paddingBottom: 20 },

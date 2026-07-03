@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { usePalette, F, type Palette } from '../../constants/theme';
@@ -171,9 +171,43 @@ export function MarketBriefSection({ t }: { t: Today }) {
 
 /* ---------- earnings ---------- */
 
-function EarningBubble({ e }: { e: EarningReported }) {
+function fmtRev(v: number | null): string {
+  if (v == null) return '—';
+  const a = Math.abs(v);
+  const sign = v < 0 ? '−' : '';
+  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `${sign}$${Math.round(a / 1e6)}M`;
+  return `${sign}$${Math.round(a).toLocaleString('en-US')}`;
+}
+
+function surprisePct(actual: number | null, est: number | null): number | null {
+  if (actual == null || est == null || est === 0) return null;
+  return ((actual - est) / Math.abs(est)) * 100;
+}
+
+/** One expanded-detail line: label · actual vs estimate · surprise (web parity). */
+function DetailLine({ label, actual, est, surprise, p }: { label: string; actual: string; est: string; surprise: number | null; p: Palette }) {
+  return (
+    <View style={s.detailLine}>
+      <Text style={[s.detailLabel, { color: p.textMuted }]}>{label}</Text>
+      <Text style={[s.detailVal, tabular, { color: p.textPrimary }]}>{actual}</Text>
+      <Text style={[s.detailEst, tabular, { color: p.textMuted }]}>vs {est} est</Text>
+      {surprise != null && (
+        <Text style={[s.detailSurprise, tabular, { color: surprise >= 0 ? p.pos : p.neg }]}>
+          {surprise >= 0 ? '+' : '−'}{Math.abs(surprise).toFixed(1)}%
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// Tap the card → expand in place (the web EarningBubble interaction, Cam
+// 2026-07-03): EPS + revenue vs estimates with surprise %, when it reported,
+// the day's reaction. The symbol and "full report →" still navigate.
+function EarningBubble({ e, today }: { e: EarningReported; today: string }) {
   const { p } = usePalette();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const beat =
     e.epsActual != null && e.epsEstimated != null
       ? e.epsActual >= e.epsEstimated
@@ -186,14 +220,17 @@ function EarningBubble({ e }: { e: EarningReported }) {
     ? 'Just reported — numbers and the market’s reaction are on the stock page.'
     : `${beat ? 'Beat' : 'Missed'} estimates${epsPart}${movePart}.`;
   return (
-    <Pressable onPress={() => router.push(`/stock/${e.symbol}`)}>
+    <Pressable onPress={() => setOpen(!open)}>
     <Card style={s.bubble}>
       <View style={s.row}>
-        <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={28} />
-        <View style={s.rowMain}>
-          <Text style={[s.sym, { color: p.accentText }]}>{e.symbol}</Text>
-          <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{e.name}</Text>
-        </View>
+        <Text style={[s.chevron, { color: p.textMuted }, open && s.chevronOpen]}>▸</Text>
+        <Pressable onPress={() => router.push(`/stock/${e.symbol}`)} style={[s.row, { flex: 1, paddingVertical: 0 }]}>
+          <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={28} />
+          <View style={s.rowMain}>
+            <Text style={[s.sym, { color: p.accentText }]}>{e.symbol}</Text>
+            <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{e.name}</Text>
+          </View>
+        </Pressable>
         <View style={s.rowRight}>
           {beat != null && (
             <Text style={[s.beatMiss, { color: beat ? p.pos : p.neg }]}>{beat ? 'beat ✓' : 'miss ✗'}</Text>
@@ -204,6 +241,22 @@ function EarningBubble({ e }: { e: EarningReported }) {
         </View>
       </View>
       <Text style={[s.bubbleRead, { color: p.textMuted }]}>{read}</Text>
+
+      {open && (
+        <View style={[s.bubbleDetail, { borderTopColor: p.cardBorder }]}>
+          <DetailLine label="EPS" actual={fmtEps(e.epsActual)} est={fmtEps(e.epsEstimated)} surprise={surprisePct(e.epsActual, e.epsEstimated)} p={p} />
+          <DetailLine label="Revenue" actual={fmtRev(e.revenueActual)} est={fmtRev(e.revenueEstimated)} surprise={surprisePct(e.revenueActual, e.revenueEstimated)} p={p} />
+          <View style={s.detailLine}>
+            <Text style={[s.detailLabel, { color: p.textMuted }]}>Reported</Text>
+            <Text style={[s.detailVal, { color: p.textPrimary }]}>{fmtDate(e.date)}</Text>
+            <Text style={[s.detailEst, { color: p.textMuted }]}>{relDay(e.date, today)}</Text>
+          </View>
+          <Text style={[s.detailFootnote, { color: p.textMuted }]}>
+            surprise = actual vs the analyst estimate · the full report and Alfred's take live on the stock page
+          </Text>
+        </View>
+      )}
+
       <View style={s.bubbleMeta}>
         <Text style={[s.metaText, { color: p.textMuted }]}>{fmtDate(e.date)}</Text>
         {e.stance ? (
@@ -211,6 +264,12 @@ function EarningBubble({ e }: { e: EarningReported }) {
             <Text style={[s.stanceText, { color: p.accentText }]}>Alfred: {e.stance}</Text>
           </View>
         ) : null}
+        <Text
+          onPress={() => router.push(`/stock/${e.symbol}`)}
+          style={[s.metaText, { color: p.accentText, marginLeft: 'auto' }]}
+        >
+          full report →
+        </Text>
       </View>
     </Card>
     </Pressable>
@@ -230,7 +289,7 @@ export function EarningsSection({ t }: { t: Today }) {
       {reported.length > 0 && (
         <View style={{ gap: 10 }}>
           <MiniLabel>Reported this week</MiniLabel>
-          {reported.map((e) => <EarningBubble key={`${e.symbol}-${e.date}`} e={e} />)}
+          {reported.map((e) => <EarningBubble key={`${e.symbol}-${e.date}`} e={e} today={today} />)}
         </View>
       )}
       {upcoming.length > 0 && (
@@ -478,6 +537,15 @@ const s = StyleSheet.create({
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 10 },
   // earnings bubbles
   bubble: { padding: 12 },
+  chevron: { fontSize: 11, width: 12 },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
+  bubbleDetail: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 8, gap: 5 },
+  detailLine: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  detailLabel: { fontFamily: F.semi, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5, width: 58 },
+  detailVal: { fontFamily: F.semi, fontSize: 13 },
+  detailEst: { fontFamily: F.reg, fontSize: 11.5 },
+  detailSurprise: { fontFamily: F.semi, fontSize: 12, marginLeft: 'auto' },
+  detailFootnote: { fontFamily: F.reg, fontSize: 9.5, lineHeight: 13, marginTop: 2, opacity: 0.8 },
   bubbleRead: { fontFamily: F.reg, fontSize: 11.5, lineHeight: 16, marginTop: 6 },
   bubbleMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   beatMiss: { fontFamily: F.black, fontSize: 10 },
