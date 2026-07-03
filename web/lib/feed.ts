@@ -8,11 +8,15 @@ import { getQuotes, getQuote } from "./broker/quotes";
 import { allUniverse, type UniverseRow, bareTicker } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
-import { etParts, etDateStr, isMarketDay, startOfEtDay } from "@/agent/calendar";
+import { etParts, etDateStr, isMarketDay, isMarketOpen, startOfEtDay } from "@/agent/calendar";
 import {
   fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews,
   fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpEarningsReport, fmpInstitutional, fmpTopHolders,
+  fmpGainers, fmpEarningsCalendar, stripSuffix,
 } from "./fmp";
+import { todayHeadlines } from "./news/queries";
+import { getMacro, macroLine } from "./macro";
+import { funFactOfDay } from "./funfacts";
 import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
 import { watchersFor } from "./watch";
@@ -447,6 +451,88 @@ export async function todayResponse() {
   const lead = briefs.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
   const leadTitle = lead?.title ?? "From the desk";
 
+  // ---- The newspaper sections the web Today grew (D106 mobile parity, additive) ----
+  const todayStr = etDateStr();
+  const earnFrom = etDateStr(new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000));
+  const earnTo = etDateStr(new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000));
+  const [headlines, brief, gainers, macro, earnCal, stanceRows] = await Promise.all([
+    todayHeadlines(12).catch(() => []),
+    prisma.marketBrief.findFirst({ where: { date: todayStr }, orderBy: { createdAt: "desc" } }).catch(() => null),
+    fmpEnabled() ? fmpGainers().catch(() => []) : Promise.resolve([]),
+    getMacro().catch(() => null),
+    fmpEnabled() ? fmpEarningsCalendar(earnFrom, earnTo).catch(() => []) : Promise.resolve([]),
+    prisma.journalEntry.findMany({
+      where: { stance: { not: null }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      select: { symbol: true, stance: true },
+    }),
+  ]);
+  const stanceBy = new Map<string, string>();
+  for (const s of stanceRows) if (s.symbol && !stanceBy.has(s.symbol)) stanceBy.set(s.symbol, s.stance as string);
+
+  // Earnings calendar → our names, matched on the bare *yahoo* ticker (AMD.US is
+  // stored with yahoo "AMD"), RETIRED CDR shells skipped — the web page's logic, compact.
+  const bareToU = new Map<string, UniverseRow>();
+  for (const u of all) {
+    if (u.status === "RETIRED") continue;
+    const key = stripSuffix(u.yahoo || u.symbol).toUpperCase();
+    if (!bareToU.has(key) || u.status === "ACTIVE") bareToU.set(key, u);
+  }
+  const dayBpsBy = new Map([...quotes.entries()].map(([sym, q]) => [sym, q.dayChangeBps ?? 0]));
+  const earnSeen = new Set<string>();
+  const earnMatched = earnCal.flatMap((r) => {
+    const u = bareToU.get(stripSuffix(r.symbol).toUpperCase());
+    if (!u) return [];
+    const key = `${u.symbol}|${r.date}`;
+    if (earnSeen.has(key)) return [];
+    earnSeen.add(key);
+    return [{
+      symbol: u.symbol,
+      name: u.name,
+      logoUrl: u.logoUrl ?? null,
+      date: r.date,
+      epsEstimated: r.epsEstimated,
+      epsActual: r.epsActual,
+      revenueEstimated: r.revenueEstimated,
+      revenueActual: r.revenueActual,
+      dayBps: dayBpsBy.get(u.symbol) ?? null,
+      stance: stanceBy.get(u.symbol) ?? null,
+    }];
+  });
+  const earningsReported = earnMatched
+    .filter((e) => e.epsActual != null || e.revenueActual != null)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+  const earningsUpcoming = earnMatched
+    .filter((e) => e.date >= todayStr && e.epsActual == null && e.revenueActual == null)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 8)
+    .map((e) => ({ symbol: e.symbol, name: e.name, logoUrl: e.logoUrl, date: e.date }));
+
+  // Sector breakdown — average day move across tracked names.
+  const sectorAcc = new Map<string, { sum: number; n: number }>();
+  for (const u of all) {
+    if (!u.sector || u.status === "RETIRED") continue;
+    const bps = dayBpsBy.get(u.symbol);
+    if (bps == null) continue;
+    const e = sectorAcc.get(u.sector) ?? { sum: 0, n: 0 };
+    e.sum += bps;
+    e.n += 1;
+    sectorAcc.set(u.sector, e);
+  }
+  const sectors = [...sectorAcc.entries()]
+    .map(([name, { sum, n }]) => ({ name, avgBps: Math.round(sum / n), n }))
+    .sort((a, b) => b.avgBps - a.avgBps);
+
+  const marketGainers = gainers.slice(0, 6).map((g) => ({
+    symbol: g.symbol,
+    name: g.name,
+    priceCents: g.priceCents,
+    changeBps: Math.round(g.changePct * 10_000),
+    exchange: g.exchange,
+    inUniverse: bareToU.has(stripSuffix(g.symbol).toUpperCase()),
+  }));
+
   return {
     edition: editionNow(),
     dateISO: etDateStr(),
@@ -462,6 +548,26 @@ export async function todayResponse() {
     topHitters,
     onTheRadar: await ideasResponse(8),
     indices,
+    // Newspaper sections (additive; the old app ignores unknown keys).
+    marketOpen: isMarketOpen(),
+    dayLabel: new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto", weekday: "long", month: "long", day: "numeric" }),
+    funFact: funFactOfDay(),
+    macroLine: macro ? macroLine(macro) : null,
+    macroNote: macro ? `${macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of ${macro.asOf}` : null,
+    marketBrief: brief ? { body: brief.body, edition: brief.edition, date: brief.date } : null,
+    headlines: headlines.map((n) => ({
+      at: n.at,
+      title: n.title,
+      url: n.url,
+      publisher: n.publisher,
+      image: n.image,
+      summary: n.summary,
+      sentiment: n.sentiment,
+    })),
+    earningsReported,
+    earningsUpcoming,
+    sectors,
+    marketGainers,
   };
 }
 

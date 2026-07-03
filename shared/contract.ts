@@ -449,6 +449,50 @@ export const Today = z.object({
   movers: z.array(Mover),                     // biggest universe moves
   topHitters: z.array(Mover),                 // holdings by day move
   onTheRadar: z.array(Idea),                  // ideas w/ targets, unfamiliar first
+  // ---- Newspaper sections (2026-07-03, additive/optional — GRQ Go's Today; the
+  // native app's decoder ignores unknown keys, so these ride safely) ----
+  marketOpen: z.boolean().optional(),
+  dayLabel: z.string().optional(),            // "Friday, July 3"
+  funFact: z.string().optional(),             // masthead "Did you know?"
+  macroLine: z.string().optional().nullable(),// "BoC overnight 2.75% · …"
+  macroNote: z.string().optional().nullable(),// source + as-of attribution
+  marketBrief: z.object({ body: z.string(), edition: z.string(), date: z.string() }).optional().nullable(),
+  headlines: z.array(z.object({
+    at: z.string(),
+    title: z.string(),
+    url: z.string(),
+    publisher: z.string(),
+    image: z.string().nullable(),
+    summary: z.string().nullable(),
+    sentiment: z.string().nullable(),         // POS | NEU | NEG
+  })).optional(),
+  earningsReported: z.array(z.object({
+    symbol: z.string(),
+    name: z.string(),
+    logoUrl: z.string().nullable(),
+    date: z.string(),                         // YYYY-MM-DD
+    epsEstimated: z.number().nullable(),
+    epsActual: z.number().nullable(),
+    revenueEstimated: z.number().nullable(),
+    revenueActual: z.number().nullable(),
+    dayBps: z.number().int().nullable(),
+    stance: z.string().nullable(),            // Alfred's call on the name
+  })).optional(),
+  earningsUpcoming: z.array(z.object({
+    symbol: z.string(),
+    name: z.string(),
+    logoUrl: z.string().nullable(),
+    date: z.string(),
+  })).optional(),
+  sectors: z.array(z.object({ name: z.string(), avgBps: z.number().int(), n: z.number().int() })).optional(),
+  marketGainers: z.array(z.object({
+    symbol: z.string(),
+    name: z.string(),
+    priceCents: z.number().int(),
+    changeBps: z.number().int(),
+    exchange: z.string(),
+    inUniverse: z.boolean(),
+  })).optional(),
 });
 
 /* ---------- The Wire — the discovery feed (prototype, iOS-first) ---------- */

@@ -3,6 +3,15 @@ import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
+import { SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import Splash from '../components/Splash';
 import SignIn from '../components/SignIn';
 import { usePalette } from '../constants/theme';
@@ -15,28 +24,45 @@ GoogleSignin.configure({
 });
 
 export default function RootLayout() {
-  const { p } = usePalette();
+  const { p, scheme } = usePalette();
   const [splashDone, setSplashDone] = useState(false);
   const { status, hydrate } = useAuth();
+
+  // Fonts bundle locally (@expo-google-fonts) so this resolves fast and offline;
+  // the splash covers the load either way.
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
 
   // Hydration races the splash's intro phase; by the tap it's usually settled.
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
+  const ready = fontsLoaded;
+
   return (
     <View style={{ flex: 1, backgroundColor: p.bodyBg }}>
-      <StatusBar style="auto" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: p.bodyBg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-      {splashDone && status !== 'signedIn' && <SignIn />}
-      {!splashDone && <Splash done={() => setSplashDone(true)} />}
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      {ready && (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: p.bodyBg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
+        </Stack>
+      )}
+      {ready && splashDone && status !== 'signedIn' && <SignIn />}
+      {(!ready || !splashDone) && <Splash done={() => setSplashDone(true)} />}
     </View>
   );
 }

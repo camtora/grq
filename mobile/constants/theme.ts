@@ -1,8 +1,11 @@
 import { useColorScheme } from 'react-native';
+import { useAuth } from '../store/auth';
 
 /**
  * GRQ palette — ported from ios/GRQ/Theme/Theme.swift (which itself mirrors
- * web shared tokens). Cam runs light, Graham runs dark.
+ * web shared tokens). THEME IS MEMBER-KEYED: Cam = light, Graham = dark
+ * (me.theme from /api/auth/me); device scheme is only the pre-sign-in fallback.
+ * docs/MOBILE-DESIGN.md §1.
  */
 export type Palette = {
   bodyBg: string;
@@ -15,6 +18,7 @@ export type Palette = {
   accentText: string;
   pos: string;
   neg: string;
+  warn: string;
   glow: string;
 };
 
@@ -29,6 +33,7 @@ export const dark: Palette = {
   accentText: '#5eead4',
   pos: '#34d399',
   neg: '#f87171',
+  warn: '#fbbf24',
   glow: 'rgba(20, 184, 166, 0.20)',
 };
 
@@ -43,12 +48,27 @@ export const light: Palette = {
   accentText: '#0f766e',
   pos: '#059669',
   neg: '#dc2626',
+  warn: '#b45309',
   glow: 'rgba(13, 148, 136, 0.12)',
 };
 
 export const brandAccent = '#14b8a6';
 
+/** Font tokens (docs/MOBILE-DESIGN.md §2). RN custom fonts ignore fontWeight —
+ * always set the exact family. Display = Space Grotesk, UI/body = Inter. */
+export const F = {
+  display: 'SpaceGrotesk_700Bold',
+  displayMed: 'SpaceGrotesk_600SemiBold',
+  black: 'Inter_800ExtraBold',
+  bold: 'Inter_700Bold',
+  semi: 'Inter_600SemiBold',
+  med: 'Inter_500Medium',
+  reg: 'Inter_400Regular',
+} as const;
+
 export function usePalette(): { p: Palette; scheme: 'light' | 'dark' } {
-  const scheme = useColorScheme() === 'light' ? 'light' : 'dark';
+  const device = useColorScheme() === 'light' ? 'light' : 'dark';
+  const memberTheme = useAuth((s) => s.me?.theme);
+  const scheme = memberTheme === 'light' || memberTheme === 'dark' ? memberTheme : device;
   return { p: scheme === 'light' ? light : dark, scheme };
 }

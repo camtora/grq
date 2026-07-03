@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { usePalette } from '../../constants/theme';
+import { usePalette, F } from '../../constants/theme';
 
 export default function TabsLayout() {
   const { p } = usePalette();
@@ -12,6 +12,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: p.accent,
         tabBarInactiveTintColor: p.textMuted,
+        tabBarLabelStyle: { fontFamily: F.med, fontSize: 10 },
         tabBarStyle: {
           backgroundColor: p.cardBg,
           borderTopColor: p.cardBorder,
@@ -41,10 +42,17 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="more"
+        name="watchlist"
         options={{
-          title: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={color} size={size} />,
+          title: 'Watchlist',
+          tabBarIcon: ({ color, size }) => <Ionicons name="eye-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" color={color} size={size} />,
         }}
       />
     </Tabs>
