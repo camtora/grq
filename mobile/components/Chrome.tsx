@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -108,7 +109,7 @@ export function Screen({
 }
 
 /** The one panel surface (docs/MOBILE-DESIGN.md §4). */
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const { p } = usePalette();
   return (
     <View style={[styles.card, { backgroundColor: p.cardBg, borderColor: p.cardBorder }, style]}>

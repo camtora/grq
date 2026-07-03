@@ -19,7 +19,7 @@ import { getMacro, macroLine } from "./macro";
 import { funFactOfDay } from "./funfacts";
 import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
-import { watchersFor } from "./watch";
+import { watchersFor, allWatches } from "./watch";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers } from "./external/store";
@@ -296,6 +296,73 @@ export async function marketResponse() {
     universe: tracked.filter((r) => r.status === "ACTIVE").map(toName),
     watchlist: tracked.filter((r) => r.status === "CANDIDATE").map(toName),
   };
+}
+
+/* ---------- /api/watchlist — the watch-driven list (D78), GRQ Go's Watchlist ----------
+ * Mirrors web/app/market/watchlist/page.tsx: names any member personally watches
+ * (candidates AND promoted names), pinned first then alphabetical, with Alfred's
+ * call + the latest dossier's targets/confidence/bottom line. NOT the old
+ * marketResponse.watchlist (that's IA-v2 candidate-status semantics). */
+export async function watchlistResponse() {
+  const [universe, watchMap, running, directives] = await Promise.all([
+    allUniverse(),
+    allWatches(),
+    prisma.researchRequest.findMany({ where: { status: "RUNNING" }, select: { symbol: true } }),
+    prisma.symbolDirective.findMany(),
+  ]);
+  const bySym = new Map(universe.map((u) => [u.symbol, u]));
+  const tracked = [...watchMap.keys()]
+    .map((sym) => bySym.get(sym))
+    .filter((u): u is UniverseRow => !!u && u.status !== "RETIRED");
+  const symbols = tracked.map((c) => c.symbol);
+
+  const [quotes, stances, dossiers] = await Promise.all([
+    getQuotes(symbols),
+    stanceMap(symbols),
+    prisma.journalEntry.findMany({
+      where: { kind: "RESEARCH", title: { startsWith: "Dossier" }, symbol: { in: symbols } },
+      orderBy: { at: "desc" },
+    }),
+  ]);
+  const dossierBy = new Map<string, (typeof dossiers)[number]>();
+  for (const d of dossiers) if (d.symbol && !dossierBy.has(d.symbol)) dossierBy.set(d.symbol, d);
+  const dirBy = new Map(directives.map((d) => [d.symbol, d]));
+  const runningSet = new Set(running.map((r) => r.symbol));
+
+  const rows = tracked
+    .map((c) => {
+      const q = quotes.get(c.symbol);
+      const doss = dossierBy.get(c.symbol);
+      const dir = dirBy.get(c.symbol);
+      const cur = q?.midCents ?? null;
+      const sm = stanceMeta(stances.get(c.symbol));
+      return {
+        symbol: c.symbol,
+        name: c.name,
+        logoUrl: c.logoUrl ?? null,
+        currency: c.currency ?? "CAD",
+        exchange: c.exchange ?? null,
+        lastCents: cur,
+        dayBps: q?.dayChangeBps ?? null,
+        stance: sm?.label ?? null,
+        stanceTone: sm?.tone ?? null,
+        stanceBlurb: sm?.blurb ?? null,
+        watchers: (watchMap.get(c.symbol) ?? []).map((w) => ({ key: w.key, name: w.name })),
+        pinnedBy: dir?.directive === "PINNED" ? (dir.by ?? null) : null,
+        blocked: dir?.directive === "BLOCKED",
+        status: c.status,
+        researchInFlight: runningSet.has(c.symbol),
+        upsidePct: cur && doss?.targetFarCents != null ? (doss.targetFarCents - cur) / cur : null,
+        nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
+        nearDays: doss?.targetNearDays ?? null,
+        confidence: doss?.confidence ?? null,
+        bottomLine: doss?.bottomLine ?? null,
+      };
+    })
+    .sort((a, b) =>
+      !!a.pinnedBy !== !!b.pinnedBy ? (a.pinnedBy ? -1 : 1) : a.symbol.localeCompare(b.symbol),
+    );
+  return { rows };
 }
 
 /* ---------- /api/ideas ---------- */

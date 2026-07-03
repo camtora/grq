@@ -114,6 +114,54 @@ export type AccountsResponse = {
   }[];
 };
 
+export type WatchRow = {
+  symbol: string;
+  name: string;
+  logoUrl: string | null;
+  currency: string;
+  exchange: string | null;
+  lastCents: number | null;
+  dayBps: number | null;
+  stance: string | null;
+  stanceTone: 'emerald' | 'teal' | 'amber' | 'red' | null;
+  stanceBlurb: string | null;
+  watchers: { key: string; name: string }[];
+  pinnedBy: string | null;
+  blocked: boolean;
+  status: string; // CANDIDATE | ACTIVE
+  researchInFlight: boolean;
+  upsidePct: number | null; // 12-mo target vs current, as a fraction
+  nearPct: number | null;
+  nearDays: number | null;
+  confidence: number | null;
+  bottomLine: string | null;
+};
+
+export type WatchlistResponse = { rows: WatchRow[] };
+
+export type StockExtras = {
+  earnings: {
+    last: { date: string; epsEstimated: number | null; epsActual: number | null } | null;
+    next: { date: string; epsEstimated: number | null } | null;
+  } | null;
+  grades: {
+    strongBuy: number;
+    buy: number;
+    hold: number;
+    sell: number;
+    strongSell: number;
+    consensus: string;
+    total: number;
+  } | null;
+};
+
+export type SymbolMatch = {
+  symbol: string;
+  name: string;
+  exchange: string | null;
+  currency: string | null;
+};
+
 export type Today = {
   edition: 'morning' | 'midday' | 'evening' | 'weekend';
   dateISO: string;
