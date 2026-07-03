@@ -131,6 +131,46 @@ export function Screen({
   );
 }
 
+/** Sub-page shell: back bar + centered title (the stock-page pattern), used by
+ * every More destination so pushes keep the tab bar and back returns home. */
+export function SubScreen({
+  title,
+  children,
+  refreshing,
+  onRefresh,
+}: {
+  title: string;
+  children: React.ReactNode;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+}) {
+  const { p } = usePalette();
+  const router = useRouter();
+  return (
+    <SafeAreaView edges={['top']} style={[styles.fill, { backgroundColor: p.bodyBg }]}>
+      <View style={styles.subBar}>
+        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.subBack}>
+          <Ionicons name="chevron-back" size={22} color={p.accentText} />
+          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
+        </Pressable>
+        <Text style={[styles.subTitle, { color: p.textPrimary }]} numberOfLines={1}>{title}</Text>
+        <View style={styles.subBack} />
+      </View>
+      <ScrollView
+        style={styles.fill}
+        contentContainerStyle={styles.body}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={p.accent} />
+          ) : undefined
+        }
+      >
+        {children}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 /** The one panel surface (docs/MOBILE-DESIGN.md §4). */
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const { p } = usePalette();
@@ -284,4 +324,7 @@ const styles = StyleSheet.create({
   seg: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9 },
   miniLabel: { fontFamily: F.semi, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 2, paddingHorizontal: 2 },
+  subBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
+  subBack: { flexDirection: 'row', alignItems: 'center', width: 70 },
+  subTitle: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
 });
