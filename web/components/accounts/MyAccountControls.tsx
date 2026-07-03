@@ -103,6 +103,16 @@ export default function MyAccountControls({
       <button type="button" className={TEAL} onClick={refresh} disabled={busy !== null}>
         {busy === "refresh" ? "Refreshing…" : "↻ Refresh"}
       </button>
+      {/* The connection itself lives in SnapTrade — when it breaks (TD forces a re-login),
+          the fix is re-authing THERE, not here. Straight to their login/dashboard. */}
+      <a
+        href="https://dashboard.snaptrade.com/home?personal"
+        target="_blank"
+        rel="noopener noreferrer"
+        className={TEAL}
+      >
+        Open SnapTrade ↗
+      </a>
       {hasAccounts ? (
         <button type="button" className={DANGER} onClick={disconnect} disabled={busy !== null}>
           {busy === "disconnect" ? "Unlinking…" : "Unlink"}

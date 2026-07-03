@@ -105,6 +105,21 @@ export async function listSnaptradePositions(
   return (r.data ?? []) as unknown[];
 }
 
+/** Per-currency cash + buying power in one account (read). This endpoint is the ONLY
+ *  source of real cash — the Account object carries no usable cash field (verified
+ *  2026-07-03: `account.cash` doesn't exist; TD accounts all read as $0 without this). */
+export async function getSnaptradeBalances(
+  p: SnaptradePartner,
+  args: { userId: string; userSecret: string; accountId: string },
+): Promise<unknown[]> {
+  const r = await clientFor(p).accountInformation.getUserAccountBalance({
+    userId: args.userId,
+    userSecret: args.userSecret,
+    accountId: args.accountId,
+  });
+  return (r.data ?? []) as unknown[];
+}
+
 /** Best-effort: delete the member's SnapTrade user (and all their connections)
  *  when they disconnect. Read-only throughout. */
 export async function deleteSnaptradeUser(p: SnaptradePartner, userId: string): Promise<void> {

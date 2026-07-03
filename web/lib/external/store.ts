@@ -12,6 +12,7 @@ import {
   readOnlyConnectUrl,
   listSnaptradeAccounts,
   listSnaptradePositions,
+  getSnaptradeBalances,
 } from "./snaptrade";
 
 // ── per-member SnapTrade credentials (Personal keys) ──────────────────────────
@@ -157,6 +158,19 @@ type ParsedHolding = {
   openPnlCents: number | null;
 };
 
+/** Real cash from SnapTrade's balances endpoint (per-currency rows). Take the entry
+ *  matching the account's own currency — never guess across currencies. Null = unknown
+ *  (endpoint failed / no matching entry): the caller keeps the last stored value rather
+ *  than zeroing a real balance. */
+export function cashCentsFromBalances(rows: unknown[], acctCurrency: string): number | null {
+  for (const row of rows) {
+    const b = obj(row);
+    const code = str(obj(b.currency).code);
+    if (code && code.toUpperCase() === acctCurrency.toUpperCase()) return toCents(b.cash);
+  }
+  return null;
+}
+
 function parsePositions(rows: unknown[], acctCurrency: string): ParsedHolding[] {
   const out: ParsedHolding[] = [];
   for (const row of rows) {
@@ -198,6 +212,19 @@ export async function syncMember(email: string): Promise<number> {
     const auth = a.brokerage_authorization;
     const authorizationId = str(auth) ?? str(obj(auth).id);
 
+    // Real cash needs the balances endpoint — the account object has NO cash field
+    // (reading `a.cash` silently stored $0 for every account until 2026-07-03).
+    // Best-effort: on failure keep whatever cash we stored last sync.
+    let cashCents: number | null = null;
+    try {
+      cashCents = cashCentsFromBalances(
+        await getSnaptradeBalances(partner, { userId, userSecret, accountId: id }),
+        currency,
+      );
+    } catch {
+      /* keep last stored cash */
+    }
+
     await prisma.externalAccount.upsert({
       where: { id },
       create: {
@@ -210,7 +237,7 @@ export async function syncMember(email: string): Promise<number> {
         accountType: str(obj(a.meta).type) ?? str(a.raw_type),
         currency,
         totalValueCents: toCents(balance.amount),
-        cashCents: toCents(a.cash),
+        cashCents: cashCents ?? 0,
       },
       update: {
         authorizationId,
@@ -220,7 +247,7 @@ export async function syncMember(email: string): Promise<number> {
         accountType: str(obj(a.meta).type) ?? str(a.raw_type),
         currency,
         totalValueCents: toCents(balance.amount),
-        cashCents: toCents(a.cash),
+        ...(cashCents == null ? {} : { cashCents }),
         syncedAt: new Date(),
         disabled: false,
       },
