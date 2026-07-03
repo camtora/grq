@@ -1,23 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../components/Chrome';
-import StockLogo from '../../components/StockLogo';
-import Sparkline from '../../components/Sparkline';
-import MdText from '../../components/MdText';
-import RatingBar, { toneColor } from '../../components/RatingBar';
-import { usePalette, F, type Palette } from '../../constants/theme';
-import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../lib/format';
-import { useApi } from '../../services/hooks';
-import type { Dossier } from '../../services/types';
+import { Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { api } from '../../../services/api';
+import StockLogo from '../../../components/StockLogo';
+import Sparkline from '../../../components/Sparkline';
+import MdText from '../../../components/MdText';
+import RatingBar, { toneColor } from '../../../components/RatingBar';
+import { usePalette, F, type Palette } from '../../../constants/theme';
+import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../../lib/format';
+import { useApi } from '../../../services/hooks';
+import type { Dossier } from '../../../services/types';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
 
 const AVATARS: Record<string, number> = {
-  cam: require('../../assets/people/cam.png'),
-  graham: require('../../assets/people/graham.png'),
+  cam: require('../../../assets/people/cam.png'),
+  graham: require('../../../assets/people/graham.png'),
 };
 
 // Tone for a 7-point label when the feed carries only the label (the technical lean).
@@ -38,6 +39,33 @@ export default function StockScreen() {
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const sym = String(symbol ?? '').toUpperCase();
   const { data: d, error, loading, refreshing, refresh } = useApi<Dossier>(`/api/dossier/${sym}`);
+  const [queueing, setQueueing] = useState(false);
+  const [queueMsg, setQueueMsg] = useState<string | null>(null);
+
+  // No verdict and no bottom line = no dossier yet (the feed's bodyMarkdown
+  // fallback text doesn't count as a read).
+  const hasDossier = !!(d?.rating || d?.bottomLine);
+
+  // While Alfred researches, poll — an on-demand kick often lands in minutes.
+  useEffect(() => {
+    if (!d?.researching) return;
+    const t = setInterval(refresh, 30_000);
+    return () => clearInterval(t);
+  }, [d?.researching, refresh]);
+
+  const queueResearch = async () => {
+    if (queueing) return;
+    setQueueing(true);
+    setQueueMsg(null);
+    try {
+      await api('/api/universe', { method: 'POST', body: JSON.stringify({ action: 'research', symbol: sym }) });
+      refresh();
+    } catch (e) {
+      setQueueMsg(e instanceof Error ? e.message : 'Could not queue research.');
+    } finally {
+      setQueueing(false);
+    }
+  };
 
   const closes = d?.closes ?? [];
   const dayBps =
@@ -94,12 +122,41 @@ export default function StockScreen() {
               </View>
             </View>
 
-            {d.researching && !d.rating && (
+            {!hasDossier && (
               <Card style={{ marginTop: 12 }}>
-                <Text style={[s.mutedBody, { color: p.textMuted }]}>
-                  Alfred is researching this name right now — the dossier lands here when it's done.
-                  Pull to refresh.
-                </Text>
+                {d.researching ? (
+                  <View>
+                    <Text style={{ color: p.warn, fontFamily: F.bold, fontSize: 13 }}>
+                      ALFRED IS ON IT
+                    </Text>
+                    <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 4 }]}>
+                      Research is in flight — the dossier (business, bull & bear case, a verdict)
+                      lands here when it's done. This page checks every 30 seconds.
+                    </Text>
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={{ color: p.textPrimary, fontFamily: F.semi, fontSize: 13.5 }}>
+                      No dossier yet
+                    </Text>
+                    <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 4 }]}>
+                      GRQ hasn't researched {sym} in depth. Queue it and Alfred writes the full
+                      read — the business, the bull & bear case, targets, and a verdict.
+                    </Text>
+                    <Pressable
+                      onPress={queueResearch}
+                      disabled={queueing}
+                      style={[s.researchBtn, { backgroundColor: p.accent + '26', opacity: queueing ? 0.6 : 1 }]}
+                    >
+                      <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 13 }}>
+                        {queueing ? 'Queueing…' : '🔬 Research this name'}
+                      </Text>
+                    </Pressable>
+                    {queueMsg && (
+                      <Text style={[s.mutedBody, { color: p.neg, marginTop: 6 }]}>{queueMsg}</Text>
+                    )}
+                  </View>
+                )}
               </Card>
             )}
 
@@ -409,8 +466,8 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* ---- The full read ---- */}
-            {d.bodyMarkdown && (
+            {/* ---- The full read (only once a real dossier exists) ---- */}
+            {hasDossier && d.bodyMarkdown && (
               <View>
                 <SectionTitle sub="Alfred's full dossier">The full read</SectionTitle>
                 <Card>
@@ -547,4 +604,5 @@ const s = StyleSheet.create({
   tradeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9 },
   covRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   covStatus: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  researchBtn: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, marginTop: 10 },
 });

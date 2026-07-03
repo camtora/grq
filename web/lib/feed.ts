@@ -5,7 +5,7 @@ import { dailyQuote } from "./dailyquote";
 import { soakStatus } from "./soak";
 import { listFxRequests } from "./fx-requests";
 import { getQuotes, getQuote } from "./broker/quotes";
-import { allUniverse, type UniverseRow, bareTicker } from "./universe";
+import { allUniverse, type UniverseRow, bareTicker, yahooForListing } from "./universe";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, isMarketOpen, startOfEtDay } from "@/agent/calendar";
@@ -1362,15 +1362,60 @@ function parseSources(json: string | null | undefined): string[] {
 // families, peers, institutional, scoreboard, the price tape, smart money, the full
 // record + trades, news, and the data-coverage map. Same Prisma/FMP source as the web
 // page, so the app sees identical numbers.
-export async function dossierResponse(symbol: string) {
+export async function dossierResponse(symbol: string, opts?: { requestedBy?: string | null }) {
   const all = await allUniverse();
   // Canonicalise like the web stock page (D89): an exact symbol match first, else a non-RETIRED
   // member by bare ticker — so a stale `/api/dossier/MU.US` deep-link still resolves to bare `MU`
   // after the .US→bare rename. (mobile parity for the web /stocks/MU.US → /stocks/MU redirect.)
   const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
   const req = symbol.toUpperCase();
-  const entry = all.find((u) => u.symbol === req) ?? all.find((u) => u.status !== "RETIRED" && bare(u.symbol) === bare(req));
-  if (!entry) return null;
+  let entry = all.find((u) => u.symbol === req) ?? all.find((u) => u.status !== "RETIRED" && bare(u.symbol) === bare(req));
+  if (!entry) {
+    // Not in the universe — synthesise a row so a researched find / screened name renders
+    // the SAME rich dossier as a tracked name (mirror of the web stock page's untracked
+    // branch). A genuinely unknown symbol (no journal, no quote, no research) still 404s.
+    const [pquote, pjournal, pending] = await Promise.all([
+      getQuote(req).catch(() => null),
+      prisma.journalEntry.findMany({ where: { symbol: req }, orderBy: { at: "desc" }, take: 30 }),
+      prisma.researchRequest.findFirst({ where: { symbol: req, status: { in: ["QUEUED", "RUNNING"] } } }),
+    ]);
+    if (pjournal.length === 0 && !pquote && !pending) return null;
+
+    // On-demand full dossier (D46): the hunt writes only LEADS — a member opening the
+    // page kicks the FULL dossier, idempotently. Members only (requestedBy is null for
+    // viewers), same as the web page.
+    const hasResearch = pjournal.some((j) => j.kind === "RESEARCH");
+    const hasFullDossier = pjournal.some((j) => j.kind === "RESEARCH" && j.title.startsWith("Dossier"));
+    if (opts?.requestedBy && hasResearch && !hasFullDossier && !pending) {
+      try {
+        await prisma.researchRequest.create({ data: { symbol: bareTicker(req), requestedBy: opts.requestedBy } });
+      } catch {
+        /* best-effort — a race just means it's already queued */
+      }
+    }
+
+    const listingEntry = pjournal.find((j) => j.kind === "RESEARCH" && j.exchange) ?? null;
+    const yahooSyn = yahooForListing(req, listingEntry?.exchange);
+    const cadSyn = /\.(TO|V|NE|CN)$/i.test(yahooSyn);
+    entry = {
+      symbol: req,
+      yahoo: yahooSyn,
+      name: pjournal.find((j) => j.companyName)?.companyName ?? req,
+      tier: null,
+      status: "CANDIDATE",
+      addedBy: null,
+      promotionRequestedBy: null,
+      proposedTier: null,
+      note: null,
+      logoUrl: fmpLogo(yahooSyn),
+      sector: null,
+      industry: null,
+      country: cadSyn ? "CA" : "US",
+      currency: cadSyn ? "CAD" : "USD",
+      exchange: listingEntry?.exchange ?? null,
+      marketCapM: null,
+    } as UniverseRow;
+  }
   const sym = entry.symbol; // use the CANONICAL symbol for every downstream lookup, not the request
 
   // Members watching this name (D78) — key+name only (iOS picks the bundled avatar).

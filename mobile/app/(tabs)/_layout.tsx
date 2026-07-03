@@ -55,6 +55,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" color={color} size={size} />,
         }}
       />
+      {/* The stock page lives INSIDE the tab navigator (hidden from the bar) so
+          the bottom nav stays visible while reading a dossier (Cam 2026-07-03). */}
+      <Tabs.Screen name="stock/[symbol]" options={{ href: null }} />
     </Tabs>
   );
 }
