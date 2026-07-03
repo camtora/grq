@@ -59,6 +59,7 @@ type BookRow = {
   valueCents: number | null;
   dayBps?: number | null;
   pnlCents?: number | null;
+  label?: string; // display override for non-stock rows (e.g. Cash) — no link
 };
 
 function countryOf(currency: string): string {
@@ -71,10 +72,10 @@ function BookRowView({ r }: { r: BookRow }) {
   const { p } = usePalette();
   const router = useRouter();
   return (
-    <Pressable onPress={() => router.push(`/stock/${r.symbol}`)} style={s.row}>
+    <Pressable onPress={r.label ? undefined : () => router.push(`/stock/${r.symbol}`)} style={s.row}>
       <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
       <View style={s.rowMain}>
-        <Text style={[s.sym, { color: p.accentText }]}>{r.symbol}</Text>
+        <Text style={[s.sym, { color: r.label ? p.textPrimary : p.accentText }]}>{r.label ?? r.symbol}</Text>
         <Text style={[s.sub, tabular, { color: p.textMuted }]} numberOfLines={1}>{r.qtyLine}</Text>
       </View>
       <View style={s.rowRight}>
@@ -284,11 +285,26 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
               qtyLine: `${h.qty} sh${h.priceCents != null ? ` @ ${money(h.priceCents)}` : ''}${h.currency === 'USD' ? ' US' : ''}`,
               valueCents: h.marketValueCents,
               pnlCents: h.openPnlCents,
-            },
+            } as BookRow,
             country: countryOf(h.currency),
           }));
+        // Cash as its own visible row in the book (web accounts-page parity,
+        // Cam 2026-07-03) — real since the SnapTrade balances fix.
+        if (cad > 0) {
+          rows.push({
+            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash', valueCents: cad },
+            country: 'Canada',
+          });
+        }
+        if (usd > 0) {
+          rows.push({
+            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash (USD)', valueCents: usd },
+            country: 'United States',
+          });
+        }
         const groups = groupBy(rows, (r) => r.country);
         const bookGroups = new Map([...groups.entries()].map(([k, v]) => [k, v.map((x) => x.row)]));
+        const cashLine = [cad > 0 ? money(cad) : null, usd > 0 ? `US${money(usd)}` : null].filter(Boolean).join(' + ');
         const synced = accounts.map((a) => a.syncedAt).filter(Boolean).sort().pop();
 
         if (!(m.connected && accounts.length > 0)) {
@@ -338,7 +354,14 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
             <SectionTitle sub="what you're holding">The book</SectionTitle>
             <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
             <View style={{ marginTop: 10 }}>
-              <CountryBook groups={bookGroups} empty="No holdings synced yet." />
+              <CountryBook
+                groups={bookGroups}
+                empty={
+                  cashLine
+                    ? `All cash — ${cashLine} uninvested, no holdings.`
+                    : 'No holdings synced yet.'
+                }
+              />
             </View>
             {synced && <Footnote>synced {String(synced).slice(0, 10)}</Footnote>}
           </View>
