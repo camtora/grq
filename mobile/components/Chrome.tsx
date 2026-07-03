@@ -41,10 +41,6 @@ export function Header({ title }: { title: string }) {
     if (me) refreshUnread();
   }, [me, refreshUnread]);
 
-  const logo = scheme === 'dark'
-    ? require('../assets/grq-logo.png')
-    : require('../assets/grq-logo-light.png');
-
   const onAvatar = () => {
     Alert.alert(
       me?.name ? `Signed in as ${me.name}` : 'Signed in',
@@ -59,7 +55,13 @@ export function Header({ title }: { title: string }) {
   return (
     <View style={[styles.header, { backgroundColor: p.bodyBg }]}>
       <View style={styles.side}>
-        <Image source={logo} style={styles.logo} resizeMode="contain" />
+        {/* The bull = talk to the agent (the web's floating launcher, moved up
+            here — Cam 2026-07-03). Opens the member's Ask Alfred thread. */}
+        <Pressable onPress={() => router.push('/chat')} hitSlop={8}>
+          <View style={[styles.bull, { backgroundColor: p.cardBg, borderColor: p.accent + '66' }]}>
+            <Image source={require('../assets/bull-splash.png')} style={styles.bullImg} resizeMode="contain" />
+          </View>
+        </Pressable>
       </View>
       <Text style={[styles.title, { color: p.textPrimary }]} numberOfLines={1}>
         {title}
@@ -226,7 +228,19 @@ const styles = StyleSheet.create({
   side: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 13 },
   badge: { position: 'absolute', top: -2, right: -3, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
   right: { justifyContent: 'flex-end' },
-  logo: { height: 20, width: 93 },
+  bull: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#14b8a6',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  bullImg: { width: 22, height: 22 },
   title: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
   avatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1 },
   body: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },

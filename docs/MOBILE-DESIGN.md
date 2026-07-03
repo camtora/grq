@@ -37,10 +37,12 @@ caption 11 · micro 10. Money/hero numbers go bigger (20–28, display family).
 
 Every tab screen renders inside `<Screen title="...">` (`components/Chrome.tsx`):
 
-- **Top bar**: GRQ logo top-left (h 20, links nowhere), the **page title centered**
-  (Space Grotesk 700, 17), and top-right the **notifications bell** then the
-  **signed-in member's avatar** (28, circular, accent ring). Bell → `/notifications`.
-  Avatar → identity sheet (signed in as… / sign out).
+- **Top bar**: the **bull bubble** top-left (34, circular, accent ring + glow — the
+  web's floating launcher moved up here) → the member's **Ask Alfred** thread
+  (`/chat`); the **page title centered** (Space Grotesk 700, 17); top-right the
+  **notifications bell**, the **chat icon** (unread red dot; → `/messages`, the
+  Cam↔Graham thread), then the **signed-in member's avatar** (28, circular, accent
+  ring) → identity sheet (signed in as… / sign out).
 - Body: `ScrollView` with pull-to-refresh (`RefreshControl` tinted `p.accent`) unless
   the screen is a list that scrolls itself.
 - Background `p.bodyBg` everywhere; content padding 16 horizontal.
