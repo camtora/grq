@@ -31,6 +31,17 @@ function avatarFor(email: string | undefined) {
   return require('../assets/people/cam.png');
 }
 
+/** Unread count pill on a header icon (hidden at 0, capped at 9+). */
+function CountBadge({ n }: { n: number }) {
+  const { p } = usePalette();
+  if (n <= 0) return null;
+  return (
+    <View style={[styles.badge, { backgroundColor: p.neg, borderColor: p.bodyBg }]}>
+      <Text style={styles.badgeText}>{n > 9 ? '9+' : n}</Text>
+    </View>
+  );
+}
+
 export function Header({ title }: { title: string }) {
   const { p, scheme } = usePalette();
   const { me, signOut } = useAuth();
@@ -75,13 +86,13 @@ export function Header({ title }: { title: string }) {
         <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
           <View>
             <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
-            {bellUnread > 0 && <View style={[styles.badge, { backgroundColor: p.neg, borderColor: p.bodyBg }]} />}
+            <CountBadge n={bellUnread} />
           </View>
         </Pressable>
         <Pressable onPress={() => router.push('/messages')} hitSlop={8}>
           <View>
             <Ionicons name="chatbubble-outline" size={21} color={p.textMuted} />
-            {unread > 0 && <View style={[styles.badge, { backgroundColor: p.neg, borderColor: p.bodyBg }]} />}
+            <CountBadge n={unread} />
           </View>
         </Pressable>
         <Pressable onPress={onAvatar} hitSlop={8}>
@@ -234,7 +245,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   side: { width: 104, flexDirection: 'row', alignItems: 'center', gap: 13 },
-  badge: { position: 'absolute', top: -2, right: -3, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -7,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#ffffff', fontFamily: F.bold, fontSize: 9, lineHeight: 11 },
   right: { justifyContent: 'flex-end' },
   bull: {
     width: 34,

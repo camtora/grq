@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
@@ -17,6 +17,8 @@ import Splash from '../components/Splash';
 import SignIn from '../components/SignIn';
 import { usePalette } from '../constants/theme';
 import { useAuth } from '../store/auth';
+import { useMessages } from '../store/messages';
+import { useNotifications } from '../store/notifications';
 import { registerForPush } from '../services/push';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
@@ -63,6 +65,27 @@ export default function RootLayout() {
   useEffect(() => {
     if (status === 'signedIn') registerForPush();
   }, [status]);
+
+  // Keep the header badges honest with the web (same server rows): refresh on
+  // app-foreground + every 60s while signed in — so clearing on one surface
+  // clears on the other within a minute, not just on navigation.
+  const refreshMessages = useMessages((s) => s.refreshUnread);
+  const refreshBell = useNotifications((s) => s.refreshUnread);
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    const tick = () => {
+      refreshMessages();
+      refreshBell();
+    };
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') tick();
+    });
+    const t = setInterval(tick, 60_000);
+    return () => {
+      sub.remove();
+      clearInterval(t);
+    };
+  }, [status, refreshMessages, refreshBell]);
 
   // Tapping a push deep-links: a symbol lands on its stock page.
   useEffect(() => {
