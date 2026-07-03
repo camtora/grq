@@ -1,12 +1,15 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePalette, F } from '../../constants/theme';
+import SearchOverlay from '../../components/SearchOverlay';
 
 export default function TabsLayout() {
   const { p } = usePalette();
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -49,15 +52,19 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="search"
+        name="more"
         options={{
-          title: 'Search',
-          tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" color={color} size={size} />,
+          title: 'More',
+          tabBarIcon: ({ color, size }) => <Ionicons name="ellipsis-horizontal" color={color} size={size} />,
         }}
       />
       {/* The stock page lives INSIDE the tab navigator (hidden from the bar) so
           the bottom nav stays visible while reading a dossier (Cam 2026-07-03). */}
       <Tabs.Screen name="stock/[symbol]" options={{ href: null }} />
     </Tabs>
+    {/* The jump-search floats over every tab (the web's round button) — Search
+        left the tab bar for this; the freed slot is More (Cam 2026-07-03). */}
+    <SearchOverlay />
+    </View>
   );
 }

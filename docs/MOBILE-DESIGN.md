@@ -92,9 +92,14 @@ position."), errors state what happened plainly.
 
 ## 8. The five pages
 
-Today · Portfolio · The Wire · Watchlist · Search — tab bar in that order, Ionicons
+Today · Portfolio · The Wire · Watchlist · More — tab bar in that order, Ionicons
 outline set, active tint `p.accent`. Each page is designed for the phone (not a port
 of the web layout), but reuses the web's *content order* where it exists.
+
+**The jump-search is NOT a tab** (Cam 2026-07-03): it's the floating round button
+bottom-right above the tab bar (`components/SearchOverlay.tsx`, mirroring the web's
+launcher) — tap → scrim + autofocused field + tappable result list over the covered-
+names index. More holds settings/kill-switch/labs (building out).
 
 - **Today** — the newspaper (shipped; see `components/today/sections.tsx`).
 - **Portfolio** — split **Alfred | Personal** via `Segmented`, defaulting to Alfred.
