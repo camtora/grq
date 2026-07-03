@@ -8,24 +8,16 @@ import ChessStatus from "@/components/chess/ChessStatus";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_TONE: Record<string, "green" | "teal" | "red" | "dim"> = {
-  READY: "green",
-  PENDING: "teal",
-  RUNNING: "teal",
-  FAILED: "red",
-};
+const STATUS_TONE: Record<string, "green" | "teal" | "red" | "dim"> = { READY: "green", PENDING: "teal", RUNNING: "teal", FAILED: "red" };
+const STATUS_LABEL: Record<string, string> = { READY: "ready", PENDING: "queued", RUNNING: "mapping…", FAILED: "no board" };
 
-const STATUS_LABEL: Record<string, string> = {
-  READY: "ready",
-  PENDING: "queued",
-  RUNNING: "mapping…",
-  FAILED: "no board",
-};
+// First readable line of an agent markdown block, stripped of bullets/markup — the one-line gist.
+const firstLine = (s: string | null): string | null =>
+  s ? ((s.split("\n").find((l) => l.trim()) ?? "").replace(/^[-*]\s*/, "").replace(/[*_`#>]/g, "").trim() || null) : null;
 
-// Chess Moves (docs/CHESS-MOVES.md) — the thematic / supply-chain reasoning experiment.
-// A member briefs a theme/chain; Alfred maps the board and the ripple-effect plays. Plus
-// a weekly self-picked "board of the week". Leads, never verdicts — every play still
-// clears the normal research → §6 gate before anything trades.
+// Chess Moves (docs/CHESS-MOVES.md, D94) — thematic / supply-chain second-order reasoning. A member
+// briefs an industry or chain; Alfred names the force in motion and traces who wins vs who loses,
+// 2–3 ripples deep. Leads, never verdicts — every play still clears research → the §6 gate to trade.
 export default async function ChessPage() {
   const session = await getSession();
   const isMember = session?.role === "member";
@@ -34,7 +26,10 @@ export default async function ChessPage() {
     where: { status: { not: "RETIRED" } },
     orderBy: { createdAt: "desc" },
     take: 40,
-    include: { _count: { select: { plays: true } }, plays: { orderBy: { rank: "asc" }, take: 6, select: { symbol: true } } },
+    include: {
+      _count: { select: { plays: true } },
+      plays: { orderBy: { rank: "asc" }, take: 16, select: { symbol: true, direction: true } },
+    },
   });
 
   const latestReadyAt = themes.find((t) => t.status === "READY")?.completedAt?.toISOString() ?? null;
@@ -44,8 +39,31 @@ export default async function ChessPage() {
     <main>
       <PageHeader
         title="Chess Moves"
-        sub="Pick a board — an industry or a supply chain — and Alfred groks how the pieces connect, names the force in motion, and traces the ripple-effect plays before the market reprices them. An experiment in second-order thinking. Leads, not verdicts."
+        sub="Name an industry or a chain of companies. Alfred spots the force already in motion, then traces who wins and who loses two to three moves out — the second-order plays, before the market reprices them."
       />
+
+      {/* What is this — Graham's "what am I looking at?" answered up front. */}
+      <Card className="mb-5 border-teal-400/15 bg-teal-400/[0.02] p-5">
+        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-3">
+          {[
+            { n: 1, t: "Pick a board", d: "A “board” is one industry or a chain of related companies — e.g. “apparel & tariffs” or “the uranium squeeze.” Brief it in plain English, or Alfred picks a timely one each week." },
+            { n: 2, t: "Alfred maps it", d: "He names the force already in motion, draws the value chain, and tags every company a winner (▲) or loser (▼) by how many ripples out it sits." },
+            { n: 3, t: "Follow the leads", d: "Each name is a lead, not a buy — a hunch about who moves next. Open one to research it; only then can it ever clear the fund’s gate." },
+          ].map((s) => (
+            <div key={s.n} className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-400/15 text-xs font-bold text-teal-200">{s.n}</span>
+              <div>
+                <div className="text-sm font-semibold text-teal-50">{s.t}</div>
+                <p className="mt-0.5 text-[12.5px] leading-snug text-teal-200/55">{s.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 border-t border-teal-400/10 pt-3 text-xs text-teal-200/45">
+          <span className="font-semibold text-teal-200/70">The point:</span> spot the second-order winners and losers before the market does. It&apos;s Alfred&apos;s
+          reasoning, not a data feed — treat every play as a probabilistic bet, never a fact.
+        </p>
+      </Card>
 
       {isMember && <ChessBar />}
 
@@ -53,42 +71,70 @@ export default async function ChessPage() {
         {themes.length > 0 ? (
           <div className="space-y-3">
             {themes.map((t) => {
-              const tone = STATUS_TONE[t.status] ?? "dim";
+              const ready = t.status === "READY";
+              const winners = t.plays.filter((p) => p.direction === "BENEFICIARY");
+              const losers = t.plays.filter((p) => p.direction === "VICTIM");
+              const take = firstLine(t.bottomLine) ?? firstLine(t.thesis);
+              const dirClass = (d: string) =>
+                d === "BENEFICIARY" ? "bg-emerald-400/10 text-emerald-300/90" : d === "VICTIM" ? "bg-red-400/10 text-red-300/90" : "bg-teal-400/10 text-teal-200/70";
+
               const inner = (
-                <Card className="p-5 transition-colors hover:bg-teal-400/[0.04]">
+                <Card className={`p-5 transition-colors ${ready ? "hover:border-teal-400/30 hover:bg-teal-400/[0.04]" : ""}`}>
+                  {/* Title + status + what kind of board */}
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-base font-semibold text-teal-50">{t.title}</span>
-                        <Chip tone={tone}>{STATUS_LABEL[t.status] ?? t.status.toLowerCase()}</Chip>
+                        <Chip tone={STATUS_TONE[t.status] ?? "dim"}>{STATUS_LABEL[t.status] ?? t.status.toLowerCase()}</Chip>
                         {t.kind === "WEEKLY" && <Chip tone="dim">board of the week</Chip>}
                       </div>
-                      {t.bottomLine ? (
-                        <p className="mt-1 max-w-2xl text-sm text-teal-200/55">
-                          {(t.bottomLine.split("\n").find((l) => l.trim()) ?? "").replace(/^[-*]\s*/, "").replace(/[*_`]/g, "")}
-                        </p>
-                      ) : (
-                        <p className="mt-1 text-sm text-teal-200/45">{t.anchor || "—"}</p>
-                      )}
-                      {t._count.plays > 0 && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          {t.plays.map((p) => (
-                            <span key={p.symbol} className="rounded bg-teal-400/10 px-1.5 py-0.5 font-mono text-[11px] text-teal-200/80">
-                              {p.symbol}
-                            </span>
-                          ))}
-                          {t._count.plays > t.plays.length && <span className="text-[11px] text-teal-200/40">+{t._count.plays - t.plays.length} more</span>}
-                        </div>
-                      )}
+                      {/* The subject — what this board is actually about (the anchor). */}
+                      {t.anchor && <p className="mt-1 max-w-3xl text-[13px] leading-snug text-teal-100/75">{t.anchor}</p>}
                     </div>
                     <div className="shrink-0 text-right text-[11px] text-teal-200/40">
                       <div>{t.requestedBy ?? "Alfred"}</div>
                       <div>{fmtWhen(t.createdAt)}</div>
                     </div>
                   </div>
+
+                  {/* The take — the plain-English punchline. */}
+                  {ready && take && <p className="mt-2.5 max-w-3xl text-[13px] italic leading-snug text-teal-200/55">“{take}”</p>}
+
+                  {/* Winners vs losers + the pieces, coloured by side. */}
+                  {ready && t._count.plays > 0 && (
+                    <div className="mt-3">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        {winners.length > 0 && <span className="text-emerald-300/90">▲ {winners.length} winner{winners.length > 1 ? "s" : ""}</span>}
+                        {losers.length > 0 && <span className="text-red-300/90">▼ {losers.length} loser{losers.length > 1 ? "s" : ""}</span>}
+                        <span className="text-teal-200/40">· {t._count.plays} ripple play{t._count.plays > 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {t.plays.slice(0, 10).map((p) => (
+                          <span key={p.symbol} className={`rounded px-1.5 py-0.5 font-mono text-[11px] font-medium ${dirClass(p.direction)}`}>
+                            {p.direction === "BENEFICIARY" ? "▲" : p.direction === "VICTIM" ? "▼" : "·"} {p.symbol}
+                          </span>
+                        ))}
+                        {t._count.plays > Math.min(10, t.plays.length) && (
+                          <span className="text-[11px] text-teal-200/40">+{t._count.plays - Math.min(10, t.plays.length)} more</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* The prompt that produced it + the open CTA. */}
+                  <div className="mt-3.5 flex items-center justify-between border-t border-teal-400/10 pt-2.5 text-[11px] text-teal-200/40">
+                    <span className="min-w-0 truncate">
+                      {t.brief ? <>briefed: <span className="italic text-teal-200/55">“{t.brief}”</span></> : "Alfred’s weekly self-pick"}
+                    </span>
+                    {ready ? (
+                      <span className="shrink-0 font-semibold text-teal-300">Open board →</span>
+                    ) : (
+                      <span className="shrink-0 text-teal-200/40">{STATUS_LABEL[t.status] === "mapping…" ? "mapping the board…" : STATUS_LABEL[t.status]}</span>
+                    )}
+                  </div>
                 </Card>
               );
-              return t.status === "READY" ? (
+              return ready ? (
                 <Link key={t.id} href={`/chess/${t.id}`} className="block">
                   {inner}
                 </Link>
