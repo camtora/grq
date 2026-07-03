@@ -330,30 +330,28 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
           );
         }
 
-        // Self mirrors Alfred exactly: hero → the Tape → the book. Other members
-        // get their name as the section, then the same book structure.
+        // Every member's section is structurally IDENTICAL to Alfred's view:
+        // hero (NET ASSET VALUE) → The Tape → The book.
         return (
           <View key={m.email}>
-            {m.isSelf ? (
-              <View style={s.hero}>
-                <Text style={[s.heroLabel, { color: p.textMuted }]}>TOTAL VALUE</Text>
-                <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(total)}</Text>
-                <View style={s.heroRow}>
-                  {dayDelta != null && dayBps != null && (
-                    <Text style={[s.heroPnl, tabular, { color: pnlColor(dayDelta, p) }]}>
-                      {signedMoney(dayDelta)} ({signedPctFromBps(dayBps)}) vs yesterday
-                    </Text>
-                  )}
-                  <Text style={[s.heroPnl, tabular, { color: pnlColor(openPnl, p) }]}>
-                    {signedMoney(openPnl)} open P&L
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <SectionTitle>{m.name}</SectionTitle>
-            )}
+            <SectionTitle sub={m.isSelf ? '· you' : undefined}>{m.name}</SectionTitle>
 
-            {m.isSelf && daily.length >= 2 && (
+            <View style={s.hero}>
+              <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
+              <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(total)}</Text>
+              <View style={s.heroRow}>
+                {dayDelta != null && dayBps != null && (
+                  <Text style={[s.heroPnl, tabular, { color: pnlColor(dayDelta, p) }]}>
+                    {signedMoney(dayDelta)} ({signedPctFromBps(dayBps)}) vs yesterday
+                  </Text>
+                )}
+                <Text style={[s.heroPnl, tabular, { color: pnlColor(openPnl, p) }]}>
+                  {signedMoney(openPnl)} open P&L
+                </Text>
+              </View>
+            </View>
+
+            {daily.length >= 2 && (
               <View>
                 <SectionTitle sub="value over time · nightly sync">The Tape</SectionTitle>
                 <Card>
@@ -366,7 +364,9 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
               </View>
             )}
 
-            {m.isSelf && <SectionTitle sub="what you're holding">The book</SectionTitle>}
+            <SectionTitle sub={m.isSelf ? "what you're holding" : `what ${m.name} is holding`}>
+              The book
+            </SectionTitle>
             <CashStrip cad={cad} usd={usd} positions={positions} p={p} />
             <View style={{ marginTop: 10 }}>
               <CountryBook groups={bookGroups} empty="No holdings synced yet." />
