@@ -697,43 +697,50 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </section>
       )}
 
-      {/* Top Hitters (your holdings) + Market Movers (tracked names) side by side, same row format +
-          same count (Cam 2026-07-02). "On the Radar" removed. Movers are today-only; on an archived
-          day only Top Hitters shows (its numbers are the snapshot's). */}
-      <section className={`mt-8 grid items-start gap-6 ${isToday ? "lg:grid-cols-2" : ""}`}>
-        <div>
-          <SectionTitle>Top Hitters<SectionSub>· your holdings</SectionSub></SectionTitle>
-          <Card className="overflow-hidden p-1">
-            {hitters.length > 0 ? (
-              <ul className="divide-y divide-teal-400/10">
-                {hitters.map((p) => (
-                  <HitterRow key={p.symbol} p={p} logoUrl={logoBy.get(p.symbol) ?? null} />
-                ))}
-              </ul>
-            ) : (
-              <p className="p-3 text-sm text-teal-200/40">
-                All cash — no hitters today. The agent only buys when a thesis clears every guardrail. Patience is a position.
-              </p>
-            )}
-          </Card>
-        </div>
-        {isToday && (
+      {/* Top hitters (your holdings) + market movers (tracked names) under ONE consolidated title,
+          mirroring "The whole market" below — small per-column labels, matched row format + count
+          (Cam 2026-07-03). Movers are today-only; on an archived day only the hitters column shows
+          (its numbers are the snapshot's). */}
+      <section className="mt-8">
+        <SectionTitle>
+          Our market<SectionSub>· your holdings{isToday ? <> &amp; the names we track</> : null}</SectionSub>
+        </SectionTitle>
+        <div className={`grid items-start gap-6 ${isToday ? "lg:grid-cols-2" : ""}`}>
           <div>
-            <SectionTitle>Market Movers<SectionSub>· our tracked names</SectionSub></SectionTitle>
+            <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Top hitters</div>
             <Card className="overflow-hidden p-1">
-              {topMovers.length > 0 ? (
+              {hitters.length > 0 ? (
                 <ul className="divide-y divide-teal-400/10">
-                  {topMovers.map((m) => (
-                    <MoverHitterRow key={m.symbol} symbol={m.symbol} name={m.name} midCents={m.midCents} dayBps={m.dayBps} logoUrl={m.logoUrl} />
+                  {hitters.map((p) => (
+                    <HitterRow key={p.symbol} p={p} logoUrl={logoBy.get(p.symbol) ?? null} />
                   ))}
                 </ul>
               ) : (
-                <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
+                <p className="p-3 text-sm text-teal-200/40">
+                  All cash — no hitters today. The agent only buys when a thesis clears every guardrail. Patience is a position.
+                </p>
               )}
             </Card>
-            <p className="mt-2 px-1 text-[10px] text-teal-200/40">the biggest moves across the {universeRows.length} names we track</p>
+            <p className="mt-2 px-1 text-[10px] text-teal-200/40">the biggest moves in what the fund holds</p>
           </div>
-        )}
+          {isToday && (
+            <div>
+              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Market movers</div>
+              <Card className="overflow-hidden p-1">
+                {topMovers.length > 0 ? (
+                  <ul className="divide-y divide-teal-400/10">
+                    {topMovers.map((m) => (
+                      <MoverHitterRow key={m.symbol} symbol={m.symbol} name={m.name} midCents={m.midCents} dayBps={m.dayBps} logoUrl={m.logoUrl} />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
+                )}
+              </Card>
+              <p className="mt-2 px-1 text-[10px] text-teal-200/40">the biggest moves across the {universeRows.length} names we track</p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Live market data below — today only; archived days hide it (stale otherwise) (Cam 2026-06-16) */}
