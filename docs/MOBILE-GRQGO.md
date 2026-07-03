@@ -92,17 +92,17 @@ metro.grq.camerontora.ca.
 ## Backlog (noted 2026-07-03 EOD — Cam)
 
 **Stock page — the missed pieces:**
-1. Options positioning panel (Tier 3, D88) — add an `options` block to
+1. ~~Options positioning panel~~ ✅ 2026-07-03 — (Tier 3, D88) — add an `options` block to
    `dossierResponse` (`getOptions`/`optionsLine` exist); US names only.
-2. Social sentiment panel (Tier 8, D89) — `social` block; keep the "on probation"
+2. ~~Social sentiment panel~~ ✅ 2026-07-03 — (Tier 8, D89) — `social` block; keep the "on probation"
    honesty label.
 3. Related names (knowledge-graph Slice 1) — needs a `related` block in the feed.
 4. The record — `record[]` is ALREADY on the wire (typed journal history); render
    as a collapsible section. No backend change.
-5. Scoreboard — `scoreboard[]` already on the wire; render when non-empty.
+5. ~~Scoreboard~~ ✅ 2026-07-03 — `scoreboard[]` already on the wire; render when non-empty.
 6. Tappable [[glossary]] terms → inline explainers (the literacy pillar).
-7. Confidence levers ("what would change our mind", D93) — not on the wire yet.
-8. Personal positions + bought-at price on dossiers (the web got this in v2.46) —
+7. ~~Confidence levers~~ ✅ 2026-07-03 — ("what would change our mind", D93) — not on the wire yet.
+8. ~~Personal positions~~ ✅ 2026-07-03 — + bought-at price on dossiers (the web got this in v2.46) —
    check/mirror on the mobile wire.
 9. Watch/unwatch + pin/block directives ON the stock page (watch lives only on
    Watchlist rows today); price-chart range selector (30/90/180d).
@@ -121,7 +121,7 @@ metro.grq.camerontora.ca.
     screens eventually.
 
 **Platform:**
-16. Cache /api/today server-side (~9s per load today; FMP quota).
+16. ~~Cache /api/today~~ ✅ 2026-07-03 (60s shared, 11s→12ms) — (~9s per load today; FMP quota).
 17. Today date archive (the web's ?d= day-changer).
 18. Live quote polling (the web's <LiveQuote>) on stock pages + Today.
 19. The Hunt as a page (heat board) — feed exists; the Wire carries finds meanwhile.
