@@ -30,17 +30,23 @@ function Shell({ title, children, stamp }: { title: string; children: React.Reac
   );
 }
 
-export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
-  let closes: { date: Date; closeCents: number }[] = [];
+/** Fetch (and self-warm) the closes a chart spec needs — shared by the RSC below and
+ *  the mobile SVG endpoint (/api/learn/svg). */
+export async function loadChartCloses(spec: LearnChartSpec): Promise<{ date: Date; closeCents: number }[]> {
   try {
-    closes = await getCloses(spec.symbol, spec.days);
+    let closes = await getCloses(spec.symbol, spec.days);
     if (closes.length < 8) {
       await refreshBars([spec.symbol], "1y");
       closes = await getCloses(spec.symbol, spec.days);
     }
+    return closes;
   } catch {
-    closes = [];
+    return [];
   }
+}
+
+export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
+  const closes = await loadChartCloses(spec);
 
   if (closes.length < 8) {
     return (
@@ -52,6 +58,16 @@ export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
     );
   }
 
+  return (
+    <Shell title={spec.label} stamp={`daily closes · as of ${NICE_DAY.format(closes[closes.length - 1].date)}`}>
+      <ChartSvg spec={spec} closes={closes} />
+    </Shell>
+  );
+}
+
+/** The chart itself, pure and sync — renderable by the RSC above AND by
+ *  renderToStaticMarkup in the mobile SVG endpoint. */
+export function ChartSvg({ spec, closes }: { spec: LearnChartSpec; closes: { date: Date; closeCents: number }[] }) {
   const min = Math.min(...closes.map((c) => c.closeCents));
   const max = Math.max(...closes.map((c) => c.closeCents));
   const pad = Math.max(1, Math.round((max - min) * 0.08));
@@ -78,13 +94,12 @@ export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
   const last = closes[closes.length - 1];
 
   return (
-    <Shell title={spec.label} stamp={`daily closes · as of ${NICE_DAY.format(last.date)}`}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full"
-        role="img"
-        aria-label={`${spec.symbol} daily closes over the last ${closes.length} trading days, from ${money(first.closeCents)} to ${money(last.closeCents)}${gap ? `, with its biggest overnight move (${(gap.bps / 100).toFixed(1)}%) marked` : ""}.`}
-      >
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full"
+      role="img"
+      aria-label={`${spec.symbol} daily closes over the last ${closes.length} trading days, from ${money(first.closeCents)} to ${money(last.closeCents)}${gap ? `, with its biggest overnight move (${(gap.bps / 100).toFixed(1)}%) marked` : ""}.`}
+    >
         {yTicks.map((v) => (
           <g key={v} className="text-teal-400/15">
             <line x1={M.left} y1={Y(v)} x2={W - M.right} y2={Y(v)} stroke="currentColor" strokeWidth={1} />
@@ -119,7 +134,6 @@ export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
             </text>
           </g>
         ) : null}
-      </svg>
-    </Shell>
+    </svg>
   );
 }

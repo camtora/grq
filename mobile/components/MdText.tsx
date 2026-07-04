@@ -10,9 +10,10 @@ import { glossaryLookup } from '../lib/learn';
  * terms — tap-to-explain everywhere via the GlossarySheet (the literacy
  * pillar, 2026-07-04). */
 
-// Inline: **bold**, *italic*, [[term]].
+// Inline: **bold**, *italic*, [[term]], and the lessons' [display](#explain:slug) links —
+// both explain forms open the GlossarySheet (web Md.tsx parity, D111 L5).
 function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactNode[] {
-  const re = /(\*\*[^*]+?\*\*|\*[^*\n]+?\*|\[\[[^\]]+?\]\])/g;
+  const re = /(\[[^\]]+?\]\(#explain:[^)\s]+\)|\*\*[^*]+?\*\*|\*[^*\n]+?\*|\[\[[^\]]+?\]\])/g;
   const out: React.ReactNode[] = [];
   let last = 0;
   let i = 0;
@@ -24,6 +25,19 @@ function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactN
       out.push(
         <Text key={`${keyPrefix}-b${i}`} style={{ fontFamily: F.semi, color: p.textPrimary }}>
           {tok.slice(2, -2)}
+        </Text>,
+      );
+    } else if (tok.startsWith('[') && tok.includes('](#explain:')) {
+      const m = /^\[([^\]]+)\]\(#explain:([^)\s]+)\)$/.exec(tok);
+      const display = m?.[1] ?? tok;
+      const slug = decodeURIComponent(m?.[2] ?? '').toLowerCase();
+      out.push(
+        <Text
+          key={`${keyPrefix}-e${i}`}
+          onPress={() => useGlossary.getState().open(slug)}
+          style={{ color: p.accentText, textDecorationLine: 'underline', textDecorationStyle: 'dotted' }}
+        >
+          {display}
         </Text>,
       );
     } else if (tok.startsWith('[[')) {

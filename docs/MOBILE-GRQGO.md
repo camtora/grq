@@ -155,3 +155,16 @@ metro.grq.camerontora.ca.
     push tokens pruned; APNS_BUNDLE_ID default → grqgo; the Google OAuth iOS client
     stays — GRQ Go authenticates through it). Still open: TestFlight/EAS-Update
     distribution.
+
+## Learn (D111 L5 — full parity, 2026-07-04)
+
+The complete Learn framework runs natively: hub (progress + "The class" standings via
+`/api/learn/state`) → syllabus (`learn-course/[slug]`) → lesson screens
+(`learn-lesson/[course]/[lesson]`, D111 blocks) → exams (`learn-exam/[course]`, server-graded).
+Diagrams/charts are the WEB'S components, server-rendered to themed SVG by `/api/learn/svg`
+and drawn with `react-native-svg/css` (`SvgCss`) — never port a diagram by hand. Videos open
+externally by design (no webview dep = no reinstalls). Content ships in
+`@shared/content/learn.json` (blocks + legacy fields); check-grading helpers in `lib/learn.ts`
+mirror web `lib/learn/answers.ts` — keep in lockstep. Gotcha: on the HOST, `mobile/shared/` can
+exist as grq-metro's empty mount target — metro.config picks the candidate containing
+`contract.ts`, so host bundling works; don't "fix" that check away.

@@ -8,8 +8,11 @@ const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
 
+// Pick the candidate that actually CONTAINS the contract — on the host, ./shared can
+// exist as the grq-metro container's (empty) mount target, which would shadow ../shared
+// and break host-side bundling (bit the L5 export, 2026-07-04).
 const sharedCandidates = [path.resolve(__dirname, 'shared'), path.resolve(__dirname, '..', 'shared')];
-const shared = sharedCandidates.find((p) => fs.existsSync(p));
+const shared = sharedCandidates.find((p) => fs.existsSync(path.join(p, 'contract.ts')));
 if (shared) {
   config.watchFolders = [shared];
   config.resolver.extraNodeModules = {

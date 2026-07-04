@@ -14,7 +14,12 @@ living-examples engine (`lib/learn/examples.ts`, seven deterministic generators 
 data, nightly via the runner + a manual seed script; template narration, zero LLM tokens — the
 doc's Haiku line is an optional later polish) **plus diagram pass two** (ten more audited SVGs).
 **Every one of the 35 lessons now carries ≥1 visual/live block — enforced per-lesson by test.**
-Remaining: L5 mobile (§12).
+**L5 shipped 2026-07-04 evening — FULL mobile parity on GRQ Go** (per-lesson screens, checks,
+exams, standings, living examples, callouts, videos; diagrams/charts served as the web's own
+components via `/api/learn/svg` → `SvgCss`, so the picture cannot drift; `/api/learn/state`
+powers progress/standings/examples; zero new native deps — phones hot-load it from grq-metro).
+The framework is COMPLETE. Parked: Alfred-graded `open` exam questions (needs a web-side API
+key decision) and the §14 capstone.
 
 Cam's original brief: *"calling them 'courses' and 'lessons' is a little ridiculous — they're just
 paragraphs."* This doc is the redesign of what a course **is**: structure, media, live examples,

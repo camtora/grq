@@ -1,38 +1,77 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SubScreen, Card, MiniLabel, Footnote, Loading, ErrorNote } from '../../../../components/Chrome';
-import MdText from '../../../../components/MdText';
-import OrderBookSim from '../../../../components/learn/OrderBookSim';
-import CompoundingSim from '../../../../components/learn/CompoundingSim';
-import ReceiptBlock, { type ReceiptWire } from '../../../../components/learn/ReceiptBlock';
-import { usePalette, F } from '../../../../constants/theme';
-import { COURSES, courseBySlug, appHref } from '../../../../lib/learn';
+import { SubScreen, Card, MiniLabel, Footnote, ErrorNote } from '../../../../components/Chrome';
+import { usePalette, F, type Palette } from '../../../../constants/theme';
+import { COURSES, courseBySlug, appHref, lessonChecks, readMinutes } from '../../../../lib/learn';
 import { useApi } from '../../../../services/hooks';
+import { BASE_URL } from '../../../../services/api';
 
-/** One Learn course (web /learn/[course] parity): the lessons stacked as panels,
- * markdown via MdText (every [[term]] tap-to-explain), interactive widgets (the
- * toy exchange · the compounding machine), live-fund receipts, and "see it live"
- * links mapped to app routes. */
+/** A course SYLLABUS (web /learn/[course] parity, D111): the overview, the lesson
+ * list with per-member checkmarks and minutes, and the final-exam card with the
+ * class's results. Lessons live on their own screens now. The external Options
+ * course renders a landing for its portal — its exam still lives here. */
+
+type LearnState = {
+  done: string[];
+  exams: Record<
+    string,
+    {
+      questionCount: number;
+      passPct: number;
+      mine: { best: number; attempts: number; passed: boolean } | null;
+      class: { name: string; photo: string | null; best: number; attempts: number; passed: boolean }[];
+    }
+  >;
+};
+
+function ExamCard({ slug, state, p }: { slug: string; state: LearnState | null; p: Palette }) {
+  const router = useRouter();
+  const exam = state?.exams?.[slug];
+  return (
+    <View>
+      <MiniLabel>The final exam</MiniLabel>
+      <Card>
+        <Text style={[s.meta, { color: p.textMuted }]}>
+          {exam ? `${exam.questionCount} questions · pass ≥ ${exam.passPct}%` : 'graded server-side'} · unlimited retakes — the best score
+          stands, the attempt count shows.
+        </Text>
+        {exam?.class?.length ? (
+          <View style={{ gap: 6, marginTop: 10 }}>
+            {exam.class.map((r) => (
+              <View key={r.name} style={s.classRow}>
+                {r.photo ? (
+                  <Image source={{ uri: `${BASE_URL}${r.photo}` }} style={s.avatar} />
+                ) : (
+                  <View style={[s.avatar, { backgroundColor: p.accent + '33', alignItems: 'center', justifyContent: 'center' }]}>
+                    <Text style={{ color: p.accentText, fontFamily: F.bold, fontSize: 10 }}>{r.name.charAt(0)}</Text>
+                  </View>
+                )}
+                <Text style={[s.className, { color: p.textPrimary }]}>{r.name}</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: r.passed ? p.pos : p.warn }}>
+                  {r.best}%{r.passed ? ' ✓' : ''}
+                </Text>
+                <Text style={[s.meta, { color: p.textMuted }]}>
+                  · {r.attempts} {r.attempts === 1 ? 'attempt' : 'attempts'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <Pressable onPress={() => router.push(`/more/learn-exam/${slug}` as never)} style={[s.btn, { backgroundColor: p.accent + '26' }]}>
+          <Text style={[s.btnText, { color: p.accentText }]}>{exam?.mine ? 'Retake the exam' : 'Take the exam'}</Text>
+        </Pressable>
+      </Card>
+    </View>
+  );
+}
+
 export default function LearnCourseScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { p } = usePalette();
   const router = useRouter();
   const course = courseBySlug(slug ?? '');
-
-  // The Options course is its own portal — hop straight there (web redirect parity).
-  useEffect(() => {
-    if (course?.external) {
-      const dest = appHref(course.external.href);
-      if (dest) router.replace(dest);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course?.slug]);
-
-  // The live-fund receipts (fetched once; each lesson renders its own block —
-  // quietly absent until the wire answers).
-  const needsReceipts = (course?.lessons ?? []).some((l) => l.receipt);
-  const receipts = useApi<{ blocks: Record<string, ReceiptWire> }>('/api/learn/receipts');
+  const state = useApi<LearnState>('/api/learn/state');
 
   if (!course) {
     return (
@@ -47,63 +86,101 @@ export default function LearnCourseScreen() {
       <SubScreen title={`Course ${course.n} · ${course.title}`}>
         <Card style={{ marginTop: 8 }}>
           <Text style={[s.body, { color: p.textMuted }]}>
-            Not written yet — this course is on the syllabus but the lessons haven&apos;t been written.
-            It&apos;ll appear on the Learn hub the day it&apos;s ready — no vaporware, no placeholders.
+            Not written yet — this course is on the syllabus but the lessons haven&apos;t been written. No vaporware, no placeholders.
           </Text>
         </Card>
       </SubScreen>
     );
   }
 
+  const doneSet = new Set((state.data?.done ?? []).filter((d) => d.startsWith(course.slug + '/')).map((d) => d.split('/')[1]));
   const next = COURSES.find((c) => c.n > course.n && c.status === 'live');
-  const nextDest = next ? (next.external ? appHref(next.external.href) : `/more/learn-course/${next.slug}`) : null;
+
+  // The external course (Options) — a landing for its portal, plus its exam.
+  if (course.external) {
+    const dest = appHref(course.external.href);
+    return (
+      <SubScreen title={`Course ${course.n} · ${course.title}`}>
+        <View style={{ marginTop: 8, gap: 12 }}>
+          <Text style={[s.intro, { color: p.textMuted }]}>{course.tagline}</Text>
+          {course.overview?.length ? (
+            <Card>
+              <Text style={[s.overviewHead, { color: p.accentText }]}>AFTER THIS COURSE</Text>
+              {course.overview.map((o) => (
+                <Text key={o} style={[s.bullet, { color: p.textPrimary }]}>
+                  · {o}
+                </Text>
+              ))}
+            </Card>
+          ) : null}
+          <Card>
+            <Text style={[s.body, { color: p.textMuted }]}>This course is taught in its own portal — lessons, the payoff calculator, and the desk experiment&apos;s live contracts.</Text>
+            {dest ? (
+              <Pressable onPress={() => router.push(dest as never)} style={[s.btn, { backgroundColor: p.accent + '26' }]}>
+                <Text style={[s.btnText, { color: p.accentText }]}>Open the Options portal</Text>
+              </Pressable>
+            ) : null}
+          </Card>
+          <ExamCard slug={course.slug} state={state.data} p={p} />
+          <Footnote>education only · one exam system, eight courses</Footnote>
+        </View>
+      </SubScreen>
+    );
+  }
 
   return (
     <SubScreen title={`Course ${course.n} · ${course.title}`}>
       <View style={{ marginTop: 8, gap: 12 }}>
         <Text style={[s.intro, { color: p.textMuted }]}>{course.tagline}</Text>
 
-        {needsReceipts && receipts.loading && <Loading />}
-
-        {course.lessons.map((lesson, i) => (
-          <View key={lesson.slug}>
-            <MiniLabel>{`${i + 1} · ${lesson.title}`}</MiniLabel>
-            <Card>
-              <MdText body={lesson.body} foldAt={1400} />
-              {lesson.widget === 'order-book' && <OrderBookSim />}
-              {lesson.widget === 'compounding' && <CompoundingSim />}
-              {lesson.receipt && <ReceiptBlock r={receipts.data?.blocks?.[lesson.receipt]} />}
-              {(lesson.tryIt?.length ?? 0) > 0 && (
-                <View style={[s.tryRow, { borderTopColor: p.cardBorder }]}>
-                  {lesson.tryIt!.map((t) => {
-                    const dest = appHref(t.href);
-                    if (!dest) return null;
-                    return (
-                      <Pressable key={t.href} onPress={() => router.push(dest)}>
-                        <Text style={[s.tryLink, { color: p.accentText }]}>{t.label} →</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              )}
-            </Card>
-          </View>
-        ))}
-
-        <View style={s.footRow}>
-          <Text style={[s.footNote, { color: p.textMuted, flex: 1 }]}>
-            Every dotted term is tap-to-explain. Something still unclear? Ask Alfred — that&apos;s what the chat
-            is for.
-          </Text>
-          {next && nextDest && (
-            <Pressable onPress={() => router.push(nextDest)}>
-              <Text style={[s.nextLink, { color: p.accentText }]}>
-                Next: Course {next.n} · {next.title} →
+        {course.overview?.length ? (
+          <Card>
+            <Text style={[s.overviewHead, { color: p.accentText }]}>AFTER THIS COURSE</Text>
+            {course.overview.map((o) => (
+              <Text key={o} style={[s.bullet, { color: p.textPrimary }]}>
+                · {o}
               </Text>
-            </Pressable>
-          )}
+            ))}
+          </Card>
+        ) : null}
+
+        <View>
+          <MiniLabel>{`Lessons · ${course.lessons.length}`}</MiniLabel>
+          <Card style={{ paddingVertical: 4 }}>
+            {course.lessons.map((lesson, i) => {
+              const done = doneSet.has(lesson.slug);
+              const checks = lessonChecks(lesson).length;
+              return (
+                <Pressable
+                  key={lesson.slug}
+                  onPress={() => router.push(`/more/learn-lesson/${course.slug}/${lesson.slug}` as never)}
+                  style={[s.lessonRow, i > 0 && { borderTopWidth: 1, borderTopColor: p.cardBorder }]}
+                >
+                  <Text style={[s.lessonN, { color: p.textMuted }]}>{i + 1}</Text>
+                  <Text style={[s.lessonTitle, { color: p.textPrimary }]} numberOfLines={2}>
+                    {lesson.title}
+                  </Text>
+                  <Text style={[s.lessonMeta, { color: p.textMuted }]}>
+                    {checks ? `${checks} ${checks === 1 ? 'check' : 'checks'} · ` : ''}
+                    {readMinutes(lesson)} min
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: done ? p.pos : p.cardBorder }}>✓</Text>
+                </Pressable>
+              );
+            })}
+          </Card>
         </View>
-        <Footnote>education only · the same lesson text the website renders</Footnote>
+
+        <ExamCard slug={course.slug} state={state.data} p={p} />
+
+        {next && (
+          <Pressable onPress={() => router.push(`/more/learn-course/${next.slug}` as never)}>
+            <Text style={[s.nextLink, { color: p.accentText }]}>
+              Next: Course {next.n} · {next.title} →
+            </Text>
+          </Pressable>
+        )}
+        <Footnote>every dotted term is tap-to-explain · ask Alfred when something&apos;s still unclear</Footnote>
       </View>
     </SubScreen>
   );
@@ -112,9 +189,17 @@ export default function LearnCourseScreen() {
 const s = StyleSheet.create({
   intro: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
   body: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 19 },
-  tryRow: { borderTopWidth: 1, marginTop: 12, paddingTop: 10, gap: 6 },
-  tryLink: { fontFamily: F.semi, fontSize: 12, lineHeight: 18 },
-  footRow: { gap: 8 },
-  footNote: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 15 },
-  nextLink: { fontFamily: F.semi, fontSize: 12.5 },
+  meta: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 15 },
+  overviewHead: { fontFamily: F.bold, fontSize: 9, letterSpacing: 1.5, marginBottom: 6 },
+  bullet: { fontFamily: F.reg, fontSize: 12, lineHeight: 18 },
+  lessonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  lessonN: { fontFamily: F.med, fontSize: 11, width: 14, textAlign: 'right' },
+  lessonTitle: { fontFamily: F.semi, fontSize: 12.5, flex: 1, lineHeight: 16 },
+  lessonMeta: { fontFamily: F.reg, fontSize: 9.5 },
+  classRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: { width: 22, height: 22, borderRadius: 11 },
+  className: { fontFamily: F.semi, fontSize: 12, width: 64 },
+  btn: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 13, paddingVertical: 8, marginTop: 10 },
+  btnText: { fontFamily: F.semi, fontSize: 12 },
+  nextLink: { fontFamily: F.semi, fontSize: 12.5, textAlign: 'right' },
 });

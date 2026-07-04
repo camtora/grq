@@ -13,3 +13,5 @@ ios/.xcode.env.local
 .DS_Store
 ._*
 *.log
+shared
+shared

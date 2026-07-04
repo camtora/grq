@@ -2904,3 +2904,27 @@ proposes-disposes, rsi-gauge) — every one screenshot-audited in both themes be
 needed geometry fixes the render exposed). **Coverage: all 35 lessons now carry ≥1 visual/live
 block, and the test enforces it per-LESSON** — "all prose" is a failing state, permanently.
 Agent redeployed v2.52-phase4 (the examples hook); boot scan correctly skipped on today's marker.
+
+**D111 addendum 3 — L5 mobile parity: the full framework on GRQ Go (2026-07-04 evening).**
+Full-parity call from Cam ("no corner cutting"). The app now renders the complete D111
+experience natively: per-lesson screens (blocks → native renderers), the course pages reborn
+as syllabi (overview, lesson rows with checkmarks + minutes, the exam card with class results),
+graded exams (server-keyed, shuffled, per-question teach-backs + review hops), inline checks
+(client-graded, answering them completes the lesson via the same /api/learn/progress), the hub's
+per-course progress lines + "The class" standings, living examples with live/illustration
+stamps, callouts, curated videos (thumbnail → external playback — the framework's designed
+mobile behaviour; zero new native deps, so no phone reinstalls), and the two widgets via the
+native ports GRQ Go already had.
+
+**The diagrams/charts ship as THE WEB'S OWN COMPONENTS**: `GET /api/learn/svg` server-renders
+them to static SVG with every Tailwind class resolved into an inline stylesheet (both theme
+ramps from globals.css baked in; `dominant-baseline` → portable `dy`; text halos stripped;
+CSS vars → hex) and the app draws them with react-native-svg's `SvgCss`. One source of truth —
+a diagram edit on web IS the mobile edit. `GET /api/learn/state` powers progress/standings/
+examples in one call; `/api/learn/receipts` (the GRQ Go session's earlier endpoint) covers
+receipts. Also fixed: mobile `MdText` never handled the lessons' `[text](#explain:slug)` links
+(they rendered as raw markdown) — now they open the GlossarySheet like `[[term]]`;
+`metro.config.js` shared-candidate check is content-aware (the grq-metro mount target used to
+shadow `../shared` on the host and break host-side bundling). Verified: mobile tsc clean, a
+full `expo export` bundle builds, both endpoints live-verified, endpoint SVGs render-checked in
+both themes. Phones hot-load it all from the grq-metro bind mount — no rebuild, no store dance.

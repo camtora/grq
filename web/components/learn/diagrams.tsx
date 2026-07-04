@@ -9,6 +9,84 @@
 import type { ReactNode } from "react";
 import type { LearnDiagramKey } from "@/lib/learn/content";
 
+/** Title + caption per diagram — the native app's shell renders these around the SVG the
+ *  /api/learn/svg endpoint serves. Kept adjacent to the components so a copy edit there is
+ *  visibly a copy edit here (same file, same review). */
+export const DIAGRAM_META: Record<LearnDiagramKey, { title: string; caption: string }> = {
+  "order-path": {
+    title: "Where your order actually goes",
+    caption: "The exchange matches you with a seller; your money settles to that seller. The company isn't in the room — that only happened once, at the IPO.",
+  },
+  "market-map": {
+    title: "Primary vs secondary market",
+    caption: "Left: the one time your purchase funds the company. Right: every trade after that — investors trading with each other, all day, forever.",
+  },
+  "book-ladder": {
+    title: "The order book, standing still",
+    caption: "Six real resting orders around a 20¢ gap nobody has crossed yet. A market buy takes 20.10; a market sell hits 19.90 — the spread is the toll between them.",
+  },
+  "acb-timeline": {
+    title: "The ACB timeline",
+    caption: "Same numbers as the lesson: ($50 + $70 + $10) ÷ 10 = $13.00 a share. The sell realizes 5 × ($16 − $13) = +$15 — the other five shares are still just paper.",
+  },
+  "drawdown-ladder": {
+    title: "What a fall costs, to scale",
+    caption: "Both sides use the same scale. A 50% hole needs a bar twice as long to climb out of — the arithmetic professionals organize their whole careers around.",
+  },
+  "margin-spiral": {
+    title: "The margin spiral",
+    caption: "Every step is mechanical — no villain required. The loan turned a survivable −25% into a realized −50%, sold at the exact bottom.",
+  },
+  "fee-gravity": {
+    title: "Fee gravity — drawn to scale",
+    caption: "Identical investor, identical market: $200 a month at 8% for 30 years. The only difference is the fee.",
+  },
+  "grq-pipeline": {
+    title: "The pipeline — receipts before trades",
+    caption: "One direction, no shortcuts. Promotion only buys a ticket to stand in front of the gate — and the kill switch is checked inside it, on every single order.",
+  },
+  "two-listings": {
+    title: "Tickers are addresses, not names",
+    caption: "Left: one business, reachable at two addresses in two currencies. Right: the trap that once fooled Alfred — the same letters living at different exchanges are different companies.",
+  },
+  "ex-date-step": {
+    title: "The ex-dividend date, drawn",
+    caption: "The $2 arrives in your account and leaves the company's — the market marks the shares down by the same $2. Your money, arriving by mail.",
+  },
+  "pizza-split": {
+    title: "Splits and buybacks, as pizza",
+    caption: "A split cuts more slices from the same pizza — your highlighted share is worth exactly what it was. A buyback retires slices, so every remaining slice is a bigger bite.",
+  },
+  "target-chase": {
+    title: "Price targets chase the price",
+    caption: "Each quarter's average target settles roughly where the price already was. That's herding, not fresh analysis.",
+  },
+  "one-bet-ten-times": {
+    title: "Ten holdings ≠ ten bets",
+    caption: "Correlation is the whole question. The left portfolio fails for ONE reason, held ten times; the right one needs ten different things to go wrong at once.",
+  },
+  "short-asymmetry": {
+    title: "Why the loss math is different",
+    caption: "Owning has a floor — the stock stops at zero. A short's bill grows with the price, forever, and you pay borrow rent while you wait.",
+  },
+  "quote-paths": {
+    title: "Two apps, two honest numbers",
+    caption: "One answers “what did the last trade print, fifteen minutes ago?”; the other answers “what's the current bid/ask midpoint, on a different venue?”",
+  },
+  "thesis-price-2x2": {
+    title: "Sell on the thesis, not the price",
+    caption: "The market doesn't know your entry price and doesn't care. The only column that matters is whether the REASON you bought still stands.",
+  },
+  "proposes-disposes": {
+    title: "The separation of powers",
+    caption: "Alfred can argue; the gate can't listen. Humans sit above both — they set the rules the gate enforces and hold the switch that stops everything.",
+  },
+  "rsi-gauge": {
+    title: "RSI, honestly labelled",
+    caption: "The needle says the ride so far was hard and fast — nothing more. “Stretched” is a tension reading, not a bounce guarantee.",
+  },
+};
+
 /* ---------- tiny shared pieces ---------- */
 
 function Shell({ title, children, caption }: { title: string; children: ReactNode; caption?: string }) {
