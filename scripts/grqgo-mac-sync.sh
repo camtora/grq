@@ -59,7 +59,7 @@ fi
 # grqgo-build/ and calls require.context('./app') to discover Expo Router routes.
 echo ""
 echo "▸ Syncing JS source..."
-for dir in app components constants services; do
+for dir in app components constants services lib store; do
   rsync -aq --delete -e "$RSYNC_SSH" \
     --exclude='.DS_Store' --exclude='._*' \
     "$UBUNTU:$REMOTE_APP/$dir/" "$LOCAL/$dir/"
