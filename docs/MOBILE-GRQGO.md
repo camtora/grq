@@ -113,17 +113,26 @@ metro.grq.camerontora.ca.
     `/api/race` grew counts/positions/days + new `/api/race/day/[date]`).
 11. Bull Race: past races (the feed's `races[]`), per-bull trade history, richer
     holdings (avg cost, market value).
-12. Options Desk: member desk controls + muteable nudge (D92), per-option decay
-    sparkline, expiry/punchline cards; link the options education portal.
+12. ~~Options Desk: member desk controls, per-option decay sparkline, expiry/punchline
+    cards; link the options education portal~~ ✅ 2026-07-04 — full parity (desk switcher +
+    new-desk form + lifecycle controls, return chart, teaching cards w/ decay, resolved
+    punchlines, recent calls, the literacy collapsibles); the portal itself became
+    More ▸ Learning ▸ Options (engines ported; Learn/Calculator/Experiment/Ask). Also
+    fixed: POST /api/desk never existed — web "+ New desk" had been 405ing.
 13. ~~Report Card: the web's filters (source · verdict · ticker · latest-per-name),
     full-ledger paging~~ ✅ 2026-07-04 — screen rebuilt to web parity (tally-card grid incl.
     effect-order "does the ripple pay?", all four filters, show-more paging, entry→now +
     verdict per row); feed rows cap 60→1500 + totalRows (also fixed bySource reading the
     pre-tally shape + pending verdicts rendering as graded).
-14. Chess Moves: theme DETAIL (`/api/chess/[id]` — the parsed board + heat-ranked
-    plays + levers), brief/research actions.
-15. Short Lab · Day-Trading Lab · options portal — web-only; want mobile feeds +
-    screens eventually.
+14. ~~Chess Moves: theme DETAIL + brief/research actions~~ ✅ 2026-07-04 — list rebuilt
+    (3-step explainer, ♟ Map-it bar, status watcher, direction chips) + chess-board/[id]
+    (provenance/prompt, take, position, levers, the chain map w/ per-piece 1D–1Y tapes,
+    heat-ranked PlayCards w/ Research).
+15. ~~Short Lab · Day-Trading Lab · options portal~~ ✅ 2026-07-04 — all three on the
+    phone (short-lab w/ margin health + shadow shorts + agent A/B; day-lab w/ Trader-vs-
+    Holder verdicts; the portal under Learning). Nothing is web-only anymore; also new:
+    About GRQ (manual/diary/decisions + Traffic & Tokens dashboards) and the app usage
+    beacon (screen views land on the Traffic dashboard).
 
 **Platform:**
 16. ~~Cache /api/today~~ ✅ 2026-07-03 (60s shared, 11s→12ms) — (~9s per load today; FMP quota).
