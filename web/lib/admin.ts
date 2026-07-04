@@ -21,6 +21,7 @@ const SECTION_ORDER = [
   "Stock",
   "Research",
   "Reports",
+  "Learn",
   "Second Opinions",
   "Bull Race",
   "Options Desk",

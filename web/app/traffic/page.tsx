@@ -242,18 +242,18 @@ export default async function AdminPage({
               {usage.recent.map((r, i) => (
                 <div key={i} className="flex items-baseline gap-3 text-sm">
                   <span className="w-16 shrink-0 text-xs tabular-nums text-teal-200/40">{timeAgo(r.at)}</span>
-                  {/* Where from: GRQ Go vs the web — blank for rows logged before the split. */}
-                  <span
-                    className={`w-8 shrink-0 text-[10px] font-bold uppercase tracking-wider ${r.client === "app" ? "text-teal-300/90" : "text-teal-200/35"}`}
-                    title={r.client === "app" ? "GRQ Go (iOS)" : r.client === "web" ? "the web app" : "logged before web/app tracking"}
-                  >
-                    {r.client ?? ""}
-                  </span>
                   <span className="w-24 shrink-0 truncate text-teal-100/80">
                     {r.name ?? r.email.split("@")[0]}
                   </span>
                   <span className="w-28 shrink-0 text-teal-200/70">{r.section}</span>
-                  <span className="truncate text-xs text-teal-200/35">{r.path}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-teal-200/35">{r.path}</span>
+                  {/* Where from, pinned far right: GRQ Go vs the web — blank pre-split rows. */}
+                  <span
+                    className={`w-8 shrink-0 text-right text-[10px] font-bold uppercase tracking-wider ${r.client === "app" ? "text-teal-300/90" : "text-teal-200/35"}`}
+                    title={r.client === "app" ? "GRQ Go (iOS)" : r.client === "web" ? "the web app" : "logged before web/app tracking"}
+                  >
+                    {r.client ?? ""}
+                  </span>
                 </div>
               ))}
             </div>

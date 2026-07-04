@@ -223,10 +223,6 @@ export default function TrafficScreen() {
                     {i > 0 && <Divider />}
                     <View style={s.recentRow}>
                       <Text style={[s.metaSmall, tabular, { color: p.textMuted, width: 52 }]}>{timeAgo(r.at)}</Text>
-                      {/* where from: GRQ Go vs the web — blank for rows logged before the split */}
-                      <Text style={[s.clientTag, { color: r.client === 'app' ? p.accentText : p.textMuted, width: 26 }]}>
-                        {r.client ?? ''}
-                      </Text>
                       <Text style={[s.metaSmall, { color: p.textPrimary, width: 60, fontFamily: F.semi }]} numberOfLines={1}>
                         {r.name ?? r.email.split('@')[0]}
                       </Text>
@@ -235,6 +231,10 @@ export default function TrafficScreen() {
                       </Text>
                       <Text style={[s.metaSmall, { color: p.textMuted, flex: 1 }]} numberOfLines={1}>
                         {r.path}
+                      </Text>
+                      {/* where from, pinned far right: GRQ Go vs the web — blank pre-split rows */}
+                      <Text style={[s.clientTag, { color: r.client === 'app' ? p.accentText : p.textMuted, width: 26, textAlign: 'right' }]}>
+                        {r.client ?? ''}
                       </Text>
                     </View>
                   </View>

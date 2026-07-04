@@ -29,6 +29,7 @@ export type Section =
   | "Activity"
   | "Ideas"
   | "How it works"
+  | "Learn"
   | "The Wire"
   | "Admin"
   | "Other";
@@ -69,6 +70,9 @@ export function sectionForPath(pathRaw: string): Section {
       "chess-board": "Chess Moves",
       "report-card": "Report Card",
       "about-grq": "How it works",
+      learn: "Learn",
+      "learn-course": "Learn",
+      "learn-glossary": "Learn",
     };
     if (MORE[sub]) return MORE[sub];
   }
@@ -105,6 +109,7 @@ export function sectionForPath(pathRaw: string): Section {
   if (path === "/ideas" || path.startsWith("/ideas/")) return "Ideas";
   if (path === "/research" || path.startsWith("/research/")) return "Research";
   if (path === "/how-it-works" || path.startsWith("/how-it-works/")) return "How it works";
+  if (path === "/learn" || path.startsWith("/learn/")) return "Learn";
   if (
     path === "/admin" ||
     path.startsWith("/admin/") ||
