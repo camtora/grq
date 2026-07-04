@@ -39,7 +39,7 @@ Every tab screen renders inside `<Screen title="...">` (`components/Chrome.tsx`)
 
 - **Top bar**: the **bull bubble** top-left (34, circular, accent ring + glow — the
   web's floating launcher moved up here) → the member's **Ask Alfred** thread
-  (`/chat`); the **page title centered** (Space Grotesk 700, 17); top-right the
+  (`/chat`); the **page title centered** (System 800, 17); top-right the
   **notifications bell**, the **chat icon** (unread red dot; → `/messages`, the
   Cam↔Graham thread), then the **signed-in member's avatar** (28, circular, accent
   ring) → **Settings** (`/settings` — me/sign-out, kill switch, risk dial, fees,
@@ -55,7 +55,7 @@ The splash and sign-in screens are the only chrome-less surfaces.
 - **Card**: `p.cardBg` background, 1px `p.cardBorder`, radius 16, padding 12–16
   (`components/Chrome.tsx` `Card`). Every panel sits on one. Lists inside cards use
   hairline dividers (`p.cardBorder`).
-- **Section header** (`SectionTitle`): uppercase, Inter 700, 13, `p.textPrimary`,
+- **Section header** (`SectionTitle`): uppercase, System 800, 13, `p.textPrimary`,
   letter-spacing 1 — with an optional lighter descriptor (`sub`) after it, like the
   web's `SectionTitle`/`SectionSub`. Sits **outside** the card, 8pt above it.
 - Section spacing: 24 between sections, 8 header→card.
