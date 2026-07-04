@@ -104,15 +104,18 @@ metro.grq.camerontora.ca.
 8. ~~Personal positions~~ ✅ 2026-07-03 — + bought-at price on dossiers (the web got this in v2.46) —
    check/mirror on the mobile wire.
 9. ~~Watch/who-is-watching on the stock page + search rows~~ ✅ 2026-07-03 (eye toggle
-   + avatars; pin/block + chart range selector still open).
+   + avatars; chart ranges since shipped; pin/block WON'T DO — Cam 2026-07-04).
 
 **Experiments — build out to match the site:**
 10. ~~Second Opinions: per-day/per-call detail (web `race/[date]`), call browser~~ ✅ 2026-07-04 —
     overview rebuilt to web parity (ranked tiles w/ counts+book, how-it-works, race-day list) +
     `race-day/[date]` (standings strip, champion-vs-challenger session matrix; feed:
     `/api/race` grew counts/positions/days + new `/api/race/day/[date]`).
-11. Bull Race: past races (the feed's `races[]`), per-bull trade history, richer
-    holdings (avg cost, market value).
+11. ~~Bull Race: past races, per-bull trade history, richer holdings~~ ✅ 2026-07-04 —
+    race-switcher chips (?id + leader %), the all-bulls return chart, traded-first
+    ranks w/ unranked pill, expandable bulls (holdings w/ avg cost/currency/mv/unreal
+    + recent calls w/ filled/rejected), per-bull spark, how-it-works collapsible;
+    feed grew cadence/startedAt/navHistory/calls/holding costs.
 12. ~~Options Desk: member desk controls, per-option decay sparkline, expiry/punchline
     cards; link the options education portal~~ ✅ 2026-07-04 — full parity (desk switcher +
     new-desk form + lifecycle controls, return chart, teaching cards w/ decay, resolved

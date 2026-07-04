@@ -1491,12 +1491,29 @@ export async function bullsResponse(id?: number) {
   return {
     races: races.map((r) => ({ id: r.id, name: r.name, status: r.status, leaderReturnPct: r.leader?.returnPct ?? null })),
     current: data && {
-      race: { id: data.race.id, name: data.race.name, status: data.race.status, startingStakeCents: data.race.startingStakeCents },
+      race: {
+        id: data.race.id,
+        name: data.race.name,
+        status: data.race.status,
+        startingStakeCents: data.race.startingStakeCents,
+        cadence: data.race.cadence,
+        startedAt: data.race.startedAt ? data.race.startedAt.toISOString() : null,
+      },
       realFundReturnPct: data.realFund?.returnPct ?? null,
+      realFundNavCents: data.realFund?.navCents ?? null,
       bulls: data.bulls.map((b) => ({
         entrantId: b.entrantId, label: b.label, model: b.model, dial: b.dial,
         navCadCents: b.navCadCents, returnPct: b.returnPct, cashPct: b.cashPct, tradeCount: b.tradeCount,
-        holdings: b.holdings.map((h) => ({ symbol: h.symbol, qty: h.qty, mvCadCents: h.mvCadCents, unrealCadCents: h.unrealCadCents })),
+        // Return-over-time (the web chart + per-bull sparkline) — GRQ Go parity.
+        navHistory: b.navHistory.map((n) => ({ at: n.at.toISOString(), returnPct: n.returnPct })),
+        holdings: b.holdings.map((h) => ({
+          symbol: h.symbol, qty: h.qty, mvCadCents: h.mvCadCents, unrealCadCents: h.unrealCadCents,
+          avgCostCents: h.avgCostCents, currency: h.currency,
+        })),
+        calls: b.calls.map((c) => ({
+          at: c.sessionAt.toISOString(), action: c.action, symbol: c.symbol, qty: c.qty,
+          thesis: c.thesis, filled: c.filled, rejectReason: c.rejectReason,
+        })),
       })),
     },
   };

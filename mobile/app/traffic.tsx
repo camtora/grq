@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../components/Chrome';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { useApi } from '../services/hooks';
@@ -148,41 +148,46 @@ export default function TrafficScreen() {
               </Card>
             </View>
 
-            {/* who uses what — the matrix, sideways-scrolling */}
+            {/* who uses what — per-person breakdowns (phone-friendly; the web's grid
+                matrix doesn't survive a narrow screen — Cam 2026-07-04) */}
             <View>
-              <SectionTitle sub="views per person, per section">Who uses what</SectionTitle>
-              <Card style={{ padding: 0, overflow: 'hidden' }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ padding: 12 }}>
-                    <View style={{ flexDirection: 'row' }}>
-                      <Text style={[s.mCell, s.mHead, { color: p.textMuted, width: 74, textAlign: 'left' }]}>USER</Text>
-                      {d.matrix.sections.map((sec) => (
-                        <Text key={sec} style={[s.mCell, s.mHead, { color: p.textMuted }]} numberOfLines={1}>
-                          {sec}
-                        </Text>
-                      ))}
-                    </View>
-                    {d.matrix.rows.map((row) => {
-                      const name = d.byUser.find((u) => u.email === row.email)?.name;
-                      return (
-                        <View key={row.email} style={{ flexDirection: 'row', marginTop: 6 }}>
-                          <Text style={[s.mCell, { color: p.textPrimary, width: 74, textAlign: 'left', fontFamily: F.semi }]} numberOfLines={1}>
-                            {name ?? row.email.split('@')[0]}
+              <SectionTitle sub="each person's sections, ranked">Who uses what</SectionTitle>
+              <View style={{ gap: 8 }}>
+                {d.matrix.rows.map((row) => {
+                  const name = d.byUser.find((u) => u.email === row.email)?.name;
+                  const entries = Object.entries(row.counts)
+                    .filter(([, n]) => n > 0)
+                    .sort((a, b) => b[1] - a[1]);
+                  const personMax = Math.max(1, ...entries.map(([, n]) => n));
+                  const shown = entries.slice(0, 6);
+                  const restViews = entries.slice(6).reduce((sum, [, n]) => sum + n, 0);
+                  return (
+                    <Card key={row.email}>
+                      <Text style={[s.userName, { color: p.textPrimary }]}>{name ?? row.email.split('@')[0]}</Text>
+                      <View style={{ gap: 5, marginTop: 8 }}>
+                        {shown.map(([sec, n]) => (
+                          <View key={sec} style={s.barRow}>
+                            <Text style={[s.barLabel, { color: p.textMuted }]} numberOfLines={1}>
+                              {sec}
+                            </Text>
+                            <View style={[s.barTrack, { backgroundColor: p.cardHi, height: 10, borderRadius: 5 }]}>
+                              <View
+                                style={[s.barFill, { width: `${Math.max(4, Math.round((n / personMax) * 100))}%`, backgroundColor: p.accent + '66', height: 10, borderRadius: 5 }]}
+                              />
+                            </View>
+                            <Text style={[s.barVal, tabular, { color: p.textPrimary, width: 44 }]}>{n.toLocaleString()}</Text>
+                          </View>
+                        ))}
+                        {restViews > 0 && (
+                          <Text style={[s.metaSmall, { color: p.textMuted }]}>
+                            +{entries.length - shown.length} more section{entries.length - shown.length > 1 ? 's' : ''} · {restViews.toLocaleString()} views
                           </Text>
-                          {d.matrix.sections.map((sec) => {
-                            const n = row.counts[sec] ?? 0;
-                            return (
-                              <Text key={sec} style={[s.mCell, tabular, { color: n ? p.textPrimary : p.cardBorder }]}>
-                                {n || '·'}
-                              </Text>
-                            );
-                          })}
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </Card>
+                        )}
+                      </View>
+                    </Card>
+                  );
+                })}
+              </View>
             </View>
 
             {/* viewer questions */}
@@ -272,6 +277,4 @@ const s = StyleSheet.create({
   metaSmall: { fontFamily: F.reg, fontSize: 10, lineHeight: 14 },
   qText: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
-  mCell: { width: 64, fontSize: 10.5, textAlign: 'right', fontFamily: F.reg },
-  mHead: { fontFamily: F.semi, fontSize: 8.5, letterSpacing: 0.5 },
 });
