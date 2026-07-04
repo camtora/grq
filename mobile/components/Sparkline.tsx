@@ -1,15 +1,18 @@
 import React from 'react';
 import { View } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Polygon, Polyline } from 'react-native-svg';
 import { usePalette } from '../constants/theme';
 
-/** Minimal sparkline — values in cents, colored by first→last direction. */
+/** Minimal sparkline — values in cents, colored by first→last direction.
+ * `area` shades under the line (the web Sparkline's area mode — Hunt hero/grid). */
 export default function Sparkline({
   values,
   height = 56,
+  area = false,
 }: {
   values: number[];
   height?: number;
+  area?: boolean;
 }) {
   const { p } = usePalette();
   const [w, setW] = React.useState(0);
@@ -27,15 +30,24 @@ export default function Sparkline({
     })
     .join(' ');
   const up = values[values.length - 1] >= values[0];
+  const color = up ? p.pos : p.neg;
+  const base = (height - pad).toFixed(1);
 
   return (
     <View style={{ height }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {w > 0 && (
         <Svg width={w} height={height}>
+          {area && (
+            <Polygon
+              points={`${pad},${base} ${points} ${(w - pad).toFixed(1)},${base}`}
+              fill={color}
+              fillOpacity={0.13}
+            />
+          )}
           <Polyline
             points={points}
             fill="none"
-            stroke={up ? p.pos : p.neg}
+            stroke={color}
             strokeWidth={1.8}
             strokeLinejoin="round"
             strokeLinecap="round"

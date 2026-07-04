@@ -396,6 +396,7 @@ export type HuntFind = {
   logoUrl: string | null;
   currency: string | null;
   cur: number | null; // current price, cents
+  quoteSymbol?: string; // the resolved listing the live-quote poll keys on (D51)
   nearBps: number | null;
   farBps: number | null;
   nearDays: number | null; // trading days to the near target
@@ -411,6 +412,7 @@ export type HuntFind = {
   heat: number; // derived 0–100 "ready to pop" (conviction + momentum + obscurity)
   tag: string | null; // "NYSE · Healthcare"
   watch: 'none' | 'watching' | 'universe';
+  watchers?: { key: string; name: string }[]; // who's watching (D78) — [] for most leads
 };
 export type HuntFeed = { brief: string | null; finds: HuntFind[] };
 /** /api/hunt/status — the pending poller anchors on latestFindAt (the runner

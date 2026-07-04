@@ -757,14 +757,25 @@ export async function huntResponse() {
     .slice(0, 12);
 
   const symbols = picked.map((d) => d.symbol as string);
-  const quotes = await getQuotes(symbols);
+  // D51 exact-listing resolution (web market-page parity): a bare untracked ticker is
+  // ambiguous (AII = NYSE insurance or TSX tungsten) — suffix it via the agent-captured
+  // exchange so quote, bars AND logo key off the real listing. Tracked names keep theirs.
+  const listingOf = (d: (typeof picked)[number]): string => {
+    const sym = d.symbol as string;
+    return uBy.has(sym) ? sym : yahooForListing(sym, d.exchange);
+  };
+  const [quotes, watchersMap] = await Promise.all([
+    getQuotes(picked.map(listingOf)),
+    watchersFor(symbols), // the human watcher stack per find (D78) — [] for most leads
+  ]);
 
   // 30-day closes power the redesign's heat ranking + sparklines (mirror of
   // web/app/market/page.tsx). Daily bars exist only for tracked names, so backfill any
   // find with too little history once (then it's cached); the rest renormalize.
   const closesBySym = new Map<string, { date: Date; closeCents: number }[]>();
-  await Promise.all(symbols.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
-  const missing = symbols.filter((s) => (closesBySym.get(s)?.length ?? 0) < 8);
+  const listings = picked.map(listingOf);
+  await Promise.all(listings.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
+  const missing = listings.filter((s) => (closesBySym.get(s)?.length ?? 0) < 8);
   if (missing.length) {
     await refreshBars(missing, "3mo").catch(() => 0);
     await Promise.all(missing.map(async (s) => closesBySym.set(s, await getCloses(s, 40))));
@@ -773,11 +784,12 @@ export async function huntResponse() {
   const finds = picked.map((d) => {
     const sym = d.symbol as string;
     const u = uBy.get(sym);
-    const q = quotes.get(sym);
+    const listing = listingOf(d);
+    const q = quotes.get(listing);
     const cur = q?.midCents ?? null;
     const nearBps = cur && d.targetNearCents != null ? Math.round(((d.targetNearCents - cur) / cur) * 10_000) : null;
     const farBps = cur && d.targetFarCents != null ? Math.round(((d.targetFarCents - cur) / cur) * 10_000) : null;
-    const spark = (closesBySym.get(sym) ?? []).slice(-30).map((c) => c.closeCents);
+    const spark = (closesBySym.get(listing) ?? []).slice(-30).map((c) => c.closeCents);
     const change30d =
       spark.length >= 2 && spark[0] > 0
         ? (spark[spark.length - 1] - spark[0]) / spark[0]
@@ -792,10 +804,13 @@ export async function huntResponse() {
     }
     return {
       sym,
-      name: u?.name ?? sym,
-      logoUrl: u?.logoUrl || fmpLogo(sym),
+      // FMP-confirmed company name for the resolved listing (D51) > tracked name > ticker.
+      name: d.companyName ?? u?.name ?? sym,
+      logoUrl: u?.logoUrl || fmpLogo(listing),
       currency: u?.currency ?? null,
       cur,
+      // The live-quote key: the phone polls /api/quotes by this (the resolved listing).
+      quoteSymbol: listing,
       nearBps,
       farBps,
       nearDays: d.targetNearDays ?? null,
@@ -810,8 +825,9 @@ export async function huntResponse() {
       change30d,
       spark,
       heat: computeHeat({ confidence: d.confidence, change30d, obscurity: d.obscurity }),
-      tag: [u?.exchange, u?.sector].filter(Boolean).join(" · ") || null,
+      tag: [u?.exchange ?? d.exchange, u?.sector].filter(Boolean).join(" · ") || null,
       watch: watchFor(statusBy.get(sym)),
+      watchers: (watchersMap.get(sym) ?? []).map((w) => ({ key: w.key, name: w.name })),
     };
   });
   // Heat ranks the board (the redesign's organizing metric); newest-first survives as a

@@ -100,6 +100,40 @@ export function useApi<T>(path: string) {
   return { data, error, refreshing, refresh, reload, loading: data === null && error === null };
 }
 
+/** Live quotes for a SET of symbols (the web's LiveQuotesProvider): one
+ * /api/quotes poll every 15s while mounted, keyed exactly as requested.
+ * Consumers fall back to their server-rendered price on a missing key. */
+export function useLiveQuotes(symbols: string[]): Record<string, { priceCents: number; changeBps: number }> {
+  const [q, setQ] = useState<Record<string, { priceCents: number; changeBps: number }>>({});
+  const key = symbols.join(',');
+  useEffect(() => {
+    if (!key) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const d = await api<{ quotes: Record<string, { priceCents: number; changePct: number }> }>(
+          `/api/quotes?symbols=${encodeURIComponent(key)}`,
+        );
+        if (!alive) return;
+        const next: Record<string, { priceCents: number; changeBps: number }> = {};
+        for (const [sym, row] of Object.entries(d.quotes)) {
+          next[sym] = { priceCents: row.priceCents, changeBps: Math.round(row.changePct * 100) };
+        }
+        setQ(next);
+      } catch {
+        /* next tick retries */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 15_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [key]);
+  return q;
+}
+
 /** Live quote poll for one symbol (the web's <LiveQuote>): /api/quotes every
  * 15s while mounted. Returns null until the first tick lands. */
 export function useLiveQuote(symbol: string | null): { priceCents: number; changeBps: number } | null {

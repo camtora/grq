@@ -15,6 +15,14 @@ export function obscurityLabel(o: number | null | undefined): string | null {
   return null;
 }
 
+export function wordCount(body: string): number {
+  return body.trim().split(/\s+/).length;
+}
+
+/** The heat explainer (literacy pillar) — shown on tap wherever HEAT ranks a list. */
+export const HEAT_TIP =
+  "Heat = Alfred's 0–100 'ready to pop' read: his conviction, recent 30-day momentum, and how under-the-radar the name is — derived, not a promise.";
+
 /** Strip markdown to a clean one-paragraph preview for clamped thesis text. */
 export function previewText(body: string): string {
   return body
