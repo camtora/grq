@@ -302,26 +302,28 @@ export function EarningsSection({ t }: { t: Today }) {
       {upcoming.length > 0 && (
         <View style={{ marginTop: reported.length ? 14 : 0 }}>
           <MiniLabel>Upcoming reports</MiniLabel>
-          <Card style={s.listCard}>
-            {upcoming.map((e, i) => {
+          {/* Two companies wide (Cam 2026-07-03). */}
+          <View style={s.upcomingGrid}>
+            {upcoming.map((e) => {
               const rel = relDay(e.date, today);
               const soon = rel === 'today' || rel === 'tomorrow';
               return (
-                <View key={`${e.symbol}-${e.date}`}>
-                  {i > 0 && <Divider />}
-                  <Pressable onPress={() => router.push(`/stock/${e.symbol}`)} style={s.row}>
-                    <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
-                    <Text style={[s.sym, { color: p.accentText, flex: 1 }]} numberOfLines={1}>{e.symbol}</Text>
-                    {/* timeframe/date pinned to the row's right edge (Cam 2026-07-03) */}
-                    <View style={s.rowRight}>
-                      <Text style={[s.relDay, { color: soon ? p.warn : p.textMuted }]}>{rel}</Text>
-                      <Text style={[s.metaText, { color: p.textMuted }]}>{fmtDate(e.date)}</Text>
-                    </View>
-                  </Pressable>
-                </View>
+                <Pressable
+                  key={`${e.symbol}-${e.date}`}
+                  onPress={() => router.push(`/stock/${e.symbol}`)}
+                  style={[s.upcomingCell, { backgroundColor: p.cardBg, borderColor: p.cardBorder }]}
+                >
+                  <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[s.sym, { color: p.accentText }]} numberOfLines={1}>{e.symbol}</Text>
+                    <Text style={[s.metaText, { color: soon ? p.warn : p.textMuted }]} numberOfLines={1}>
+                      {rel} · {fmtDate(e.date)}
+                    </Text>
+                  </View>
+                </Pressable>
               );
             })}
-          </Card>
+          </View>
         </View>
       )}
       <Footnote>earnings for names we track · beat/miss is actual vs the analyst EPS estimate</Footnote>
@@ -542,6 +544,18 @@ const s = StyleSheet.create({
   rowPct: { fontFamily: F.semi, fontSize: 13 },
   metaText: { fontFamily: F.reg, fontSize: 10 },
   relDay: { fontFamily: F.semi, fontSize: 11 },
+  upcomingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  upcomingCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    flexBasis: '47%',
+    flexGrow: 1,
+  },
   sectorName: { fontFamily: F.semi, fontSize: 13 },
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 10 },
   // earnings bubbles
