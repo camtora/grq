@@ -9,8 +9,12 @@ written "why" lines; trap/rule callouts; `scripts/check-learn-videos.ts` rot-che
 **viewers stay non-write** (no exams/progress — lessons, checks and standings remain
 viewer-readable), retitles as proposed, pass ≥80% / unlimited retakes /
 best-stands-with-attempt-count, push on passes as a normal toggleable category, **YouTube embeds
-in**, **per-lesson URLs in** (course page = syllabus). Remaining: L4 living examples → L5 mobile
-(§12).
+in**, **per-lesson URLs in** (course page = syllabus). **L4 shipped 2026-07-04 evening** — the
+living-examples engine (`lib/learn/examples.ts`, seven deterministic generators over stored
+data, nightly via the runner + a manual seed script; template narration, zero LLM tokens — the
+doc's Haiku line is an optional later polish) **plus diagram pass two** (ten more audited SVGs).
+**Every one of the 35 lessons now carries ≥1 visual/live block — enforced per-lesson by test.**
+Remaining: L5 mobile (§12).
 
 Cam's original brief: *"calling them 'courses' and 'lessons' is a little ridiculous — they're just
 paragraphs."* This doc is the redesign of what a course **is**: structure, media, live examples,

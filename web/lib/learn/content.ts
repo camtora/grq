@@ -44,7 +44,7 @@ export type LearnQuestion = {
     }
 );
 
-/** Hand-built theme-aware SVG diagrams (components/learn/diagrams.tsx — L3). */
+/** Hand-built theme-aware SVG diagrams (components/learn/diagrams.tsx — L3 + pass two). */
 export type LearnDiagramKey =
   | "order-path"
   | "market-map"
@@ -53,7 +53,29 @@ export type LearnDiagramKey =
   | "drawdown-ladder"
   | "margin-spiral"
   | "fee-gravity"
-  | "grq-pipeline";
+  | "grq-pipeline"
+  | "two-listings"
+  | "ex-date-step"
+  | "pizza-split"
+  | "target-chase"
+  | "one-bet-ten-times"
+  | "short-asymmetry"
+  | "quote-paths"
+  | "thesis-price-2x2"
+  | "proposes-disposes"
+  | "rsi-gauge";
+
+/** Living examples (lib/learn/examples.ts — L4): market illustrations refreshed nightly
+ *  from data GRQ already stores. A lesson's `example` block renders the LearnExample row
+ *  when one exists, else its authored fallback — stamped honestly either way. */
+export type LearnExampleKey =
+  | "biggest-gap"
+  | "volume-mover"
+  | "spread-pair"
+  | "calm-vs-bumpy"
+  | "insider-cluster"
+  | "buzz-leader"
+  | "fx-drift";
 
 /** A real-data chart (components/learn/LearnChart.tsx — L3): daily closes from the Bar
  *  cache, self-warming; "biggest-gap" pins the largest overnight move in the window. */
@@ -73,7 +95,7 @@ export type LearnBlock =
   | { kind: "chart"; spec: LearnChartSpec }
   | { kind: "widget"; id: LearnWidgetKey }
   | { kind: "receipt"; id: LearnReceiptKey }
-  | { kind: "example"; key: string; fallbackMd: string }
+  | { kind: "example"; key: LearnExampleKey; fallbackMd: string }
   | { kind: "video"; yt: string; title: string; author: string; minutes: number; why: string }
   | { kind: "check"; q: LearnQuestion }
   | { kind: "tryIt"; links: { href: string; label: string }[] };
@@ -193,6 +215,7 @@ Canada's main venue is the **TSX** (Toronto). The US has two giants: the **NYSE*
 The same company can list in two places at once (Shopify trades in Toronto in CAD and in New York in USD — same company, two addresses). But the reverse is also true: the **same letters** can point at completely different companies on different exchanges. Alfred once charted a forty-cent Canadian look-alike instead of the real Visa because it trusted the letters and not the exchange. We fixed the bug; the lesson is permanent — always check *where* a ticker lives.
 
 Then there are [CDRs](#explain:cdr): TSX-listed, CAD-hedged certificates that *track* a big US name without being the actual share. SPCX on the TSX is a Canadian certificate about SpaceX at around $36 — it is not a SpaceX share, and its FX hedge makes it behave differently from the real thing. Useful tools, but only if you know what you're actually holding.`),
+          { kind: "diagram", id: "two-listings" },
           check({
             id: "tickers-and-look-alikes-c1",
             kind: "choice",
@@ -220,6 +243,11 @@ One more wrinkle for a two-country fund: **holidays don't line up**. On Canada D
             kind: "callout",
             tone: "trap",
             md: `A stock can open **far** from where it closed — and no [stop-loss](#explain:stop-loss) can save you from a gap. The stop fires *at* the market, wherever the market reopens.`,
+          },
+          {
+            kind: "example",
+            key: "biggest-gap",
+            fallbackMd: `Illustration: a company reports after Tuesday's close; Wednesday's first trade prints 8% below Tuesday's last. Nobody "sold it down overnight" — the open simply agreed on a new number, and a stop-loss set at −3% filled at −8%.`,
           },
           check({
             id: "market-hours-c1",
@@ -346,6 +374,11 @@ The toy exchange below runs a real (cartoon) order book. Place both order types,
 That "always someone" quality is [[liquidity]]: how much you can buy or sell without moving the price against yourself. A liquid stock absorbs your order like the ocean absorbs a pebble. An illiquid one moves *because you showed up* — your own buying pushes the ask higher, and later your own selling pushes the bid lower. Illiquidity punishes you in both directions.
 
 This is why GRQ's universe has a hard liquidity screen (built on average daily [[volume]]) that runs *before* a name is even eligible to buy. A position you can't exit cleanly isn't a position — it's a trap with a ticker symbol.`),
+          {
+            kind: "example",
+            key: "spread-pair",
+            fallbackMd: `Illustration: a mega-cap quotes $99.99 / $100.00 — a one-cent toll. A thin small-cap quotes $4.80 / $5.05 — five percent of open water. The same $1,000 order starts about $0.10 underwater in one and ~$50 in the other.`,
+          },
           check({
             id: "market-makers-and-liquidity-c1",
             kind: "choice",
@@ -372,6 +405,11 @@ Mechanically: there's a queue of standing orders at every price level. When buye
 News moves prices *without needing trades at all*. When a company reports terrible earnings, nobody has to sell a single share for the quotes to collapse — everyone simply updates what they're willing to pay, and the bid and ask re-form lower. The price is a live opinion poll, not a measurement of some underlying "true" number.
 
 [[volume]] tells you how much conviction is behind a move. A 5% jump on heavy volume means real money changed its mind; the same jump on a trickle is a shrug that can reverse by lunch.`),
+          {
+            kind: "example",
+            key: "volume-mover",
+            fallbackMd: `Illustration: two stocks both close +4%. One did it on three times its usual volume — real money repriced it. The other did it on a trickle, and gave it all back by Thursday.`,
+          },
           check({
             id: "what-moves-a-price-c1",
             kind: "choice",
@@ -395,6 +433,7 @@ News moves prices *without needing trades at all*. When a company reports terrib
 Most free quotes are **delayed 15 minutes** (real-time data is licensed, and exchanges charge for it — it's a real revenue line for them). Some apps show the last trade, others the midpoint of the bid and ask. US stocks trade on a dozen venues at once, and feeds consolidate them at different speeds. Fifteen minutes plus a different venue plus last-vs-mid equals two honest numbers that disagree.
 
 GRQ's own pages are built on this honesty: some figures are near-real-time, others are delayed, and the app says which. For a [swing-trading](#explain:swing-trade) fund holding positions for weeks, a 15-minute-old price is noise — the thesis doesn't care. For a day trader scalping pennies, it's fatal — which is one more quiet reason the day-trading game is harder than it looks.`),
+          { kind: "diagram", id: "quote-paths" },
           check({
             id: "whose-quote-is-right-c1",
             kind: "choice",
@@ -433,6 +472,7 @@ GRQ's own pages are built on this honesty: some figures are near-real-time, othe
 Now the catch everyone learns the hard way: **a dividend is not free money.** On the ex-dividend date, the stock's price drops by roughly the dividend amount — the cash didn't appear from nowhere, it left the company and the market marks the company down accordingly. It's your own money arriving by mail. (Buying a stock the day before its dividend to "grab the payout" achieves precisely nothing, minus commissions.)
 
 So why care? Because over years, reinvested dividends are a huge share of the market's [total return](#explain:total-return) — and because a company that pays one is making a statement: it generates real cash and doesn't need every dollar to survive. The flip side: fast growers usually pay nothing, because reinvesting in the business beats mailing the cash out. Neither choice is virtue — it's strategy.`),
+          { kind: "diagram", id: "ex-date-step" },
           check({
             id: "dividends-c1",
             kind: "choice",
@@ -456,6 +496,7 @@ So why care? Because over years, reinvested dividends are a huge share of the ma
 A [[buyback]] is the interesting one: the company uses its cash to buy its own shares on the open market and cancel them. Fewer slices exist, so each remaining slice owns a bigger fraction of the business — it's [[dilution]] running in reverse, and a quieter cousin of the dividend (returning cash without mailing anyone a cheque).
 
 The discipline for both: neither changes what the business is *worth* by itself. A split is pure arithmetic. A buyback only helps if the company bought its shares cheap — a company overpaying for its own stock is just a bad investor with insider enthusiasm.`),
+          { kind: "diagram", id: "pizza-split" },
           check({
             id: "splits-and-buybacks-c1",
             kind: "numeric",
@@ -541,6 +582,11 @@ Here's the uncomfortable, load-bearing fact: **most professional stock-pickers f
 Converting money isn't free either. FX conversion has its own spread (banks are enthusiastic about this one), so bouncing cash between currencies on every trade quietly bleeds a portfolio. The sane pattern is to convert deliberately, in chunks, and then trade within each currency sleeve.
 
 That's exactly how GRQ runs it: a CAD sleeve and a USD sleeve, and a US buy needs USD cash to already be there — no automatic conversion, no borrowing. When Alfred wants more USD, it must *ask*, and a human approves the conversion. For hedged exposure without holding USD at all, that's what CAD-hedged [CDRs](#explain:cdr) are for — with the caveat from Course 1 that a hedged certificate never behaves quite like the real share.`),
+          {
+            kind: "example",
+            key: "fx-drift",
+            fallbackMd: `Illustration: USD/CAD drifts 2% in a month. A US stock that went exactly nowhere still moved your CAD statement by 2% — the silent passenger rides every cross-border position, in both directions.`,
+          },
           check({
             id: "two-currencies-c1",
             kind: "choice",
@@ -608,6 +654,7 @@ Reports land before the open (BMO) or after the close (AMC) — which, per Cours
 Read the ratings with subtitles on. The scale is inflated: "buy" is everywhere, and a "hold" often functions as a polite "sell" (analysts need access to the companies they cover, and companies dislike sell ratings). The **changes** carry more information than the levels — an upgrade, a downgrade, or a price-target cut moves stocks; the standing rating mostly doesn't.
 
 Price targets have their own tell: they chase the price. A stock runs 30% and the targets drift up behind it — that's herding, not fresh analysis. Which is why the useful move is comparing the consensus target against an *independent* view. When the street's average and Alfred's call sharply disagree, someone is wrong — and finding out **why** is worth more than either number. GRQ puts the analyst band next to its own call on every stock page for exactly that reason.`),
+          { kind: "diagram", id: "target-chase" },
           check({
             id: "analyst-ratings-c1",
             kind: "choice",
@@ -635,6 +682,11 @@ Price targets have their own tell: they chase the price. A stock runs 30% and th
 **[Congressional disclosures](#explain:congress-trade):** trades reported only as dollar ranges, up to 45 days late. Colour on the well-connected, not a strategy.
 
 GRQ ingests all three daily on the Smart Money page and feeds them to the agent — as **leads to investigate, never reasons to trade**. That distinction is the whole discipline: big-money signals generate questions; the answers still have to come from the research.`),
+          {
+            kind: "example",
+            key: "insider-cluster",
+            fallbackMd: `Illustration: three executives at the same company each buy six figures of their own stock on the open market in the same week. That's the strong version of the signal — a lead worth researching, never a reason to trade by itself.`,
+          },
           check({
             id: "big-money-c1",
             kind: "choice",
@@ -659,6 +711,7 @@ GRQ ingests all three daily on the Smart Money page and feeds them to the agent 
 What they honestly are: **descriptions of the ride so far**. RSI at 24 says "this fell hard and fast" — it does not say "it will bounce". Cheap-and-falling is still falling. The signals earn a strange half-life of usefulness because everyone watches the same lines, so they occasionally self-fulfil — support "holds" partly because thousands of buyers agreed in advance to buy there.
 
 GRQ rolls its signals into a confidence-weighted [[recommendation]] — and treats it as exactly one input among many. The technicals answer *"how has it been trading, and is now a tense moment?"* They never answer *"is this a good business?"* — that's what the dossier is for. When the chart and the thesis disagree, the thesis gets re-examined, not obeyed.`),
+          { kind: "diagram", id: "rsi-gauge" },
           check({
             id: "technical-signals-c1",
             kind: "choice",
@@ -682,6 +735,11 @@ GRQ rolls its signals into a confidence-weighted [[recommendation]] — and trea
 Then there's the crowd itself. GRQ tracks [social buzz](#explain:social-buzz) (how loudly Reddit is talking about a name, versus its own usual volume) and [crowd mood](#explain:social-sentiment) (self-tagged bull/bear posts). Read those as a **crowding gauge, not a tip sheet**: by the time retail chatter goes vertical, the easy money is usually gone, and euphoria reverses hard. It's noisy, it's gameable, and GRQ keeps it on probation — a risk flag on names we hold, never a reason to buy.
 
 Everything in this course lives on one screen: open any stock page and you'll find the earnings history, the analyst band, the 13F holders, the signals, the news — each with an honest coverage map of what we can and can't see for that name. The course was really a user's manual for that page.`),
+          {
+            kind: "example",
+            key: "buzz-leader",
+            fallbackMd: `Illustration: a name's Reddit mentions run six times their usual pace — after the price already ran 40% in a month. The gauge reads "crowded", not "buy". Euphoria reverses hard.`,
+          },
           check({
             id: "news-and-the-crowd-c1",
             kind: "choice",
@@ -720,6 +778,11 @@ Everything in this course lives on one screen: open any stock page and you'll fi
 Here's the nuance worth keeping: volatility is not, by itself, the risk of losing money — a stock can be wildly bumpy on its way to tripling. The real danger is what volatility does to *you*: bumpy rides eject their passengers at the bottom. A −30% month you can't stomach converts a temporary swing into a permanent loss, because you sold it.
 
 So the practical rule inverts the amateur instinct. The answer to "this stock is really volatile" isn't "avoid it" — it's **"own less of it."** Size the position so the worst plausible week is boring to you personally. (The options market publishes its own forecast of future swings — [implied volatility](#explain:implied-volatility), covered in Course 6. When it spikes, the market is bracing.)`),
+          {
+            kind: "example",
+            key: "calm-vs-bumpy",
+            fallbackMd: `Illustration: a utility drifts ±0.4% a day while a small biotech swings ±5%. Over a month that's the difference between weather and a storm system — and why the same dollar amount can be a safe position in one and an oversized bet in the other.`,
+          },
           check({
             id: "volatility-c1",
             kind: "choice",
@@ -764,6 +827,7 @@ It's also why GRQ's defenses are **pre-committed and automatic**: a [stop-loss](
 GRQ enforces this with a [[weight]] cap — no single name may grow big enough to sink the boat — and a [cash floor](#explain:cash-floor) that keeps dry powder the gate won't let it spend. Both limits are set by the risk dial and enforced in code, because "just this once" is how concentration happens.
 
 Diversification is the other half, and it's subtler than "own many things." Ten Canadian banks is one bet, held ten times. What diversification actually requires is low [[correlation]] — holdings that fail for *different reasons*: different sectors, countries, currencies. Spread across those and the wobbles partially cancel; it's the closest thing markets offer to a free lunch. The fine print: in a real panic, correlations rush toward 1 and everything falls together. Diversification softens ordinary weather. Nothing diversifies away a hurricane — that's what the cash floor and the kill switch are for.`),
+          { kind: "diagram", id: "one-bet-ten-times" },
           check({
             id: "sizing-and-diversification-c1",
             kind: "choice",
@@ -809,6 +873,7 @@ GRQ bans margin borrowing outright — it's one of the fund's hard rules, alongs
 **[Day trading](#explain:day-trading):** buying and selling within the day to catch small moves. The quiet killer is cost × frequency: every round trip pays the [spread](#explain:bid-ask-spread), commissions, and [[slippage]] — a small toll that compounds viciously across hundreds of trades, against opponents measured in microseconds.
 
 Neither ban is superstition — both are live experiments here. The Short Lab runs modeled shorts (with real borrow math and margin calls) and shadow-shorts every real sell the fund makes; the Day-Trading Lab races a churning trader against a buy-and-holder with real costs. Understanding a bet and making it are different things: the labs buy the understanding without paying the tuition.`),
+          { kind: "diagram", id: "short-asymmetry" },
           {
             kind: "callout",
             tone: "rule",
@@ -978,6 +1043,7 @@ The discipline that cuts through: **sell on the thesis, not the price.** You bou
 Because that judgment is hardest exactly when it's needed, pre-commitment does the heavy lifting: a [stop-loss](#explain:stop-loss) caps the damage when you're wrong, a [take-profit](#explain:take-profit) banks the win before it round-trips, and a [price target](#explain:price-target) with a horizon makes "the thesis played out" a testable claim instead of a vibe. (Selling at a loss in a taxable account? Mind the [30-day rebuy rule](#explain:superficial-loss).)
 
 Nobody sells the top — that's not the goal. The goal is a **written reason for every exit**, graded later. GRQ logs its reason on every trade and scores its own calls after the fact; that's the "receipts" in the tagline. An exit you can defend in writing is a good exit, whatever the next candle does.`),
+          { kind: "diagram", id: "thesis-price-2x2" },
           check({
             id: "when-to-sell-c1",
             kind: "choice",
@@ -1017,6 +1083,7 @@ The load-bearing design fact: **Alfred doesn't hold the keys.** Every order it p
 Humans sit above both, holding exactly two powers that matter. The [kill switch](#explain:kill-switch): either member can halt all trading instantly, and nothing trades while it's engaged. And the rules themselves: **only humans can change the guardrails** — Alfred cannot edit its own limits, not because it hasn't asked nicely, but because no code path exists for it to do so.
 
 Why build it this way? Course 7's behavioural lesson, applied to a machine. An AI doesn't get greedy or scared, but it has its own failure modes — overconfidence, a persuasive bad idea, a misread number. Separation of powers means a bad idea has to get past something that *cannot be talked into it*. That principle is older than markets, and it's the whole architecture.`),
+          { kind: "diagram", id: "proposes-disposes" },
           check({
             id: "proposes-disposes-c1",
             kind: "choice",

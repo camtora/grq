@@ -2882,3 +2882,25 @@ curation rubric and were dropped. `scripts/check-learn-videos.ts` is the weekly 
 (oEmbed liveness + title/author drift, prefix-matched). Tests grew the diagram/chart validations
 + a per-course ≥1-visual-block lint (127/127). Chat persona updated to the D111 titles + exams/
 standings map — chat-only rebuild, agent untouched (no restart → no boot scan).
+
+**D111 addendum 2 — L4 living examples + diagram pass two: every lesson now has media (2026-07-04 evening).**
+The `example` blocks went live: `lib/learn/examples.ts` is a deterministic engine — seven
+generators over data GRQ already stores (Bar opens/closes/volume for true overnight gaps,
+volume-conviction and calm-vs-bumpy volatility contrasts; Quote bid/ask for a real tightest-vs-
+widest spread pair; InsiderTrade for the freshest cluster buy; SocialDaily for the buzz leader;
+MacroDaily.usdcad for the month's FX drift). Each writes a 2–4 sentence LearnExample row the
+lesson renders with a "live · as of" stamp; authored fallbacks cover any key that can't produce
+an honest example (fx-drift self-activates once MacroDaily accumulates ~15 rows). **Narration is
+deliberately TEMPLATE-based, not Haiku** — the living part is the data changing nightly, template
+prose keeps the voice exact, and the token cost is zero (the framework doc's Haiku line becomes
+an optional later polish). Runner fires `runLearnExamplesRefresh()` nightly at ~16:40 ET after
+the bars refresh; `scripts/refresh-learn-examples.ts [--force]` seeds/regenerates on demand.
+First live run produced six real examples (COHR's −8.7% overnight gap; 17 insiders clustering
+$1.1M into SPG; RY ±0.8% vs COHR ±6.3%…).
+
+Diagram pass two added ten more themed SVGs (two-listings, ex-date-step, pizza-split,
+target-chase, one-bet-ten-times, short-asymmetry, quote-paths, thesis-price-2x2,
+proposes-disposes, rsi-gauge) — every one screenshot-audited in both themes before ship (four
+needed geometry fixes the render exposed). **Coverage: all 35 lessons now carry ≥1 visual/live
+block, and the test enforces it per-LESSON** — "all prose" is a failing state, permanently.
+Agent redeployed v2.52-phase4 (the examples hook); boot scan correctly skipped on today's marker.

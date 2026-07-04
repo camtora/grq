@@ -125,7 +125,11 @@ describe("learn block content", () => {
   it("block payloads are well-formed (media ids, video ids, chart specs, tryIt hrefs)", () => {
     const widgets = new Set(["order-book", "compounding"]);
     const receipts = new Set(["real-fills", "drawdown", "vs-xic", "fees", "guardrails", "soak"]);
-    const diagrams = new Set(["order-path", "market-map", "book-ladder", "acb-timeline", "drawdown-ladder", "margin-spiral", "fee-gravity", "grq-pipeline"]);
+    const diagrams = new Set([
+      "order-path", "market-map", "book-ladder", "acb-timeline", "drawdown-ladder", "margin-spiral", "fee-gravity", "grq-pipeline",
+      "two-listings", "ex-date-step", "pizza-split", "target-chase", "one-bet-ten-times", "short-asymmetry", "quote-paths", "thesis-price-2x2", "proposes-disposes", "rsi-gauge",
+    ]);
+    const examples = new Set(["biggest-gap", "volume-mover", "spread-pair", "calm-vs-bumpy", "insider-cluster", "buzz-leader", "fx-drift"]);
     for (const c of COURSES)
       for (const l of c.lessons)
         for (const b of l.blocks) {
@@ -143,17 +147,21 @@ describe("learn block content", () => {
           }
           if (b.kind === "tryIt") for (const t of b.links) assert.ok(t.href.startsWith("/"), `${where} tryIt href must be in-app`);
           if (b.kind === "figure") assert.ok(b.src.startsWith("/") && b.alt.trim().length > 0, `${where} figure needs a local src + alt`);
-          if (b.kind === "example") assert.ok(b.key.trim().length > 0 && b.fallbackMd.trim().length > 0, `${where} example needs key + fallback`);
+          if (b.kind === "example") {
+            assert.ok(examples.has(b.key), `${where} uses unregistered example "${b.key}" (lib/learn/examples.ts)`);
+            assert.ok(b.fallbackMd.trim().length > 0, `${where} example needs an authored fallback`);
+          }
         }
   });
 
-  it("every live course shows something beyond prose (≥1 visual/live block — D111 L3)", () => {
+  it("every live LESSON shows something beyond prose (≥1 visual/live block — D111 L3+L4)", () => {
     const visual = new Set(["diagram", "chart", "video", "figure", "widget", "receipt", "example"]);
     for (const c of COURSES)
-      if (c.status === "live" && !c.external) {
-        const n = c.lessons.reduce((sum, l) => sum + l.blocks.filter((b) => visual.has(b.kind)).length, 0);
-        assert.ok(n >= 1, `${c.slug} is all prose — the framework exists to prevent exactly this`);
-      }
+      if (c.status === "live" && !c.external)
+        for (const l of c.lessons) {
+          const n = l.blocks.filter((b) => visual.has(b.kind)).length;
+          assert.ok(n >= 1, `${c.slug}/${l.slug} is all prose — the framework exists to prevent exactly this`);
+        }
   });
 
   it("inline check questions have valid, globally-unique keys", () => {

@@ -519,6 +519,456 @@ function GrqPipeline() {
   );
 }
 
+/* ================= pass two (D111 L3 follow-up) — one visual per remaining lesson ================= */
+
+/** Polar helper for the pizza sectors + the RSI gauge (degrees; 0° = east, CCW positive). */
+function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
+  const rad = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy - r * Math.sin(rad)];
+}
+
+function arcPath(cx: number, cy: number, r: number, fromDeg: number, toDeg: number): string {
+  const [x1, y1] = polar(cx, cy, r, fromDeg);
+  const [x2, y2] = polar(cx, cy, r, toDeg);
+  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0;
+  const sweep = toDeg < fromDeg ? 1 : 0; // clockwise when the angle decreases
+  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${large} ${sweep} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}
+
+/* ---------- 11 · two-listings — one company two addresses; same letters two companies ---------- */
+
+function TwoListings() {
+  return (
+    <Shell
+      title="Tickers are addresses, not names"
+      caption="Left: one business, reachable at two addresses in two currencies. Right: the trap that once fooled Alfred — the same letters living at different exchanges are different companies."
+    >
+      <svg viewBox="0 0 720 210" className="w-full" role="img" aria-label="Two panels. Left: Shopify listed on both the TSX in Canadian dollars and the NYSE in US dollars — one company. Right: the letter V points to Visa on the NYSE but to an unrelated forty-cent look-alike on a Canadian venture exchange.">
+        <ArrowDefs id="tl-a" />
+        <rect x={4} y={4} width={340} height={202} rx={10} className="fill-none stroke-teal-400/10" />
+        <rect x={376} y={4} width={340} height={202} rx={10} className="fill-none stroke-teal-400/10" />
+        <text x={174} y={26} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          One company, two addresses
+        </text>
+        <text x={546} y={26} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          Same letters, different companies
+        </text>
+        <NodeBox x={24} y={46} w={140} h={40} lines={["SHOP · TSX"]} sub="in CAD" />
+        <NodeBox x={184} y={46} w={140} h={40} lines={["SHOP · NYSE"]} sub="in USD" />
+        <NodeBox x={94} y={140} w={160} h={44} lines={["SHOPIFY INC."]} sub="the same business" tone="accent" />
+        <g className="text-teal-400/40">
+          <line x1={94} y1={86} x2={150} y2={138} stroke="currentColor" strokeWidth={1.2} />
+          <line x1={254} y1={86} x2={198} y2={138} stroke="currentColor" strokeWidth={1.2} />
+        </g>
+        {/* right: the look-alike */}
+        <NodeBox x={514} y={42} w={64} h={34} lines={["“V”"]} />
+        <g className="text-teal-300/60">
+          <line x1={530} y1={76} x2={478} y2={116} stroke="currentColor" strokeWidth={1.2} markerEnd="url(#tl-a)" />
+          <line x1={562} y1={76} x2={614} y2={116} stroke="currentColor" strokeWidth={1.2} markerEnd="url(#tl-a)" />
+        </g>
+        <NodeBox x={392} y={120} w={150} h={48} lines={["NYSE: Visa"]} sub="the payments giant" />
+        <NodeBox x={556} y={120} w={150} h={48} lines={["TSX-V: look-alike"]} sub="a 40¢ shell — not Visa" tone="dim" />
+        <text x={631} y={186} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-amber-300/80">
+          ⚠ check the exchange, always
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 12 · ex-date-step — the dividend leaves, the price follows ---------- */
+
+function ExDateStep() {
+  return (
+    <Shell
+      title="The ex-dividend date, drawn"
+      caption="The $2 arrives in your account and leaves the company's — the market marks the shares down by the same $2. Your money, arriving by mail."
+    >
+      <svg viewBox="0 0 720 190" className="w-full" role="img" aria-label="A price line sits flat at fifty dollars, steps down two dollars to forty-eight on the ex-dividend date, and continues flat — the drop equals the dividend paid out.">
+        <g className="text-teal-400/15">
+          <line x1={70} y1={60} x2={660} y2={60} stroke="currentColor" strokeWidth={1} strokeDasharray="3 4" />
+          <line x1={70} y1={112} x2={660} y2={112} stroke="currentColor" strokeWidth={1} strokeDasharray="3 4" />
+        </g>
+        <text x={62} y={60} textAnchor="end" dominantBaseline="middle" fill="currentColor" className="text-[10px] tabular-nums text-teal-200/50">
+          $50.00
+        </text>
+        <text x={62} y={112} textAnchor="end" dominantBaseline="middle" fill="currentColor" className="text-[10px] tabular-nums text-teal-200/50">
+          $48.00
+        </text>
+        <polyline points="70,60 340,60 340,112 660,112" fill="none" stroke="var(--spark-up)" strokeWidth={2} />
+        <g className="text-teal-200/50">
+          <line x1={340} y1={34} x2={340} y2={150} stroke="currentColor" strokeWidth={1} strokeDasharray="4 3" className="text-teal-400/25" />
+          <text x={340} y={24} textAnchor="middle" fill="currentColor" className="text-[10px] font-semibold text-teal-100/80">
+            ex-dividend date
+          </text>
+        </g>
+        <g className="text-emerald-300/85">
+          <line x1={368} y1={60} x2={368} y2={110} stroke="currentColor" strokeWidth={1.5} markerEnd="url(#ex-m)" />
+          <defs>
+            <marker id="ex-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+            </marker>
+          </defs>
+          <text x={382} y={88} fill="currentColor" className="text-[10px] font-semibold">
+            the $2 dividend — paid to holders, marked off the price
+          </text>
+        </g>
+        <text x={365} y={168} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
+          buying the day before “to grab the payout” buys exactly this step — nothing, minus commissions
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 13 · pizza-split — splits and buybacks as slices ---------- */
+
+function Pizza({ cx, cy, r, slices, yourFrom, yourTo }: { cx: number; cy: number; r: number; slices: number; yourFrom: number; yourTo: number }) {
+  const spokes = Array.from({ length: slices }, (_, i) => polar(cx, cy, r, (360 / slices) * i));
+  const [sx, sy] = polar(cx, cy, r, yourFrom);
+  const [ex, ey] = polar(cx, cy, r, yourTo);
+  return (
+    <g>
+      <path d={`M ${cx} ${cy} L ${sx.toFixed(1)} ${sy.toFixed(1)} A ${r} ${r} 0 0 0 ${ex.toFixed(1)} ${ey.toFixed(1)} Z`} className="fill-teal-400/25" />
+      <circle cx={cx} cy={cy} r={r} className="fill-none stroke-teal-400/40" strokeWidth={1.4} />
+      {spokes.map(([x, y], i) => (
+        <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="currentColor" strokeWidth={1} className="text-teal-400/25" />
+      ))}
+    </g>
+  );
+}
+
+function PizzaSplit() {
+  return (
+    <Shell
+      title="Splits and buybacks, as pizza"
+      caption="A split cuts more slices from the same pizza — your highlighted share is worth exactly what it was. A buyback retires slices, so every remaining slice (yours included) is a bigger bite of the same business."
+    >
+      <svg viewBox="0 0 720 220" className="w-full" role="img" aria-label="Three pizzas: eight slices with one highlighted; after a two-for-one split, sixteen thinner slices with the same highlighted area; after a buyback, six slices where the highlighted one is visibly larger.">
+        <Pizza cx={130} cy={95} r={54} slices={8} yourFrom={0} yourTo={45} />
+        <Pizza cx={360} cy={95} r={54} slices={16} yourFrom={0} yourTo={45} />
+        <Pizza cx={590} cy={95} r={54} slices={6} yourFrom={0} yourTo={60} />
+        <g fill="currentColor" className="text-teal-100/80">
+          <text x={130} y={172} textAnchor="middle" className="text-[10.5px] font-semibold">before — 8 slices</text>
+          <text x={360} y={172} textAnchor="middle" className="text-[10.5px] font-semibold">2-for-1 split — 16 slices</text>
+          <text x={590} y={172} textAnchor="middle" className="text-[10.5px] font-semibold">buyback — 6 slices left</text>
+        </g>
+        <g fill="currentColor" className="text-teal-200/50">
+          <text x={130} y={188} textAnchor="middle" className="text-[9.5px]">your slice: 1/8</text>
+          <text x={360} y={188} textAnchor="middle" className="text-[9.5px]">your two slices: still 1/8 of the pizza</text>
+          <text x={590} y={188} textAnchor="middle" className="text-[9.5px]">your slice: now 1/6 — dilution in reverse</text>
+        </g>
+        <text x={360} y={210} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/45">
+          the pizza itself — what the business is worth — didn&apos;t change in any panel
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 14 · target-chase — analyst targets herd behind the price ---------- */
+
+function TargetChase() {
+  const price: [number, number][] = [
+    [70, 150],
+    [170, 140],
+    [270, 121],
+    [370, 96],
+    [470, 78],
+    [570, 60],
+  ];
+  const targets: [number, number][] = [
+    [170, 152],
+    [270, 144],
+    [370, 126],
+    [470, 102],
+    [570, 84],
+  ];
+  return (
+    <Shell
+      title="Price targets chase the price"
+      caption="Watch the amber dots: each quarter's average target settles roughly where the price already was. That's herding, not fresh analysis — which is why comparing the street to an independent call beats reading either alone."
+    >
+      <svg viewBox="0 0 720 200" className="w-full" role="img" aria-label="A rising price line with average analyst price targets plotted as dots that trail below and behind it the whole way up.">
+        {/* legend */}
+        <g className="text-[10px]">
+          <line x1={70} y1={22} x2={92} y2={22} stroke="var(--spark-up)" strokeWidth={2} />
+          <text x={98} y={25} fill="currentColor" className="text-teal-200/60">the price</text>
+          <g className="text-amber-400/90">
+            <circle cx={186} cy={22} r={4} fill="currentColor" />
+          </g>
+          <text x={196} y={25} fill="currentColor" className="text-teal-200/60">average analyst target, each quarter</text>
+        </g>
+        <polyline points={price.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke="var(--spark-up)" strokeWidth={2} />
+        <g className="text-amber-400/90">
+          {targets.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r={4.5} fill="currentColor" />
+          ))}
+        </g>
+        <text x={588} y={60} fill="currentColor" className="text-[10px] font-semibold text-teal-100/85" dominantBaseline="middle">
+          +30% later…
+        </text>
+        <text x={588} y={86} fill="currentColor" className="text-[10px] font-semibold text-amber-300/90" dominantBaseline="middle">
+          …targets arrive
+        </text>
+        <g className="text-teal-200/45">
+          <line x1={470} y1={102} x2={470} y2={78} stroke="currentColor" strokeWidth={1} strokeDasharray="2 3" />
+          <text x={462} y={122} textAnchor="middle" fill="currentColor" className="text-[9.5px]">
+            always a step behind
+          </text>
+        </g>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 15 · one-bet-ten-times — what diversification actually requires ---------- */
+
+function OneBetTenTimes() {
+  const cell = (x: number, y: number, label: string, dim = false) => (
+    <g key={`${x}-${y}`}>
+      <rect x={x} y={y} width={60} height={24} rx={6} className={dim ? "fill-amber-400/10 stroke-amber-400/30" : "fill-teal-400/5 stroke-teal-400/30"} strokeWidth={1} />
+      <text x={x + 30} y={y + 12} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className={`text-[9px] font-semibold ${dim ? "text-amber-200/80" : "text-teal-100/80"}`}>
+        {label}
+      </text>
+    </g>
+  );
+  const banks = Array.from({ length: 10 }, (_, i) => cell(22 + (i % 5) * 62, 62 + Math.floor(i / 5) * 32, "BANK", true));
+  const mixed = ["BANK", "RAIL", "GOLD", "SAAS", "GROCER", "PIPELN", "CHIPS", "TELCO", "INSURE", "MEDIA"].map((l, i) =>
+    cell(390 + (i % 5) * 62, 62 + Math.floor(i / 5) * 32, l),
+  );
+  return (
+    <Shell
+      title="Ten holdings ≠ ten bets"
+      caption="Correlation is the whole question. The left portfolio fails for ONE reason, held ten times; the right one needs ten different things to go wrong at once — the wobbles partially cancel."
+    >
+      <svg viewBox="0 0 720 208" className="w-full" role="img" aria-label="Two portfolios of ten holdings each: ten identical bank boxes under one storm, versus ten boxes across different sectors that fail for different reasons.">
+        <rect x={4} y={4} width={340} height={172} rx={10} className="fill-none stroke-teal-400/10" />
+        <rect x={376} y={4} width={340} height={172} rx={10} className="fill-none stroke-teal-400/10" />
+        <text x={174} y={26} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-amber-300/80">
+          Ten holdings, one bet
+        </text>
+        <text x={546} y={26} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          Ten holdings, ten storms
+        </text>
+        <text x={174} y={44} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-amber-300/70">
+          one storm sinks all ten
+        </text>
+        <text x={546} y={44} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
+          different sectors · countries · currencies
+        </text>
+        {banks}
+        {mixed}
+        <text x={174} y={156} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
+          correlation ≈ 1 — “diversified” in name only
+        </text>
+        <text x={546} y={156} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
+          low correlation — the closest thing to a free lunch
+        </text>
+        <text x={360} y={196} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/40">
+          fine print: in a real panic, correlations rush toward 1 — that&apos;s what the cash floor and kill switch are for
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 16 · short-asymmetry — the floor vs no ceiling ---------- */
+
+function ShortAsymmetry() {
+  return (
+    <Shell
+      title="Why the loss math is different"
+      caption="Owning has a floor — the stock stops at zero. A short's bill grows with the price, forever, and you pay borrow rent while you wait. Being right too early looks exactly like being wrong."
+    >
+      <svg viewBox="0 0 720 230" className="w-full" role="img" aria-label="Both positions enter at forty dollars. The long position's worst case is a bar down to zero, minus one hundred percent. The short position's loss arrow rises past the top of the chart — no ceiling.">
+        <ArrowDefs id="sa-a" className="text-red-400/70" />
+        <text x={190} y={30} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          Own it
+        </text>
+        <text x={530} y={30} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          Short it
+        </text>
+        <g className="text-teal-400/30">
+          <line x1={60} y1={120} x2={660} y2={120} stroke="currentColor" strokeWidth={1} strokeDasharray="5 4" />
+        </g>
+        <text x={360} y={112} textAnchor="middle" fill="currentColor" className="text-[10px] text-teal-200/60">
+          both enter at $40
+        </text>
+        {/* long: bounded fall */}
+        <g className="text-amber-400/75">
+          <rect x={170} y={122} width={40} height={72} rx={4} fill="currentColor" />
+        </g>
+        <line x1={130} y1={196} x2={250} y2={196} stroke="currentColor" strokeWidth={2} className="text-teal-100/70" />
+        <text x={190} y={212} textAnchor="middle" fill="currentColor" className="text-[10px] font-semibold text-teal-100/80">
+          worst case −100% — $0 is the floor
+        </text>
+        {/* short: unbounded rise — the arrow stops clear of the column header */}
+        <g className="text-red-400/80">
+          <line x1={530} y1={118} x2={530} y2={62} stroke="currentColor" strokeWidth={2.5} markerEnd="url(#sa-a)" />
+          <line x1={530} y1={58} x2={530} y2={44} stroke="currentColor" strokeWidth={1.5} strokeDasharray="3 4" />
+        </g>
+        <text x={548} y={62} fill="currentColor" className="text-[10px] font-semibold text-red-300/90">
+          the loss has no ceiling
+        </text>
+        <text x={548} y={78} fill="currentColor" className="text-[9.5px] text-teal-200/55">
+          a rising price is a rising bill —
+        </text>
+        <text x={548} y={92} fill="currentColor" className="text-[9.5px] text-teal-200/55">
+          and a squeeze can force it higher
+        </text>
+        <text x={548} y={106} fill="currentColor" className="text-[9.5px] text-teal-200/55">
+          plus borrow rent while you wait
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 17 · quote-paths — two honest numbers ---------- */
+
+function QuotePaths() {
+  return (
+    <Shell
+      title="Two apps, two honest numbers"
+      caption="Neither app is lying. One answers “what did the last trade print, fifteen minutes ago?”; the other answers “what's the midpoint of the current bid and ask, on a different venue?” Different questions, different clocks."
+    >
+      <svg viewBox="0 0 720 200" className="w-full" role="img" aria-label="One market feeds two apps: App A shows twenty dollars ten as a delayed last trade; App B shows twenty dollars fourteen as a bid-ask midpoint from another venue.">
+        <ArrowDefs id="qp-a" />
+        <NodeBox x={24} y={68} w={170} h={60} lines={["THE MARKET"]} sub="a dozen venues, one stock" tone="accent" />
+        <NodeBox x={440} y={26} w={250} h={54} lines={["APP A: $20.10"]} sub="the last trade — 15 minutes old" />
+        <NodeBox x={440} y={118} w={250} h={54} lines={["APP B: $20.14"]} sub="bid/ask midpoint — another venue" />
+        <Flow x1={196} x2={436} y={78} marker="qp-a" label="same moment" />
+        <Flow x1={196} x2={436} y={122} marker="qp-a" labelAbove={false} label="same stock" />
+        <text x={360} y={186} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
+          fifteen minutes + a different venue + last-vs-mid = disagreement without a liar in sight
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 18 · thesis-price-2x2 — the only sell matrix that matters ---------- */
+
+function ThesisPrice2x2() {
+  const cellText = (x: number, y: number, title: string, sub: string, broken: boolean) => (
+    <g>
+      <rect x={x} y={y} width={250} height={78} rx={9} className={broken ? "fill-red-400/[0.05] stroke-red-400/30" : "fill-teal-400/5 stroke-teal-400/30"} strokeWidth={1.2} />
+      <text x={x + 125} y={y + 32} textAnchor="middle" fill="currentColor" className={`text-[12px] font-bold ${broken ? "text-red-300/90" : "text-teal-50"}`}>
+        {title}
+      </text>
+      <text x={x + 125} y={y + 52} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/60">
+        {sub}
+      </text>
+    </g>
+  );
+  return (
+    <Shell
+      title="Sell on the thesis, not the price"
+      caption="The market doesn't know your entry price and doesn't care. The only column that matters is whether the REASON you bought still stands."
+    >
+      <svg viewBox="0 0 720 250" className="w-full" role="img" aria-label="A two-by-two grid: thesis intact and price up means let it run; thesis intact and price down is not a sell signal; thesis broken means sell whether the price is up or down.">
+        <text x={285} y={36} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
+          Thesis intact
+        </text>
+        <text x={555} y={36} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-red-300/70">
+          Thesis broken
+        </text>
+        <g fill="currentColor" className="text-teal-200/60">
+          <text x={148} y={90} textAnchor="end" className="text-[10px] font-semibold">price UP</text>
+          <text x={148} y={186} textAnchor="end" className="text-[10px] font-semibold">price DOWN</text>
+        </g>
+        {cellText(160, 48, "let it run", "and grade the call later", false)}
+        {cellText(430, 48, "sell", "you're lucky, not right", true)}
+        {cellText(160, 144, "not a sell signal", "the same thesis just got cheaper", false)}
+        {cellText(430, 144, "sell", "your entry price is a sunk cost", true)}
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 19 · proposes-disposes — the separation of powers ---------- */
+
+function ProposesDisposes() {
+  return (
+    <Shell
+      title="The separation of powers"
+      caption="Alfred can argue; the gate can't listen. Humans sit above both — they set the rules the gate enforces and hold the switch that stops everything."
+    >
+      <svg viewBox="0 0 720 230" className="w-full" role="img" aria-label="A triangle: Cam and Graham at the top hold the rules and the kill switch; Alfred at the bottom left proposes orders; the paragraph-six gate at the bottom right disposes of them in code.">
+        <ArrowDefs id="pd-a" />
+        <NodeBox x={255} y={14} w={210} h={52} lines={["CAM & GRAHAM"]} sub="hold the rules + the kill switch" tone="accent" />
+        <NodeBox x={56} y={146} w={220} h={56} lines={["ALFRED"]} sub="reads · researches · proposes" />
+        <NodeBox x={444} y={146} w={220} h={56} lines={["THE §6 GATE"]} sub="code — cannot be talked into it" tone="accent" />
+        <Flow x1={278} x2={440} y={174} marker="pd-a" label="every order, every time" />
+        <g className="text-teal-300/50">
+          <line x1={312} y1={68} x2={190} y2={142} stroke="currentColor" strokeWidth={1.3} strokeDasharray="5 4" markerEnd="url(#pd-a)" />
+          <line x1={408} y1={68} x2={530} y2={142} stroke="currentColor" strokeWidth={1.3} strokeDasharray="5 4" markerEnd="url(#pd-a)" />
+        </g>
+        <text x={178} y={100} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/55">
+          block · demote · kill
+        </text>
+        <text x={578} y={100} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/55">
+          only humans change the rules
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
+/* ---------- 20 · rsi-gauge — a description, not a forecast ---------- */
+
+function RsiGauge() {
+  const cx = 360;
+  const cy = 168;
+  const r = 118;
+  const angle = (rsi: number) => 180 - rsi * 1.8;
+  const needleAt = 24;
+  const [nx, ny] = polar(cx, cy, r - 22, angle(needleAt));
+  const tick = (v: number) => {
+    const [tx, ty] = polar(cx, cy, r + 16, angle(v));
+    return (
+      <text key={v} x={tx} y={ty} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[9.5px] tabular-nums text-teal-200/50">
+        {v}
+      </text>
+    );
+  };
+  return (
+    <Shell
+      title="RSI, honestly labelled"
+      caption="The needle says the ride so far was hard and fast — nothing more. Cheap-and-falling is still falling; “stretched” is a tension reading, not a bounce guarantee."
+    >
+      <svg viewBox="0 0 720 205" className="w-full" role="img" aria-label="A semicircular gauge from zero to one hundred with stretched zones below thirty and above seventy; the needle points at twenty-four, labelled as a description of the ride so far, not a forecast.">
+        <g className="text-amber-400/70">
+          <path d={arcPath(cx, cy, r, 180, angle(30))} fill="none" stroke="currentColor" strokeWidth={10} strokeLinecap="round" />
+        </g>
+        <g className="text-teal-400/25">
+          <path d={arcPath(cx, cy, r, angle(30), angle(70))} fill="none" stroke="currentColor" strokeWidth={10} strokeLinecap="round" />
+        </g>
+        <g className="text-amber-400/70">
+          <path d={arcPath(cx, cy, r, angle(70), 0)} fill="none" stroke="currentColor" strokeWidth={10} strokeLinecap="round" />
+        </g>
+        {[0, 30, 70, 100].map(tick)}
+        <text x={168} y={84} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-amber-300/80">
+          stretched low
+        </text>
+        <text x={552} y={84} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-amber-300/80">
+          stretched high
+        </text>
+        <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="currentColor" strokeWidth={2.5} className="text-teal-50" />
+        <circle cx={cx} cy={cy} r={5} className="fill-teal-300" />
+        {/* surface halo so the needle reads as passing BEHIND the reading */}
+        <text x={cx} y={cy - 46} textAnchor="middle" fill="currentColor" paintOrder="stroke" stroke="var(--card-bg)" strokeWidth={6} strokeLinejoin="round" className="text-[13px] font-bold text-teal-50">
+          RSI 24
+        </text>
+        <text x={cx} y={cy - 28} textAnchor="middle" fill="currentColor" paintOrder="stroke" stroke="var(--card-bg)" strokeWidth={5} strokeLinejoin="round" className="text-[9.5px] text-teal-200/60">
+          “this fell hard and fast” — the ride so far, not the road ahead
+        </text>
+      </svg>
+    </Shell>
+  );
+}
+
 /* ---------- the registry ---------- */
 
 export const DIAGRAMS: Record<LearnDiagramKey, ReactNode> = {
@@ -530,4 +980,14 @@ export const DIAGRAMS: Record<LearnDiagramKey, ReactNode> = {
   "margin-spiral": <MarginSpiral />,
   "fee-gravity": <FeeGravity />,
   "grq-pipeline": <GrqPipeline />,
+  "two-listings": <TwoListings />,
+  "ex-date-step": <ExDateStep />,
+  "pizza-split": <PizzaSplit />,
+  "target-chase": <TargetChase />,
+  "one-bet-ten-times": <OneBetTenTimes />,
+  "short-asymmetry": <ShortAsymmetry />,
+  "quote-paths": <QuotePaths />,
+  "thesis-price-2x2": <ThesisPrice2x2 />,
+  "proposes-disposes": <ProposesDisposes />,
+  "rsi-gauge": <RsiGauge />,
 };

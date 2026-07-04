@@ -43,7 +43,7 @@ async function ExampleBlock({ k, fallbackMd }: { k: string; fallbackMd: string }
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Market example</div>
         <div className="text-[10px] text-teal-200/35">
-          {row ? `live · as of ${NICE_DAY.format(row.asOf)}` : "illustration — refreshes from live data once the examples engine lands"}
+          {row ? `live · as of ${NICE_DAY.format(row.asOf)}` : "illustration — the live version returns as the data refreshes"}
         </div>
       </div>
       <div className="mt-2.5">

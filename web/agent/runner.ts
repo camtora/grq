@@ -12,6 +12,7 @@ import { getBroker } from "../lib/broker";
 import { IBKRBroker } from "../lib/broker/ibkr";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
+import { runLearnExamplesRefresh } from "../lib/learn/examples";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runMarketScreenNightly } from "../lib/market-screen/nightly";
@@ -60,6 +61,7 @@ let lastDailyRefreshDay = "";
 let lastEarningsRefreshDay = "";
 let lastSmartMoneyDay = "";
 let lastExtAcctSyncDay = "";
+let lastLearnExamplesDay = "";
 let lastOptionsMs = 0;
 let lastSocialMs = 0;
 let lastMacroEventDay = "";
@@ -762,6 +764,18 @@ async function tick() {
     lastBarsDay = p.dateStr;
     const n = await refreshBars(await trackedSymbols(), "5d").catch(() => 0);
     console.log(`[bars] nightly refresh stored ${n} rows`);
+  }
+
+  // Learn portal living examples (D111 L4) — nightly after the bars refresh, so the
+  // gap/volume/volatility generators read today's closes. Deterministic templates over
+  // stored data; zero LLM tokens; never throws upward (lib/learn/examples.ts).
+  if (isMarketDay() && p.minutesSinceMidnight >= 16 * 60 + 40 && lastLearnExamplesDay !== p.dateStr) {
+    lastLearnExamplesDay = p.dateStr;
+    const ex = await runLearnExamplesRefresh().catch((e) => {
+      console.error("[learn] examples refresh failed:", e instanceof Error ? e.message : e);
+      return 0;
+    });
+    if (ex) console.log(`[learn] refreshed ${ex} living example(s)`);
   }
 
   // (1d) Experiment integrity audit — after close, once per ET day. Pure DB read over the Bull-Race
