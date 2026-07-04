@@ -1,6 +1,6 @@
 # The Learn Portal — how the market actually works (D110)
 
-**Status:** Phases 1 + 2 shipped 2026-07-04. A top-level **`/learn`** destination beside Reports —
+**Status:** Phases 1–3 shipped 2026-07-04 — all 8 courses live. A top-level **`/learn`** destination beside Reports —
 the front door for the financial-literacy pillar (`docs/LITERACY.md`). It teaches Cam & Graham
 **how the market works** — not which stocks to buy: what a stock is, how a price forms, what
 owning one actually means. The Options portal, the labs, and the glossary are gathered under it
@@ -62,7 +62,10 @@ measured against XIC in Reports").
 7. **The long game** *(live, Phase 2)* — compounding (**+ the compounding-machine widget**) · the
    benchmark (the couch opponent) · fee gravity + tax drag (TFSA/RRSP order) · behavioural traps (rules
    as the defense — the gate binds Alfred the way a plan binds a human) · when to sell (thesis, not price).
-8. **How GRQ works** *(soon — Phase 3)* — the fund as a worked example, per above.
+8. **How GRQ works** *(live, Phase 3)* — the agent proposes / the gate disposes (separation of
+   powers) · the guardrails as Course 5 enforced in code (+ live dials receipt) · the scoreboard +
+   the operating-cost hurdle (+ vs-XIC receipt) · receipts-before-trades (the research pipeline,
+   Second Opinions, Report Card) · the soak (+ live soak-state receipt).
 
 "Soon" courses render as dimmed hub cards (honest — no vaporware) and an EmptyState if visited.
 
@@ -111,9 +114,15 @@ mirrors it to **`shared/content/learn.json`** for GRQ Go (same lockstep pattern 
   amber, series pair CVD-validated on both surfaces) under Course 7's compounding lesson. Both pure
   client, integer cents. 118/118 tests (widget-key check added), tsc clean, all routes + widget SSR
   smoke-tested.
-- **Phase 3 — receipts + How GRQ works.** Live-fund example blocks inside lessons (a real fill vs
-  its quote, the fund's actual drawdown, the real vs-XIC line — the `how-it-works` pattern of
-  pulling live numbers so prose can't drift), and Course 8.
+- **Phase 3 — ✅ SHIPPED 2026-07-04.** **Receipts** (`components/learn/Receipts.tsx`, server-only;
+  `LearnLesson.receipt`) — live-fund example blocks that pull the fund's OWN numbers so lesson
+  claims can't drift (the `how-it-works` pattern). Six blocks: `real-fills` (Course 2 · spread),
+  `drawdown` (Course 5), `vs-xic` (Course 7 benchmark + Course 8 scoreboard), `fees` (Course 7),
+  `guardrails` + `soak` (Course 8). All queries scoped to `PAPER_INCEPTION` (the current soak's
+  honest inception — the validator's own rule) so pre-reset history never leaks in; every block
+  has an honest empty state and a lesson never falls over on a receipt failure. **Course 8 written**
+  (5 lessons — proposes/disposes · guardrails-as-risk · the scoreboard · receipts-before-trades ·
+  the soak). 119/119 tests (receipt-key check added). Receipts are web-only; mobile ignores the key.
 - **Phase 4 — mobile parity + glossary unification.** GRQ Go renders `shared/content/learn.json`
   in its More ▸ Learning section (one small `[[term]]`→tap-alert renderer); promote the shared
   glossary JSON to full fidelity and end the web/shared/mobile triplication. Optional per-member

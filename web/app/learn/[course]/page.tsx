@@ -6,6 +6,7 @@ import Md from "@/components/Md";
 import { COURSES, courseBySlug, type LearnWidgetKey } from "@/lib/learn/content";
 import OrderBookSim from "@/components/learn/OrderBookSim";
 import CompoundingSim from "@/components/learn/CompoundingSim";
+import ReceiptBlock from "@/components/learn/Receipts";
 
 // Interactive widgets a lesson can embed (client leaves under this server page).
 const WIDGETS: Record<LearnWidgetKey, React.ReactNode> = {
@@ -59,6 +60,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
               <Card className="p-5">
                 <Md text={lesson.body} />
                 {lesson.widget ? WIDGETS[lesson.widget] : null}
+                {lesson.receipt ? <ReceiptBlock k={lesson.receipt} /> : null}
                 {lesson.tryIt?.length ? (
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-teal-400/10 pt-3">
                     {lesson.tryIt.map((t) => (

@@ -25,7 +25,7 @@ export default async function LearnPage() {
 
       <div className="space-y-10">
         <section>
-          <SectionHeader sub="· eight courses, in order — the later ones are being written">The curriculum</SectionHeader>
+          <SectionHeader sub="· eight courses, in order — start at the machine">The curriculum</SectionHeader>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {COURSES.map((c) => {
               const inner = (

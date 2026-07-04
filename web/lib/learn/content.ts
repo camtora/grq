@@ -13,6 +13,10 @@
 /** Interactive widgets a lesson can embed (rendered by app/learn/[course]/page.tsx). */
 export type LearnWidgetKey = "order-book" | "compounding";
 
+/** Live-fund "receipts" blocks (components/learn/Receipts.tsx) — the fund's own numbers,
+ *  queried live so a lesson's claims can't drift from reality. Web-only (mobile ignores). */
+export type LearnReceiptKey = "real-fills" | "drawdown" | "vs-xic" | "fees" | "guardrails" | "soak";
+
 export type LearnLesson = {
   slug: string;
   title: string;
@@ -22,6 +26,8 @@ export type LearnLesson = {
   tryIt?: { href: string; label: string }[];
   /** Embed an interactive widget under the lesson body. */
   widget?: LearnWidgetKey;
+  /** Embed a live-fund receipts block under the lesson body. */
+  receipt?: LearnReceiptKey;
 };
 
 export type LearnCourse = {
@@ -110,6 +116,7 @@ Here's the part that stings: you buy at the ask and sell at the bid. Buy a share
 
 On a giant like Apple the spread is a penny — a rounding error. On an obscure small-cap it can be several percent, which means the stock has to rise several percent *just to get you back to zero*. The spread is both a toll and a warning light: wide spreads are the market telling you few people trade this thing, and getting out may cost as much as getting in.`,
         tryIt: [{ href: "/day-lab", label: "watch the spread tax the Day-Trading Lab's trader arm" }],
+        receipt: "real-fills",
       },
       {
         slug: "order-types",
@@ -300,6 +307,7 @@ So the practical rule inverts the amateur instinct. The answer to "this stock is
 That asymmetry is why professionals obsess more about avoiding catastrophic losses than catching spectacular wins. A portfolio that grinds out modest gains but never craters beats a flashy one that halves itself every few years — compounding (Course 7) does the rest.
 
 It's also why GRQ's defenses are **pre-committed and automatic**: a [stop-loss](#explain:stop-loss) on every position, and a system-level tripwire — if the whole fund draws down past its limit, the [kill switch](#explain:kill-switch) halts trading without asking anyone's opinion. The design assumption is that in the moment, at the bottom, with everything red, *nobody* — human or AI — reliably makes the calm decision. So the calm decision was made in advance, in code.`,
+        receipt: "drawdown",
       },
       {
         slug: "sizing-and-diversification",
@@ -374,6 +382,7 @@ That's what a benchmark is for. GRQ's is [XIC](#explain:vs-xic), the whole TSX i
 
 Two honest corollaries. Most professionals lose this game over long periods, after fees — competition is brutal, costs compound, and the market is mostly-right most days. And short-term wins prove little: a hot quarter is luck until years of scorekeeping say otherwise, which is why the fund keeps score in public and grades its own calls after the fact. Beating the couch is *hard*. The dashboard exists to find out — with receipts — whether it's happening, not to assume it.`,
         tryIt: [{ href: "/reports", label: "Reports — the scoreboard vs XIC, updated live" }],
+        receipt: "vs-xic",
       },
       {
         slug: "fee-gravity-and-tax-drag",
@@ -383,6 +392,7 @@ Two honest corollaries. Most professionals lose this game over long periods, aft
 The retail-scale version is death by a thousand cuts: [commissions](#explain:commission), the [spread](#explain:bid-ask-spread), FX conversion, all × how often you trade. GRQ has two code-level defenses — a trade must be worth at least 3× its [round-trip](#explain:round-trip) commissions, and a monthly [fee budget](#explain:fee-budget) the gate simply won't let the fund exceed. Small accounts don't usually die of bad picks; they bleed out in costs.
 
 Then taxes, the other drag — and Canada hands you shelters, in order: a [[tfsa]] (gains never taxed, with the fine print that CRA can reclassify a *day-trading* TFSA as a business — cadence matters), an [[rrsp]] (tax deferred to retirement), and only then non-registered accounts, where half your [capital gains](#explain:capital-gains) are taxable and the [superficial-loss rule](#explain:superficial-loss) polices your loss-harvesting. Shelter first is worth more than most stock picks.`,
+        receipt: "fees",
       },
       {
         slug: "behavioural-traps",
@@ -411,8 +421,67 @@ Nobody sells the top — that's not the goal. The goal is a **written reason for
     n: 8,
     title: "How GRQ works",
     tagline: "The fund as a worked example — guardrails as risk management, NAV as accounting, the soak as proof.",
-    status: "soon",
-    lessons: [],
+    status: "live",
+    lessons: [
+      {
+        slug: "proposes-disposes",
+        title: "The agent proposes, the gate disposes",
+        body: `GRQ is a real brokerage account run day-to-day by an AI agent — Alfred, a large language model ([Claude Opus](#explain:opus)) on a fixed rhythm: a 9:00 morning plan, decision check-ins every half hour through the trading day, a close-of-day brief. It reads the same dashboards you do, files research, and proposes trades.
+
+The load-bearing design fact: **Alfred doesn't hold the keys.** Every order it proposes must pass a deterministic code gate — a checklist of hard rules (next lesson) applied with zero judgment and zero appreciation for eloquence. An order that breaks a rule is rejected no matter how good the reasoning sounded. The agent proposes; the gate disposes.
+
+Humans sit above both, holding exactly two powers that matter. The [kill switch](#explain:kill-switch): either member can halt all trading instantly, and nothing trades while it's engaged. And the rules themselves: **only humans can change the guardrails** — Alfred cannot edit its own limits, not because it hasn't asked nicely, but because no code path exists for it to do so.
+
+Why build it this way? Course 7's behavioural lesson, applied to a machine. An AI doesn't get greedy or scared, but it has its own failure modes — overconfidence, a persuasive bad idea, a misread number. Separation of powers means a bad idea has to get past something that *cannot be talked into it*. That principle is older than markets, and it's the whole architecture.`,
+      },
+      {
+        slug: "guardrails-as-risk",
+        title: "The guardrails — Course 5, enforced in code",
+        body: `Everything the Risk course taught, GRQ enforces mechanically. This lesson is just the mapping.
+
+**Sizing** (Course 5, lesson 3): a max-position cap — no single name past a set share of NAV — and a [cash floor](#explain:cash-floor) held *per currency*, so the fund is never all-in. **Drawdown** (lesson 2): two tripwires — a bad enough day pauses all new buying until tomorrow, and a deep enough fall from the high-water mark trips the kill switch automatically. **Fee gravity** (Course 7): order-rate caps, a monthly fee budget the gate enforces, and the 3× rule — no trade whose thesis doesn't clear three times its round-trip commissions.
+
+**Behaviour**: no new entries in the first or last 15 minutes of the session (the tape is at its most emotional at the open and close), and no buy below a [conviction](#explain:confidence) bar — Alfred must put a number on how sure it is, and the gate holds it to that number. **The banned bets** (lesson 5): no [[leverage]], no [short selling](#explain:short-selling), and no options — the options ban is literally a toggle in the database that ships OFF, and the broker seam rejects option orders while it stays off.
+
+The dials below are the live values — not a screenshot, the same constants the gate is checking right now. Members pick the risk dial (Cautious / Balanced / Aggressive presets); every trade, whatever the dial, clears every rule above.`,
+        receipt: "guardrails",
+      },
+      {
+        slug: "the-scoreboard",
+        title: "The scoreboard — NAV, the couch, and the real hurdle",
+        body: `The fund keeps score the way Courses 1 and 7 said an honest investor must. [Contributions](#explain:contributions) — every dollar Cam and Graham ever put in — are the baseline. [[nav]] is what it's all worth right now. The difference is [total P&L](#explain:total-pnl), and beside it, always, sits the couch: what those same contributions would be worth had they gone [straight into XIC](#explain:vs-xic) on the day they arrived.
+
+There's a second hurdle most funds don't print: **operating costs**. GRQ runs on paid subscriptions — the AI and the market data together cost real money every month. A small fund can beat XIC and *still* be underwater once its own running costs are counted, and GRQ's reporting is required to say so rather than celebrate. The honest exit from that trap is scale and patient compounding — never bigger risk. The gate doesn't loosen because the fund is impatient.
+
+One more honesty rule baked into the scoreboard: it's measured from the current soak's inception, not from whatever flattering date a marketer would pick. When the paper account was reset mid-soak, the clock restarted and said so. Track records are only worth what their starting line is.`,
+        receipt: "vs-xic",
+      },
+      {
+        slug: "receipts-before-trades",
+        title: "Receipts before trades — the research pipeline",
+        body: `No name gets bought on a hunch. The pipeline runs one direction:
+
+A name enters as a **candidate** — a member watches it, or Alfred's hunt surfaces it as a lead. Research produces a [[dossier]]: the business, the catalysts, the bear case, a verdict with a [confidence](#explain:confidence) number and [price targets](#explain:price-target) with horizons. Only a genuine Buy call at or above the conviction bar can be **promoted** into the tradeable [universe](#explain:universe) — and promotion itself passes a deterministic [[liquidity]] screen first (Course 2: a position you can't exit isn't a position). And after *all* of that, every actual order still clears the full gate from the last lesson.
+
+Then the part that gives this course its name: **everything is written down and graded.** Every decision lands in a journal with its reasoning. Price targets get scored when they resolve. A panel of rival AI models (Second Opinions) logs what *they* would have done at every check-in, so Alfred's judgment is benchmarked against alternatives. The Report Card tallies whether the calls were right, wrong, or lucky.
+
+The point of all this isn't infallibility — the fund is wrong plenty. The point is **auditability**: for any position, any exit, any miss, you can always pull the receipt and find out *why*. An investment process you can't audit isn't a process; it's a mood with a brokerage account.`,
+        tryIt: [
+          { href: "/race", label: "Second Opinions — rival models grade the fund's real calls" },
+          { href: "/report-card", label: "the Report Card — the tally, wins and misses alike" },
+        ],
+      },
+      {
+        slug: "the-soak",
+        title: "The soak — proving it before real money",
+        body: `The last rule is the one everything else waits on: **real dollars trade only after the [soak](#explain:soak)** — at least four clean weeks of live trading on simulated and paper accounts, at least two of them on the broker's paper system, the same one the real account would use. "Clean" is defined, not vibed: no blown guardrails, no phantom P&L, and the fund's books reconciled against the broker's every single day.
+
+Why so slow? The same reason pilots log simulator hours: in a simulator, failure is free *and informative*. The soak has already paid for itself — it caught a broker-side account reset that looked exactly like a portfolio crash, tripped the defenses, and got diagnosed with receipts instead of panic. Every bug found on paper is a bug that never touches money.
+
+This is also the honest answer to "why isn't it trading real money yet?" Because the burden of proof sits with the system, not with enthusiasm. The block below is the live state of that proof — the broker, the clock, and whether the kill switch is resting or engaged. When the gate finally opens, it will open because the receipts said so.`,
+        receipt: "soak",
+      },
+    ],
   },
 ];
 

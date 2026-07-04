@@ -71,6 +71,13 @@ describe("learn lesson bodies", () => {
       for (const l of c.lessons)
         if (l.widget) assert.ok(known.has(l.widget), `${c.slug}/${l.slug} embeds unknown widget "${l.widget}"`);
   });
+
+  it("only embeds known receipts (components/learn/Receipts.tsx dispatches this set)", () => {
+    const known = new Set(["real-fills", "drawdown", "vs-xic", "fees", "guardrails", "soak"]);
+    for (const c of COURSES)
+      for (const l of c.lessons)
+        if (l.receipt) assert.ok(known.has(l.receipt), `${c.slug}/${l.slug} embeds unknown receipt "${l.receipt}"`);
+  });
 });
 
 describe("labs rail", () => {
