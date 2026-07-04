@@ -29,6 +29,7 @@ export type Section =
   | "Activity"
   | "Ideas"
   | "How it works"
+  | "The Wire"
   | "Admin"
   | "Other";
 
@@ -39,6 +40,38 @@ export function sectionForPath(pathRaw: string): Section {
 
   if (path === "/") return "Today";
   if (path === "/today" || path.startsWith("/today/")) return "Today"; // alias of "/"
+
+  // ---- GRQ Go (expo-router pathnames) — the app beacons the same /api/track
+  // (2026-07-04), so its screens bucket into the SAME sections as the web. App
+  // paths that shadow web ones (/portfolio, /settings, /chat…) fall through to
+  // the web rules below; only the app-shaped ones need mapping here.
+  if (path === "/wire" || path.startsWith("/wire/")) return "The Wire";
+  if (path === "/watchlist" || path.startsWith("/watchlist/")) return "Watchlist";
+  if (path.startsWith("/stock/")) return "Stock"; // web is /stocks/
+  if (path === "/messages" || path.startsWith("/messages/")) return "Chat";
+  if (path === "/notifications" || path === "/notification-settings") return "Settings";
+  if (path.startsWith("/more/")) {
+    const sub = path.slice("/more/".length).split("/")[0];
+    const MORE: Record<string, Section> = {
+      hunt: "The Hunt",
+      "smart-money": "Smart Money",
+      browse: "Browse",
+      reports: "Reports",
+      report: "Reports",
+      race: "Second Opinions",
+      "race-day": "Second Opinions",
+      bulls: "Bull Race",
+      desk: "Options Desk",
+      options: "Options Desk",
+      "short-lab": "Short Lab",
+      "day-lab": "Day-Trading Lab",
+      chess: "Chess Moves",
+      "chess-board": "Chess Moves",
+      "report-card": "Report Card",
+      "about-grq": "How it works",
+    };
+    if (MORE[sub]) return MORE[sub];
+  }
   if (path === "/portfolio" || path.startsWith("/portfolio/")) return "Portfolio";
   if (path === "/accounts" || path.startsWith("/accounts/")) return "Accounts";
   if (path === "/market/watchlist" || path.startsWith("/market/watchlist/")) return "Watchlist";

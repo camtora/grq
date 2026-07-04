@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Notifications from 'expo-notifications';
@@ -20,6 +20,7 @@ import { useMessages } from '../store/messages';
 import { useNotifications } from '../store/notifications';
 import { useThemeStore } from '../store/theme';
 import { registerForPush } from '../services/push';
+import { api } from '../services/api';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
 // so iosClientId only — no webClientId (that would flip the audience).
@@ -95,6 +96,18 @@ export default function RootLayout() {
     });
     return () => sub.remove();
   }, [router]);
+
+  // The usage beacon (web components/Tracker.tsx parity, 2026-07-04): every screen
+  // change POSTs the pathname to /api/track, so app usage shows up on the Traffic
+  // dashboard beside web usage. Identity resolves server-side from the Bearer;
+  // fire-and-forget — a logging miss never surfaces. Consecutive repeats dedupe.
+  const pathname = usePathname();
+  const lastTracked = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== 'signedIn' || !pathname || pathname === lastTracked.current) return;
+    lastTracked.current = pathname;
+    api('/api/track', { method: 'POST', body: JSON.stringify({ path: pathname }) }).catch(() => {});
+  }, [status, pathname]);
 
   const ready = fontsLoaded;
 
