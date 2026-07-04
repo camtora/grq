@@ -43,6 +43,7 @@ import {
   getFundsPilingIn,
   getInsiderTopBuys,
   getInsiderClusters,
+  getCongressMembers,
   getSmartMoneyFreshness,
   getSmartMoneyForSymbol,
 } from "./smart-money/queries";
@@ -1127,13 +1128,14 @@ const tidyName = (s: string) =>
   s.replace(/\b(INC|CORP|CO|LTD|PLC|LP|LLC|N V|S A|GROUP|THE)\b\.?/gi, "").replace(/\s+/g, " ").trim() || s;
 
 export async function smartMoneyResponse() {
-  const [universe, portfolios, congress, funds, insiders, clusters, fresh, narrative] = await Promise.all([
+  const [universe, portfolios, congress, funds, insiders, clusters, members, fresh, narrative] = await Promise.all([
     allUniverse(),
     getPortfolios(),
     getCongressLeaderboard(90, 8),
     getFundsPilingIn(8),
     getInsiderTopBuys(14, 10),
     getInsiderClusters(30, 8),
+    getCongressMembers(180, 8), // the tracked-congress "personal account" cards (Pelosi…)
     getSmartMoneyFreshness(),
     prisma.journalEntry.findFirst({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } }, orderBy: { at: "desc" } }),
   ]);
@@ -1158,6 +1160,15 @@ export async function smartMoneyResponse() {
       subtitle: p.firm || p.blurb || null,
       asOf: p.asOf ?? null,
       totalValueUsd: p.totalValueUsd ?? null,
+      // Full card metadata (web PortfolioCard parity — GRQ Go's collapsible cards).
+      firm: p.firm,
+      blurb: p.blurb,
+      avatar: p.avatar ?? null,
+      holdingsCount: p.holdingsCount,
+      hasPuts: p.hasPuts,
+      perf1yPct: p.perf1yPct ?? null,
+      securitiesAdded: p.securitiesAdded ?? null,
+      securitiesRemoved: p.securitiesRemoved ?? null,
       topHoldings: p.topHoldings.map((h) => ({
         symbol: h.symbol,
         name: h.name ?? null,
@@ -1168,11 +1179,29 @@ export async function smartMoneyResponse() {
         overlap: overlap.get(h.symbol) ?? null,
       })),
     })),
+    // Tracked members of Congress — disclosed-trade cards (no 13F applies).
+    members: members
+      .filter((m) => m.trades.length > 0)
+      .map((m) => ({
+        slug: m.person.slug,
+        name: m.person.name,
+        role: m.person.role,
+        blurb: m.person.blurb,
+        avatar: m.person.avatar ?? null,
+        trades: m.trades.map((t) => ({
+          symbol: t.symbol,
+          side: t.side,
+          amountRange: t.amountRange,
+          txnDate: t.txnDate,
+          overlap: overlap.get(t.symbol) ?? null,
+        })),
+      })),
     congress: congress.map((c) => ({
       symbol: c.symbol,
       name: tidyName(c.assetName),
       primary: `${c.buyers} member${c.buyers > 1 ? "s" : ""}`,
       secondary: `${c.trades} trade${c.trades > 1 ? "s" : ""}`,
+      value: c.buyers, // magnitude-bar scale (web Leaderboard parity)
       overlap: overlap.get(c.symbol) ?? null,
     })),
     funds: funds.map((f) => ({
@@ -1180,6 +1209,7 @@ export async function smartMoneyResponse() {
       name: tidyName(f.name),
       primary: `${f.funds} fund${f.funds > 1 ? "s" : ""}`,
       secondary: fmtUsd(f.totalValueUsd),
+      value: f.funds,
       overlap: overlap.get(f.symbol) ?? null,
     })),
     insiders: insiders.map((t) => ({
@@ -1187,6 +1217,7 @@ export async function smartMoneyResponse() {
       name: t.insiderName.length > 26 ? `${t.insiderName.slice(0, 26)}…` : t.insiderName,
       primary: fmtUsd(t.valueUsd),
       secondary: t.insiderTitle ? t.insiderTitle.split(/[,:]/)[0] : null,
+      value: t.valueUsd,
       overlap: overlap.get(t.symbol) ?? null,
     })),
     clusters: clusters.map((c) => ({ symbol: c.symbol, insiders: c.insiders, totalValueUsd: c.totalValueUsd ?? null })),
