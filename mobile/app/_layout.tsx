@@ -12,7 +12,6 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
-import { SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import Splash from '../components/Splash';
 import SignIn from '../components/SignIn';
 import { usePalette } from '../constants/theme';
@@ -51,8 +50,6 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    SpaceGrotesk_600SemiBold,
-    SpaceGrotesk_700Bold,
   });
 
   const router = useRouter();

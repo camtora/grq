@@ -105,9 +105,9 @@ export default function BullsScreen() {
 const s = StyleSheet.create({
   benchLine: { fontFamily: F.med, fontSize: 13 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rank: { fontFamily: F.display, fontSize: 14, width: 28 },
+  rank: { fontFamily: 'System', fontWeight: '800', fontSize: 14, width: 28 },
   label: { fontFamily: F.semi, fontSize: 14 },
-  ret: { fontFamily: F.display, fontSize: 16 },
+  ret: { fontFamily: 'System', fontWeight: '800', fontSize: 16 },
   meta: { fontFamily: F.reg, fontSize: 10.5, marginTop: 1 },
   holdings: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },

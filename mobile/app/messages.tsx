@@ -224,7 +224,7 @@ const s = StyleSheet.create({
   fill: { flex: 1 },
   bar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
-  barTitle: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
+  barTitle: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   thread: { padding: 16, flexGrow: 1 },
   empty: { fontFamily: F.reg, fontSize: 12.5, textAlign: 'center', marginTop: 40, lineHeight: 18 },
   timeLabel: { fontFamily: F.med, fontSize: 10, textAlign: 'center', marginTop: 16, marginBottom: 2, opacity: 0.7 },

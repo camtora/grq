@@ -72,6 +72,6 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
   label: { fontFamily: F.semi, fontSize: 14.5 },
   role: { fontFamily: F.reg, fontSize: 10.5, marginTop: 1 },
-  pnl: { fontFamily: F.display, fontSize: 16 },
+  pnl: { fontFamily: 'System', fontWeight: '800', fontSize: 16 },
   meta: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 15, marginTop: 8 },
 });

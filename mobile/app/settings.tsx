@@ -445,7 +445,7 @@ const st = StyleSheet.create({
   fill: { flex: 1 },
   bar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
-  title: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
+  title: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   body: { paddingHorizontal: 16, paddingBottom: 40 },
   pageSub: { fontFamily: F.reg, fontSize: 12, lineHeight: 17, marginTop: 4 },
   meRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -440,7 +440,7 @@ function PersonalView({ data, loading, error }: { data: AccountsResponse | null;
 const s = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 22 },
   heroLabel: { fontFamily: F.semi, fontSize: 10, letterSpacing: 2 },
-  heroNav: { fontFamily: F.display, fontSize: 40, marginTop: 4, letterSpacing: -0.5 },
+  heroNav: { fontFamily: 'System', fontWeight: '800', fontSize: 40, marginTop: 4, letterSpacing: -0.5 },
   heroRow: { flexDirection: 'row', gap: 14, marginTop: 6 },
   heroPnl: { fontFamily: F.semi, fontSize: 12.5 },
   tapeLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },

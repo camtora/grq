@@ -167,7 +167,7 @@ const s = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
   titleWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   titleBull: { width: 24, height: 24 },
-  barTitle: { fontFamily: F.display, fontSize: 17 },
+  barTitle: { fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   honesty: { fontFamily: F.semi, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'center', opacity: 0.7 },
   thread: { padding: 16, flexGrow: 1 },
   row: { flexDirection: 'row' },

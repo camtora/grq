@@ -115,7 +115,7 @@ const s = StyleSheet.create({
   statRow: { flexDirection: 'row', paddingVertical: 12 },
   stat: { flex: 1, alignItems: 'center' },
   statLabel: { fontFamily: F.med, fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statValue: { fontFamily: F.display, fontSize: 16, marginTop: 3 },
+  statValue: { fontFamily: 'System', fontWeight: '800', fontSize: 16, marginTop: 3 },
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   sourceName: { fontFamily: F.semi, fontSize: 13, flex: 1, textTransform: 'capitalize' },

@@ -22,9 +22,9 @@ a palette addition if needed — don't inline it).
 
 Two families, loaded in the root layout (`@expo-google-fonts/*`):
 
-| Role | Font | Token (`F.` in theme.ts) |
+| Role | Font | How |
 |---|---|---|
-| Display — masthead, page titles, big numbers | **Space Grotesk** 600/700 | `F.display`, `F.displayMed` |
+| Display — masthead, page titles, section headers, big numbers | **System (SF)** — the same face as the website's headers | `fontFamily: 'System'` + `fontWeight` ('600'–'900') |
 | UI/body — everything else | **Inter** 400/500/600/700/800 | `F.reg` `F.med` `F.semi` `F.bold` `F.black` |
 
 RN rule: custom fonts ignore `fontWeight` — always set the exact `fontFamily` token.

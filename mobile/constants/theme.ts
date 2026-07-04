@@ -55,11 +55,11 @@ export const light: Palette = {
 
 export const brandAccent = '#14b8a6';
 
-/** Font tokens (docs/MOBILE-DESIGN.md §2). RN custom fonts ignore fontWeight —
- * always set the exact family. Display = Space Grotesk, UI/body = Inter. */
+/** Font tokens (docs/MOBILE-DESIGN.md §2). Display/headers use the SYSTEM font
+ * (fontFamily 'System' + a fontWeight, matching the website's header face —
+ * the site runs the system sans stack); Inter stays for body/UI text. RN
+ * custom fonts ignore fontWeight — always use the exact Inter family below. */
 export const F = {
-  display: 'SpaceGrotesk_700Bold',
-  displayMed: 'SpaceGrotesk_600SemiBold',
   black: 'Inter_800ExtraBold',
   bold: 'Inter_700Bold',
   semi: 'Inter_600SemiBold',

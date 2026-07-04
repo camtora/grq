@@ -188,7 +188,7 @@ export default function DeskScreen() {
 const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   label: { fontFamily: F.semi, fontSize: 14 },
-  ret: { fontFamily: F.display, fontSize: 16 },
+  ret: { fontFamily: 'System', fontWeight: '800', fontSize: 16 },
   meta: { fontFamily: F.reg, fontSize: 10.5, marginTop: 1 },
   metaSmall: { fontFamily: F.reg, fontSize: 9.5, marginTop: 1 },
   holding: { paddingVertical: 8 },

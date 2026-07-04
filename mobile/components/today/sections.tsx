@@ -30,11 +30,29 @@ export function Masthead({ t }: { t: Today }) {
   const weekend = t.edition === 'weekend';
   return (
     <View style={[s.masthead, { borderBottomColor: p.accent + '4d' }]}>
-      <Text style={[s.mastTitle, { color: p.textPrimary }]}>GRQ Daily</Text>
-      <Text style={[s.mastKicker, { color: p.accentText }]}>
-        {editionLabel[t.edition]}{t.dayLabel ? ` · ${t.dayLabel}` : ''}
-      </Text>
-      <View style={s.mastRow}>
+      {/* Balanced banner: the title column left, the fund's day column right,
+          both rows aligned (Cam 2026-07-03). */}
+      <View style={s.mastTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.mastTitle, { color: p.textPrimary }]}>GRQ Daily</Text>
+        </View>
+        <View style={s.mastRight}>
+          {weekend ? (
+            <Text style={[s.mastPnlMain, { color: p.textMuted }]}>Flat</Text>
+          ) : (
+            <Text style={[s.mastPnlMain, tabular, { color: pnlColor(t.dayPnlCents, p) }]}>
+              {signedMoney(t.dayPnlCents)}
+            </Text>
+          )}
+          <Text style={[s.mastPnlSub, tabular, { color: p.textMuted }]}>
+            {weekend ? 'markets closed' : `${signedPctFromBps(t.dayPnlBps)} today`}
+          </Text>
+        </View>
+      </View>
+      <View style={s.mastMeta}>
+        <Text style={[s.mastKicker, { color: p.accentText }]}>
+          {editionLabel[t.edition]}{t.dayLabel ? ` · ${t.dayLabel}` : ''}
+        </Text>
         {t.marketOpen != null && (
           <View style={s.mastStatus}>
             <View style={[s.dot, { backgroundColor: t.marketOpen ? p.pos : p.textMuted }]} />
@@ -43,19 +61,8 @@ export function Masthead({ t }: { t: Today }) {
             </Text>
           </View>
         )}
-        <View style={s.mastPnl}>
-          {weekend ? (
-            <Text style={[s.mastPnlMain, { color: p.textMuted }]}>Flat · markets closed</Text>
-          ) : (
-            <Text style={[s.mastPnlMain, tabular, { color: pnlColor(t.dayPnlCents, p) }]}>
-              {signedMoney(t.dayPnlCents)}
-              <Text style={[s.mastPnlSub, { color: p.textMuted }]}>
-                {'  '}({signedPctFromBps(t.dayPnlBps)} today)
-              </Text>
-            </Text>
-          )}
-        </View>
       </View>
+      <View style={[s.mastRule, { backgroundColor: p.cardBorder }]} />
       <Text style={[s.quote, { color: p.textMuted }]}>{t.quote}</Text>
       {t.funFact ? (
         <Text style={[s.funFact, { color: p.textMuted }]}>
@@ -488,17 +495,19 @@ export function Pulse({ t }: { t: Today }) {
 /* ---------- styles ---------- */
 
 const s = StyleSheet.create({
-  // masthead
+  // masthead — balanced two-column banner (Cam 2026-07-03)
   masthead: { borderBottomWidth: 2, paddingBottom: 14, paddingTop: 8 },
-  mastTitle: { fontFamily: F.display, fontSize: 30, textTransform: 'uppercase', letterSpacing: -0.5 },
-  mastKicker: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 3, marginTop: 4 },
-  mastRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  mastTop: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+  mastTitle: { fontFamily: 'System', fontWeight: '900', fontSize: 28, textTransform: 'uppercase', letterSpacing: -0.5 },
+  mastRight: { alignItems: 'flex-end' },
+  mastPnlMain: { fontFamily: 'System', fontWeight: '800', fontSize: 20 },
+  mastPnlSub: { fontFamily: F.reg, fontSize: 10.5, marginTop: 1 },
+  mastMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  mastKicker: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 2.5 },
   mastStatus: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   mastStatusText: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 },
-  mastPnl: { marginLeft: 'auto' },
-  mastPnlMain: { fontFamily: F.displayMed, fontSize: 16 },
-  mastPnlSub: { fontFamily: F.reg, fontSize: 12 },
-  quote: { fontFamily: F.reg, fontStyle: 'italic', fontSize: 13, lineHeight: 19, marginTop: 12 },
+  mastRule: { height: StyleSheet.hairlineWidth, marginTop: 10 },
+  quote: { fontFamily: F.reg, fontStyle: 'italic', fontSize: 13, lineHeight: 19, marginTop: 10 },
   funFact: { fontFamily: F.reg, fontSize: 11, lineHeight: 16, marginTop: 8 },
   // indices strip
   stripWrap: { marginTop: 14, marginHorizontal: -16 },

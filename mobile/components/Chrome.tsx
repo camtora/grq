@@ -301,12 +301,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   bullImg: { width: 22, height: 22 },
-  title: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
+  title: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   avatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1 },
   body: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
   card: { borderWidth: 1, borderRadius: 16, padding: 14 },
   section: {
-    fontFamily: F.bold,
+    fontFamily: 'System',
+    fontWeight: '800',
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -326,5 +327,5 @@ const styles = StyleSheet.create({
   miniLabel: { fontFamily: F.semi, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, marginTop: 2, paddingHorizontal: 2 },
   subBar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
   subBack: { flexDirection: 'row', alignItems: 'center', width: 70 },
-  subTitle: { flex: 1, textAlign: 'center', fontFamily: F.display, fontSize: 17 },
+  subTitle: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
 });
