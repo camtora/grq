@@ -99,7 +99,8 @@ metro.grq.camerontora.ca.
 3. ~~Related names~~ ✅ 2026-07-03 — `related` feed block + the panel (+ chart ranges, the value-chain cards, agent's note).
 4. ~~The record~~ ✅ 2026-07-03 — the journal spine (3 collapsed rows, unfold, show-all).
 5. ~~Scoreboard~~ ✅ 2026-07-03 — `scoreboard[]` already on the wire; render when non-empty.
-6. Tappable [[glossary]] terms → inline explainers (the literacy pillar).
+6. ~~Tappable [[glossary]] terms → inline explainers~~ ✅ 2026-07-04 — shipped with the Learn
+   portal (229eb6d: GlossarySheet mounted app-wide; any [[term]] opens the explainer sheet).
 7. ~~Confidence levers~~ ✅ 2026-07-03 — ("what would change our mind", D93) — not on the wire yet.
 8. ~~Personal positions~~ ✅ 2026-07-03 — + bought-at price on dossiers (the web got this in v2.46) —
    check/mirror on the mobile wire.
@@ -144,8 +145,10 @@ metro.grq.camerontora.ca.
 19. ~~The Hunt as a page (heat board)~~ ✅ 2026-07-04 (More ▸ The Hunt: heat-board rows w/
     rail/meter/rank, expand = sparkline+targets+full thesis+watch/share/dismiss, D38 brief
     bar + 🎯 banner, pending poll anchored on latestFindAt; helpers in `lib/hunt.ts`).
-20. Ask Alfred: thread switcher (each other's threads) + symbol-aimed chat from
-    stock pages.
+20. ~~Ask Alfred: thread switcher + symbol-aimed chat~~ ✅ 2026-07-04 — avatar thread chips
+    (yours / the other member's; posting there is you, in their thread; their asks get a face),
+    🎯 aim chip via `/chat?symbol=…` from the stock bar's bull button (FOCUS block: signals +
+    latest journal). The API already carried `owner`+`symbol` — mobile-only change.
 21. ~~Agent container rebuild (push topics)~~ ✅ 2026-07-03 — v2.47 live.
 22. ~~shared/contract.ts direct imports~~ ✅ 2026-07-03 (@shared alias; migrate types
     opportunistically). ~~retire ios/ + GRQNext~~ ✅ 2026-07-04 — deleted at parity (old

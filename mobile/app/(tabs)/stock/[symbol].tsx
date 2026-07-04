@@ -137,7 +137,11 @@ export default function StockScreen() {
           <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
         </Pressable>
         <Text style={[s.barTitle, { color: p.textPrimary }]}>{sym}</Text>
-        <View style={[s.back, { justifyContent: 'flex-end' }]}>
+        <View style={[s.back, { justifyContent: 'flex-end', gap: 12 }]}>
+          {/* Ask Alfred ABOUT this name — opens the chat aimed (signals + journal focus). */}
+          <Pressable onPress={() => router.push(`/chat?symbol=${encodeURIComponent(sym)}`)} hitSlop={8}>
+            <Image source={require('../../../assets/bull-splash.png')} style={s.askBull} resizeMode="contain" />
+          </Pressable>
           <ShareButton symbol={sym} />
         </View>
       </View>
@@ -1038,6 +1042,7 @@ const s = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12 },
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
   barTitle: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
+  askBull: { width: 24, height: 24 },
   body: { paddingHorizontal: 16, paddingBottom: 32 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   heroMain: { flex: 1, minWidth: 0 },
