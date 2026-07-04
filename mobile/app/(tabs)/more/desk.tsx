@@ -524,8 +524,7 @@ export default function DeskScreen() {
               <Footnote>
                 sandbox · option prices are MODELED (CBOE delayed ~15-min mid, or Black-Scholes from implied
                 volatility) — educational, not executable · options are US-only; CA names have none · books are
-                CAD; US fills convert at the live FX rate · the Learn / Calculator / Experiment portal lives on
-                the web Options Desk page
+                CAD; US fills convert at the live FX rate · learn the mechanics in More ▸ Learning ▸ Options
               </Footnote>
             </>
           )}

@@ -14,6 +14,10 @@ const MARKETS: Row[] = [
   { href: '/more/reports', icon: 'document-text-outline', title: 'Reports', desc: 'EOD closes, weekly reviews, and the daily build diary.' },
 ];
 
+const LEARNING: Row[] = [
+  { href: '/more/options', icon: 'school-outline', title: 'Options', desc: 'Lessons + the payoff calculator — modeled, never executable.' },
+];
+
 const EXPERIMENTS: Row[] = [
   { href: '/more/race', icon: 'git-compare-outline', title: 'Second Opinions', desc: "Seven shadow models judge the fund's real calls." },
   { href: '/more/bulls', icon: 'flag-outline', title: 'Bull Race', desc: 'Each model runs its own paper book — same market, same rules.' },
@@ -52,9 +56,9 @@ export default function MoreScreen() {
       {renderRows(MARKETS)}
       <SectionTitle sub="modeled, never the real fund">Experiments</SectionTitle>
       {renderRows(EXPERIMENTS)}
-      <Footnote>
-        the Short Lab, Day-Trading Lab, and the options education portal live on the web for now
-      </Footnote>
+      <SectionTitle sub="every number explainable">Learning</SectionTitle>
+      {renderRows(LEARNING)}
+      <Footnote>the Short Lab and Day-Trading Lab live on the web for now</Footnote>
     </Screen>
   );
 }
