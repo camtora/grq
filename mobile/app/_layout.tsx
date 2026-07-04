@@ -89,14 +89,45 @@ export default function RootLayout() {
     };
   }, [status, refreshMessages, refreshBell]);
 
-  // Tapping a push deep-links: a symbol lands on its stock page.
+  // Tapping a push deep-links: a symbol lands on its stock page. Two iOS
+  // gotchas handled here (Cam 2026-07-04 — the TSM test push opened Today):
+  // 1. Remote-push custom keys arrive in request.trigger.payload on iOS, not
+  //    always content.data — read both.
+  // 2. A tap that COLD-STARTS the app fires before the navigator (and the
+  //    tap-through splash) exist — so the symbol is parked in state and the
+  //    navigation happens once the app is actually ready.
+  const [pendingPushSymbol, setPendingPushSymbol] = useState<string | null>(null);
+  const handledPushId = useRef<string | null>(null);
+  const symbolOf = (res: Notifications.NotificationResponse | null): string | null => {
+    if (!res) return null;
+    const req = res.notification.request;
+    const fromData = req.content.data?.symbol;
+    const trigger = req.trigger as { payload?: Record<string, unknown> } | null;
+    const fromPayload = trigger?.payload?.symbol;
+    const sym = typeof fromData === 'string' && fromData ? fromData : typeof fromPayload === 'string' ? fromPayload : null;
+    return sym;
+  };
+  const takeResponse = (res: Notifications.NotificationResponse | null) => {
+    if (!res || handledPushId.current === res.notification.request.identifier) return;
+    const sym = symbolOf(res);
+    if (!sym) return;
+    handledPushId.current = res.notification.request.identifier;
+    setPendingPushSymbol(sym);
+  };
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((res) => {
-      const symbol = res.notification.request.content.data?.symbol;
-      if (typeof symbol === 'string' && symbol) router.push(`/stock/${symbol}`);
-    });
+    // Warm/background taps.
+    const sub = Notifications.addNotificationResponseReceivedListener(takeResponse);
+    // The cold-start tap — the launching notification never hits the listener.
+    Notifications.getLastNotificationResponseAsync().then(takeResponse).catch(() => {});
     return () => sub.remove();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!pendingPushSymbol || !fontsLoaded || !splashDone || status !== 'signedIn') return;
+    const sym = pendingPushSymbol;
+    setPendingPushSymbol(null);
+    router.push(`/stock/${sym}`);
+  }, [pendingPushSymbol, fontsLoaded, splashDone, status, router]);
 
   // The usage beacon (web components/Tracker.tsx parity, 2026-07-04): every screen
   // change POSTs the pathname to /api/track, so app usage shows up on the Traffic
