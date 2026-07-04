@@ -696,6 +696,10 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- The record — every journal entry on this name (approved layout:
+                 collapsed spine, 3 rows default, tap to unfold; Cam 2026-07-03) ---- */}
+            {(d.record ?? []).length > 0 && <TheRecord d={d} p={p} />}
+
             {/* ---- News ---- */}
             {d.news.length > 0 && (
               <View>
@@ -854,6 +858,91 @@ function ValueChain({ board, selfSymbol, p }: { board: NonNullable<Dossier['ches
   );
 }
 
+/** The record — the journal spine: kind chip + date + the body's first line,
+ * newest first, 3 shown, nothing auto-opens (dossier bodies are enormous).
+ * The newest read is skipped — it's already "The full read" above. */
+function TheRecord({ d, p }: { d: Dossier; p: Palette }) {
+  const [showAll, setShowAll] = useState(false);
+  const [openId, setOpenId] = useState<number | null>(null);
+  // Skip the entry already rendered as The full read.
+  const entries = (d.record ?? []).filter((r) => r.body !== d.bodyMarkdown);
+  if (!entries.length) return null;
+  const shown = showAll ? entries : entries.slice(0, 3);
+
+  const labelOf = (r: Dossier['record'][number]) => {
+    const head = r.title.split('—')[0].trim();
+    return (head.length > 2 && head.length < 26 ? head : r.kind).toUpperCase();
+  };
+  const toneOf = (r: Dossier['record'][number]) =>
+    r.kind === 'DECISION' ? p.pos : r.kind === 'RESEARCH' ? p.accentText : p.textMuted;
+  const firstLine = (body: string) =>
+    body
+      .split('\n')
+      .map((l) => l.replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[-•]\s*/, '').replace(/\[\[(.+?)\]\]/g, '$1').trim())
+      .find((l) => l.length > 0) ?? '';
+
+  return (
+    <View>
+      <SectionTitle sub={`${entries.length} entries — everything Alfred has filed on this name`}>
+        The record
+      </SectionTitle>
+      <Card style={s.listCard}>
+        {shown.map((r, i) => {
+          const open = openId === r.id;
+          return (
+            <View key={r.id}>
+              {i > 0 && <Divider />}
+              <Pressable onPress={() => setOpenId(open ? null : r.id)} style={s.recordRow}>
+                <View style={s.recordHead}>
+                  <Text style={[s.recordKind, { color: toneOf(r) }]}>{labelOf(r)}</Text>
+                  <Text style={[s.metaSmall, { color: p.textMuted }]}>{r.at.slice(0, 10)}</Text>
+                  <Text style={[s.metaSmall, { color: p.accentText, marginLeft: 'auto' }]}>
+                    {open ? 'close' : 'read →'}
+                  </Text>
+                </View>
+                {!open && (
+                  <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]} numberOfLines={1}>
+                    {firstLine(r.body)}
+                  </Text>
+                )}
+                {open && (
+                  <View style={{ marginTop: 8 }}>
+                    <MdText body={r.body} foldAt={100_000} />
+                    {(r.sources ?? []).length > 0 && (
+                      <View style={s.sourceChips}>
+                        {r.sources.slice(0, 6).map((src, j) => (
+                          <View key={j} style={[s.sourceChip, { borderColor: p.cardBorder }]}>
+                            <Text style={[s.metaSmall, { color: p.textMuted }]} numberOfLines={1}>{src}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    {r.agentVersion && (
+                      <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 6, opacity: 0.6 }]}>
+                        filed by {r.agentVersion}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          );
+        })}
+        {entries.length > 3 && (
+          <View>
+            <Divider />
+            <Pressable onPress={() => setShowAll(!showAll)} style={s.recordMore}>
+              <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12 }}>
+                {showAll ? 'show fewer ↑' : `show all ${entries.length} entries ↓`}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </Card>
+    </View>
+  );
+}
+
 /** The analyst target band — low → consensus → high with "now" marked. */
 function TargetBand({ band, p }: { band: NonNullable<Dossier['analystBand']>; p: Palette }) {
   const lo = Math.min(band.lowCents, band.nowCents);
@@ -945,6 +1034,12 @@ const s = StyleSheet.create({
   stageItem: { paddingVertical: 8, paddingHorizontal: 6, marginHorizontal: -6 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 },
   dotSm: { width: 6, height: 6, borderRadius: 3 },
+  recordRow: { paddingVertical: 9 },
+  recordHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  recordKind: { fontFamily: F.bold, fontSize: 10.5, letterSpacing: 0.5 },
+  recordMore: { alignItems: 'center', paddingVertical: 10 },
+  sourceChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  sourceChip: { borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, maxWidth: 220 },
   leverRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9 },
   leverDir: { fontFamily: F.bold, fontSize: 12, width: 16, marginTop: 1 },
   leverGap: { fontFamily: F.med, fontSize: 12.5, lineHeight: 18 },

@@ -284,6 +284,7 @@ export type Dossier = {
   trades: { id: number; side: string; qty: number; priceCents: number; realizedPnlCents: number | null; at: string }[];
   coverage: { tier: number; name: string; status: string; detail: string }[];
   scoreboard: { source: string; grades: number; hits: number; misses: number; neutral: number; hitRate: number | null }[];
+  record: { id: number; kind: string; title: string; body: string; at: string; agentVersion: string | null; sources: string[] }[];
   related?: {
     ticker: string;
     name: string;
