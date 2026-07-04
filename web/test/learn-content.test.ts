@@ -64,6 +64,13 @@ describe("learn lesson bodies", () => {
         for (const t of l.tryIt ?? []) assert.ok(t.href.startsWith("/"), `${c.slug}/${l.slug} tryIt href must be in-app`);
       }
   });
+
+  it("only embeds known widgets (the course page renders from this set)", () => {
+    const known = new Set(["order-book", "compounding"]);
+    for (const c of COURSES)
+      for (const l of c.lessons)
+        if (l.widget) assert.ok(known.has(l.widget), `${c.slug}/${l.slug} embeds unknown widget "${l.widget}"`);
+  });
 });
 
 describe("labs rail", () => {

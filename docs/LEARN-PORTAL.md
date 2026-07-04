@@ -1,6 +1,6 @@
 # The Learn Portal — how the market actually works (D110)
 
-**Status:** Phase 1 shipped 2026-07-04. A top-level **`/learn`** destination beside Reports —
+**Status:** Phases 1 + 2 shipped 2026-07-04. A top-level **`/learn`** destination beside Reports —
 the front door for the financial-literacy pillar (`docs/LITERACY.md`). It teaches Cam & Graham
 **how the market works** — not which stocks to buy: what a stock is, how a price forms, what
 owning one actually means. The Options portal, the labs, and the glossary are gathered under it
@@ -47,16 +47,22 @@ measured against XIC in Reports").
 
 1. **The machine** *(live)* — what a stock is · what an exchange does · tickers & look-alikes
    (CDRs, the D105 lesson) · market hours & gaps (D102's split holidays) · indices & "the market was up".
-2. **How a price happens** *(live)* — bid/ask/spread · order types · market makers & liquidity
-   (why the universe has a screen) · what actually moves a price · why quotes disagree (delayed data, honestly).
+2. **How a price happens** *(live)* — bid/ask/spread · order types (**+ the toy order-book widget**) ·
+   market makers & liquidity (why the universe has a screen) · what actually moves a price · why quotes
+   disagree (delayed data, honestly).
 3. **Owning a piece** *(live)* — dividends (ex-date honesty) · splits & buybacks · ACB + unrealized
    vs realized (+ superficial loss) · stocks vs ETFs (MER, the couch-potato bar) · two currencies (D62 FX).
-4. **Reading the game** *(soon)* — earnings, analyst ratings, 13F/insiders, technicals honestly framed —
-   each maps to a stock-page panel.
-5. **Risk** *(soon)* — volatility, drawdown, sizing, leverage, shorting, day trading → exits to the labs.
+4. **Reading the game** *(live, Phase 2)* — earnings & guidance (the expectations game) · analyst
+   ratings (grade inflation, changes > levels) · 13F/insider/congress paper trails (leads, never trades) ·
+   technicals honestly framed · news + the crowding gauge. Closes as a user's manual for the stock page.
+5. **Risk** *(live, Phase 2)* — volatility (own less, not none) · drawdown arithmetic (−50% needs +100%) ·
+   sizing & diversification (correlation caveat) · leverage & margin calls · shorting + day trading →
+   exits to the labs.
 6. **Options** *(live, external)* — the D100 portal, unchanged.
-7. **The long game** *(soon)* — compounding, benchmarks, fee gravity, TFSA/taxes, behavioural traps.
-8. **How GRQ works** *(soon)* — the fund as a worked example, per above.
+7. **The long game** *(live, Phase 2)* — compounding (**+ the compounding-machine widget**) · the
+   benchmark (the couch opponent) · fee gravity + tax drag (TFSA/RRSP order) · behavioural traps (rules
+   as the defense — the gate binds Alfred the way a plan binds a human) · when to sell (thesis, not price).
+8. **How GRQ works** *(soon — Phase 3)* — the fund as a worked example, per above.
 
 "Soon" courses render as dimmed hub cards (honest — no vaporware) and an EmptyState if visited.
 
@@ -95,9 +101,16 @@ mirrors it to **`shared/content/learn.json`** for GRQ Go (same lockstep pattern 
 
 ## 5. Roadmap
 
-- **Phase 2 — the rest of the curriculum + flagship widget.** Courses 4, 5, 7; the **toy order
-  book** (pure client, integer cents — the spread/order-type lessons' interactive centrepiece);
-  a compounding/DCA visualizer for Course 7.
+- **Phase 2 — ✅ SHIPPED 2026-07-04.** Courses 4, 5, 7 written (15 more lessons — 30 total) + 4 new
+  glossary terms (guidance, leverage, correlation, compounding). Two interactive widgets, embeddable
+  per-lesson via `LearnLesson.widget`: **`OrderBookSim`** (a working toy limit-order book — liquid/thin
+  modes, market + limit orders with queue priority, external flow, a running "spread toll" ledger;
+  emerald=bid / amber=ask with text labels, never colour-alone) under Course 2's order-types lesson,
+  and **`CompoundingSim`** (monthly-contribution compounding vs a fee-drag line — sliders, hover
+  crosshair + tooltip, legend + direct labels + dash-pattern encoding; `var(--spark-up)` + themed
+  amber, series pair CVD-validated on both surfaces) under Course 7's compounding lesson. Both pure
+  client, integer cents. 118/118 tests (widget-key check added), tsc clean, all routes + widget SSR
+  smoke-tested.
 - **Phase 3 — receipts + How GRQ works.** Live-fund example blocks inside lessons (a real fill vs
   its quote, the fund's actual drawdown, the real vs-XIC line — the `how-it-works` pattern of
   pulling live numbers so prose can't drift), and Course 8.

@@ -10,6 +10,9 @@
 //   - keep hrefs OUT of bodies (Md opens links in a new tab) — use `tryIt` instead
 // `web/test/learn-content.test.ts` verifies every referenced term exists in the glossary.
 
+/** Interactive widgets a lesson can embed (rendered by app/learn/[course]/page.tsx). */
+export type LearnWidgetKey = "order-book" | "compounding";
+
 export type LearnLesson = {
   slug: string;
   title: string;
@@ -17,6 +20,8 @@ export type LearnLesson = {
   body: string;
   /** In-app "see it live" links, rendered as real <Link>s under the lesson. */
   tryIt?: { href: string; label: string }[];
+  /** Embed an interactive widget under the lesson body. */
+  widget?: LearnWidgetKey;
 };
 
 export type LearnCourse = {
@@ -115,7 +120,10 @@ A [[market-order]] says *"fill me now, at whatever the market's asking."* You're
 
 A [[limit-order]] says *"fill me at this price or better — or not at all."* You're guaranteed the price, not the fill. The market is under no obligation to come to you; plenty of limit orders die lonely at expiry, watching the stock run away without them.
 
-A [stop-loss](#explain:stop-loss) is a *trigger*, not a standing order: when the price touches your level, it fires a market order to get you out. It caps damage in normal conditions — but because it fires *at* the market, an overnight gap can blow straight through the level and fill you far below it. GRQ uses stops on every position and still treats them as seatbelts, not force fields.`,
+A [stop-loss](#explain:stop-loss) is a *trigger*, not a standing order: when the price touches your level, it fires a market order to get you out. It caps damage in normal conditions — but because it fires *at* the market, an overnight gap can blow straight through the level and fill you far below it. GRQ uses stops on every position and still treats them as seatbelts, not force fields.
+
+The toy exchange below runs a real (cartoon) order book. Place both order types, flip it to a thin stock, and watch what each certainty costs you.`,
+        widget: "order-book",
       },
       {
         slug: "market-makers-and-liquidity",
@@ -210,16 +218,123 @@ That's exactly how GRQ runs it: a CAD sleeve and a USD sleeve, and a US buy need
     n: 4,
     title: "Reading the game",
     tagline: "Earnings, analyst ratings, insider filings, and technical signals — what each one can and can't tell you.",
-    status: "soon",
-    lessons: [],
+    status: "live",
+    lessons: [
+      {
+        slug: "earnings-season",
+        title: "Earnings season — the quarterly exam",
+        body: `Four times a year, every public company hands in a report card: revenue, profit, and [[eps]] for the last three months. Analysts publish estimates beforehand, so every [earnings report](#explain:earnings) is graded on a curve — a **beat** or a **miss** versus what the market expected.
+
+That's the part newcomers find maddening: a company can grow profits 20% and the stock *falls*, because everyone had priced in 25%. The reaction isn't to the result — it's to the **gap between the result and the expectation**. The quarter itself is already history; expectations were the live price.
+
+Usually the biggest mover isn't even the quarter — it's [[guidance]], management's own forecast for what comes next. A beat with a cut to next year's outlook reads as bad news, and the market treats it that way within seconds. The market prices the future; guidance *is* the future, straight from the people running the place.
+
+Reports land before the open (BMO) or after the close (AMC) — which, per Course 1, is why earnings day so often means an opening gap rather than a slow drift. It's the single biggest *scheduled* risk event a stock has, and it's on the calendar months in advance.`,
+        tryIt: [{ href: "/", label: "Today's earnings panel — who just reported, who's up next" }],
+      },
+      {
+        slug: "analyst-ratings",
+        title: "Analyst ratings — the street's opinion",
+        body: `Investment-bank analysts cover stocks for a living: they build models, grill management, and publish three things — a rating (buy/hold/sell), a 12-month [price target](#explain:analyst-target), and the estimates that earnings get graded against.
+
+Read the ratings with subtitles on. The scale is inflated: "buy" is everywhere, and a "hold" often functions as a polite "sell" (analysts need access to the companies they cover, and companies dislike sell ratings). The **changes** carry more information than the levels — an upgrade, a downgrade, or a price-target cut moves stocks; the standing rating mostly doesn't.
+
+Price targets have their own tell: they chase the price. A stock runs 30% and the targets drift up behind it — that's herding, not fresh analysis. Which is why the useful move is comparing the consensus target against an *independent* view. When the street's average and Alfred's call sharply disagree, someone is wrong — and finding out **why** is worth more than either number. GRQ puts the analyst band next to its own call on every stock page for exactly that reason.`,
+      },
+      {
+        slug: "big-money",
+        title: "Following the big money",
+        body: `Three paper trails let you watch what informed money does — as long as you respect what each one *can't* tell you.
+
+**[13F filings](#explain:13f):** every big fund must disclose its US stock holdings quarterly — but up to ~45 days late, and showing only longs and options, never shorts. So Buffett's May filing shows March's book. It's colour on conviction, useless for timing.
+
+**[Insider trades](#explain:form-4):** executives and directors file within two days of trading their own stock. The one pattern worth attention is an **open-market buy with their own cash** — nobody spends their own money on a stock they think is going down. Option exercises and grants are compensation plumbing; ignore them. Several insiders buying the same week ([cluster buying](#explain:cluster-buying)) is the strong version.
+
+**[Congressional disclosures](#explain:congress-trade):** trades reported only as dollar ranges, up to 45 days late. Colour on the well-connected, not a strategy.
+
+GRQ ingests all three daily on the Smart Money page and feeds them to the agent — as **leads to investigate, never reasons to trade**. That distinction is the whole discipline: big-money signals generate questions; the answers still have to come from the research.`,
+        tryIt: [{ href: "/market/smart-money", label: "Smart Money — the tracked filers, leaderboards, and cluster buys" }],
+      },
+      {
+        slug: "technical-signals",
+        title: "Technical signals — weather, not prophecy",
+        body: `Technical signals are statistics computed from price and volume alone — no balance sheets, no news, just the tape. The three GRQ shows: [[rsi]] (a 0–100 momentum gauge — stretched high or low), [[macd]] (whether short-term momentum is pulling ahead of the longer trend), and the [SMA trend stack](#explain:trend) (price above its 50-day average, above its 200-day = the textbook uptrend).
+
+What they honestly are: **descriptions of the ride so far**. RSI at 24 says "this fell hard and fast" — it does not say "it will bounce". Cheap-and-falling is still falling. The signals earn a strange half-life of usefulness because everyone watches the same lines, so they occasionally self-fulfil — support "holds" partly because thousands of buyers agreed in advance to buy there.
+
+GRQ rolls its signals into a confidence-weighted [[recommendation]] — and treats it as exactly one input among many. The technicals answer *"how has it been trading, and is now a tense moment?"* They never answer *"is this a good business?"* — that's what the dossier is for. When the chart and the thesis disagree, the thesis gets re-examined, not obeyed.`,
+      },
+      {
+        slug: "news-and-the-crowd",
+        title: "News and the crowd",
+        body: `Course 2's lesson applies with teeth here: news reprices a stock in seconds, without waiting for you. By the time a headline reaches your phone, the market has read it, argued about it, and moved. So the amateur question — *"is this good news?"* — is the wrong one. The working question is: **is this better or worse than what was already priced in?** A "great quarter" that everyone saw coming moves nothing.
+
+Then there's the crowd itself. GRQ tracks [social buzz](#explain:social-buzz) (how loudly Reddit is talking about a name, versus its own usual volume) and [crowd mood](#explain:social-sentiment) (self-tagged bull/bear posts). Read those as a **crowding gauge, not a tip sheet**: by the time retail chatter goes vertical, the easy money is usually gone, and euphoria reverses hard. It's noisy, it's gameable, and GRQ keeps it on probation — a risk flag on names we hold, never a reason to buy.
+
+Everything in this course lives on one screen: open any stock page and you'll find the earnings history, the analyst band, the 13F holders, the signals, the news — each with an honest coverage map of what we can and can't see for that name. The course was really a user's manual for that page.`,
+        tryIt: [{ href: "/market/watchlist", label: "open any watched name — every panel from this course is on its page" }],
+      },
+    ],
   },
   {
     slug: "risk",
     n: 5,
     title: "Risk",
     tagline: "Volatility, drawdowns, position sizing, leverage, shorting, and day trading — how portfolios actually die.",
-    status: "soon",
-    lessons: [],
+    status: "live",
+    lessons: [
+      {
+        slug: "volatility",
+        title: "Volatility — the price of admission",
+        body: `[[volatility]] is the size of the swings — how bumpy the ride is, usually annualized from recent daily moves. A utility drifts a fraction of a percent a day; a small biotech can swing 6%. Same market, different weather systems.
+
+Here's the nuance worth keeping: volatility is not, by itself, the risk of losing money — a stock can be wildly bumpy on its way to tripling. The real danger is what volatility does to *you*: bumpy rides eject their passengers at the bottom. A −30% month you can't stomach converts a temporary swing into a permanent loss, because you sold it.
+
+So the practical rule inverts the amateur instinct. The answer to "this stock is really volatile" isn't "avoid it" — it's **"own less of it."** Size the position so the worst plausible week is boring to you personally. (The options market publishes its own forecast of future swings — [implied volatility](#explain:implied-volatility), covered in Course 6. When it spikes, the market is bracing.)`,
+      },
+      {
+        slug: "drawdown",
+        title: "Drawdown — the arithmetic that kills",
+        body: `[[drawdown]] is the fall from your portfolio's peak. It comes with the cruelest arithmetic in investing: **losses need bigger gains to undo**. Down 10% needs +11% back. Down 25% needs +33%. Down 50% needs a *double*. The hole deepens faster than the ladder grows.
+
+That asymmetry is why professionals obsess more about avoiding catastrophic losses than catching spectacular wins. A portfolio that grinds out modest gains but never craters beats a flashy one that halves itself every few years — compounding (Course 7) does the rest.
+
+It's also why GRQ's defenses are **pre-committed and automatic**: a [stop-loss](#explain:stop-loss) on every position, and a system-level tripwire — if the whole fund draws down past its limit, the [kill switch](#explain:kill-switch) halts trading without asking anyone's opinion. The design assumption is that in the moment, at the bottom, with everything red, *nobody* — human or AI — reliably makes the calm decision. So the calm decision was made in advance, in code.`,
+      },
+      {
+        slug: "sizing-and-diversification",
+        title: "Position sizing and diversification",
+        body: `The most underrated question in investing isn't *what* to buy — it's **how much**. A brilliant pick sized at 80% of your portfolio is a coin flip on your future; a mediocre one at 3% is a rounding error. Sizing is where risk is actually controlled.
+
+GRQ enforces this with a [[weight]] cap — no single name may grow big enough to sink the boat — and a [cash floor](#explain:cash-floor) that keeps dry powder the gate won't let it spend. Both limits are set by the risk dial and enforced in code, because "just this once" is how concentration happens.
+
+Diversification is the other half, and it's subtler than "own many things." Ten Canadian banks is one bet, held ten times. What diversification actually requires is low [[correlation]] — holdings that fail for *different reasons*: different sectors, countries, currencies. Spread across those and the wobbles partially cancel; it's the closest thing markets offer to a free lunch. The fine print: in a real panic, correlations rush toward 1 and everything falls together. Diversification softens ordinary weather. Nothing diversifies away a hurricane — that's what the cash floor and the kill switch are for.`,
+      },
+      {
+        slug: "leverage",
+        title: "Leverage and margin — borrowed conviction",
+        body: `[[leverage]] means investing with borrowed money. Put up $10,000, borrow $10,000, buy $20,000 of stock: every move is now doubled. A +25% year becomes +50% — this is why leverage is seductive. A −25% dip becomes −50% *of your money* — this is why it kills.
+
+The mechanism that does the killing is the [margin call](#explain:margin-call). The loan is secured by your holdings; when they fall far enough, the broker doesn't send a sympathetic note — it **sells your positions, at the bottom, without asking**. Leverage converts a temporary drawdown into a permanent, realized loss at the worst possible price. You can be right about the stock eventually and still be dead first: markets can stay irrational longer than a levered account can stay solvent.
+
+GRQ bans margin borrowing outright — it's one of the fund's hard rules, alongside no shorting and no options, and only humans can change it. Not because leverage never works, but because it removes the one advantage a patient investor has: **the ability to wait**. An unlevered portfolio can ride out any storm it's diversified for. A levered one can be forced to surrender mid-storm.`,
+      },
+      {
+        slug: "the-bets-we-wont-make",
+        title: "The bets the fund won't make",
+        body: `Two more of GRQ's hard rules ban whole categories of trade. Both bans are worth understanding, because both bets are worth understanding.
+
+**[Short selling](#explain:short-selling):** borrow shares, sell them, hope to buy back cheaper. The asymmetry is the problem — a stock you own can only fall to zero (−100%), but a short has **no ceiling on its loss**, and you pay [rent](#explain:cost-to-borrow) while you wait. Crowded shorts add the [squeeze](#explain:short-squeeze): a rising price *forces* shorts to buy, which pushes the price higher, which forces more buying. Being right too early looks exactly like being wrong.
+
+**[Day trading](#explain:day-trading):** buying and selling within the day to catch small moves. The quiet killer is cost × frequency: every round trip pays the [spread](#explain:bid-ask-spread), commissions, and [[slippage]] — a small toll that compounds viciously across hundreds of trades, against opponents measured in microseconds.
+
+Neither ban is superstition — both are live experiments here. The Short Lab runs modeled shorts (with real borrow math and margin calls) and shadow-shorts every real sell the fund makes; the Day-Trading Lab races a churning trader against a buy-and-holder with real costs. Understanding a bet and making it are different things: the labs buy the understanding without paying the tuition.`,
+        tryIt: [
+          { href: "/short-lab", label: "the Short Lab — shorts with real borrow math and margin calls" },
+          { href: "/day-lab", label: "the Day-Trading Lab — watch the costs do the arguing" },
+        ],
+      },
+    ],
   },
   {
     slug: "options",
@@ -238,8 +353,58 @@ That's exactly how GRQ runs it: a CAD sleeve and a USD sleeve, and a US buy need
     n: 7,
     title: "The long game",
     tagline: "Compounding, benchmarks, fee gravity, TFSAs, and the behavioural traps that outkill every bear market.",
-    status: "soon",
-    lessons: [],
+    status: "live",
+    lessons: [
+      {
+        slug: "compounding",
+        title: "Compounding — the whole trick",
+        body: `[[compounding]] is growth earning growth on itself. Year one's gains earn gains in year two, and the curve that looks flat for a decade quietly goes vertical in the third. The rule of 72 gives you the feel of it: 72 ÷ your annual return ≈ years to double. At 7%, money doubles roughly every decade — so 30 years is three doublings, which is 8×.
+
+Two consequences run the whole game. First, **time matters more than brilliance**: a decent return sustained for decades beats a spectacular one that starts late or gets interrupted (see: drawdowns, Course 5). Second, **small differences in rate become enormous differences in outcome** — one percentage point a year, compounded over 30 years, is the difference between 8× and 10×. Hold that thought for the fees lesson; it's the entire punchline.
+
+This is GRQ's tagline decoded: *"get rich quick, slowly."* No single trade makes the fund; the rate, protected and repeated, makes the fund. Play with the machine below — drag the return and the years and watch which slider does the heavy lifting.`,
+        widget: "compounding",
+      },
+      {
+        slug: "the-benchmark",
+        title: "The benchmark — your opponent is a couch",
+        body: `Every active investor has a silent opponent: the do-nothing alternative. Buy an index [[etf]] in one click, never think again, collect the market's return. Any effort beyond that — research, agents, dashboards, this entire app — is only justified by the margin *above* what the couch would have earned.
+
+That's what a benchmark is for. GRQ's is [XIC](#explain:vs-xic), the whole TSX in one ticker, and the comparison sits on screen permanently: not "did we make money?" but **"did we beat just buying XIC?"** In a year the market rises 10%, a fund that made 8% *lost the game* — it did worse than nothing, with extra steps.
+
+Two honest corollaries. Most professionals lose this game over long periods, after fees — competition is brutal, costs compound, and the market is mostly-right most days. And short-term wins prove little: a hot quarter is luck until years of scorekeeping say otherwise, which is why the fund keeps score in public and grades its own calls after the fact. Beating the couch is *hard*. The dashboard exists to find out — with receipts — whether it's happening, not to assume it.`,
+        tryIt: [{ href: "/reports", label: "Reports — the scoreboard vs XIC, updated live" }],
+      },
+      {
+        slug: "fee-gravity-and-tax-drag",
+        title: "Fee gravity and tax drag",
+        body: `Compounding has an evil twin: costs compound too, in reverse, every single year. A 2% [MER](#explain:mer) sounds like nothing next to a 10% return — but it's a fifth of your growth, taken annually, forever. Over 30 years it can consume a third of the final pot. Nothing about your portfolio works as relentlessly as its fees.
+
+The retail-scale version is death by a thousand cuts: [commissions](#explain:commission), the [spread](#explain:bid-ask-spread), FX conversion, all × how often you trade. GRQ has two code-level defenses — a trade must be worth at least 3× its [round-trip](#explain:round-trip) commissions, and a monthly [fee budget](#explain:fee-budget) the gate simply won't let the fund exceed. Small accounts don't usually die of bad picks; they bleed out in costs.
+
+Then taxes, the other drag — and Canada hands you shelters, in order: a [[tfsa]] (gains never taxed, with the fine print that CRA can reclassify a *day-trading* TFSA as a business — cadence matters), an [[rrsp]] (tax deferred to retirement), and only then non-registered accounts, where half your [capital gains](#explain:capital-gains) are taxable and the [superficial-loss rule](#explain:superficial-loss) polices your loss-harvesting. Shelter first is worth more than most stock picks.`,
+      },
+      {
+        slug: "behavioural-traps",
+        title: "The enemy in the mirror",
+        body: `Markets have a century of data on how portfolios actually die, and the leading cause isn't crashes — it's **what investors do during them**. The average fund *investor* earns meaningfully less than the average *fund*, purely from the timing of their own entrances and exits: piling in after a run, bailing out at the bottom.
+
+The traps have names. **Panic selling** converts temporary drawdowns into permanent losses. **FOMO buying** arrives precisely when the easy money has been made (Course 4's crowding gauge exists for this). **Loss aversion** makes losses hurt about twice as much as gains feel good — so people hold losers ("it'll come back, I just don't want to *realize* it") and sell winners early, the exact backwards of cutting losses and letting winners run. **Overconfidence** after a lucky streak breeds oversized bets. **Overtrading** scratches the itch to *do something* — and pays fee gravity for the privilege.
+
+The only defense with a track record is **deciding in advance**: written rules, made calm, enforced when you're not. That's the deep design of GRQ — stops, caps, floors, a fee budget, a kill switch, all in code that the heat of the moment can't renegotiate. The gate binds Alfred exactly the way a written plan binds a human, and for the same reason: nobody is at their best at the bottom.`,
+      },
+      {
+        slug: "when-to-sell",
+        title: "When to sell — the hardest question",
+        body: `Buying gets all the attention, but selling is where returns are made real — and it's harder, because every exit argues with an emotion: selling a winner feels like quitting, selling a loser feels like admitting it.
+
+The discipline that cuts through: **sell on the thesis, not the price.** You bought for a reason. If the price falls but the reason still stands, the stock got cheaper — falling price alone isn't a sell signal. If the reason has *broken* — the moat cracked, the growth stalled, the story you bought didn't happen — sell regardless of whether you're up or down. What you paid is a sunk cost; the market doesn't know your entry price and doesn't care.
+
+Because that judgment is hardest exactly when it's needed, pre-commitment does the heavy lifting: a [stop-loss](#explain:stop-loss) caps the damage when you're wrong, a [take-profit](#explain:take-profit) banks the win before it round-trips, and a [price target](#explain:price-target) with a horizon makes "the thesis played out" a testable claim instead of a vibe. (Selling at a loss in a taxable account? Mind the [30-day rebuy rule](#explain:superficial-loss).)
+
+Nobody sells the top — that's not the goal. The goal is a **written reason for every exit**, graded later. GRQ logs its reason on every trade and scores its own calls after the fact; that's the "receipts" in the tagline. An exit you can defend in writing is a good exit, whatever the next candle does.`,
+      },
+    ],
   },
   {
     slug: "how-grq-works",

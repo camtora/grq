@@ -744,4 +744,28 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "A US name gains 5% while the USD slips 5% against the loonie — in CAD, your gain just evaporated.",
     related: ["cdr", "vs-xic"],
   },
+  guidance: {
+    term: "Guidance",
+    def: "Management's own forecast for the coming quarter or year, issued alongside earnings. It often moves the stock more than the reported numbers — the market prices the future, and guidance IS the future, straight from the people running the place.",
+    example: "A company beats the quarter but cuts full-year guidance — the stock falls anyway.",
+    related: ["earnings", "eps"],
+  },
+  leverage: {
+    term: "Leverage",
+    def: "Investing with borrowed money, so gains AND losses are amplified. 2× leverage turns a −25% dip into −50% of your capital — and a margin call can force you out before any recovery arrives. GRQ's fund is barred from it.",
+    example: "Put up $10k, borrow $10k, buy $20k of stock: a 25% market dip just cost you half your money.",
+    related: ["margin-call", "drawdown"],
+  },
+  correlation: {
+    term: "Correlation",
+    def: "How much two holdings move together. Diversification only works when correlations are low — holdings that fail for different reasons. The catch: in a real panic, correlations rush toward 1 and everything falls at once.",
+    example: "Ten Canadian banks isn't diversification — it's one bet, held ten times.",
+    related: ["weight", "volatility"],
+  },
+  compounding: {
+    term: "Compounding",
+    def: "Growth earning growth on itself — the engine of long-term investing. Rule of 72: divide 72 by your annual return to get the years to double. Small rate differences become enormous outcome differences over decades.",
+    example: "$10,000 at 7% is ~$20k in a decade and ~$80k in three — the last doubling earns more than the first two combined.",
+    related: ["total-return", "mer"],
+  },
 };

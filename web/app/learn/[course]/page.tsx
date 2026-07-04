@@ -3,7 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
 import Md from "@/components/Md";
-import { COURSES, courseBySlug } from "@/lib/learn/content";
+import { COURSES, courseBySlug, type LearnWidgetKey } from "@/lib/learn/content";
+import OrderBookSim from "@/components/learn/OrderBookSim";
+import CompoundingSim from "@/components/learn/CompoundingSim";
+
+// Interactive widgets a lesson can embed (client leaves under this server page).
+const WIDGETS: Record<LearnWidgetKey, React.ReactNode> = {
+  "order-book": <OrderBookSim />,
+  compounding: <CompoundingSim />,
+};
 
 // One Learn-portal course (docs/LEARN-PORTAL.md, D110): the lessons stacked as panels,
 // markdown bodies rendered by Md (so every [[term]] is tap-to-explain), with optional
@@ -50,6 +58,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
               <PanelHeader>{`${i + 1} · ${lesson.title}`}</PanelHeader>
               <Card className="p-5">
                 <Md text={lesson.body} />
+                {lesson.widget ? WIDGETS[lesson.widget] : null}
                 {lesson.tryIt?.length ? (
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-teal-400/10 pt-3">
                     {lesson.tryIt.map((t) => (
