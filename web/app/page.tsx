@@ -409,7 +409,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const upcomingEarn = earnMatched
     .filter((e) => e.date >= todayStr && e.epsActual == null && e.revenueActual == null)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 16); // the strip is 8 tiles per row — two rows max before the window runs out
+    .slice(0, 12); // the strip is 6 tiles per row — two rows max before the window runs out
   const hasEarnings = recentEarn.length > 0 || upcomingEarn.length > 0;
 
   // The daily market brief — latest edition (PM after 6pm, else AM) for the viewed date. The
@@ -603,12 +603,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               earnings for names we track or watch · beat/miss is actual vs the analyst <Term k="eps">EPS</Term> estimate · the full report lives on the stock page
             </p>
           </div>
-          {/* Upcoming — its own row: tiles 8-wide, wrapping */}
+          {/* Upcoming — its own row: tiles 6-wide, wrapping (was 8 — Cam 2026-07-04: room for the company name under the ticker, matching the reported bubbles) */}
           <div className="mt-5">
             <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Upcoming reports</div>
             <Card className="overflow-hidden p-1.5">
               {upcomingEarn.length > 0 ? (
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-8">
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
                   {upcomingEarn.map((e) => {
                     const soon = e.date === todayStr || relDay(e.date, todayStr) === "tomorrow";
                     return (
@@ -619,8 +619,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                       >
                         <span className="flex items-center gap-1.5">
                           <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-5 w-5 text-[8px]" />
-                          <span className="truncate text-[13px] font-semibold text-teal-200 group-hover:underline">
-                            {e.symbol}
+                          <span className="min-w-0">
+                            <span className="block truncate text-[13px] font-semibold text-teal-200 group-hover:underline">
+                              {e.symbol}
+                            </span>
+                            <span className="block truncate text-[10px] text-teal-200/40">{e.name}</span>
                           </span>
                         </span>
                         <span className="mt-0.5 flex items-baseline justify-between gap-1">
