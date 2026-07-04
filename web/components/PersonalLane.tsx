@@ -8,6 +8,8 @@ import SortableTable from "@/components/SortableTable";
 import RollingNumber from "@/components/RollingNumber";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import { useLiveQuotes } from "@/components/LiveQuotes";
+import StockLogo from "@/components/StockLogo";
+import ScroogeChip from "@/components/ScroogeChip";
 
 // A member's personal lane on the Portfolio page — their external (read-only) holdings,
 // rendered with the SAME columns + spacing as Alfred's own positions table (Cam 2026-06-30):
@@ -31,6 +33,7 @@ export type PersonalRow = {
   openPnlCents: number | null; // SSR fallback unrealized P&L (the "change")
   currency: string; // the holding's own currency
   stance: string | null; // Alfred's 7-point call, if it covers the name
+  logoUrl?: string | null; // resolved server-side (universe artwork, else the FMP ticker image)
 };
 
 // Static per-currency cash (cash doesn't move intraday) — the anchor each footer Total rolls
@@ -155,9 +158,12 @@ export default function PersonalLane({
       node: (
         <tr key={`${r.symbol}-${r.account}`} className="border-t border-teal-400/10">
           <td className="px-5 py-2.5">
-            <Link href={r.dossierHref} className="font-semibold text-teal-300 hover:underline">
-              {r.symbol}
-            </Link>
+            <div className="flex items-center gap-2.5">
+              <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} className="h-6 w-6 text-[9px]" />
+              <Link href={r.dossierHref} className="font-semibold text-teal-300 hover:underline">
+                {r.symbol}
+              </Link>
+            </div>
           </td>
           <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{qtyDisplay(r.qty)}</td>
           <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">
@@ -238,7 +244,9 @@ export default function PersonalLane({
               .map((c) => (
                 <tr key={`cash-${c.currency}`} className="border-t border-teal-400/10">
                   <td className="px-5 py-2.5 text-teal-200/55" colSpan={4}>
-                    Cash <span className="text-[10px] uppercase text-teal-200/35">{c.currency}</span>
+                    <div className="flex items-center gap-2.5">
+                      <ScroogeChip /> Cash <span className="text-[10px] uppercase text-teal-200/35">{c.currency}</span>
+                    </div>
                   </td>
                   <td className="px-5 py-2.5" />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/70">{money(c.cashCents, c.currency)}</td>

@@ -13,6 +13,10 @@ import PersonalLane, { type PersonalRow, type PersonalCash, type PersonalOwner }
 import ConnectSplash from "@/components/accounts/ConnectSplash";
 import ResearchQueueCard from "@/components/ResearchQueueCard";
 import Avatar from "@/components/Avatar";
+import StockLogo from "@/components/StockLogo";
+import ScroogeChip from "@/components/ScroogeChip";
+import { allUniverse } from "@/lib/universe";
+import { fmpLogo } from "@/lib/logos";
 import { LiveQuotesProvider } from "@/components/LiveQuotes";
 import {
   LiveTotal,
@@ -55,9 +59,10 @@ function Sources({ sourcesJson }: { sourcesJson: string | null }) {
 }
 
 export default async function Portfolio() {
-  const [session, pf, recentJournal, premorning, latestPlan, midday, checkin, latestEod, weekly, agenda] = await Promise.all([
+  const [session, pf, universeRows, recentJournal, premorning, latestPlan, midday, checkin, latestEod, weekly, agenda] = await Promise.all([
     getSession(),
     getPortfolio(),
+    allUniverse(), // logo lookups for the positions + personal-lane tables (60s-cached)
     prisma.journalEntry.findMany({ orderBy: { at: "desc" }, take: 4 }),
     // The 6:00 ET pre-morning read — owns the briefing slot from dawn until the 9:00
     // game plan (a newer brief) supersedes it (Cam 2026-06-25).
@@ -94,6 +99,16 @@ export default async function Portfolio() {
   ]);
   const hasAgenda = agenda.length > 0;
   const name = session?.user?.name ?? "friend";
+
+  // Logo lookups (Cam 2026-07-04): fund positions match the universe by symbol; the
+  // personal lanes join on the BARE ticker (external symbols carry brokerage suffixes)
+  // and fall back to FMP's ticker-keyed image for anything we don't track.
+  const bareLogoKey = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/, "");
+  const logoBySymbol = new Map(universeRows.map((u) => [u.symbol, u.logoUrl]));
+  const logoByBare = new Map<string, string>();
+  for (const u of universeRows) {
+    if (u.logoUrl && !logoByBare.has(bareLogoKey(u.symbol))) logoByBare.set(bareLogoKey(u.symbol), u.logoUrl);
+  }
 
   // The Tape — the day's NAV on a fixed 9:30→16:00 axis. Moved here from Today, to sit above Alfred's
   // positions (Cam 2026-07-02). Seed the intraday points from today's NAV snapshots; LiveTape polls
@@ -174,6 +189,8 @@ export default async function Portfolio() {
           symbol: h.symbol,
           quoteSymbol: h.quoteSymbol,
           dossierHref: h.dossierHref,
+          // Universe artwork when we track the name; else FMP's ticker image (404 → monogram).
+          logoUrl: logoByBare.get(bareLogoKey(h.symbol)) || fmpLogo(h.quoteSymbol),
           description: h.description,
           account: h.account,
           acctCurrency: h.acctCurrency,
@@ -352,9 +369,12 @@ export default async function Portfolio() {
             node: (
               <tr key={p.symbol} className="border-t border-teal-400/10">
                 <td className="px-5 py-2.5">
-                  <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
-                    {p.symbol}
-                  </Link>
+                  <div className="flex items-center gap-2.5">
+                    <StockLogo symbol={p.symbol} logoUrl={logoBySymbol.get(p.symbol) || fmpLogo(p.symbol)} className="h-6 w-6 text-[9px]" />
+                    <Link href={`/stocks/${p.symbol}`} className="font-semibold text-teal-300 hover:underline">
+                      {p.symbol}
+                    </Link>
+                  </div>
                 </td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{p.qty}</td>
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-100/80">{money(p.avgCostCents)}</td>
@@ -381,7 +401,11 @@ export default async function Portfolio() {
           groupFooters={{
             CAD: (
               <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
-                <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · CAD</td>
+                <td className="px-5 py-2.5 font-semibold text-teal-200/70">
+                  <div className="flex items-center gap-2.5">
+                    <ScroogeChip /> Cash · CAD
+                  </div>
+                </td>
                 <td className="px-5 py-2.5" colSpan={4} />
                 <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{money(pf.cadCashCents)}</td>
                 <td className="px-5 py-2.5" />
@@ -393,7 +417,11 @@ export default async function Portfolio() {
             USD:
               pf.usdCashCents > 0 ? (
                 <tr className="border-t border-teal-400/15 bg-teal-400/[0.03]">
-                  <td className="px-5 py-2.5 font-semibold text-teal-200/70">Cash · USD</td>
+                  <td className="px-5 py-2.5 font-semibold text-teal-200/70">
+                    <div className="flex items-center gap-2.5">
+                      <ScroogeChip /> Cash · USD
+                    </div>
+                  </td>
                   <td className="px-5 py-2.5" colSpan={4} />
                   <td className="px-5 py-2.5 text-right tabular-nums text-teal-50">{usd(pf.usdCashCents)}</td>
                   <td className="px-5 py-2.5" />
