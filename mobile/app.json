@@ -16,7 +16,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.camerontora.grqgo",
       "infoPlist": {
-        "CFBundleDisplayName": "GRQ Go"
+        "CFBundleDisplayName": "GRQ"
       }
     },
     "plugins": [
