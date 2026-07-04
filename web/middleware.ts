@@ -37,6 +37,9 @@ const MOBILE_API = [
   "/api/race",            // Second Opinions — shadow-model scorecard (read)
   "/api/bulls",           // Bull Race — each model's paper book (read)
   "/api/desk",            // Options Desk sandbox (read)
+  "/api/short-lab",       // The Short Lab: GET book + member ops (open/cover/mark/reset in-route)
+  "/api/short-desk",      // The Short Lab agent A/B: GET + member start/pause/reset (in-route)
+  "/api/day-lab",         // The Day-Trading Lab: GET + member ops (start/buy/sell/flatten/mark/reset in-route)
   "/api/report-card",     // Report Card — how the calls did (read)
   "/api/accounts",        // personal/external accounts (SnapTrade — TD TFSA etc.); members-only in-route
   "/api/reports",         // A10 (list + /day/[date])

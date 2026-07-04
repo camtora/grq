@@ -24,6 +24,8 @@ const EXPERIMENTS: Row[] = [
   { href: '/more/desk', icon: 'analytics-outline', title: 'Options Desk', desc: 'Stock-only vs stock+options — the sandbox that teaches options.' },
   { href: '/more/report-card', icon: 'school-outline', title: 'Report Card', desc: 'How every call actually did — graded, with receipts.' },
   { href: '/more/chess', icon: 'extension-puzzle-outline', title: 'Chess Moves', desc: 'Value-chain boards — who wins two moves after the headline.' },
+  { href: '/more/short-lab', icon: 'trending-down-outline', title: 'The Short Lab', desc: 'Modeled shorts on real names — the bet the fund can never make.' },
+  { href: '/more/day-lab', icon: 'stopwatch-outline', title: 'Day-Trading Lab', desc: 'Churn vs a buy-and-hold twin — does trading beat sitting still?' },
 ];
 
 export default function MoreScreen() {
@@ -58,7 +60,6 @@ export default function MoreScreen() {
       {renderRows(EXPERIMENTS)}
       <SectionTitle sub="every number explainable">Learning</SectionTitle>
       {renderRows(LEARNING)}
-      <Footnote>the Short Lab and Day-Trading Lab live on the web for now</Footnote>
     </Screen>
   );
 }

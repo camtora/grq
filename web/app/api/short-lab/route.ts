@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sessionFromRequest, memberFromRequest } from "@/lib/session";
 import { loadShortLab, openShort, coverShort, markLab, resetLab, ensureHouseLab } from "@/lib/short/lab";
+import { loadShadow } from "@/lib/short/shadow";
 
 // The Short Lab (docs/SHORT-LAB.md) — read the sandbox book (any signed-in session) + member actions
 // (open / cover / mark / reset). Modeled, never executable; the fund never shorts (rule #3). Writes
@@ -11,7 +12,10 @@ export const maxDuration = 25;
 export async function GET(req: Request) {
   const session = sessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Sign in to view this." }, { status: 403 });
-  return NextResponse.json(await loadShortLab());
+  // The shadow-shorts view rides along (the web page loads it server-side; the app
+  // reads it from here — GRQ Go parity, 2026-07-04).
+  const [lab, shadow] = await Promise.all([loadShortLab(), loadShadow()]);
+  return NextResponse.json({ ...lab, shadow });
 }
 
 export async function POST(req: Request) {
