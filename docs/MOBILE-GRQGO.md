@@ -104,8 +104,8 @@ metro.grq.camerontora.ca.
 7. ~~Confidence levers~~ ✅ 2026-07-03 — ("what would change our mind", D93) — not on the wire yet.
 8. ~~Personal positions~~ ✅ 2026-07-03 — + bought-at price on dossiers (the web got this in v2.46) —
    check/mirror on the mobile wire.
-9. Watch/unwatch + pin/block directives ON the stock page (watch lives only on
-   Watchlist rows today); price-chart range selector (30/90/180d).
+9. ~~Watch/who-is-watching on the stock page + search rows~~ ✅ 2026-07-03 (eye toggle
+   + avatars; pin/block + chart range selector still open).
 
 **Experiments — build out to match the site:**
 10. Second Opinions: per-day/per-call detail (web `race/[date]`), call browser.
@@ -123,11 +123,11 @@ metro.grq.camerontora.ca.
 **Platform:**
 16. ~~Cache /api/today~~ ✅ 2026-07-03 (60s shared, 11s→12ms) — (~9s per load today; FMP quota).
 17. Today date archive (the web's ?d= day-changer).
-18. Live quote polling (the web's <LiveQuote>) on stock pages + Today.
+18. ~~Live quote polling~~ ✅ 2026-07-03 (stock hero 15s; Today re-pulls the cached feed 60s).
 19. The Hunt as a page (heat board) — feed exists; the Wire carries finds meanwhile.
 20. Ask Alfred: thread switcher (each other's threads) + symbol-aimed chat from
     stock pages.
-21. Agent container rebuild picks up per-token push topics (until then agent-
-    originated pushes reach only native-app tokens; web-originated are correct).
-22. shared/contract.ts direct imports (metro watchFolders); TestFlight/EAS-Update
-    distribution for release builds; retire ios/ + GRQNext at parity.
+21. ~~Agent container rebuild (push topics)~~ ✅ 2026-07-03 — v2.47 live.
+22. ~~shared/contract.ts direct imports~~ ✅ 2026-07-03 (@shared alias; migrate types
+    opportunistically). Still open: TestFlight/EAS-Update distribution; retire ios/ +
+    GRQNext at parity.
