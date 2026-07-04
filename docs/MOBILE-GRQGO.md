@@ -96,9 +96,8 @@ metro.grq.camerontora.ca.
    `dossierResponse` (`getOptions`/`optionsLine` exist); US names only.
 2. ~~Social sentiment panel~~ ✅ 2026-07-03 — (Tier 8, D89) — `social` block; keep the "on probation"
    honesty label.
-3. Related names (knowledge-graph Slice 1) — needs a `related` block in the feed.
-4. The record — `record[]` is ALREADY on the wire (typed journal history); render
-   as a collapsible section. No backend change.
+3. ~~Related names~~ ✅ 2026-07-03 — `related` feed block + the panel (+ chart ranges, the value-chain cards, agent's note).
+4. ~~The record~~ ✅ 2026-07-03 — the journal spine (3 collapsed rows, unfold, show-all).
 5. ~~Scoreboard~~ ✅ 2026-07-03 — `scoreboard[]` already on the wire; render when non-empty.
 6. Tappable [[glossary]] terms → inline explainers (the literacy pillar).
 7. ~~Confidence levers~~ ✅ 2026-07-03 — ("what would change our mind", D93) — not on the wire yet.
