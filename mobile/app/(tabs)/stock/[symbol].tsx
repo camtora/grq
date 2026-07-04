@@ -378,6 +378,32 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- Trades (the fund's own — below Position, Cam 2026-07-04) ---- */}
+            {d.trades.length > 0 && (
+              <View>
+                <SectionTitle sub="the fund's fills">Trades</SectionTitle>
+                <Card style={s.listCard}>
+                  {d.trades.slice(0, 8).map((t, i) => (
+                    <View key={t.id}>
+                      {i > 0 && <Divider />}
+                      <View style={s.tradeRow}>
+                        <Text style={[s.sigSignal, { color: t.side === 'BUY' ? p.pos : p.neg, width: 40 }]}>{t.side}</Text>
+                        <Text style={[s.meta, tabular, { color: p.textPrimary, flex: 1 }]}>
+                          {t.qty} sh @ {money(t.priceCents)}
+                        </Text>
+                        {t.realizedPnlCents != null && (
+                          <Text style={[s.metaSmall, tabular, { color: pnlColor(t.realizedPnlCents, p) }]}>
+                            {signedMoney(t.realizedPnlCents)}
+                          </Text>
+                        )}
+                        <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
             {/* ---- Price chart (web PriceChart parity: 1D intraday live + daily slices) ---- */}
             {closes.length >= 2 && (() => {
               const is1D = range === '1D';
@@ -594,6 +620,16 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- The full read (under Earnings — Cam 2026-07-04; only once a real dossier exists) ---- */}
+            {hasDossier && d.bodyMarkdown && (
+              <View>
+                <SectionTitle sub="Alfred's full dossier">The full read</SectionTitle>
+                <Card>
+                  <MdText body={d.bodyMarkdown} foldAt={600} />
+                </Card>
+              </View>
+            )}
+
             {/* ---- Valuation vs peers ---- */}
             {d.peers.length > 1 && (
               <View>
@@ -697,26 +733,20 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* ---- Trades (the fund's own) ---- */}
-            {d.trades.length > 0 && (
+            {/* ---- News (below Smart money — Cam 2026-07-04) ---- */}
+            {d.news.length > 0 && (
               <View>
-                <SectionTitle sub="the fund's fills">Trades</SectionTitle>
+                <SectionTitle sub="recent coverage">News</SectionTitle>
                 <Card style={s.listCard}>
-                  {d.trades.slice(0, 8).map((t, i) => (
-                    <View key={t.id}>
+                  {d.news.map((n, i) => (
+                    <View key={i}>
                       {i > 0 && <Divider />}
-                      <View style={s.tradeRow}>
-                        <Text style={[s.sigSignal, { color: t.side === 'BUY' ? p.pos : p.neg, width: 40 }]}>{t.side}</Text>
-                        <Text style={[s.meta, tabular, { color: p.textPrimary, flex: 1 }]}>
-                          {t.qty} sh @ {money(t.priceCents)}
+                      <Pressable onPress={() => n.url && Linking.openURL(n.url)} style={s.newsRow}>
+                        <Text style={[s.newsTitle, { color: p.textPrimary }]}>{n.title}</Text>
+                        <Text style={[s.chartLabel, { color: p.textMuted, marginTop: 2 }]}>
+                          {n.publisher}{n.at ? ` · ${String(n.at).slice(0, 10)}` : ''}
                         </Text>
-                        {t.realizedPnlCents != null && (
-                          <Text style={[s.metaSmall, tabular, { color: pnlColor(t.realizedPnlCents, p) }]}>
-                            {signedMoney(t.realizedPnlCents)}
-                          </Text>
-                        )}
-                        <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
-                      </View>
+                      </Pressable>
                     </View>
                   ))}
                 </Card>
@@ -747,36 +777,6 @@ export default function StockScreen() {
             {/* ---- The record — every journal entry on this name (approved layout:
                  collapsed spine, 3 rows default, tap to unfold; Cam 2026-07-03) ---- */}
             {(d.record ?? []).length > 0 && <TheRecord d={d} p={p} />}
-
-            {/* ---- News ---- */}
-            {d.news.length > 0 && (
-              <View>
-                <SectionTitle sub="recent coverage">News</SectionTitle>
-                <Card style={s.listCard}>
-                  {d.news.map((n, i) => (
-                    <View key={i}>
-                      {i > 0 && <Divider />}
-                      <Pressable onPress={() => n.url && Linking.openURL(n.url)} style={s.newsRow}>
-                        <Text style={[s.newsTitle, { color: p.textPrimary }]}>{n.title}</Text>
-                        <Text style={[s.chartLabel, { color: p.textMuted, marginTop: 2 }]}>
-                          {n.publisher}{n.at ? ` · ${String(n.at).slice(0, 10)}` : ''}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </Card>
-              </View>
-            )}
-
-            {/* ---- The full read (only once a real dossier exists) ---- */}
-            {hasDossier && d.bodyMarkdown && (
-              <View>
-                <SectionTitle sub="Alfred's full dossier">The full read</SectionTitle>
-                <Card>
-                  <MdText body={d.bodyMarkdown} foldAt={600} />
-                </Card>
-              </View>
-            )}
 
             {/* ---- Data coverage (honest 10-tier map) ---- */}
             {d.coverage.length > 0 && (
