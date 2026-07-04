@@ -64,7 +64,31 @@ type BookRow = {
   pnlCents?: number | null;
   label?: string; // display override for non-stock rows (e.g. Cash) — no link
   usd?: boolean; // house convention: $ is CAD unless it wears a US prefix
+  emoji?: string; // chip art override for non-stock rows (Cash = the money bag)
 };
+
+/** The cash row's "logo" — a money-bag chip (Cam wants Scrooge McDuck; that's
+ * Disney art we can't bundle ourselves. Drop an image at assets/scrooge.png and
+ * swap this for <Image source={require('../../assets/scrooge.png')} …/>). */
+function EmojiChip({ emoji, size }: { emoji: string; size: number }) {
+  const { p } = usePalette();
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: p.cardHi,
+        borderWidth: 1,
+        borderColor: p.cardBorder,
+      }}
+    >
+      <Text style={{ fontSize: size * 0.55, lineHeight: size * 0.7 }}>{emoji}</Text>
+    </View>
+  );
+}
 
 // "US$1,234.56" / "-US$12.34" — the US prefix rides inside the sign.
 const usMoney = (cents: number) => money(cents).replace('$', 'US$');
@@ -81,7 +105,7 @@ function BookRowView({ r }: { r: BookRow }) {
   const router = useRouter();
   return (
     <Pressable onPress={r.label ? undefined : () => router.push(`/stock/${r.symbol}`)} style={s.row}>
-      <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
+      {r.emoji ? <EmojiChip emoji={r.emoji} size={32} /> : <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />}
       <View style={s.rowMain}>
         <Text style={[s.sym, { color: r.label ? p.textPrimary : p.accentText }]}>{r.label ?? r.symbol}</Text>
         <Text style={[s.sub, tabular, { color: p.textMuted }]} numberOfLines={1}>{r.qtyLine}</Text>
@@ -392,13 +416,13 @@ function PersonalView({
         // Cam 2026-07-03) — real since the SnapTrade balances fix.
         if (cad > 0) {
           rows.push({
-            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash', valueCents: cad },
+            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash', valueCents: cad, emoji: '💰' },
             country: 'Canada',
           });
         }
         if (usd > 0) {
           rows.push({
-            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash (USD)', valueCents: usd, usd: true },
+            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash (USD)', valueCents: usd, usd: true, emoji: '💰' },
             country: 'United States',
           });
         }
