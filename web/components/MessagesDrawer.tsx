@@ -29,7 +29,7 @@ export default function MessagesDrawer() {
 
   return (
     <aside
-      className={`fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-teal-400/20 shadow-2xl transition-transform duration-300 sm:w-[440px] lg:w-[33vw] lg:max-w-[620px] ${
+      className={`fixed inset-y-0 right-0 z-[45] flex w-full flex-col border-l border-teal-400/20 shadow-2xl transition-transform duration-300 sm:w-[440px] lg:w-[33vw] lg:max-w-[620px] ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
       style={{ background: "var(--body-bg)" }}
