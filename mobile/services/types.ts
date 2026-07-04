@@ -7,6 +7,7 @@ export type Mover = {
   currency: string;
   lastCents: number;
   dayChangeBps: number;
+  logoUrl?: string | null;
 };
 
 export type IndexQuote = { symbol: string; name: string; priceCents: number; changeBps: number };
@@ -100,6 +101,7 @@ export type ExternalAccount = {
   cashCents: number | null;
   disabled: boolean;
   syncedAt: string | null;
+  authorizationId?: string | null; // the SnapTrade connection — the one-tap Reconnect key
   holdings: ExternalHolding[];
 };
 
@@ -386,6 +388,39 @@ export type DirectMessage = {
 };
 
 export type DirectThread = { messages: DirectMessage[]; unread: number; otherName: string };
+
+/* ---------- The Hunt — /api/hunt (web lib/feed.ts huntResponse) ---------- */
+export type HuntFind = {
+  sym: string;
+  name: string;
+  logoUrl: string | null;
+  currency: string | null;
+  cur: number | null; // current price, cents
+  nearBps: number | null;
+  farBps: number | null;
+  nearDays: number | null; // trading days to the near target
+  targetNearCents: number | null;
+  targetFarCents: number | null;
+  confidence: number | null;
+  body: string;
+  bottomLine: string | null;
+  sources: string[];
+  obscurity: number | null; // 1–5, agent-scored (5 = almost nobody covers it)
+  change30d: number | null; // fraction over the sparkline window
+  spark: number[];
+  heat: number; // derived 0–100 "ready to pop" (conviction + momentum + obscurity)
+  tag: string | null; // "NYSE · Healthcare"
+  watch: 'none' | 'watching' | 'universe';
+};
+export type HuntFeed = { brief: string | null; finds: HuntFind[] };
+/** /api/hunt/status — the pending poller anchors on latestFindAt (the runner
+ * clears huntRequestedAt at the run's START, before results land). */
+export type HuntStatus = {
+  requestedAt: string | null;
+  brief: string | null;
+  latestFindAt: string | null;
+  finds: number;
+};
 
 /* ---------- The Wire — the discovery feed (shared/contract.ts WireItem) ---------- */
 export type WireKind = 'find' | 'dossier' | 'watch' | 'article' | 'lesson';

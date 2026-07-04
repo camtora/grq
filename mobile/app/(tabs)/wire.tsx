@@ -17,6 +17,7 @@ import RatingBar from '../../components/RatingBar';
 import ShareButton from '../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedPctFromBps, pnlColor } from '../../lib/format';
+import { heatColor, obscurityLabel } from '../../lib/hunt';
 import { api } from '../../services/api';
 import { useApi } from '../../services/hooks';
 import type { WireItem } from '../../services/types';
@@ -39,19 +40,6 @@ const CALL_META: Record<string, { label: string; tone: string; pos: number }> = 
   sell: { label: 'Sell', tone: 'red', pos: 0.18 },
   strong_sell: { label: 'Strong Sell', tone: 'red', pos: 0 },
 };
-
-function obscurityLabel(o: number | null | undefined): string | null {
-  if (o === 5) return '🔍 deep cut';
-  if (o === 4) return 'under-the-radar';
-  if (o === 3) return 'lesser-known';
-  return null;
-}
-
-// The Hunt's heat ramp — hue teal-green (cool) → amber/orange (hot), same as web.
-function heatColor(heat: number): string {
-  const h = 175 - (Math.max(0, Math.min(100, heat)) / 100) * 150;
-  return `hsl(${Math.round(h)}, 70%, 55%)`;
-}
 
 function shortDate(iso: string): string {
   const d = new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso);

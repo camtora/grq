@@ -123,7 +123,9 @@ metro.grq.camerontora.ca.
 16. ~~Cache /api/today~~ ✅ 2026-07-03 (60s shared, 11s→12ms) — (~9s per load today; FMP quota).
 17. Today date archive (the web's ?d= day-changer).
 18. ~~Live quote polling~~ ✅ 2026-07-03 (stock hero 15s; Today re-pulls the cached feed 60s).
-19. The Hunt as a page (heat board) — feed exists; the Wire carries finds meanwhile.
+19. ~~The Hunt as a page (heat board)~~ ✅ 2026-07-04 (More ▸ The Hunt: heat-board rows w/
+    rail/meter/rank, expand = sparkline+targets+full thesis+watch/share/dismiss, D38 brief
+    bar + 🎯 banner, pending poll anchored on latestFindAt; helpers in `lib/hunt.ts`).
 20. Ask Alfred: thread switcher (each other's threads) + symbol-aimed chat from
     stock pages.
 21. ~~Agent container rebuild (push topics)~~ ✅ 2026-07-03 — v2.47 live.

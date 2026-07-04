@@ -8,6 +8,7 @@ import { usePalette, F } from '../../../constants/theme';
 type Row = { href: string; icon: keyof typeof Ionicons.glyphMap; title: string; desc: string };
 
 const MARKETS: Row[] = [
+  { href: '/more/hunt', icon: 'telescope-outline', title: 'The Hunt', desc: 'Under-the-radar leads, heat-ranked — steer it in plain English.' },
   { href: '/more/smart-money', icon: 'people-outline', title: 'Smart Money', desc: 'Buffett, Burry, congress & insiders — leads, not trades.' },
   { href: '/more/browse', icon: 'compass-outline', title: 'Browse', desc: 'The whole-market screen, ranked — 4,700+ names scored.' },
   { href: '/more/reports', icon: 'document-text-outline', title: 'Reports', desc: 'EOD closes, weekly reviews, and the daily build diary.' },
