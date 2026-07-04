@@ -26,7 +26,7 @@ import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
-import { parseBoard, buildPlayViews, chessRefsForSymbol, bareChainKey } from "./chess";
+import { parseBoard, buildPlayViews, buildBoardTrends, chessRefsForSymbol, bareChainKey } from "./chess";
 import { relatedFor } from "./graph/related";
 import { parseConfidenceLevers } from "./confidence-levers";
 import { loadStandings, loadDay, type ModelStanding } from "./race/standings";
@@ -1344,7 +1344,10 @@ export async function chessListResponse() {
     where: { status: { not: "RETIRED" } },
     orderBy: { createdAt: "desc" },
     take: 40,
-    include: { _count: { select: { plays: true } }, plays: { orderBy: { rank: "asc" }, take: 6, select: { symbol: true } } },
+    include: {
+      _count: { select: { plays: true } },
+      plays: { orderBy: { rank: "asc" }, take: 16, select: { symbol: true, direction: true } },
+    },
   });
   return {
     themes: themes.map((t) => ({
@@ -1354,10 +1357,12 @@ export async function chessListResponse() {
       kind: t.kind,
       status: t.status,
       bottomLine: t.bottomLine,
+      brief: t.brief, // the prompt that produced it (web list-card footer)
       requestedBy: t.requestedBy,
       createdAt: t.createdAt.toISOString(),
       playCount: t._count.plays,
-      tickers: t.plays.map((p) => p.symbol),
+      tickers: t.plays.map((p) => p.symbol), // back-compat (pre-direction bundles)
+      plays: t.plays.map((p) => ({ symbol: p.symbol, direction: p.direction })), // the ▲/▼ chips
     })),
   };
 }
@@ -1366,7 +1371,9 @@ export async function chessBoardResponse(id: number) {
   const t = await prisma.chessTheme.findUnique({ where: { id }, include: { plays: { orderBy: { rank: "asc" } } } });
   if (!t || t.status === "RETIRED") return null;
   const board = parseBoard(t.boardJson);
-  const plays = t.status === "READY" ? await buildPlayViews(t.plays) : [];
+  const ready = t.status === "READY";
+  const plays = ready ? await buildPlayViews(t.plays) : [];
+  const trendMap = ready ? await buildBoardTrends(board) : new Map<string, { series: { t: number; c: number }[]; todayBps?: number | null }>();
   const levers = parseConfidenceLevers(t.confidenceLeversJson);
   return {
     id: t.id,
@@ -1376,10 +1383,19 @@ export async function chessBoardResponse(id: number) {
     status: t.status,
     thesis: t.thesis,
     bottomLine: t.bottomLine,
+    // Provenance (web board-page card): the prompt + who/when/what version.
+    brief: t.brief,
     requestedBy: t.requestedBy,
+    createdAt: t.createdAt.toISOString(),
+    agentVersion: t.agentVersion,
     completedAt: (t.completedAt ?? t.createdAt).toISOString(),
     board, // { stages:[{label,role,items:[{symbol,name,note}]}], links:[{from,to,label}] }
     levers, // [{ gap, direction, magnitude, kind, trigger, retrievable }]
+    // Per-piece daily-close tapes for the board map (bare key → series + today's move) —
+    // the app slices these client-side for the shared 1D…1Y range toggle.
+    trends: Object.fromEntries(
+      [...trendMap.entries()].map(([k, v]) => [k, { series: v.series, todayBps: v.todayBps ?? null }]),
+    ),
     plays: plays.map((p) => ({
       id: p.id,
       symbol: p.sym,
@@ -1395,6 +1411,7 @@ export async function chessBoardResponse(id: number) {
       currency: p.currency,
       lastCents: p.cur,
       change30d: p.change30d,
+      spark: p.spark,
       heat: p.heat,
       tracked: p.tracked,
       stance: p.stance,
