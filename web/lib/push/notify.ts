@@ -6,10 +6,11 @@ import { apnsConfigured, sendApns } from "./apns";
 // same events go to each member's registered iOS devices, gated by their per-user
 // NotificationPreference. Configured-or-no-op; failures never take the caller down.
 //
-// "Always-on": the `trades`, `risk`, `fx`, and `messages` categories are forced on
-// (non-toggleable), AND any critical-severity alert (agent crash, drawdown halt)
-// pushes regardless of toggles — that's the "system outages" guarantee. (messages
-// forced on for everyone — Cam 2026-06-25.) Everything else is per-user, default ON.
+// "Always-on": the `trades`, `risk`, `fx`, `messages`, and `accounts` categories are
+// forced on (non-toggleable), AND any critical-severity alert (agent crash, drawdown
+// halt) pushes regardless of toggles — that's the "system outages" guarantee.
+// (messages forced on — Cam 2026-06-25; accounts forced on — Cam 2026-07-04: a broken
+// brokerage link silently freezes holdings.) Everything else is per-user, default ON.
 
 export type NotifCategory =
   | "trades" // order fills, stops, take-profits — FORCED ON
@@ -26,14 +27,16 @@ export type NotifCategory =
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
   | "priceTargets" // a price alert the member set has crossed (Phase 2 — The Wire)
   | "optionsDesk" // the experimental Options Desk opened/settled an option — a nudge to read the card (sandbox)
-  | "accounts"; // the member's OWN linked brokerage connection broke / was fixed (SnapTrade reconnect)
+  | "accounts"; // the member's OWN linked brokerage broke / was fixed (SnapTrade reconnect) — FORCED ON (Cam 2026-07-04)
 
 type Severity = "info" | "warning" | "critical";
 
-const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk", "fx", "messages"]);
+const FORCED: ReadonlySet<NotifCategory> = new Set(["trades", "risk", "fx", "messages", "accounts"]);
 
 // Map a category → the NotificationPreference column that gates it. trades/risk/fx/
-// messages are absent on purpose (forced on); the rest line up with the schema booleans.
+// messages/accounts are absent on purpose (forced on); the rest line up with the
+// schema booleans (the orphaned `accounts` column stays in the DB — dropping a live
+// column breaks the running Prisma client).
 const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   dossiers: "dossiers",
   hunt: "hunt",
@@ -45,7 +48,6 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   system: "system",
   priceTargets: "priceTargets",
   optionsDesk: "optionsDesk",
-  accounts: "accounts",
 };
 
 type PrefRow = {

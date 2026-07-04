@@ -27,6 +27,7 @@ const ALWAYS_ON: { label: string; desc: string }[] = [
   { label: 'Risk & safety', desc: 'Kill switch, drawdown halt, and daily-loss pause.' },
   { label: 'FX approvals', desc: 'When the agent asks to convert CAD→USD to fund a US name — needs your OK.' },
   { label: 'Messages', desc: 'When the other member sends you a message or shares a stock.' },
+  { label: 'Account connections', desc: 'When your linked brokerage (your TD) loses its SnapTrade connection and holdings freeze — a quick reconnect fixes it. Only you get yours.' },
   { label: 'Critical outages', desc: 'Agent crashes and total data-feed failures.' },
 ];
 

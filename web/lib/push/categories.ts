@@ -2,10 +2,11 @@
 // exist, what they mean, and which are user-toggleable. The web Settings UI renders
 // from this; the iOS settings screen mirrors the same copy (docs/PUSH-NOTIFICATIONS.md).
 //
-// "Always-on": Trades, Risk, FX approvals, and Messages are non-toggleable, and any
-// critical-severity alert (agent crash, drawdown halt) pushes regardless of toggles.
-// (Messages forced on for everyone — Cam 2026-06-25.) Everything else defaults ON
-// and can be muted per-user.
+// "Always-on": Trades, Risk, FX approvals, Messages, and Account connections are
+// non-toggleable, and any critical-severity alert (agent crash, drawdown halt) pushes
+// regardless of toggles. (Messages forced on — Cam 2026-06-25; Account connections
+// forced on — Cam 2026-07-04: a broken link silently freezes holdings, so the nudge
+// can't be mutable.) Everything else defaults ON and can be muted per-user.
 
 export const TOGGLEABLE_CATEGORIES = [
   { key: "dossiers", label: "Research dossiers", desc: "A dossier you or the agent requested is ready." },
@@ -18,7 +19,6 @@ export const TOGGLEABLE_CATEGORIES = [
   { key: "system", label: "System health", desc: "Agent restarts and data-feed or broker hiccups (non-critical)." },
   { key: "priceTargets", label: "Price alerts", desc: "When a stock you set an alert on crosses your target price." },
   { key: "optionsDesk", label: "Options Desk", desc: "When the experimental Options Desk opens or settles an option — a nudge to go read the teaching card. Sandbox only; never the real fund." },
-  { key: "accounts", label: "Account connections", desc: "When your linked brokerage (your TD) loses its SnapTrade connection and holdings freeze — a quick reconnect fixes it. Only you get yours." },
 ] as const;
 
 export type ToggleKey = (typeof TOGGLEABLE_CATEGORIES)[number]["key"];
@@ -29,6 +29,7 @@ export const ALWAYS_ON = [
   { label: "Risk & safety", desc: "Kill switch, drawdown halt, and daily-loss pause." },
   { label: "FX approvals", desc: "When the agent asks to convert CAD→USD to fund a US name — needs your OK." },
   { label: "Messages", desc: "When the other member sends you a message or shares a stock." },
+  { label: "Account connections", desc: "When your linked brokerage (your TD) loses its SnapTrade connection and holdings freeze — a quick reconnect fixes it. Only you get yours." },
   { label: "Critical outages", desc: "Agent crashes and total data-feed failures." },
 ] as const;
 
@@ -36,7 +37,7 @@ export type NotificationPrefs = Record<ToggleKey, boolean>;
 
 /** All-on — the default when a member has never touched their settings. */
 export function defaultPrefs(): NotificationPrefs {
-  return { dossiers: true, hunt: true, agentMoves: true, reports: true, checkins: true, holdingChecks: true, members: true, system: true, priceTargets: true, optionsDesk: true, accounts: true };
+  return { dossiers: true, hunt: true, agentMoves: true, reports: true, checkins: true, holdingChecks: true, members: true, system: true, priceTargets: true, optionsDesk: true };
 }
 
 /** Normalize a DB row (or null) into the flat toggle object the API returns. */
