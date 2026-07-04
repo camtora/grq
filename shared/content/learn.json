@@ -1,0 +1,208 @@
+{
+  "_generated": "web/scripts/export-learn-content.ts — do not edit by hand; edit web/lib/learn/content.ts and re-run",
+  "courses": [
+    {
+      "slug": "the-machine",
+      "n": 1,
+      "title": "The machine",
+      "tagline": "What a stock actually is, what an exchange actually does, and why the same ticker can be two different things.",
+      "status": "live",
+      "lessons": [
+        {
+          "slug": "what-a-stock-is",
+          "title": "What a stock actually is",
+          "body": "A share is a real slice of a real company. Own one share of a company with a million [shares outstanding](#explain:market-cap) and you own one-millionth of the business — one-millionth of its profits, its buildings, its brand, and its problems.\n\nCompanies sell shares to raise money without borrowing it. The one time your purchase actually funds the company is the [[ipo]] — after that, shares just change hands between investors, and the company isn't part of the trade at all.\n\nWhat do you get for holding it? Three things: a claim on the profits (paid out as a [[dividend]] or reinvested to grow the business), a vote at the annual meeting, and the right to sell your slice to someone else at whatever they'll pay. That last one is the part everyone watches.\n\nAnd one thing you *don't* get: unlimited downside. A share can go to zero, but never below it — the most you can lose is what you paid. That sounds obvious, but it's the property that separates owning stocks from [short selling](#explain:short-selling) and other bets where the losses have no floor."
+        },
+        {
+          "slug": "what-an-exchange-does",
+          "title": "What an exchange actually does",
+          "body": "An exchange is not a store. The TSX doesn't own any shares, doesn't sell you anything, and doesn't set a single price. It does exactly two jobs: it decides which companies are allowed to list (audited books, minimum size, ongoing disclosure — the bouncer at the door), and it runs the matching engine that pairs every buyer with a seller.\n\nThat second job is the whole game. When you buy a share, your money goes to *whoever sold it to you* — another investor, a pension fund, an algorithm — not to the company. This is called the secondary market, and it's where essentially all trading happens.\n\nCanada's main venue is the **TSX** (Toronto). The US has two giants: the **NYSE** and the **Nasdaq**. Same machinery, different bouncers, different currencies — which is why GRQ's fund runs a CAD sleeve and a USD sleeve rather than pretending the border isn't there."
+        },
+        {
+          "slug": "tickers-and-look-alikes",
+          "title": "Tickers, listings, and look-alikes",
+          "body": "A [[ticker]] is an address, not a name. SHOP, XIC, AAPL — short codes a stock trades under *on a specific exchange*. That last part matters more than it looks.\n\nThe same company can list in two places at once (Shopify trades in Toronto in CAD and in New York in USD — same company, two addresses). But the reverse is also true: the **same letters** can point at completely different companies on different exchanges. Alfred once charted a forty-cent Canadian look-alike instead of the real Visa because it trusted the letters and not the exchange. We fixed the bug; the lesson is permanent — always check *where* a ticker lives.\n\nThen there are [CDRs](#explain:cdr): TSX-listed, CAD-hedged certificates that *track* a big US name without being the actual share. SPCX on the TSX is a Canadian certificate about SpaceX at around $36 — it is not a SpaceX share, and its FX hedge makes it behave differently from the real thing. Useful tools, but only if you know what you're actually holding."
+        },
+        {
+          "slug": "market-hours",
+          "title": "Market hours, and why prices jump overnight",
+          "body": "The TSX and NYSE both trade **9:30am to 4:00pm Eastern**, Monday to Friday. That's it — six and a half hours. There's a thin \"pre-market\" and \"after-hours\" session in the US, but it's a back alley: few participants, wide [spreads](#explain:bid-ask-spread), and prices that can be badly unrepresentative.\n\nNews, meanwhile, doesn't keep market hours. Earnings land after the close, wars start on weekends, and central banks speak whenever they like. All of that piles up while the market sleeps — and the **opening price gaps** to wherever buyers and sellers now agree the stock belongs. Nobody \"traded it down\" overnight; the first trade of the day simply reprices everything at once. If you only remember one thing: a stock can open far from where it closed, and no [stop-loss](#explain:stop-loss) can save you from a gap.\n\nOne more wrinkle for a two-country fund: **holidays don't line up**. On Canada Day the TSX sleeps while New York trades; on July 4th it's the reverse. GRQ's calendar knows the difference — on a TSX-only holiday the fund can still trade its US sleeve."
+        },
+        {
+          "slug": "indices",
+          "title": "Indices, and what “the market was up” means",
+          "body": "\"The market rose 1% today\" — which market? Every headline like that is quoting an [[index]]: a formula-weighted basket of stocks used as a thermometer. The **S&P 500** is the 500 biggest US companies; the **TSX Composite** is the Canadian equivalent.\n\nMost indices are weighted by market cap, which means the giants dominate the reading. When the S&P 500 moves, that's mostly its ten biggest names talking — hundreds of smaller members could have a terrible day and barely dent the number. \"The market was up\" really means \"big companies were up, on average.\"\n\nYou can't buy an index directly — it's just math. But an [[etf]] can track one for you: XIC holds essentially the whole TSX in a single ticker. That's why GRQ measures itself against [XIC](#explain:vs-xic) — if Alfred's stock-picking can't beat the thing you could buy in one click and never think about again, the honest conclusion is that the fund shouldn't exist. That bar stays on screen at all times, on purpose.",
+          "tryIt": [
+            {
+              "href": "/reports",
+              "label": "see the fund measured against XIC in Reports"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "how-a-price-happens",
+      "n": 2,
+      "title": "How a price happens",
+      "tagline": "There is no “the price” — the bid, the ask, order types, market makers, and what actually moves a stock.",
+      "status": "live",
+      "lessons": [
+        {
+          "slug": "the-spread",
+          "title": "There is no “the price”",
+          "body": "Every quote you've ever seen — the big number on a stock page — is just the *last trade*. History. At any live moment a stock actually has **two** prices: the **bid** (the most any buyer will currently pay) and the **ask** (the least any seller will currently take). The gap between them is the [[bid-ask-spread]].\n\nHere's the part that stings: you buy at the ask and sell at the bid. Buy a share and sell it one second later and you've lost the spread — guaranteed, before the stock moves at all. Every position you'll ever open starts underwater by that much.\n\nOn a giant like Apple the spread is a penny — a rounding error. On an obscure small-cap it can be several percent, which means the stock has to rise several percent *just to get you back to zero*. The spread is both a toll and a warning light: wide spreads are the market telling you few people trade this thing, and getting out may cost as much as getting in.",
+          "tryIt": [
+            {
+              "href": "/day-lab",
+              "label": "watch the spread tax the Day-Trading Lab's trader arm"
+            }
+          ]
+        },
+        {
+          "slug": "order-types",
+          "title": "Order types — what you're trading away",
+          "body": "Every order is a trade-off between two certainties, and you only get to keep one.\n\nA [[market-order]] says *\"fill me now, at whatever the market's asking.\"* You're guaranteed the fill, not the price — it crosses the spread and takes what's there. In a liquid name that's fine; in a thin one, \"whatever's asking\" can be an unpleasant surprise (that surprise has a name: [[slippage]]).\n\nA [[limit-order]] says *\"fill me at this price or better — or not at all.\"* You're guaranteed the price, not the fill. The market is under no obligation to come to you; plenty of limit orders die lonely at expiry, watching the stock run away without them.\n\nA [stop-loss](#explain:stop-loss) is a *trigger*, not a standing order: when the price touches your level, it fires a market order to get you out. It caps damage in normal conditions — but because it fires *at* the market, an overnight gap can blow straight through the level and fill you far below it. GRQ uses stops on every position and still treats them as seatbelts, not force fields."
+        },
+        {
+          "slug": "market-makers-and-liquidity",
+          "title": "Who's on the other side",
+          "body": "When you buy at 10:47am, who sold? Sometimes another investor. But often it's a [[market-maker]] — a firm whose entire job is quoting both a bid and an ask all day, every day, in thousands of names. They're not betting on the stock; they're earning the spread over and over, in exchange for making sure there's always *someone* to trade with.\n\nThat \"always someone\" quality is [[liquidity]]: how much you can buy or sell without moving the price against yourself. A liquid stock absorbs your order like the ocean absorbs a pebble. An illiquid one moves *because you showed up* — your own buying pushes the ask higher, and later your own selling pushes the bid lower. Illiquidity punishes you in both directions.\n\nThis is why GRQ's universe has a hard liquidity screen (built on average daily [[volume]]) that runs *before* a name is even eligible to buy. A position you can't exit cleanly isn't a position — it's a trap with a ticker symbol.",
+          "tryIt": [
+            {
+              "href": "/universe",
+              "label": "the Universe — every name here already passed the liquidity screen"
+            }
+          ]
+        },
+        {
+          "slug": "what-moves-a-price",
+          "title": "What actually moves a price",
+          "body": "\"More buyers than sellers\" is the classic explanation, and it's technically nonsense — every single trade has exactly one buyer and one seller. What moves a price is **eagerness**, not headcount.\n\nMechanically: there's a queue of standing orders at every price level. When buyers get impatient enough to take everything offered at the current ask, the ask moves up to the next level. When sellers get anxious enough to hit every bid, the bid steps down. Price is just the front line between impatient buyers and anxious sellers, and it moves when one side's urgency exhausts the other side's orders.\n\nNews moves prices *without needing trades at all*. When a company reports terrible earnings, nobody has to sell a single share for the quotes to collapse — everyone simply updates what they're willing to pay, and the bid and ask re-form lower. The price is a live opinion poll, not a measurement of some underlying \"true\" number.\n\n[[volume]] tells you how much conviction is behind a move. A 5% jump on heavy volume means real money changed its mind; the same jump on a trickle is a shrug that can reverse by lunch."
+        },
+        {
+          "slug": "whose-quote-is-right",
+          "title": "Why your quote disagrees with mine",
+          "body": "Pull up the same stock on two apps and you'll often see two different prices. Neither is lying — they're answering slightly different questions.\n\nMost free quotes are **delayed 15 minutes** (real-time data is licensed, and exchanges charge for it — it's a real revenue line for them). Some apps show the last trade, others the midpoint of the bid and ask. US stocks trade on a dozen venues at once, and feeds consolidate them at different speeds. Fifteen minutes plus a different venue plus last-vs-mid equals two honest numbers that disagree.\n\nGRQ's own pages are built on this honesty: some figures are near-real-time, others are delayed, and the app says which. For a [swing-trading](#explain:swing-trade) fund holding positions for weeks, a 15-minute-old price is noise — the thesis doesn't care. For a day trader scalping pennies, it's fatal — which is one more quiet reason the day-trading game is harder than it looks.",
+          "tryIt": [
+            {
+              "href": "/day-lab",
+              "label": "the Day-Trading Lab — where stale prices and spreads actually bite"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "owning-a-piece",
+      "n": 3,
+      "title": "Owning a piece",
+      "tagline": "Dividends, splits, what you actually paid, stocks vs ETFs, and holding two currencies at once.",
+      "status": "live",
+      "lessons": [
+        {
+          "slug": "dividends",
+          "title": "Dividends — getting paid to hold",
+          "body": "A [[dividend]] is the company mailing you your share of the profits — so many cents per share, usually every quarter. The [dividend yield](#explain:dividend-yield) is that annual payout as a percent of the price: a $2 dividend on a $50 stock yields 4%.\n\nNow the catch everyone learns the hard way: **a dividend is not free money.** On the ex-dividend date, the stock's price drops by roughly the dividend amount — the cash didn't appear from nowhere, it left the company and the market marks the company down accordingly. It's your own money arriving by mail. (Buying a stock the day before its dividend to \"grab the payout\" achieves precisely nothing, minus commissions.)\n\nSo why care? Because over years, reinvested dividends are a huge share of the market's [total return](#explain:total-return) — and because a company that pays one is making a statement: it generates real cash and doesn't need every dollar to survive. The flip side: fast growers usually pay nothing, because reinvesting in the business beats mailing the cash out. Neither choice is virtue — it's strategy."
+        },
+        {
+          "slug": "splits-and-buybacks",
+          "title": "Splits and buybacks — slicing the pizza",
+          "body": "A [stock split](#explain:stock-split) cuts the pizza into more slices. A 2-for-1 split gives you twice the shares at half the price — you own exactly what you owned yesterday. Companies split mostly for psychology and convenience (a $40 stock *feels* more buyable than an $800 one), and markets sometimes celebrate splits anyway, which tells you more about markets than about pizza.\n\nA [[buyback]] is the interesting one: the company uses its cash to buy its own shares on the open market and cancel them. Fewer slices exist, so each remaining slice owns a bigger fraction of the business — it's [[dilution]] running in reverse, and a quieter cousin of the dividend (returning cash without mailing anyone a cheque).\n\nThe discipline for both: neither changes what the business is *worth* by itself. A split is pure arithmetic. A buyback only helps if the company bought its shares cheap — a company overpaying for its own stock is just a bad investor with insider enthusiasm."
+        },
+        {
+          "slug": "acb-and-paper-gains",
+          "title": "What you actually paid — and gains that aren't real yet",
+          "body": "Buy a stock three times at three prices and \"what did I pay?\" stops having an obvious answer. The answer that matters is your [[acb]] — your average cost per share, *commissions included*. Ten shares at $20 plus a $5 commission makes your ACB $20.50, and every gain or loss you'll ever book is measured from there.\n\nWhile you still hold the shares, any profit is [unrealized](#explain:unrealized-pnl) — a paper gain. It moves every day, it feels real, and it isn't: it only becomes real (and taxable) the moment you sell. Markets are littered with people who watched a +40% paper gain round-trip to zero because selling felt like quitting.\n\nThe CRA only cares when you realize. Sell for more than your ACB and you've got a [capital gain](#explain:capital-gains); sell for less and the loss can offset other gains — **unless** you buy the same name back within 30 days, in which case the [superficial-loss rule](#explain:superficial-loss) throws your loss out entirely. GRQ's agent is code-barred from tripping that rule, which is the correct amount of trust to place in enthusiasm near tax season."
+        },
+        {
+          "slug": "stocks-vs-etfs",
+          "title": "Stocks vs ETFs — one ticker, whole markets",
+          "body": "An [[etf]] is a basket of stocks wearing a single ticker. One share of XIC buys you a slice of essentially every big company in Canada at once — instant diversification for the price of one commission. You give up the dream of picking the one stock that goes up 10× and in exchange you stop being exposed to the one that goes to zero.\n\nETFs charge for the service via the [MER](#explain:mer) — a yearly fee quietly deducted from the fund's value. For a plain index ETF it's tiny (XIC charges about 0.06%); for actively-managed funds it can run 2%, which compounds into a shocking amount of your return over decades. Fee gravity is real and it never sleeps.\n\nHere's the uncomfortable, load-bearing fact: **most professional stock-pickers fail to beat the index ETF over long periods**, after fees. That's not a slogan, it's decades of scorekeeping. It's exactly why GRQ keeps [XIC on screen as the benchmark](#explain:vs-xic) — the couch-potato option is the opponent, and pretending otherwise would be marketing.",
+          "tryIt": [
+            {
+              "href": "/reports",
+              "label": "Reports — the fund vs the couch potato, updated live"
+            }
+          ]
+        },
+        {
+          "slug": "two-currencies",
+          "title": "Two currencies, one portfolio",
+          "body": "Buy a US stock from Canada and you're making two bets whether you meant to or not: one on the company, one on the [exchange rate](#explain:currency-risk). A US name can rise 5% while the US dollar slips 5% against the loonie — and your gain, measured in CAD, evaporates. It works in reverse too; currency is a silent passenger on every cross-border position.\n\nConverting money isn't free either. FX conversion has its own spread (banks are enthusiastic about this one), so bouncing cash between currencies on every trade quietly bleeds a portfolio. The sane pattern is to convert deliberately, in chunks, and then trade within each currency sleeve.\n\nThat's exactly how GRQ runs it: a CAD sleeve and a USD sleeve, and a US buy needs USD cash to already be there — no automatic conversion, no borrowing. When Alfred wants more USD, it must *ask*, and a human approves the conversion. For hedged exposure without holding USD at all, that's what CAD-hedged [CDRs](#explain:cdr) are for — with the caveat from Course 1 that a hedged certificate never behaves quite like the real share."
+        }
+      ]
+    },
+    {
+      "slug": "reading-the-game",
+      "n": 4,
+      "title": "Reading the game",
+      "tagline": "Earnings, analyst ratings, insider filings, and technical signals — what each one can and can't tell you.",
+      "status": "soon",
+      "lessons": []
+    },
+    {
+      "slug": "risk",
+      "n": 5,
+      "title": "Risk",
+      "tagline": "Volatility, drawdowns, position sizing, leverage, shorting, and day trading — how portfolios actually die.",
+      "status": "soon",
+      "lessons": []
+    },
+    {
+      "slug": "options",
+      "n": 6,
+      "title": "Options",
+      "tagline": "Calls, puts, the Greeks, and a live payoff calculator — taught in its own portal.",
+      "status": "live",
+      "external": {
+        "href": "/options",
+        "note": "Lessons, the payoff calculator, the desk experiment's live fake contracts, and options-aware chat."
+      },
+      "lessons": []
+    },
+    {
+      "slug": "the-long-game",
+      "n": 7,
+      "title": "The long game",
+      "tagline": "Compounding, benchmarks, fee gravity, TFSAs, and the behavioural traps that outkill every bear market.",
+      "status": "soon",
+      "lessons": []
+    },
+    {
+      "slug": "how-grq-works",
+      "n": 8,
+      "title": "How GRQ works",
+      "tagline": "The fund as a worked example — guardrails as risk management, NAV as accounting, the soak as proof.",
+      "status": "soon",
+      "lessons": []
+    }
+  ],
+  "labs": [
+    {
+      "href": "/options-desk",
+      "title": "Options Desk",
+      "teaches": "Does adding defined-risk options actually beat stock-only? Two Opus arms, same market, live scoreboard."
+    },
+    {
+      "href": "/short-lab",
+      "title": "Short Lab",
+      "teaches": "Short selling — the unbounded-loss bet the fund can't make — with modeled borrows, margin calls, and shadow-shorts of our real sells."
+    },
+    {
+      "href": "/day-lab",
+      "title": "Day-Trading Lab",
+      "teaches": "Day trading vs buy-and-hold with real spreads and commissions. Watch the costs do the arguing."
+    },
+    {
+      "href": "/bulls",
+      "title": "Bull Race",
+      "teaches": "Eight AI models, each running its own $50k paper book. Different brains, same market."
+    },
+    {
+      "href": "/race",
+      "title": "Second Opinions",
+      "teaches": "Shadow judges score the fund's real calls after the fact — was Alfred right, or just lucky?"
+    }
+  ]
+}

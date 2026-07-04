@@ -2803,3 +2803,33 @@ the code:
   Every stock mention app-wide links to its page. No error may ever flash before auth settles
   (quiet-retry `useApi`). Runbook + backlog: `docs/MOBILE-GRQGO.md`; design contract:
   `docs/MOBILE-DESIGN.md`.
+
+### D110 — The Learn portal: a top-level /learn beside Reports (Cam, 2026-07-04)
+
+**Decision:** build **`/learn`** as a top-level header destination (in `SECONDARY`, beside
+Reports) — the front door for the financial-literacy pillar. It teaches **how the market works**,
+not which stocks to buy: a market-mechanics curriculum (eight courses), the labs rail (each
+sandbox framed by what it teaches), a browsable/searchable **glossary page** (the `<Term>`
+entries finally get a front door), and an Ask Alfred entry (the `grq:chat` pattern). Full design:
+`docs/LEARN-PORTAL.md`.
+
+**The two calls Cam signed off:** (1) **"How GRQ works" is IN — as Course 8**, the fund taught as
+a worked example (guardrails as risk-management, NAV as accounting, the soak as verification),
+viewer-readable; `/how-it-works` stays untouched as the owner-only *operating manual*. (2) the
+name is plain **Learn**. Also settled: **`/options` does not move** — Alfred's deep links, the
+desk buttons, ShortEducation, and mobile all point at `/options?tab=…`; the hub lists it as
+Course 6 and the portal back-links `← learn`.
+
+**Content architecture:** lessons are **markdown-as-data** in `web/lib/learn/content.ts`
+(rendered by `Md`, so `[[term]]` tap-to-explain comes free) — NOT hardcoded JSX like
+`OptionsLearn`. Web owns the content because the web Docker build context is `./web` (repo-root
+`shared/` is unimportable); `web/scripts/export-learn-content.ts` mirrors it to
+`shared/content/learn.json` for GRQ Go (the `contract.ts` lockstep pattern).
+`web/test/learn-content.test.ts` enforces: every referenced term exists in the glossary, no
+navigation links inside markdown bodies (Md new-tabs them — `tryIt` metadata instead), no dead
+glossary cross-links (it caught two pre-existing ones on day one).
+
+**Phase 1 shipped 2026-07-04:** hub + course pages + glossary browser, courses 1–3 written
+(15 lessons), 16 new glossary terms, nav entry, `/options` back-nav. 117/117 tests, tsc clean,
+routes smoke-tested. Phases 2–4 (courses 4/5/7 + the toy order-book widget; live-fund "receipts"
+blocks + Course 8; mobile parity + glossary unification): `docs/LEARN-PORTAL.md` §5.

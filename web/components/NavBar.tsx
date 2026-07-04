@@ -22,7 +22,11 @@ const PRIMARY: NavLink[] = [
   { href: "/universe", label: "Universe" },
   { href: "/market/browse", label: "Browse" },
 ];
-const SECONDARY: NavLink[] = [{ href: "/reports", label: "Reports" }];
+// Learn (the education portal, D110) sits beside Reports on the right (Cam 2026-07-04).
+const SECONDARY: NavLink[] = [
+  { href: "/learn", label: "Learn" },
+  { href: "/reports", label: "Reports" },
+];
 // The model bake-offs / sandboxes live under one "Experiments" dropdown (Cam & Graham, 2026-06-27).
 // The Hunt moved back into the top-level header between Watchlist and Smart Money (Cam 2026-07-02).
 const EXPERIMENTS: NavLink[] = [

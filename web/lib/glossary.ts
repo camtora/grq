@@ -436,7 +436,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: "Dealer gamma (GEX)",
     def: "Market-makers who sold the options must constantly buy/sell the stock to stay hedged. When net gamma is POSITIVE they trade AGAINST moves → the stock gets 'pinned' / range-bound. When NEGATIVE they trade WITH moves → swings get amplified and trendy.",
     example: "Negative gamma into a selloff means dealers keep selling as it drops — the move feeds on itself.",
-    related: ["call-wall", "put-wall", "options-positioning"],
+    related: ["call-wall", "options-positioning"],
   },
   "put-call-ratio": {
     term: "Put/Call ratio",
@@ -645,5 +645,103 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     def: "Short interest divided by average daily volume — roughly how many days of normal trading it would take every short to buy back. A high number means shorts are packed into a small exit, which makes a squeeze more violent.",
     example: "Days-to-cover of 8 means it'd take over a week of average volume for shorts to all cover.",
     related: ["short-interest", "short-squeeze"],
+  },
+  "long-call": {
+    term: "Long call",
+    def: "Buying a call outright — the simplest bullish option bet. Leveraged upside if the stock rises past the strike; the premium you paid is the most you can lose.",
+    example: "Buy one $105 call for $2.50 and your worst case is −$250, no matter how hard the stock falls.",
+    related: ["call-option", "premium", "max-loss"],
+  },
+
+  // ---- Market mechanics: the Learn portal curriculum (docs/LEARN-PORTAL.md, D110) ----
+  ticker: {
+    term: "Ticker symbol",
+    def: "The short code a stock trades under on a specific exchange — SHOP, XIC, AAPL. It's an address, not a name: the same letters can point at completely different companies on different exchanges.",
+    example: "SPCX on the TSX is a Canadian certificate tracking SpaceX — not a SpaceX share; always check where a ticker lives.",
+    related: ["cdr", "etf"],
+  },
+  ipo: {
+    term: "IPO — Initial Public Offering",
+    def: "The day a private company first sells shares to the public. It's the one time buying the stock hands money to the company itself — every trade after that is just investors swapping shares between themselves.",
+    example: "Buy at the IPO and you're funding the company; buy the next morning and you're paying whoever got in first.",
+    related: ["market-cap", "dilution"],
+  },
+  index: {
+    term: "Index",
+    def: "A formula-weighted basket of stocks used as a market thermometer — the S&P 500, the TSX Composite. Most are cap-weighted, so the biggest companies dominate the reading.",
+    example: "'The market rose 1%' means an index did — which mostly means its ten biggest names did.",
+    related: ["etf", "market-cap", "vs-xic"],
+  },
+  "market-order": {
+    term: "Market order",
+    def: "'Fill me now, at whatever the market's asking.' You're guaranteed the fill, not the price — it crosses the spread and takes whatever's on the other side, which in a thin name can surprise you.",
+    example: "A market buy in an illiquid stock can fill several levels up the book — you asked for now, not for cheap.",
+    related: ["limit-order", "bid-ask-spread", "slippage"],
+  },
+  "limit-order": {
+    term: "Limit order",
+    def: "'Fill me at this price or better — or not at all.' You're guaranteed the price, not the fill; the market is under no obligation to come to you.",
+    example: "A $98 limit bid on a $100 stock only fills if the price comes down to meet it — plenty of limits expire lonely.",
+    related: ["market-order", "bid-ask-spread"],
+  },
+  "market-maker": {
+    term: "Market maker",
+    def: "A firm that quotes both a bid and an ask all day, in thousands of names, earning the spread over and over — in exchange for making sure there's always someone to trade with.",
+    example: "Your 10:47am buy probably didn't find a human seller — a market maker took the other side and moved on.",
+    related: ["bid-ask-spread", "liquidity"],
+  },
+  liquidity: {
+    term: "Liquidity",
+    def: "How much of a stock you can buy or sell without moving the price against yourself. Liquid names have tight spreads and deep volume; illiquid ones punish you on the way in AND the way out.",
+    example: "GRQ's liquidity screen blocks names that trade too thin — a position you can't exit cleanly is a trap with a ticker.",
+    related: ["volume", "bid-ask-spread", "slippage"],
+  },
+  volume: {
+    term: "Volume",
+    def: "How many shares changed hands in a period. A price move on heavy volume has real conviction behind it; the same move on thin volume is a shrug that can reverse by lunch.",
+    example: "A 5% pop on 10× average volume means money changed its mind; on a trickle, it means almost nothing.",
+    related: ["liquidity", "trend"],
+  },
+  dividend: {
+    term: "Dividend",
+    def: "A cash payout per share from the company's profits, usually quarterly. On the ex-dividend date the price drops by roughly the payout — it's your own money arriving, not a bonus.",
+    example: "A $1 dividend lands and the stock opens about $1 lower — buying the day before to 'grab it' achieves nothing.",
+    related: ["dividend-yield", "total-return", "buyback"],
+  },
+  "stock-split": {
+    term: "Stock split",
+    def: "Cutting the pizza into more slices: a 2-for-1 split doubles your share count and halves the price. You own exactly what you owned before — splits are psychology and convenience, not value.",
+    example: "An $800 stock splits 4-for-1 to trade at $200 — nothing about the business changed.",
+    related: ["buyback", "market-cap"],
+  },
+  buyback: {
+    term: "Share buyback",
+    def: "A company buying back and cancelling its own shares — dilution in reverse. Fewer shares exist, so each remaining one owns a bigger slice of the business. Only value-adding if the shares were bought cheap.",
+    example: "Retire 10% of the share count and every holder's slice grows ~11% — no cheque mailed, same effect over time.",
+    related: ["dividend", "dilution", "eps"],
+  },
+  "total-return": {
+    term: "Total return",
+    def: "Price change PLUS dividends (ideally reinvested). The honest way to compare investments — judging a dividend payer on price alone shortchanges it.",
+    example: "A stock flat on price that paid 4% in dividends beat one that rose 3% and paid nothing.",
+    related: ["dividend", "vs-xic"],
+  },
+  mer: {
+    term: "MER — Management Expense Ratio",
+    def: "The yearly fee a fund quietly deducts from its own value, in percent. Tiny for plain index ETFs, up to ~2% for active funds — and it compounds against you every single year.",
+    example: "XIC charges about 0.06%; a 2% mutual fund costs 33× more for the privilege of probably trailing it.",
+    related: ["etf", "commission"],
+  },
+  cdr: {
+    term: "CDR — Canadian Depositary Receipt",
+    def: "A TSX-listed, CAD-hedged certificate representing a fraction of a big (usually US) company's share. It tracks the company without being the actual share — and the built-in FX hedge changes how it behaves.",
+    example: "SPCX.TO is a ~$36 CAD-hedged SpaceX CDR — a way to hold the story in loonies, not the Nasdaq share itself.",
+    related: ["ticker", "currency-risk", "etf"],
+  },
+  "currency-risk": {
+    term: "Currency risk (FX)",
+    def: "Hold a US stock from Canada and you're making two bets: the stock, and the exchange rate. A move in the US dollar changes your CAD-measured return even when the stock stands still.",
+    example: "A US name gains 5% while the USD slips 5% against the loonie — in CAD, your gain just evaporated.",
+    related: ["cdr", "vs-xic"],
   },
 };

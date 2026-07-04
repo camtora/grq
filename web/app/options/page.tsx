@@ -31,6 +31,11 @@ export default async function OptionsPage({ searchParams }: { searchParams: Prom
 
   return (
     <main>
+      {/* The portal is Course 6 of the Learn curriculum (D110) — same back-nav home as the other courses. */}
+      <Link href="/learn" className="text-xs text-teal-300 hover:underline">
+        ← learn
+      </Link>
+      <div className="mt-4" />
       <PageHeader
         title="Options"
         sub="Learn how options actually work, play with any strategy on a live payoff calculator, and watch the experiment's fake options move over time. Education only — the fund never trades options."
