@@ -115,8 +115,11 @@ metro.grq.camerontora.ca.
     holdings (avg cost, market value).
 12. Options Desk: member desk controls + muteable nudge (D92), per-option decay
     sparkline, expiry/punchline cards; link the options education portal.
-13. Report Card: the web's filters (source · verdict · ticker · latest-per-name),
-    full-ledger paging.
+13. ~~Report Card: the web's filters (source · verdict · ticker · latest-per-name),
+    full-ledger paging~~ ✅ 2026-07-04 — screen rebuilt to web parity (tally-card grid incl.
+    effect-order "does the ripple pay?", all four filters, show-more paging, entry→now +
+    verdict per row); feed rows cap 60→1500 + totalRows (also fixed bySource reading the
+    pre-tally shape + pending verdicts rendering as graded).
 14. Chess Moves: theme DETAIL (`/api/chess/[id]` — the parsed board + heat-ranked
     plays + levers), brief/research actions.
 15. Short Lab · Day-Trading Lab · options portal — web-only; want mobile feeds +

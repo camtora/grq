@@ -1535,7 +1535,9 @@ export async function reportCardResponse() {
     overall: t(rc.overall),
     bySource: rc.bySource.map((s) => ({ source: s.source, label: s.label, tally: t(s.tally) })),
     byEffectOrder: rc.byEffectOrder.map((e) => ({ order: e.order, tally: t(e.tally) })),
-    rows: rc.rows.slice(0, 60).map((r) => ({
+    // The FULL ledger (safety-capped) — the app filters + windows client-side like the web table.
+    totalRows: rc.rows.length,
+    rows: rc.rows.slice(0, 1500).map((r) => ({
       id: r.id, source: r.source, symbol: r.symbol, currency: r.currency, direction: r.direction,
       label: r.label, conviction: r.conviction, context: r.context, predictedAt: r.predictedAt.toISOString(),
       entryPriceCents: r.entryPriceCents, markCents: r.markCents, calledReturnBps: r.calledReturnBps,
