@@ -140,6 +140,21 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
+        {/* Personal accounts — the web /accounts page, on the phone */}
+        <SectionTitle sub="Cam & Graham's own brokerages — read-only, beside the fund">
+          Personal accounts
+        </SectionTitle>
+        <Pressable onPress={() => router.push('/accounts')}>
+          <Card>
+            <View style={st.linkRow}>
+              <Text style={{ color: p.textPrimary, fontFamily: F.med, fontSize: 13.5 }}>
+                Holdings & connections
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={p.textMuted} />
+            </View>
+          </Card>
+        </Pressable>
+
         {fund.loading && <Loading />}
         {fund.error && !s7 && <View style={{ marginTop: 12 }}><ErrorNote message={fund.error} /></View>}
 

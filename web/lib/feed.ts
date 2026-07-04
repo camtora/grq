@@ -1328,6 +1328,7 @@ export async function accountsResponse(meEmail: string) {
           marketValueCents: h.marketValueCents,
           currency: h.currency,
           openPnlCents: h.openPnlCents,
+          avgCostCents: h.avgCostCents, // cost basis for the app's unrealized line (web-parity)
           quoteSymbol: h.quoteSymbol,
           logoUrl: logoByBare.get(bareTicker(h.quoteSymbol).toUpperCase()) ?? fmpLogo(h.quoteSymbol),
         })),

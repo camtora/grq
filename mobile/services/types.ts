@@ -88,6 +88,7 @@ export type ExternalHolding = {
   marketValueCents: number | null;
   currency: string;
   openPnlCents: number | null;
+  avgCostCents?: number | null; // per-share buy price from the brokerage — the honest cost basis
   quoteSymbol?: string; // the resolved listing our quote feed knows it by
   logoUrl?: string | null;
 };

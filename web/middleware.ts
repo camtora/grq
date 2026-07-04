@@ -67,6 +67,8 @@ const MOBILE_API = [
   "/api/external/connect", // SnapTrade reconnect from the phone (member-guarded in-route; D107 parity)
   "/api/external/status",  // the reconnect poller's LIVE connection-health read
   "/api/external/sync",    // pull fresh holdings once the re-auth lands
+  "/api/external/keys",    // self-serve SnapTrade connect from the phone (member-guarded, self-only)
+  "/api/external/disconnect", // unlink from the phone (member-guarded, self-only)
   "/api/stocks/directive",
   "/api/stocks/share",    // member shares a stock with the other member (push)
   "/api/note",
