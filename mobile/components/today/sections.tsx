@@ -5,6 +5,8 @@ import { usePalette, F, type Palette } from '../../constants/theme';
 import { Card, SectionTitle, Footnote, Divider, MiniLabel } from '../Chrome';
 import StockLogo from '../StockLogo';
 import { money, signedMoney, signedPctFromBps, pnlColor, relDay, fmtDate, fmtEps } from '../../lib/format';
+import { fmpLogo } from '../../lib/logos';
+import { stanceMeta, toneColor } from '../../lib/stance';
 import type { Today, Headline, EarningReported, Mover } from '../../services/types';
 
 /* ---------- small shared bits ---------- */
@@ -266,11 +268,21 @@ function EarningBubble({ e, today }: { e: EarningReported; today: string }) {
 
       <View style={s.bubbleMeta}>
         <Text style={[s.metaText, { color: p.textMuted }]}>{fmtDate(e.date)}</Text>
-        {e.stance ? (
-          <View style={[s.stancePill, { backgroundColor: p.accent + '1a' }]}>
-            <Text style={[s.stanceText, { color: p.accentText }]}>Alfred: {e.stance}</Text>
-          </View>
-        ) : null}
+        {e.stance
+          ? (() => {
+              // "Alfred" reads as the source; the call itself is the tone-coded pill.
+              const sm = stanceMeta(e.stance);
+              const c = toneColor(sm?.tone, p);
+              return (
+                <View style={s.stanceWrap}>
+                  <Text style={[s.metaText, { color: p.textMuted }]}>Alfred</Text>
+                  <View style={[s.stancePill, { backgroundColor: c + '1f', borderColor: c + '55' }]}>
+                    <Text style={[s.stanceText, { color: c }]}>{sm?.label ?? e.stance}</Text>
+                  </View>
+                </View>
+              );
+            })()
+          : null}
         <Text
           onPress={() => router.push(`/stock/${e.symbol}`)}
           style={[s.metaText, { color: p.accentText, marginLeft: 'auto' }]}
@@ -302,27 +314,32 @@ export function EarningsSection({ t }: { t: Today }) {
       {upcoming.length > 0 && (
         <View style={{ marginTop: reported.length ? 14 : 0 }}>
           <MiniLabel>Upcoming reports</MiniLabel>
-          {/* Two companies wide (Cam 2026-07-03). */}
+          {/* Two companies wide (Cam 2026-07-03) — explicit pairs so each row spans full width. */}
           <View style={s.upcomingGrid}>
-            {upcoming.map((e) => {
-              const rel = relDay(e.date, today);
-              const soon = rel === 'today' || rel === 'tomorrow';
-              return (
-                <Pressable
-                  key={`${e.symbol}-${e.date}`}
-                  onPress={() => router.push(`/stock/${e.symbol}`)}
-                  style={[s.upcomingCell, { backgroundColor: p.cardBg, borderColor: p.cardBorder }]}
-                >
-                  <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[s.sym, { color: p.accentText }]} numberOfLines={1}>{e.symbol}</Text>
-                    <Text style={[s.metaText, { color: soon ? p.warn : p.textMuted }]} numberOfLines={1}>
-                      {rel} · {fmtDate(e.date)}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+            {Array.from({ length: Math.ceil(upcoming.length / 2) }, (_, i) => upcoming.slice(i * 2, i * 2 + 2)).map((pair) => (
+              <View key={`${pair[0].symbol}-${pair[0].date}`} style={s.upcomingRow}>
+                {pair.map((e) => {
+                  const rel = relDay(e.date, today);
+                  const soon = rel === 'today' || rel === 'tomorrow';
+                  return (
+                    <Pressable
+                      key={`${e.symbol}-${e.date}`}
+                      onPress={() => router.push(`/stock/${e.symbol}`)}
+                      style={[s.upcomingCell, { backgroundColor: p.cardBg, borderColor: p.cardBorder }]}
+                    >
+                      <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[s.sym, { color: p.accentText }]} numberOfLines={1}>{e.symbol}</Text>
+                        <Text style={[s.metaText, { color: soon ? p.warn : p.textMuted }]} numberOfLines={1}>
+                          {rel} · {fmtDate(e.date)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+                {pair.length === 1 && <View style={{ flex: 1 }} />}
+              </View>
+            ))}
           </View>
         </View>
       )}
@@ -338,7 +355,7 @@ function MoverRow({ m }: { m: Mover }) {
   const router = useRouter();
   return (
     <Pressable onPress={() => router.push(`/stock/${m.symbol}`)} style={s.row}>
-      <StockLogo symbol={m.symbol} logoUrl={null} size={28} />
+      <StockLogo symbol={m.symbol} logoUrl={m.logoUrl ?? null} size={28} />
       <View style={s.rowMain}>
         <Text style={[s.sym, { color: p.accentText }]}>{m.symbol}</Text>
         <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{m.name}</Text>
@@ -416,6 +433,8 @@ export function WholeMarket({ t }: { t: Today }) {
               <View key={g.symbol}>
                 {i > 0 && <Divider />}
                 <Pressable onPress={() => router.push(`/stock/${g.symbol}`)} style={s.row}>
+                  {/* Gainers come straight from FMP, so their symbol is a real FMP ticker. */}
+                  <StockLogo symbol={g.symbol} logoUrl={fmpLogo(g.symbol)} size={28} />
                   <View style={s.rowMain}>
                     <Text style={[s.sym, { color: p.accentText }]}>
                       {g.symbol}
@@ -544,7 +563,8 @@ const s = StyleSheet.create({
   rowPct: { fontFamily: F.semi, fontSize: 13 },
   metaText: { fontFamily: F.reg, fontSize: 10 },
   relDay: { fontFamily: F.semi, fontSize: 11 },
-  upcomingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  upcomingGrid: { gap: 8 },
+  upcomingRow: { flexDirection: 'row', gap: 8 },
   upcomingCell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -553,10 +573,9 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 9,
-    // Always exactly two per row — an odd last cell stays half-width.
-    flexBasis: '47%',
-    flexGrow: 0,
-    maxWidth: '48.5%',
+    // Two per row, full panel width — an odd last cell pairs with a flex spacer.
+    flex: 1,
+    minWidth: 0,
   },
   sectorName: { fontFamily: F.semi, fontSize: 13 },
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 10 },
@@ -574,7 +593,8 @@ const s = StyleSheet.create({
   bubbleRead: { fontFamily: F.reg, fontSize: 11.5, lineHeight: 16, marginTop: 6 },
   bubbleMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   beatMiss: { fontFamily: F.black, fontSize: 10 },
-  stancePill: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  stanceWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  stancePill: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
   stanceText: { fontFamily: F.semi, fontSize: 9.5 },
   // pulse
   pulseRow: { flexDirection: 'row', gap: 8, paddingVertical: 9 },

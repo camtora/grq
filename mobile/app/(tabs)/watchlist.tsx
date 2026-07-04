@@ -6,7 +6,7 @@ import StockLogo from '../../components/StockLogo';
 import ShareButton from '../../components/ShareButton';
 import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
-import { money, signedPctFromBps, pctFromFrac, pnlColor, fmtDate, fmtEps } from '../../lib/format';
+import { money, signedMoney, signedPctFromBps, pctFromFrac, pnlColor, fmtDate, fmtEps } from '../../lib/format';
 import { api } from '../../services/api';
 import { useApi } from '../../services/hooks';
 import { useAuth } from '../../store/auth';
@@ -26,6 +26,15 @@ const AVATARS: Record<string, number> = {
   graham: require('../../assets/people/graham.png'),
 };
 
+/** Day change in cents, derived from mid + day bps (the wire carries only bps;
+ * exact to within the bps rounding — display/sort only, never money math). */
+function dayCentsOf(r: WatchRow): number | null {
+  if (r.lastCents == null || r.dayBps == null) return null;
+  const denom = 1 + r.dayBps / 10_000;
+  if (denom <= 0) return null;
+  return Math.round(r.lastCents - r.lastCents / denom);
+}
+
 /** Watchlist — the names you're watching (web market/watchlist parity, D78).
  * Tabs filter to each member's own watches; a row expands for Alfred's
  * reasoning + the dossier's targets + lazy earnings/analyst extras. */
@@ -37,14 +46,15 @@ export default function WatchlistScreen() {
 
   const [tab, setTab] = useState<'all' | 'cam' | 'graham'>('all');
   // Tap a sort chip again to reverse it (Cam 2026-07-03).
-  const [sort, setSort] = useState<{ key: 'ticker' | 'change'; dir: 'asc' | 'desc' }>({ key: 'ticker', dir: 'asc' });
+  type SortKey = 'ticker' | 'change' | 'dollar';
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'ticker', dir: 'asc' });
   const tabInitialized = useRef(false);
 
-  const tapSort = (key: 'ticker' | 'change') => {
+  const tapSort = (key: SortKey) => {
     setSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: key === 'change' ? 'desc' : 'asc' }, // change starts best-first
+        : { key, dir: key === 'ticker' ? 'asc' : 'desc' }, // both change sorts start best-first
     );
   };
 
@@ -66,14 +76,17 @@ export default function WatchlistScreen() {
 
   const filtered = tab === 'all' ? rows : rows.filter((r) => r.watchers.some((w) => w.key === tab));
   // ticker asc = the server order (pinned first, then A–Z); ticker desc = Z–A.
-  // change desc = biggest gain → biggest loss (unquoted last); asc = the reverse.
+  // change/dollar desc = biggest gain → biggest loss (unquoted last); asc = the reverse.
   const visible = (() => {
     if (sort.key === 'ticker') {
       return sort.dir === 'asc' ? filtered : [...filtered].sort((a, b) => b.symbol.localeCompare(a.symbol));
     }
+    const metric = (r: WatchRow) => (sort.key === 'dollar' ? dayCentsOf(r) : r.dayBps);
     const missing = sort.dir === 'desc' ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
     return [...filtered].sort((a, b) =>
-      sort.dir === 'desc' ? (b.dayBps ?? missing) - (a.dayBps ?? missing) : (a.dayBps ?? missing) - (b.dayBps ?? missing),
+      sort.dir === 'desc'
+        ? (metric(b) ?? missing) - (metric(a) ?? missing)
+        : (metric(a) ?? missing) - (metric(b) ?? missing),
     );
   })();
 
@@ -99,6 +112,7 @@ export default function WatchlistScreen() {
               [
                 { key: 'ticker', label: sort.key === 'ticker' && sort.dir === 'desc' ? 'Z–A' : 'A–Z' },
                 { key: 'change', label: sort.key === 'change' && sort.dir === 'asc' ? '% change ↑' : '% change ↓' },
+                { key: 'dollar', label: sort.key === 'dollar' && sort.dir === 'asc' ? '$ change ↑' : '$ change ↓' },
               ] as const
             ).map((o) => (
               <Pressable
@@ -334,6 +348,10 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
           )}
           {r.dayBps != null && (
             <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>
+              {(() => {
+                const dc = dayCentsOf(r);
+                return dc != null ? `${signedMoney(dc)} · ` : '';
+              })()}
               {signedPctFromBps(r.dayBps)}
             </Text>
           )}
