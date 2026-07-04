@@ -66,6 +66,12 @@ for dir in app components constants services; do
 done
 rsync -aq -e "$RSYNC_SSH" "$UBUNTU:$REMOTE_APP/babel.config.js" "$LOCAL/"
 rsync -aq -e "$RSYNC_SSH" "$UBUNTU:$REMOTE_APP/tsconfig.json"   "$LOCAL/"
+rsync -aq -e "$RSYNC_SSH" "$UBUNTU:$REMOTE_APP/metro.config.js" "$LOCAL/"
+# shared/ (the wire-shape source) syncs INSIDE the build copy — metro.config
+# resolves ./shared first, ../shared second.
+rsync -aq --delete -e "$RSYNC_SSH" \
+  --exclude='.DS_Store' --exclude='._*' \
+  "$UBUNTU:/home/camerontora/grq/shared/" "$LOCAL/shared/"
 echo "  ✓ JS source synced"
 
 # ── 4. Sync ios/ source files ─────────────────────────────────────────────────

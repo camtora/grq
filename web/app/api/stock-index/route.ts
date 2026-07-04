@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
+import { allWatches } from "@/lib/watch";
 import { sessionFromRequest } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export type StockIndexItem = {
   name: string;
   kind: "active" | "watching" | "retired" | "researched" | "screened";
   seenAt: number;
+  watchers?: string[]; // member keys watching this name (GRQ Go's search rows)
 };
 
 const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
@@ -89,8 +91,15 @@ export async function GET(req: Request) {
     if (sym && ms > (seen.get(sym) ?? 0)) seen.set(sym, ms);
   }
 
+  // Who's watching, per symbol (D78) — powers the search rows' avatars + toggle.
+  const watchMap = await allWatches();
+
   const stocks: StockIndexItem[] = [...byKey.values()]
-    .map((it) => ({ ...it, seenAt: seen.get(it.symbol.toUpperCase()) ?? 0 }))
+    .map((it) => ({
+      ...it,
+      seenAt: seen.get(it.symbol.toUpperCase()) ?? 0,
+      watchers: (watchMap.get(it.symbol) ?? []).map((w) => w.key),
+    }))
     .sort((a, b) => b.seenAt - a.seenAt || a.symbol.localeCompare(b.symbol));
 
   return NextResponse.json({ stocks });

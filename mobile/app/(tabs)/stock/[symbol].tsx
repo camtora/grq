@@ -12,7 +12,8 @@ import RatingBar, { toneColor } from '../../../components/RatingBar';
 import ShareButton from '../../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../../lib/format';
-import { useApi } from '../../../services/hooks';
+import { useApi, useLiveQuote } from '../../../services/hooks';
+import { useAuth } from '../../../store/auth';
 import type { Dossier } from '../../../services/types';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
@@ -68,12 +69,35 @@ export default function StockScreen() {
     }
   };
 
+  // Live ticker (the web's <LiveQuote>): the hero price + day% update every 15s.
+  const live = useLiveQuote(sym);
+  const me = useAuth((st) => st.me);
+  const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
+  const iWatch = (d?.watchers ?? []).some((w) => w.key === myKey);
+  const [watchBusy, setWatchBusy] = useState(false);
+  const toggleWatch = async () => {
+    if (watchBusy || !d) return;
+    setWatchBusy(true);
+    try {
+      await api('/api/universe', {
+        method: 'POST',
+        body: JSON.stringify(iWatch ? { action: 'unwatch', symbol: d.symbol } : { action: 'add', symbol: d.symbol, name: d.name, currency: d.currency }),
+      });
+      refresh();
+    } catch {
+      /* refresh shows truth */
+    } finally {
+      setWatchBusy(false);
+    }
+  };
+
   const closes = d?.closes ?? [];
-  const dayBps =
+  const closeBps =
     closes.length >= 2 && closes[closes.length - 2].c > 0
       ? Math.round(((closes[closes.length - 1].c - closes[closes.length - 2].c) / closes[closes.length - 2].c) * 10_000)
       : null;
-  const cur = d?.lastCents ?? (closes.length ? closes[closes.length - 1].c : null);
+  const dayBps = live?.changeBps ?? closeBps;
+  const cur = live?.priceCents ?? d?.lastCents ?? (closes.length ? closes[closes.length - 1].c : null);
   const nearPct = cur && d?.target?.nearCents ? (d.target.nearCents - cur) / cur : null;
   const farPct = cur && d?.target?.farCents ? (d.target.farCents - cur) / cur : null;
 
@@ -109,6 +133,10 @@ export default function StockScreen() {
                       ) : null,
                     )}
                   </View>
+                  {/* Who's watching + the watch toggle (Cam 2026-07-03). */}
+                  <Pressable onPress={toggleWatch} hitSlop={8} disabled={watchBusy} style={{ opacity: watchBusy ? 0.5 : 1 }}>
+                    <Ionicons name={iWatch ? 'eye' : 'eye-outline'} size={17} color={iWatch ? p.accent : p.textMuted} />
+                  </Pressable>
                 </View>
               </View>
               <View style={s.heroRight}>

@@ -19,7 +19,14 @@ import type { Today } from '../../services/types';
  * designed for the phone. Section order: masthead → indices → macro →
  * headlines → Alfred's brief → earnings → our market → whole market → pulse. */
 export default function TodayScreen() {
-  const { data: t, error, loading, refreshing, refresh } = useApi<Today>('/api/today');
+  const { data: t, error, loading, refreshing, refresh, reload } = useApi<Today>('/api/today');
+
+  // Quietly re-pull every 60s while the screen lives — the server caches the
+  // feed for 60s, so this is one cheap hit and the indices/movers/P&L stay live.
+  React.useEffect(() => {
+    const poll = setInterval(reload, 60_000);
+    return () => clearInterval(poll);
+  }, [reload]);
 
   return (
     <Screen title="Today" refreshing={refreshing} onRefresh={refresh}>

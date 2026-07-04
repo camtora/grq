@@ -167,6 +167,7 @@ export type StockIndexItem = {
   name: string;
   kind: 'active' | 'watching' | 'retired' | 'researched' | 'screened';
   seenAt: number;
+  watchers?: string[]; // member keys watching this name
 };
 
 /** The subset of /api/dossier/[symbol] the stock screen renders (the feed is

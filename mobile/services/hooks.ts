@@ -94,5 +94,36 @@ export function useApi<T>(path: string) {
     setRefreshing(false);
   }, [load]);
 
-  return { data, error, refreshing, refresh, loading: data === null && error === null };
+  // Silent reload — no spinner. For background polling (e.g. Today every 60s).
+  const reload = useCallback(() => load(), [load]);
+
+  return { data, error, refreshing, refresh, reload, loading: data === null && error === null };
+}
+
+/** Live quote poll for one symbol (the web's <LiveQuote>): /api/quotes every
+ * 15s while mounted. Returns null until the first tick lands. */
+export function useLiveQuote(symbol: string | null): { priceCents: number; changeBps: number } | null {
+  const [q, setQ] = useState<{ priceCents: number; changeBps: number } | null>(null);
+  useEffect(() => {
+    if (!symbol) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const d = await api<{ quotes: Record<string, { priceCents: number; changePct: number }> }>(
+          `/api/quotes?symbols=${encodeURIComponent(symbol)}`,
+        );
+        const row = d.quotes[symbol] ?? Object.values(d.quotes)[0];
+        if (alive && row) setQ({ priceCents: row.priceCents, changeBps: Math.round(row.changePct * 100) });
+      } catch {
+        /* next tick retries */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 15_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [symbol]);
+  return q;
 }

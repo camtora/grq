@@ -168,6 +168,7 @@ export function LiveExternalTiles({
   valueLabel,
   changeLabel,
   showChange,
+  valueNote = "your external accounts",
 }: {
   accounts: ExtAccount[];
   fx: number;
@@ -175,6 +176,9 @@ export function LiveExternalTiles({
   valueLabel: string; // kept short ("Cam's value") so the tile label never wraps a 7-col row
   changeLabel: string; // ditto ("Cam's change")
   showChange: boolean;
+  /** The value tile's note — the page passes the quantities' age ("as of …" / an amber
+   *  frozen warning) so the tile is honest about how old the share counts are. */
+  valueNote?: React.ReactNode;
 }) {
   const quotes = useLiveQuotes();
   const totalCad = extTotalCad(accounts, quotes, fx);
@@ -207,12 +211,14 @@ export function LiveExternalTiles({
   return (
     <>
       <StatCard
+        size="md"
         label={`${valueLabel} (CAD)`}
         value={<RollingNumber value={money(totalCad)} />}
-        note="your external accounts"
+        note={valueNote}
       />
       {showChange && changeCents !== null && (
         <StatCard
+          size="md"
           label={`${changeLabel} (CAD)`}
           value={
             <span className={pnlClass(changeCents)}>

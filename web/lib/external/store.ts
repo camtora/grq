@@ -151,6 +151,17 @@ export async function buildConnectUrl(email: string, origin: string, reconnect?:
   });
 }
 
+/** The member's connection health, read LIVE from SnapTrade (not our mirror) — the
+ *  reconnect flow polls this to notice the moment a broken authorization flips back
+ *  to enabled (the portal's own "reconnecting…" screen can hang without resolving). */
+export async function connectionHealthFor(
+  email: string,
+): Promise<{ id: string; disabled: boolean; brokerName: string | null }[]> {
+  const { partner, userId, userSecret } = await resolveUser(email);
+  const auths = await listSnaptradeAuthorizations(partner, { userId, userSecret });
+  return auths.map((a) => ({ id: a.id, disabled: a.disabled, brokerName: a.brokerName }));
+}
+
 // ── sync (SnapTrade → DB) ─────────────────────────────────────────────────────
 
 type ParsedHolding = {

@@ -92,6 +92,7 @@ services:
       REACT_NATIVE_PACKAGER_HOSTNAME: metro.grq.camerontora.ca
     volumes:
       - ./mobile:/app
+      - ./shared:/app/shared # the wire-shape source, importable as '@shared'
       - /app/node_modules
       - grq-metro-expo:/app/.expo
 

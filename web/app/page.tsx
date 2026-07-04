@@ -435,12 +435,12 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <header className="mb-6 border-b-2 border-teal-400/30 pb-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-3xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.3em] text-teal-300/70">
+            <div className="text-2xl font-black uppercase tracking-tight text-teal-50">GRQ Daily</div>
+            <div className="mt-1 text-[10px] uppercase tracking-[0.3em] text-teal-300/70">
               {edition} · {dayLabel}
             </div>
           </div>
-          <div className="text-right text-sm">
+          <div className="text-right text-[13px]">
             {isToday && (
               <div className="mb-1 flex items-center justify-end gap-1.5">
                 <span className={`h-1.5 w-1.5 rounded-full ${marketOpenNow ? "animate-pulse bg-emerald-400" : "bg-teal-200/30"}`} />
@@ -467,23 +467,23 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4 border-t border-teal-400/10 pt-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm italic text-teal-200/60">{dailyQ}</p>
-            <p className="mt-2 text-xs text-teal-100/70">
+            <p className="text-[13px] italic text-teal-200/60">{dailyQ}</p>
+            <p className="mt-2 text-[11px] text-teal-100/70">
               <span className="font-semibold uppercase tracking-[0.15em] text-teal-300/70">Did you know?</span>{" "}
               {funFact}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 text-sm">
-            <Link href={`/?d=${prev}`} className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+          <div className="flex shrink-0 items-center gap-2 text-xs">
+            <Link href={`/?d=${prev}`} className="rounded-lg border border-teal-400/20 px-2.5 py-1 text-teal-300 hover:bg-teal-400/10">
               ← {prev}
             </Link>
             {!isToday && (
-              <Link href="/" className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+              <Link href="/" className="rounded-lg border border-teal-400/20 px-2.5 py-1 text-teal-300 hover:bg-teal-400/10">
                 today
               </Link>
             )}
             {dateStr < todayStr && (
-              <Link href={`/?d=${next}`} className="rounded-lg border border-teal-400/20 px-3 py-1.5 text-teal-300 hover:bg-teal-400/10">
+              <Link href={`/?d=${next}`} className="rounded-lg border border-teal-400/20 px-2.5 py-1 text-teal-300 hover:bg-teal-400/10">
                 {next} →
               </Link>
             )}
@@ -504,7 +504,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
       {/* Macro strip — rates/CPI/FX context (Cam 2026-06-26) */}
       {isToday && macro && (
-        <div className="mb-6 mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-xs text-teal-200/60">
+        <div className="mb-6 mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] px-4 py-2 text-[11px] text-teal-200/60">
           <span className="font-semibold uppercase tracking-wider text-teal-200/40">Macro</span>
           <span className="text-teal-100/70">{macroLine(macro)}</span>
           <span className="ml-auto text-teal-200/30">{macro.fedFunds != null ? "Bank of Canada · US FRED" : "Bank of Canada"} · as of {macro.asOf}</span>
@@ -526,19 +526,19 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               >
                 {n.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={n.image} alt="" className="h-36 w-full object-cover transition-opacity group-hover:opacity-90" />
+                  <img src={n.image} alt="" className="h-28 w-full object-cover transition-opacity group-hover:opacity-90" />
                 ) : (
-                  <div className="flex h-36 w-full items-center justify-center bg-teal-400/5 text-3xl">📰</div>
+                  <div className="flex h-28 w-full items-center justify-center bg-teal-400/5 text-2xl">📰</div>
                 )}
                 <div className="p-3">
                   <div className="flex items-start gap-1.5">
-                    <span className="mt-1.5">
+                    <span className="mt-1">
                       <SentimentDot sentiment={n.sentiment} />
                     </span>
                     <div className="min-w-0">
-                      <div className="text-sm font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
-                      {n.summary ? <div className="mt-1 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
-                      <div className="mt-1 text-[11px] text-teal-200/40">
+                      <div className="text-[13px] font-semibold leading-snug text-teal-50 group-hover:text-teal-200">{n.title}</div>
+                      {n.summary ? <div className="mt-1 text-[11px] leading-snug text-teal-200/55">{n.summary}</div> : null}
+                      <div className="mt-1 text-[10px] text-teal-200/40">
                         {n.publisher}
                         {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
                       </div>
@@ -558,8 +558,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {marketBrief && (
         <section className="mb-6">
           <SectionHeader sub={<>· {marketBrief.edition === "PM" ? "evening read" : "morning read"}</>}>The Market Today</SectionHeader>
-          <Card className="p-5">
-            <p className="text-sm leading-relaxed text-teal-100/80">{marketBrief.body}</p>
+          <Card className="p-4">
+            <p className="text-[13px] leading-relaxed text-teal-100/80">{marketBrief.body}</p>
             <p className="mt-2.5 text-[10px] text-teal-200/40">
               Alfred&apos;s read of the whole market · {marketBrief.edition === "PM" ? "evening" : "morning"} edition · {marketBrief.date}
             </p>
@@ -570,10 +570,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Market pulse now renders at the BOTTOM of the page, under the movers (Cam 2026-07-02). */}
 
       {weekly && (
-        <Card className="mb-6 border-teal-400/30 p-5">
+        <Card className="mb-6 border-teal-400/30 p-4">
           <div className="mb-2 flex items-center gap-3">
             <Chip tone="teal">weekly review</Chip>
-            <span className="font-medium text-teal-50">{weekly.title}</span>
+            <span className="text-sm font-medium text-teal-50">{weekly.title}</span>
           </div>
           <CollapsibleMd text={weekly.body} threshold={1200} />
         </Card>
@@ -663,7 +663,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   ))}
                 </ul>
               ) : (
-                <p className="p-3 text-sm text-teal-200/40">
+                <p className="p-3 text-[13px] text-teal-200/40">
                   All cash — no hitters today. The agent only buys when a thesis clears every guardrail. Patience is a position.
                 </p>
               )}
@@ -681,7 +681,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                     ))}
                   </ul>
                 ) : (
-                  <p className="p-3 text-sm text-teal-200/40">No moves to report yet.</p>
+                  <p className="p-3 text-[13px] text-teal-200/40">No moves to report yet.</p>
                 )}
               </Card>
               <p className="mt-2 px-1 text-[10px] text-teal-200/40">the biggest moves across the {universeRows.length} names we track</p>
@@ -773,11 +773,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               <div key={i} className="border-t border-teal-400/10">
                 <a href={n.url || "#"} target="_blank" rel="noreferrer" className="block py-2 hover:bg-teal-400/[0.03]">
                   <div className="flex items-start gap-1.5">
-                    <span className="mt-1.5"><SentimentDot sentiment={n.sentiment} /></span>
+                    <span className="mt-1"><SentimentDot sentiment={n.sentiment} /></span>
                     <div className="min-w-0">
-                      <div className="text-sm leading-snug text-teal-100/80">{n.title}</div>
-                      {n.summary ? <div className="mt-0.5 text-[12px] leading-snug text-teal-200/55">{n.summary}</div> : null}
-                      <div className="mt-0.5 text-[11px] text-teal-200/40">
+                      <div className="text-[13px] leading-snug text-teal-100/80">{n.title}</div>
+                      {n.summary ? <div className="mt-0.5 text-[11px] leading-snug text-teal-200/55">{n.summary}</div> : null}
+                      <div className="mt-0.5 text-[10px] text-teal-200/40">
                         {n.publisher}
                         {n.at ? ` · ${n.at.slice(0, 10)}` : ""}
                       </div>

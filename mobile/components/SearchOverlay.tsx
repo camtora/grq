@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,7 +15,13 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { api } from '../services/api';
+import { useAuth } from '../store/auth';
 import type { StockIndexItem } from '../services/types';
+
+const AVATARS: Record<string, number> = {
+  cam: require('../assets/people/cam.png'),
+  graham: require('../assets/people/graham.png'),
+};
 
 /** The jump-to-stock search as a floating overlay (the web's round search
  * button, mobile edition): a FAB above the tab bar opens a scrimmed field +
@@ -51,9 +58,47 @@ export default function SearchOverlay() {
   const { p } = usePalette();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const me = useAuth((s) => s.me);
+  const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState<StockIndexItem[] | null>(null);
+  const [watchBusy, setWatchBusy] = useState<string | null>(null);
+
+  // Watch/unwatch straight from a result row (optimistic; Cam 2026-07-03).
+  const toggleWatch = async (item: StockIndexItem) => {
+    if (watchBusy) return;
+    const watching = (item.watchers ?? []).includes(myKey);
+    setWatchBusy(item.symbol);
+    setIndex((prev) =>
+      prev
+        ? prev.map((it) =>
+            it.symbol === item.symbol
+              ? { ...it, watchers: watching ? (it.watchers ?? []).filter((k) => k !== myKey) : [...(it.watchers ?? []), myKey] }
+              : it,
+          )
+        : prev,
+    );
+    try {
+      await api('/api/universe', {
+        method: 'POST',
+        body: JSON.stringify(watching ? { action: 'unwatch', symbol: item.symbol } : { action: 'add', symbol: item.symbol, name: item.name }),
+      });
+    } catch {
+      // revert on failure
+      setIndex((prev) =>
+        prev
+          ? prev.map((it) =>
+              it.symbol === item.symbol
+                ? { ...it, watchers: watching ? [...(it.watchers ?? []), myKey] : (it.watchers ?? []).filter((k) => k !== myKey) }
+                : it,
+            )
+          : prev,
+      );
+    } finally {
+      setWatchBusy(null);
+    }
+  };
 
   const openSearch = () => {
     setOpen(true);
@@ -145,6 +190,7 @@ export default function SearchOverlay() {
                     keyboardShouldPersistTaps="handled"
                     renderItem={({ item, index: i }) => {
                       const km = KIND_META[item.kind];
+                      const watching = (item.watchers ?? []).includes(myKey);
                       return (
                         <Pressable
                           onPress={() => go(item.symbol)}
@@ -152,9 +198,27 @@ export default function SearchOverlay() {
                         >
                           <View style={s.rowMain}>
                             <Text style={[s.sym, { color: p.accentText }]}>{item.symbol}</Text>
-                            <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{item.name}</Text>
+                            <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>
+                              {item.name}
+                              <Text style={{ color: km.color(p) }}>  · {km.label.toLowerCase()}</Text>
+                            </Text>
                           </View>
-                          <Text style={[s.kind, { color: km.color(p) }]}>{km.label}</Text>
+                          {/* who's watching */}
+                          <View style={s.avatars}>
+                            {(item.watchers ?? []).map((k) =>
+                              AVATARS[k] ? (
+                                <Image key={k} source={AVATARS[k]} style={[s.avatar, { borderColor: p.cardBg }]} />
+                              ) : null,
+                            )}
+                          </View>
+                          {/* the watch toggle */}
+                          <Pressable
+                            onPress={() => toggleWatch(item)}
+                            hitSlop={10}
+                            style={{ opacity: watchBusy === item.symbol ? 0.4 : 1 }}
+                          >
+                            <Ionicons name={watching ? 'eye' : 'eye-outline'} size={18} color={watching ? p.accent : p.textMuted} />
+                          </Pressable>
                         </Pressable>
                       );
                     }}
@@ -202,4 +266,6 @@ const s = StyleSheet.create({
   sym: { fontFamily: F.semi, fontSize: 14 },
   name: { fontFamily: F.reg, fontSize: 11, marginTop: 1 },
   kind: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  avatars: { flexDirection: 'row', marginRight: 2 },
+  avatar: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, marginLeft: -6 },
 });

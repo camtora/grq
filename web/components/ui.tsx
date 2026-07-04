@@ -22,22 +22,31 @@ export function StatCard({
   valueClassName = "text-teal-50",
   term,
   compact = false,
+  size,
 }: {
   label: string;
   value: React.ReactNode;
   note?: React.ReactNode;
   valueClassName?: string;
   term?: string;
-  /** Tighter padding + smaller value — for dense single-row stat strips. */
+  /** Tighter padding + smaller value — for dense single-row stat strips. Legacy alias for size="sm". */
   compact?: boolean;
+  /** "lg" (default hero tiles) · "md" (a notch down — Portfolio's stat row, Cam 2026-07-03:
+   *  the 24px values towered over the 14px positions body) · "sm" (dense strips). */
+  size?: "lg" | "md" | "sm";
 }) {
+  const s = size ?? (compact ? "sm" : "lg");
+  const pad = s === "sm" ? "p-3" : s === "md" ? "p-4" : "p-5";
+  const labelCls = s === "sm" ? "text-[10px]" : s === "md" ? "text-[11px]" : "text-xs";
+  const valueCls = s === "sm" ? "mt-1 text-base" : s === "md" ? "mt-1.5 text-xl" : "mt-2 text-2xl";
+  const noteCls = s === "sm" ? "mt-0.5 text-[10px]" : s === "md" ? "mt-1 text-[11px]" : "mt-1 text-xs";
   return (
-    <Card className={compact ? "p-3" : "p-5"}>
-      <div className={`uppercase tracking-wider text-teal-200/50 ${compact ? "text-[10px]" : "text-xs"}`}>
+    <Card className={pad}>
+      <div className={`uppercase tracking-wider text-teal-200/50 ${labelCls}`}>
         {term ? <Term k={term}>{label}</Term> : label}
       </div>
-      <div className={`font-semibold tabular-nums ${valueClassName} ${compact ? "mt-1 text-base" : "mt-2 text-2xl"}`}>{value}</div>
-      {note ? <div className={`text-teal-200/40 ${compact ? "mt-0.5 text-[10px]" : "mt-1 text-xs"}`}>{note}</div> : null}
+      <div className={`font-semibold tabular-nums ${valueClassName} ${valueCls}`}>{value}</div>
+      {note ? <div className={`text-teal-200/40 ${noteCls}`}>{note}</div> : null}
     </Card>
   );
 }
@@ -78,13 +87,13 @@ export function SectionHeader({
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-      <h2 className="text-lg font-bold uppercase tracking-wide text-teal-100">
+      <h2 className="text-base font-bold uppercase tracking-wide text-teal-100">
         {children}
         {sub ? (
-          <span className="ml-2 text-sm font-normal normal-case tracking-normal text-teal-200/45">{sub}</span>
+          <span className="ml-2 text-xs font-normal normal-case tracking-normal text-teal-200/45">{sub}</span>
         ) : null}
       </h2>
-      {right ? <div className="shrink-0 pb-1 text-xs">{right}</div> : null}
+      {right ? <div className="shrink-0 pb-0.5 text-xs">{right}</div> : null}
     </div>
   );
 }

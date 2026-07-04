@@ -2740,3 +2740,14 @@ Discord** — a broken personal-account link is the owner's business, not fund-c
 
 Diagnostic probe: `cd web && npx tsx scripts/snaptrade-connections-probe.ts`. If TD breaks the link
 more often than ~weekly, revisit providers (Plaid direct / Wealthica — both researched, both costlier).
+
+**D107 addendum (2026-07-03, evening):** the disconnect cadence is now known — SnapTrade's own portal
+warns that **TD Direct Investing connections go inactive within 24–48 hours of linking, by design**
+(TD is driven via an `UNOFFICIAL_API` credential replay, not Plaid/OAuth). Reconnect is therefore a
+recurring chore, not a rare repair. Also found: the portal's reconnect screen ("up to 60 seconds") can
+hang indefinitely while the server-side TD re-login job stalls, with the authorization staying disabled —
+so the button now **captures the outcome** instead of fire-and-forget: portal opens in a popup, the app
+listens for the portal's postMessage result AND polls `GET /api/external/status`
+(`connectionHealthFor` — the LIVE authorization flag) every 15s; first success signal syncs + refreshes,
+a 4-min timeout sends the member to the SnapTrade dashboard. If the every-other-day TD dance proves
+too much friction, the researched alternatives are Plaid-direct or Wealthica (both costlier).

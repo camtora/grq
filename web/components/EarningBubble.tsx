@@ -108,7 +108,7 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
         <span className={`text-xs text-teal-200/30 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
         <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-7 w-7 text-[10px]" />
         <div className="min-w-0">
-          <Link href={`/stocks/${e.symbol}`} className="font-semibold text-teal-100 hover:underline">
+          <Link href={`/stocks/${e.symbol}`} className="text-[13px] font-semibold text-teal-100 hover:underline">
             {e.symbol}
           </Link>
           <div className="truncate text-[10px] text-teal-200/40">{e.name}</div>
@@ -121,7 +121,7 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
       <p className="mt-2 text-[11.5px] leading-snug text-teal-200/60">{read}</p>
 
       {open && (
-        <div className="mt-2 space-y-1.5 border-t border-teal-400/10 pt-2 text-sm">
+        <div className="mt-2 space-y-1.5 border-t border-teal-400/10 pt-2 text-[13px]">
           <DetailLine label="EPS" actual={fmtEps(e.epsActual)} est={fmtEps(e.epsEstimated)} surprise={surprisePct(e.epsActual, e.epsEstimated)} />
           <DetailLine label="Revenue" actual={fmtRev(e.revenueActual)} est={fmtRev(e.revenueEstimated)} surprise={surprisePct(e.revenueActual, e.revenueEstimated)} />
           <div className="flex items-baseline gap-2">

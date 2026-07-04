@@ -117,12 +117,27 @@ export default async function Portfolio() {
   // each holding's `quoteSymbol` + static per-currency cash and recomputes price/value/change on
   // the client. External accounts are "both see both" (same as /accounts), members-only, UI-only
   // contrast — the agent never reads these. The viewer's own connection state drives the prompt.
-  const personalGroups: { key: string; owner: PersonalOwner; rows: PersonalRow[]; cash: PersonalCash[]; extAccounts: ExtAccount[]; cadTotalCents: number }[] = [];
+  const personalGroups: {
+    key: string;
+    owner: PersonalOwner;
+    rows: PersonalRow[];
+    cash: PersonalCash[];
+    extAccounts: ExtAccount[];
+    cadTotalCents: number;
+    // Freshness (Cam 2026-07-03): SnapTrade quantities go stale when the TD link dies
+    // (every 24–48h by TD design), while prices stay live — so show the QUANTITIES' age.
+    // `syncedAt` = the OLDEST last-successful-brokerage-pull across the member's accounts
+    // (the honest worst case); `disabled` = any connection currently broken.
+    syncedAt: Date | null;
+    disabled: boolean;
+  }[] = [];
   let fxUsdCad = 1; // USD→CAD, used by the live personal components (kept in sync with the SSR calc)
   let myCadCents = 0; // the VIEWER's own external holdings, summed in CAD (the "Outside GRQ" tile)
   let myExtAccounts: ExtAccount[] = []; // the VIEWER's accounts, fed to the live "Outside GRQ" tiles
   let hasExtCost = false; // any viewer holding reports cost basis → an unrealized-change tile is possible
   let myExternalBaselineCad: number | null = null; // this morning's snapshot total (CAD) → true day-change anchor
+  let myExternalSyncedAt: Date | null = null; // the viewer's quantities' age (oldest brokerage pull) → tile note
+  let myExternalDisabled = false; // the viewer's TD link is down → tile note goes amber
   // Personal external accounts show for ANY authenticated user — their OWN holdings (Cam &
   // Graham see their TD, a viewer like Jose sees his IBKR). Read-only display either way.
   const personalConfigured = !!session?.email && (await snaptradeConfiguredFor(session.email));
@@ -206,8 +221,13 @@ export default async function Portfolio() {
       // CAD header total = the brokerage's account totals (holdings + cash) valued in CAD — the
       // SSR fallback for the live header pill + the show/hide decision for the tiles.
       const cadTotalCents = (v.accounts ?? []).reduce((s, a) => s + toCadCents(a.totalValueCents, a.currency, fxUsdCad), 0);
+      // Quantities' age: syncedAt = SnapTrade's last successful pull FROM the brokerage
+      // (honest since 2026-07-03); take the member's oldest account as the worst case.
+      const syncTimes = (v.accounts ?? []).map((a) => Date.parse(a.syncedAt)).filter(Number.isFinite);
+      const syncedAt = syncTimes.length ? new Date(Math.min(...syncTimes)) : null;
+      const disabled = (v.accounts ?? []).some((a) => a.disabled);
       const key = person?.key ?? v.email;
-      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, cash, extAccounts, cadTotalCents });
+      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, cash, extAccounts, cadTotalCents, syncedAt, disabled });
     }
     personalGroups.sort((a, b) => (ORDER[a.key] ?? 9) - (ORDER[b.key] ?? 9));
     // The "Outside GRQ" stat tiles show the VIEWER's own external total + change, not the combined.
@@ -217,6 +237,8 @@ export default async function Portfolio() {
     myExtAccounts = myGroup?.extAccounts ?? [];
     hasExtCost = myExtAccounts.some((a) => a.holdings.some((h) => h.bookCostCents != null));
     myExternalBaselineCad = await externalDayBaselineCadCents(session.email);
+    myExternalSyncedAt = myGroup?.syncedAt ?? null;
+    myExternalDisabled = myGroup?.disabled ?? false;
   }
 
   // One evolving "latest briefing" slot: the agent's most recent read replaces
@@ -392,8 +414,8 @@ export default async function Portfolio() {
       <SectionHeader sub={<>· {latestBrief.kickerSub}</>} right={<span className="text-teal-200/40">{fmtWhen(latestBrief.at)}</span>}>
         {latestBrief.kicker}
       </SectionHeader>
-      <Card className="p-5">
-        <div className="mb-2 text-base font-semibold text-teal-50">{latestBrief.title}</div>
+      <Card className="p-4">
+        <div className="mb-2 text-sm font-semibold text-teal-50">{latestBrief.title}</div>
         <CollapsibleMd text={latestBrief.body} threshold={600} defaultOpen>
           <Sources sourcesJson={latestBrief.sourcesJson} />
         </CollapsibleMd>
@@ -418,7 +440,7 @@ export default async function Portfolio() {
       >
         Latest journal
       </SectionHeader>
-      <Card className="p-5">
+      <Card className="p-4">
       {recentJournal.length === 0 ? (
         <p className="text-sm text-teal-200/40">Quiet so far.</p>
       ) : (
@@ -481,8 +503,23 @@ export default async function Portfolio() {
             <SectionHeader
               sub={<>· outside the fund · read-only · Alfred can&apos;t trade these</>}
               right={
-                <span className="tabular-nums text-teal-200/50">
-                  <LiveExternalValue accounts={g.extAccounts} fx={fxUsdCad} /> <span className="text-teal-200/35">total</span>
+                <span className="block text-right">
+                  <span className="tabular-nums text-teal-200/50">
+                    <LiveExternalValue accounts={g.extAccounts} fx={fxUsdCad} /> <span className="text-teal-200/35">total</span>
+                  </span>
+                  {/* The quantities' age — prices tick live, but share counts are only as fresh
+                      as SnapTrade's last TD pull (their link dies every 24–48h by TD design). */}
+                  {g.syncedAt && (
+                    <span className="block text-[10px]">
+                      {g.disabled ? (
+                        <Link href="/accounts" className="font-semibold text-amber-300/90 hover:underline">
+                          ⚠ holdings frozen {fmtWhen(g.syncedAt)} — reconnect
+                        </Link>
+                      ) : (
+                        <span className="text-teal-200/40">prices live · holdings as of {fmtWhen(g.syncedAt)}</span>
+                      )}
+                    </span>
+                  )}
                 </span>
               }
             >
@@ -526,12 +563,12 @@ export default async function Portfolio() {
   return (
     <main>
       <LiveQuotesProvider symbols={liveSymbols}>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-teal-50">
+          <h1 className="text-2xl font-semibold text-teal-50">
             {greeting(name, pf.totalPnlCents, pf.contributionsCents)}
           </h1>
-          <p className="mt-1 text-sm text-teal-200/50">
+          <p className="mt-1 text-[13px] text-teal-200/50">
             Live-fire sim on real delayed quotes
           </p>
         </div>
@@ -545,6 +582,7 @@ export default async function Portfolio() {
       <section className={`grid grid-cols-2 gap-3 ${topColsClass}`}>
         {/* Portfolio value — total NAV, shown in BOTH CAD and USD, live + rolling (Cam 2026-06-29). */}
         <StatCard
+          size="md"
           label="Portfolio value (CAD)"
           term="nav"
           value={<LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="nav" currency="CAD" />}
@@ -557,6 +595,7 @@ export default async function Portfolio() {
         />
         {/* Total holdings — positions only, CAD + USD, live. */}
         <StatCard
+          size="md"
           label="Total holdings (CAD)"
           term="market-value"
           value={<LiveTotal positions={livePositions} cashCents={pf.cashCents} fx={fxLive} base="holdings" currency="CAD" />}
@@ -564,6 +603,7 @@ export default async function Portfolio() {
         />
         {/* Total cash — the CAD-valued total, split by currency. */}
         <StatCard
+          size="md"
           label="Total cash (CAD)"
           value={money(pf.cashCents)}
           note={
@@ -574,6 +614,7 @@ export default async function Portfolio() {
         />
         {/* Total P&L — live value; the %/vs-XIC note is the server snapshot. */}
         <StatCard
+          size="md"
           label="Total P&L (CAD)"
           term="total-pnl"
           value={<LivePnlValue positions={livePositions} cashCents={pf.cashCents} contributionsCents={pf.contributionsCents} fx={fxLive} />}
@@ -583,7 +624,7 @@ export default async function Portfolio() {
               : `${pct(pnlPct, 2)} on contributions`
           }
         />
-        <StatCard label="Contributions (CAD)" term="contributions" value={money(pf.contributionsCents)} note="initial commitment" />
+        <StatCard size="md" label="Contributions (CAD)" term="contributions" value={money(pf.contributionsCents)} note="initial commitment" />
         {showExternal && (
           <LiveExternalTiles
             accounts={myExtAccounts}
@@ -592,6 +633,15 @@ export default async function Portfolio() {
             valueLabel={extValueLabel}
             changeLabel={extChangeLabel}
             showChange={showExternalChange}
+            valueNote={
+              myExternalDisabled && myExternalSyncedAt ? (
+                <Link href="/accounts" className="font-semibold text-amber-300/90 hover:underline">
+                  ⚠ frozen {fmtWhen(myExternalSyncedAt)} — reconnect
+                </Link>
+              ) : myExternalSyncedAt ? (
+                <>holdings as of {fmtWhen(myExternalSyncedAt)}</>
+              ) : undefined
+            }
           />
         )}
       </section>

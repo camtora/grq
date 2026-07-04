@@ -58,7 +58,7 @@ coherent — a restyle in one file then fixes every page.
 | `Card` | `rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]` (no padding — you add `p-5`/`p-6`) | **every** panel / surface |
 | `PageHeader` | `<h1 className="text-2xl font-bold text-teal-50">` + optional `sub` (`text-sm text-teal-200/50`) + `right` slot, wrapped `mb-8 flex flex-wrap items-end justify-between gap-4` | the page's single top title |
 | `PanelHeader` | `<h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">` + optional freshness badge (`live`/`fresh`) **or** a `right` slot (links/meta) | in-page **panel** headings (stock-page panels & other dense multi-panel pages) |
-| `SectionHeader` | `<h2 className="text-lg font-bold uppercase tracking-wide text-teal-100">` + optional `sub` (trailing `text-sm font-normal normal-case text-teal-200/45` descriptor) + `right` slot, wrapped `mb-3 flex items-end justify-between` | top-level **page sections** (Today, Portfolio) |
+| `SectionHeader` | `<h2 className="text-base font-bold uppercase tracking-wide text-teal-100">` + optional `sub` (trailing `text-xs font-normal normal-case text-teal-200/45` descriptor) + `right` slot, wrapped `mb-3 flex items-end justify-between` | top-level **page sections** (Today, Portfolio) |
 | `StatCard` | label (`text-xs uppercase tracking-wider text-teal-200/50`) + big `tabular-nums` value + note; `compact` variant | stat strips (NAV, P&L…) |
 | `Chip` | `rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider`, tones `teal/red/green/dim` | status pills, tags |
 | `Pnl` / `Money` | `tabular-nums`, P&L colour-coded | any cents value |
@@ -74,11 +74,13 @@ live/fresh badge.
 Three heading levels, three components — that's it.
 
 - **Page title** → `PageHeader` (`<h1>`, `text-2xl font-bold text-teal-50`). One per page.
-- **Page section** → `SectionHeader` (`<h2>`, `text-lg font-bold uppercase tracking-wide text-teal-100`
+- **Page section** → `SectionHeader` (`<h2>`, `text-base font-bold uppercase tracking-wide text-teal-100`
   + optional `sub` descriptor + `right` slot). Born on Today ("the newspaper sections should stand
-  out", Cam 2026-07-02), extended to Portfolio 2026-07-03. Use it for the big top-level sections of a
-  page — the things a reader scans for ("Headlines", "Alfred's positions"). Title stays one or two
-  words; the explanation goes in `sub` (`· your holdings & the names we track`).
+  out", Cam 2026-07-02), extended to Portfolio 2026-07-03, then downsized text-lg→text-base the same
+  day ("everything on Today is too big compared to the body" — the body rows are 13px, so the chrome
+  sits one notch above, not three). Use it for the big top-level sections of a page — the things a
+  reader scans for ("Headlines", "Alfred's positions"). Title stays one or two words; the explanation
+  goes in `sub` (`· your holdings & the names we track`).
 - **Panel heading** → `PanelHeader` (`<h2>`, `text-sm font-semibold uppercase tracking-wider text-teal-200/50`),
   sitting **outside** the card. The quieter tier for dense multi-panel pages — the stock page's
   many panels keep this so twelve headings don't shout at once.
