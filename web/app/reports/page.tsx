@@ -9,6 +9,7 @@ import Md from "@/components/Md";
 import { Stats, parseStats } from "@/components/ReportStats";
 import PeopleBadges from "@/components/PeopleBadges";
 import { PEOPLE } from "@/lib/people";
+import { HARD } from "@/agent/policy";
 
 // Reports is a hub over every kind of report the fund files: the Daily (morning
 // game plan beside the EOD close), the Saturday Weekly review, Smart-money
@@ -218,10 +219,13 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
         </div>
       );
   } else if (tab === "conviction") {
+    // The REAL gate from policy (D95 lowered it 75→70) — this page hardcoded 75
+    // and mislabeled its own tally until 2026-07-04.
+    const gatePct = HARD.minBuyConfidence;
     const proposals = await prisma.tradeProposal.findMany({ orderBy: { at: "desc" }, take: 120 });
     const buys = proposals.filter((p) => p.side === "BUY");
     const withBoth = buys.filter((p) => p.tradeConfidence != null && p.dossierConfidence != null);
-    const clearedGate = buys.filter((p) => (p.tradeConfidence ?? 0) >= 75).length;
+    const clearedGate = buys.filter((p) => (p.tradeConfidence ?? 0) >= gatePct).length;
     const filled = buys.filter((p) => p.accepted).length;
     const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((s, x) => s + x, 0) / xs.length) : null);
     const avgTrade = avg(withBoth.map((p) => p.tradeConfidence as number));
@@ -229,7 +233,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
     const avgGap = avgTrade != null && avgDossier != null ? avgTrade - avgDossier : null;
     const summary: [string, string][] = [
       ["BUY proposals", String(buys.length)],
-      ["cleared 75% gate", `${clearedGate}/${buys.length}`],
+      [`cleared ${gatePct}% gate`, `${clearedGate}/${buys.length}`],
       ["actually traded", `${filled}/${buys.length}`],
       ["avg per-trade conf", avgTrade != null ? `${avgTrade}%` : "—"],
       ["avg dossier conf", avgDossier != null ? `${avgDossier}%` : "—"],
@@ -239,7 +243,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
       proposals.length === 0 ? (
         <EmptyState
           title="No proposals logged yet"
-          body="Every BUY/SELL the agent proposes — including the ones the 75% conviction gate rejects — lands here, with its per-trade confidence beside the standing dossier confidence. The tally starts from the next proposal."
+          body={`Every BUY/SELL the agent proposes — including the ones the ${gatePct}% conviction gate rejects — lands here, with its per-trade confidence beside the standing dossier confidence. The tally starts from the next proposal.`}
         />
       ) : (
         <div className="space-y-4">
@@ -253,7 +257,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
               ))}
             </div>
             <p className="mt-3 text-xs text-teal-200/40">
-              A persistently negative gap means the agent rates names highly in research but talks itself below the 75% bar at the
+              A persistently negative gap means the agent rates names highly in research but talks itself below the {gatePct}% bar at the
               trigger — the pattern we&apos;re watching for. Price at proposal is kept too, so we can retro whether waiting paid off.
             </p>
           </Card>
@@ -298,7 +302,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
                           <span className="text-emerald-400">{p.status}</span>
                         ) : (
                           <span className={convictionBlocked ? "text-amber-400" : "text-red-400/80"} title={p.rejectReason ?? ""}>
-                            {convictionBlocked ? "below 75% gate" : "rejected"}
+                            {convictionBlocked ? `below ${gatePct}% gate` : "rejected"}
                           </span>
                         )}
                       </td>
