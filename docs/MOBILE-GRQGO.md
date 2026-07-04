@@ -148,5 +148,7 @@ metro.grq.camerontora.ca.
     stock pages.
 21. ~~Agent container rebuild (push topics)~~ ✅ 2026-07-03 — v2.47 live.
 22. ~~shared/contract.ts direct imports~~ ✅ 2026-07-03 (@shared alias; migrate types
-    opportunistically). Still open: TestFlight/EAS-Update distribution; retire ios/ +
-    GRQNext at parity.
+    opportunistically). ~~retire ios/ + GRQNext~~ ✅ 2026-07-04 — deleted at parity (old
+    push tokens pruned; APNS_BUNDLE_ID default → grqgo; the Google OAuth iOS client
+    stays — GRQ Go authenticates through it). Still open: TestFlight/EAS-Update
+    distribution.
