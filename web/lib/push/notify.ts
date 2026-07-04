@@ -132,6 +132,17 @@ async function persistNotifications(opts: PushOpts, recipients: string[]): Promi
   }
 }
 
+/** Everything awaiting the member — unread bell rows + unread DMs. Sent as the
+ *  app-icon badge on every push, so the icon count tracks server truth; the app
+ *  mirrors the same sum locally as things get read (mobile app/_layout.tsx). */
+async function unreadTotal(email: string): Promise<number> {
+  const [bell, dms] = await Promise.all([
+    prisma.notification.count({ where: { email, readAt: null } }),
+    prisma.directMessage.count({ where: { toEmail: email, readAt: null } }),
+  ]);
+  return bell + dms;
+}
+
 /** Fan an alert out: persist it to each eligible member's bell feed, then push to
  *  their iOS devices. Best-effort — the feed write happens even with APNs unset. */
 export async function pushNotify(opts: PushOpts): Promise<void> {
@@ -149,20 +160,36 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
     if (targets.length === 0) return;
 
     const envBy = new Map(targets.map((d) => [d.token, d.apnsEnv]));
-    const results = await sendApns(
-      targets.map((d) => ({ token: d.token, apnsEnv: d.apnsEnv })),
-      {
-        title: opts.title,
-        body: (opts.body || opts.title).slice(0, 300),
-        threadId: opts.symbol ?? opts.category,
-        data: {
-          category: opts.category,
-          ...(opts.symbol ? { symbol: opts.symbol } : {}),
-          ...(opts.panel ? { panel: opts.panel } : {}),
-          ...(opts.dest ? { dest: opts.dest } : {}),
-        },
-      },
-    );
+    // One send per recipient — the app-icon badge is THAT member's unread total,
+    // computed after the feed write above so it counts this alert. bundleId must
+    // travel with each token (it's the apns-topic): dropping it pushed GRQ Go
+    // tokens under the old app's topic → DeviceTokenNotForTopic → pruned as dead
+    // (the 2026-07-04 empty-DeviceToken incident).
+    const emails = [...new Set(targets.map((d) => d.email))];
+    const results = (
+      await Promise.all(
+        emails.map(async (email) => {
+          const badge = await unreadTotal(email);
+          return sendApns(
+            targets
+              .filter((d) => d.email === email)
+              .map((d) => ({ token: d.token, apnsEnv: d.apnsEnv, bundleId: d.bundleId })),
+            {
+              title: opts.title,
+              body: (opts.body || opts.title).slice(0, 300),
+              threadId: opts.symbol ?? opts.category,
+              badge,
+              data: {
+                category: opts.category,
+                ...(opts.symbol ? { symbol: opts.symbol } : {}),
+                ...(opts.panel ? { panel: opts.panel } : {}),
+                ...(opts.dest ? { dest: opts.dest } : {}),
+              },
+            },
+          );
+        }),
+      )
+    ).flat();
 
     // Self-heal: persist the gateway that actually delivered when it differs from what
     // we had stored (a dev-signed Release build mis-reports its env). Next send goes
@@ -182,22 +209,23 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
   }
 }
 
-/** Tell a member's iOS devices to clear their delivered notifications + zero the
- *  app badge (D64). A SILENT (background) push carrying `{ clear: "all" }` — the app
- *  handles it by calling removeAllDeliveredNotifications(). Fired when the member
- *  opens the web notification bell, so the lock-screen pile clears once they've
- *  triaged on the desktop. No preference gating (housekeeping). Best-effort: iOS
- *  throttles background pushes and won't deliver to a force-quit app — the app's
- *  foreground reconcile is the catch-up net. Configured-or-no-op. */
-export async function pushClear(email: string): Promise<void> {
+/** A silent (background) push to a member's devices that sets the app-icon badge
+ *  to their CURRENT unread total — plus optional data keys the app acts on. iOS
+ *  applies `aps.badge` at the system level, so this works even when the app is
+ *  backgrounded; content-available delivery to the app itself is best-effort
+ *  (throttled, never to a force-quit app) — the app's foreground reconcile is the
+ *  catch-up net. Configured-or-no-op. */
+async function silentBadgeSync(email: string, data: Record<string, string> = {}): Promise<void> {
   if (!apnsConfigured()) return;
   try {
-    const devices = await prisma.deviceToken.findMany({ where: { email: email.trim().toLowerCase() } });
+    const normalized = email.trim().toLowerCase();
+    const devices = await prisma.deviceToken.findMany({ where: { email: normalized } });
     if (devices.length === 0) return;
 
+    const badge = await unreadTotal(normalized);
     const results = await sendApns(
-      devices.map((d) => ({ token: d.token, apnsEnv: d.apnsEnv })),
-      { silent: true, badge: 0, title: "", body: "", data: { clear: "all" } },
+      devices.map((d) => ({ token: d.token, apnsEnv: d.apnsEnv, bundleId: d.bundleId })),
+      { silent: true, badge, title: "", body: "", data },
     );
 
     const dead = results.filter((r) => !r.ok && (r.status === 410 || (r.reason && DEAD_REASONS.has(r.reason)))).map((r) => r.token);
@@ -205,6 +233,21 @@ export async function pushClear(email: string): Promise<void> {
       await prisma.deviceToken.deleteMany({ where: { token: { in: dead } } }).catch(() => {});
     }
   } catch (e) {
-    console.error("pushClear failed", e);
+    console.error("silentBadgeSync failed", e);
   }
+}
+
+/** Fired when the member opens the web notification bell (D64): clears the phone's
+ *  delivered-notification pile (`{ clear: "all" }` → removeAllDeliveredNotifications)
+ *  and drops the icon badge to whatever is STILL unread (usually just DMs) — triage
+ *  on the desktop, the lock screen follows. No preference gating (housekeeping). */
+export async function pushClear(email: string): Promise<void> {
+  await silentBadgeSync(email, { clear: "all" });
+}
+
+/** Fired when the member reads their DM thread on the web: re-syncs the phone's
+ *  icon badge to the remaining unread total. Leaves the delivered pile alone —
+ *  reading messages shouldn't dismiss unrelated lock-screen alerts. */
+export async function pushBadgeSync(email: string): Promise<void> {
+  await silentBadgeSync(email);
 }

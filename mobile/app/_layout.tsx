@@ -30,13 +30,15 @@ GoogleSignin.configure({
   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
 });
 
-// Show pushes as banners even while the app is foregrounded.
+// Show pushes as banners even while the app is foregrounded. shouldSetBadge lets a
+// foreground delivery apply the payload's app-icon badge (the recipient's unread
+// total, computed server-side); background deliveries apply it automatically.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: false,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
@@ -92,6 +94,16 @@ export default function RootLayout() {
       clearInterval(t);
     };
   }, [status, refreshMessages, refreshBell]);
+
+  // The app-icon badge mirrors the chrome badges (bell + chat) — reading everything
+  // in-app (or on the web, once the stores refresh) drops the icon to zero without
+  // waiting on a server push. Server pushes carry the same sum, so both agree.
+  const unreadMessages = useMessages((s) => s.unread);
+  const unreadBell = useNotifications((s) => s.unread);
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    Notifications.setBadgeCountAsync(unreadMessages + unreadBell).catch(() => {});
+  }, [status, unreadMessages, unreadBell]);
 
   // Tapping a push deep-links — dest/category rules first, then symbol → stock
   // page (lib/notification-routes; fx opens Settings even though it carries a

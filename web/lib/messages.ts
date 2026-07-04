@@ -58,15 +58,17 @@ export async function createDirectMessage(input: CreateMessageInput): Promise<Db
   })) as DbMessage;
 
   // Compose the push. A share leads with what's being shared; a plain message leads
-  // with the body. Truncation + fallback happen in pushNotify.
+  // with the body. The 💬 marks it as the other MEMBER talking, not GRQ — until the
+  // native communication-notification (real avatar) upgrade. Truncation + fallback
+  // happen in pushNotify.
   let title: string;
   let pushBody: string;
   if (symbol) {
     const where = panel ? `${symbol} · ${panelLabel(panel) ?? "a panel"}` : symbol;
-    title = `${input.fromName} shared ${where}`;
+    title = `💬 ${input.fromName} shared ${where}`;
     pushBody = body || `Tap to open ${symbol}.`;
   } else {
-    title = input.fromName;
+    title = `💬 ${input.fromName}`;
     pushBody = body || "sent you a message";
   }
 
