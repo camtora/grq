@@ -11,6 +11,10 @@ export default function TabsLayout() {
   return (
     <View style={{ flex: 1 }}>
     <Tabs
+      // Back returns to the tab you CAME FROM (watchlist → stock → back →
+      // watchlist) — the default is first-route, which dumped every stock-page
+      // back onto Today (Cam 2026-07-04).
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: p.accent,

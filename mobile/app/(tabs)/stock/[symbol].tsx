@@ -156,19 +156,35 @@ export default function StockScreen() {
               <View style={s.heroMain}>
                 <Text style={[s.heroName, { color: p.textPrimary }]} numberOfLines={2}>{d.name}</Text>
                 <View style={s.heroTags}>
-                  {d.status === 'ACTIVE' && <Text style={[s.tag, { color: p.pos }]}>in universe</Text>}
-                  {d.researching && <Text style={[s.tag, { color: p.warn }]}>researching…</Text>}
-                  <View style={s.avatars}>
-                    {d.watchers.map((w) =>
+                  {/* Who's watching, left under the name — the avatars ARE the toggle
+                      (tap: the dashed + adds you, tapping while in removes you). The
+                      old eye icon is gone (Cam 2026-07-04). */}
+                  <Pressable
+                    onPress={toggleWatch}
+                    hitSlop={8}
+                    disabled={watchBusy}
+                    style={[s.watchRow, { opacity: watchBusy ? 0.5 : 1 }]}
+                  >
+                    {d.watchers.map((w, i) =>
                       AVATARS[w.key] ? (
-                        <Image key={w.key} source={AVATARS[w.key]} style={[s.avatar, { borderColor: p.bodyBg }]} />
+                        <Image
+                          key={w.key}
+                          source={AVATARS[w.key]}
+                          style={[s.watchAvatar, { borderColor: p.bodyBg }, i > 0 && s.watchOverlap]}
+                        />
                       ) : null,
                     )}
-                  </View>
-                  {/* Who's watching + the watch toggle (Cam 2026-07-03). */}
-                  <Pressable onPress={toggleWatch} hitSlop={8} disabled={watchBusy} style={{ opacity: watchBusy ? 0.5 : 1 }}>
-                    <Ionicons name={iWatch ? 'eye' : 'eye-outline'} size={17} color={iWatch ? p.accent : p.textMuted} />
+                    {!iWatch && (
+                      <View style={[s.watchAdd, { borderColor: p.textMuted + '88' }, d.watchers.length > 0 && s.watchAfter]}>
+                        <Ionicons name="add" size={12} color={p.textMuted} />
+                      </View>
+                    )}
+                    {!iWatch && d.watchers.length === 0 && (
+                      <Text style={[s.tag, s.watchAfter, { color: p.textMuted }]}>watch</Text>
+                    )}
                   </Pressable>
+                  {d.status === 'ACTIVE' && <Text style={[s.tag, { color: p.pos }]}>in universe</Text>}
+                  {d.researching && <Text style={[s.tag, { color: p.warn }]}>researching…</Text>}
                 </View>
               </View>
               <View style={s.heroRight}>
@@ -1052,8 +1068,19 @@ const s = StyleSheet.create({
   heroPrice: { fontFamily: 'System', fontWeight: '800', fontSize: 20 },
   heroDay: { fontFamily: F.semi, fontSize: 12, marginTop: 2 },
   tag: { fontFamily: F.semi, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5 },
-  avatars: { flexDirection: 'row', marginLeft: 2 },
-  avatar: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, marginLeft: -5 },
+  watchRow: { flexDirection: 'row', alignItems: 'center' },
+  watchAvatar: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5 },
+  watchOverlap: { marginLeft: -6 },
+  watchAfter: { marginLeft: 4 },
+  watchAdd: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   chartLabel: { fontFamily: F.reg, fontSize: 9.5 },
   callRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
