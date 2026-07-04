@@ -1,11 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COURSES, LABS, courseBySlug } from "@/lib/learn/content";
+import { COURSES, LABS, courseBySlug, lessonBySlug, lessonChecks, readMinutes, type LearnBlock, type LearnQuestion } from "@/lib/learn/content";
+import { EXAMS, examForCourse, gradeExam } from "@/lib/learn/exams";
+import { parseNumericAnswer, choiceCorrect } from "@/lib/learn/answers";
 import { GLOSSARY } from "@/lib/glossary";
 
-// Integrity checks for the Learn portal curriculum (docs/LEARN-PORTAL.md, D110) and the
-// glossary it leans on. The big one: every tap-to-explain reference in a lesson body must
-// resolve to a real glossary key, so lessons never ship a dead popover.
+// Integrity checks for the Learn curriculum (docs/LEARN-PORTAL.md D110 + the D111 block
+// framework) and the glossary it leans on. The big ones: every tap-to-explain reference
+// must resolve to a real glossary key (no dead popovers), markdown never carries nav
+// links (Md new-tabs them — tryIt blocks instead), every question's answer key must be
+// resolvable, and every live lesson must actually ask something of the learner.
 
 // Md.tsx turns [[slug]] and [text](#explain:slug) into <Term k={slug.toLowerCase()}>.
 function termRefs(body: string): string[] {
@@ -14,6 +18,48 @@ function termRefs(body: string): string[] {
   for (const m of body.matchAll(/\(#explain:([^)\s]+)\)/g)) refs.push(decodeURIComponent(m[1]).trim().toLowerCase());
   return refs;
 }
+
+/** Every markdown string a block can render (prose, callouts, questions, fallbacks). */
+function blockMd(b: LearnBlock): string[] {
+  switch (b.kind) {
+    case "prose":
+    case "callout":
+      return [b.md];
+    case "example":
+      return [b.fallbackMd];
+    case "check":
+      return questionMd(b.q);
+    default:
+      return [];
+  }
+}
+
+function questionMd(q: LearnQuestion): string[] {
+  const md = [q.prompt, q.explain];
+  if (q.kind === "choice") md.push(...q.options.map((o) => o.md));
+  return md;
+}
+
+function assertValidQuestion(q: LearnQuestion, where: string) {
+  assert.ok(q.id.trim().length > 0, `${where} question missing id`);
+  assert.ok(q.prompt.trim().length > 0, `${where}/${q.id} has no prompt`);
+  assert.ok(q.explain.trim().length > 0, `${where}/${q.id} has no explain (the teach-back is the point)`);
+  if (q.kind === "choice") {
+    assert.ok(q.options.length >= 2, `${where}/${q.id} needs ≥2 options`);
+    const ids = new Set(q.options.map((o) => o.id));
+    assert.equal(ids.size, q.options.length, `${where}/${q.id} option ids collide`);
+    assert.ok(q.correct.length >= 1, `${where}/${q.id} has no correct answer`);
+    for (const c of q.correct) assert.ok(ids.has(c), `${where}/${q.id} correct "${c}" isn't an option`);
+    assert.equal(!!q.multi, q.correct.length > 1, `${where}/${q.id} multi flag must match correct-count`);
+  } else {
+    assert.ok(Number.isInteger(q.answer), `${where}/${q.id} numeric answer must be an integer (${q.unit})`);
+    assert.ok((q.tolerance ?? 0) >= 0 && Number.isInteger(q.tolerance ?? 0), `${where}/${q.id} bad tolerance`);
+  }
+}
+
+const allMd: { where: string; md: string }[] = [];
+for (const c of COURSES) for (const l of c.lessons) for (const b of l.blocks) for (const md of blockMd(b)) allMd.push({ where: `${c.slug}/${l.slug}`, md });
+for (const e of EXAMS) for (const q of e.questions) for (const md of questionMd(q)) allMd.push({ where: `exam:${e.courseSlug}/${q.id}`, md });
 
 describe("learn curriculum structure", () => {
   it("has unique course slugs and numbers", () => {
@@ -32,51 +78,144 @@ describe("learn curriculum structure", () => {
     }
   });
 
-  it("has unique, non-empty lessons within each course", () => {
+  it("has unique, non-empty lessons within each course (and none named 'exam' — that route is taken)", () => {
     for (const c of COURSES) {
       assert.equal(new Set(c.lessons.map((l) => l.slug)).size, c.lessons.length, `${c.slug} lesson slugs collide`);
       for (const l of c.lessons) {
+        assert.notEqual(l.slug, "exam", `${c.slug}/${l.slug} shadows the exam route`);
         assert.ok(l.title.trim().length > 0, `${c.slug}/${l.slug} has no title`);
-        assert.ok(l.body.trim().length > 100, `${c.slug}/${l.slug} body suspiciously short`);
+        const prose = l.blocks.filter((b) => b.kind === "prose" || b.kind === "callout");
+        assert.ok(prose.length >= 1, `${c.slug}/${l.slug} has no written content`);
+        assert.ok(
+          prose.reduce((n, b) => n + ("md" in b ? b.md.length : 0), 0) > 100,
+          `${c.slug}/${l.slug} written content suspiciously short`,
+        );
+        assert.ok(readMinutes(l) >= 2, `${c.slug}/${l.slug} readMinutes broke`);
       }
     }
   });
 
-  it("resolves courseBySlug", () => {
-    assert.equal(courseBySlug("the-machine")?.n, 1);
+  it("every live lesson asks something of the learner (≥1 inline check — D111 §3)", () => {
+    for (const c of COURSES)
+      if (c.status === "live" && !c.external)
+        for (const l of c.lessons) assert.ok(lessonChecks(l).length >= 1, `${c.slug}/${l.slug} has no check`);
+  });
+
+  it("resolves courseBySlug/lessonBySlug", () => {
+    const c = courseBySlug("the-machine");
+    assert.equal(c?.n, 1);
+    assert.equal(c?.title, "Market structure");
+    assert.ok(lessonBySlug(c!, "what-a-stock-is"));
     assert.equal(courseBySlug("nope"), undefined);
   });
 });
 
-describe("learn lesson bodies", () => {
-  it("reference only glossary terms that exist", () => {
-    for (const c of COURSES)
-      for (const l of c.lessons)
-        for (const ref of termRefs(l.body))
-          assert.ok(ref in GLOSSARY, `${c.slug}/${l.slug} references unknown term "${ref}"`);
+describe("learn block content", () => {
+  it("references only glossary terms that exist", () => {
+    for (const { where, md } of allMd)
+      for (const ref of termRefs(md)) assert.ok(ref in GLOSSARY, `${where} references unknown term "${ref}"`);
   });
 
-  it("keep navigation out of markdown (Md opens links in a new tab — use tryIt instead)", () => {
+  it("keeps navigation out of markdown (Md opens links in a new tab — tryIt/video blocks instead)", () => {
+    for (const { where, md } of allMd)
+      for (const m of md.matchAll(/\]\(([^)]+)\)/g))
+        assert.ok(m[1].startsWith("#explain:"), `${where} has a non-explain markdown link: ${m[1]}`);
+  });
+
+  it("block payloads are well-formed (media ids, video ids, tryIt hrefs)", () => {
+    const widgets = new Set(["order-book", "compounding"]);
+    const receipts = new Set(["real-fills", "drawdown", "vs-xic", "fees", "guardrails", "soak"]);
     for (const c of COURSES)
-      for (const l of c.lessons) {
-        for (const m of l.body.matchAll(/\]\(([^)]+)\)/g))
-          assert.ok(m[1].startsWith("#explain:"), `${c.slug}/${l.slug} has a non-explain markdown link: ${m[1]}`);
-        for (const t of l.tryIt ?? []) assert.ok(t.href.startsWith("/"), `${c.slug}/${l.slug} tryIt href must be in-app`);
+      for (const l of c.lessons)
+        for (const b of l.blocks) {
+          const where = `${c.slug}/${l.slug}`;
+          if (b.kind === "widget") assert.ok(widgets.has(b.id), `${where} embeds unknown widget "${b.id}"`);
+          if (b.kind === "receipt") assert.ok(receipts.has(b.id), `${where} embeds unknown receipt "${b.id}"`);
+          if (b.kind === "video") {
+            assert.match(b.yt, /^[\w-]{11}$/, `${where} bad YouTube id "${b.yt}"`);
+            assert.ok(b.minutes > 0 && b.why.trim().length > 0, `${where} video needs minutes + a why line`);
+          }
+          if (b.kind === "tryIt") for (const t of b.links) assert.ok(t.href.startsWith("/"), `${where} tryIt href must be in-app`);
+          if (b.kind === "figure") assert.ok(b.src.startsWith("/") && b.alt.trim().length > 0, `${where} figure needs a local src + alt`);
+          if (b.kind === "example") assert.ok(b.key.trim().length > 0 && b.fallbackMd.trim().length > 0, `${where} example needs key + fallback`);
+        }
+  });
+
+  it("inline check questions have valid, globally-unique keys", () => {
+    const seen = new Set<string>();
+    for (const c of COURSES)
+      for (const l of c.lessons)
+        for (const q of lessonChecks(l)) {
+          assertValidQuestion(q, `${c.slug}/${l.slug}`);
+          assert.ok(!seen.has(q.id), `check id "${q.id}" collides`);
+          seen.add(q.id);
+        }
+  });
+});
+
+describe("learn exams", () => {
+  it("every live course has an exam (Options included — one exam system, eight courses)", () => {
+    for (const c of COURSES)
+      if (c.status === "live") assert.ok(examForCourse(c.slug), `${c.slug} is live but has no exam`);
+    for (const e of EXAMS) assert.ok(courseBySlug(e.courseSlug), `exam for unknown course ${e.courseSlug}`);
+  });
+
+  it("exams are substantial, valid, and reviewable", () => {
+    const seen = new Set<string>();
+    for (const e of EXAMS) {
+      assert.ok(e.questions.length >= 6, `${e.courseSlug} exam has only ${e.questions.length} questions`);
+      assert.ok(e.passPct >= 50 && e.passPct <= 100, `${e.courseSlug} passPct out of range`);
+      assert.ok(e.version >= 1);
+      const course = courseBySlug(e.courseSlug)!;
+      for (const q of e.questions) {
+        assertValidQuestion(q, `exam:${e.courseSlug}`);
+        assert.ok(!seen.has(q.id), `exam question id "${q.id}" collides`);
+        seen.add(q.id);
+        if (q.reviewLesson) assert.ok(lessonBySlug(course, q.reviewLesson), `exam:${e.courseSlug}/${q.id} reviews unknown lesson "${q.reviewLesson}"`);
       }
+    }
   });
 
-  it("only embeds known widgets (the course page renders from this set)", () => {
-    const known = new Set(["order-book", "compounding"]);
-    for (const c of COURSES)
-      for (const l of c.lessons)
-        if (l.widget) assert.ok(known.has(l.widget), `${c.slug}/${l.slug} embeds unknown widget "${l.widget}"`);
+  it("grades a perfect sitting at 100 and an empty one at 0", () => {
+    for (const e of EXAMS) {
+      const perfect: Record<string, string | string[]> = {};
+      for (const q of e.questions) {
+        if (q.kind === "choice") perfect[q.id] = q.multi ? q.correct : q.correct[0];
+        else perfect[q.id] = q.unit === "cents" ? (q.answer / 100).toFixed(2) : String(q.answer);
+      }
+      const full = gradeExam(e, perfect);
+      assert.equal(full.scorePct, 100, `${e.courseSlug} perfect sitting graded ${full.scorePct}`);
+      assert.ok(full.passed);
+      const empty = gradeExam(e, {});
+      assert.equal(empty.scorePct, 0);
+      assert.ok(!empty.passed);
+    }
+  });
+});
+
+describe("answer parsing (the no-floats rule extends to homework)", () => {
+  it("parses money as string-math cents", () => {
+    assert.equal(parseNumericAnswer("cents", "20.50"), 2050);
+    assert.equal(parseNumericAnswer("cents", "$6"), 600);
+    assert.equal(parseNumericAnswer("cents", "0.20"), 20);
+    assert.equal(parseNumericAnswer("cents", "800"), 80000);
+    assert.equal(parseNumericAnswer("cents", "-1.05"), -105);
+    assert.equal(parseNumericAnswer("cents", "1.234"), null);
+    assert.equal(parseNumericAnswer("cents", "abc"), null);
   });
 
-  it("only embeds known receipts (components/learn/Receipts.tsx dispatches this set)", () => {
-    const known = new Set(["real-fills", "drawdown", "vs-xic", "fees", "guardrails", "soak"]);
-    for (const c of COURSES)
-      for (const l of c.lessons)
-        if (l.receipt) assert.ok(known.has(l.receipt), `${c.slug}/${l.slug} embeds unknown receipt "${l.receipt}"`);
+  it("parses plain integers with unit decorations", () => {
+    assert.equal(parseNumericAnswer("pct", "33%"), 33);
+    assert.equal(parseNumericAnswer("pct", " 100 "), 100);
+    assert.equal(parseNumericAnswer("years", "8"), 8);
+    assert.equal(parseNumericAnswer("shares", "x"), null);
+  });
+
+  it("choice grading is set-equality", () => {
+    const q = { id: "t", kind: "choice", prompt: "p", explain: "e", options: [{ id: "a", md: "a" }, { id: "b", md: "b" }, { id: "c", md: "c" }], correct: ["a", "b"], multi: true } as const;
+    assert.ok(choiceCorrect(q, ["b", "a"]));
+    assert.ok(!choiceCorrect(q, ["a"]));
+    assert.ok(!choiceCorrect(q, ["a", "b", "c"]));
   });
 });
 

@@ -862,6 +862,7 @@ model NotificationPreference {
   priceTargets Boolean  @default(true) // price alerts you set (The Wire, Phase 2) — now wired
   optionsDesk  Boolean  @default(true) // the experimental Options Desk opened/settled an option (sandbox nudge)
   accounts     Boolean  @default(true) // a linked personal brokerage connection broke / was fixed (SnapTrade reconnect)
+  learn        Boolean  @default(true) // the other member passed a Learn course exam (D111)
   updatedAt    DateTime @updatedAt
 }
 
@@ -1765,4 +1766,56 @@ model MarketBrief {
 
   @@unique([date, edition])
   @@index([date])
+}
+
+// ── The Learn framework (D111, docs/LEARN-FRAMEWORK.md) ─────────────────────────
+// Curriculum content stays code-owned (web/lib/learn/); the DB holds only the
+// LIVING layer: lesson completion, exam attempts (scores are integer percent —
+// no floats, even for homework), and the nightly-refreshed market examples.
+
+// A member finished a lesson (its inline checks answered, or "mark as read").
+model LearnLessonDone {
+  id         String   @id @default(cuid())
+  email      String // member email (normalized lowercase) — members only (Cam: viewers are read-only, no exams/progress)
+  courseSlug String
+  lessonSlug String
+  at         DateTime @default(now())
+
+  @@unique([email, courseSlug, lessonSlug])
+  @@index([email])
+}
+
+// One completed exam sitting. Best score stands; the attempt COUNT is published
+// beside it ("92% · 2nd attempt") — honesty the GRQ way. Answer keys never leave
+// the server (web/lib/learn/exams.ts); `feedback` stores the graded per-question
+// results the member saw.
+model LearnExamAttempt {
+  id         String   @id @default(cuid())
+  email      String // member email (normalized lowercase)
+  courseSlug String
+  version    Int // the exam version this attempt sat (exams.ts bumps on edits)
+  at         DateTime @default(now())
+  scorePct   Int // 0–100, integer
+  passed     Boolean  @default(false)
+  answers    Json // { [questionId]: raw submitted answer }
+  feedback   Json // graded per-question results returned to the member
+
+  @@index([courseSlug, email])
+  @@index([email])
+}
+
+// A "living example" — a lesson's market illustration refreshed from data GRQ
+// already ingests (movers, earnings, our own trades…), narrated by Haiku in the
+// runner's nightly window (framework L4). Lessons render `fallbackMd` until a
+// row exists, and again if it goes stale — a lesson never falls over on its
+// live parts (the receipts rule).
+model LearnExample {
+  key        String   @id // e.g. "biggest-gap"
+  courseSlug String
+  lessonSlug String
+  asOf       DateTime
+  md         String // 2–4 sentences, GRQ voice
+  dataJson   Json? // the compact facts the narration was built from
+
+  @@index([courseSlug])
 }

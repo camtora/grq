@@ -1,5 +1,11 @@
 # The Learn Portal — how the market actually works (D110)
 
+> **2026-07-04 — D111 GREENLIT + L1/L2 SHIPPED:** the course-framework redesign in
+> `docs/LEARN-FRAMEWORK.md` supersedes §3's content model — typed lesson blocks, per-lesson URLs
+> (course pages are syllabi), matter-of-fact titles (slugs unchanged), 38 inline checks, 8 graded
+> exams with published standings, a `learn` push category. The portal shell (hub, glossary, labs
+> rail, Ask) stands. Read the framework doc first for anything content-model.
+
 **Status:** Phases 1–3 shipped 2026-07-04 — all 8 courses live. A top-level **`/learn`** destination beside Reports —
 the front door for the financial-literacy pillar (`docs/LITERACY.md`). It teaches Cam & Graham
 **how the market works** — not which stocks to buy: what a stock is, how a price forms, what

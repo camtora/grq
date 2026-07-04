@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { PageHeader, SectionHeader, Card, Chip } from "@/components/ui";
 import { getSession } from "@/lib/session";
+import { prisma } from "@/lib/db";
 import { COURSES, LABS } from "@/lib/learn/content";
+import { EXAMS } from "@/lib/learn/exams";
 import { GLOSSARY } from "@/lib/glossary";
 import AskLearn from "@/components/learn/AskLearn";
+import Standings from "@/components/learn/Standings";
 
-// The Learn portal hub (docs/LEARN-PORTAL.md, D110) — the front door for the financial-
-// literacy pillar: the market-mechanics curriculum, the labs (framed by what each teaches),
-// the browsable glossary, and an Ask Alfred entry. Teaches how the market WORKS, not which
-// stocks to buy. Viewer-readable; only chat is members-only.
+// The Learn portal hub (docs/LEARN-PORTAL.md D110 + docs/LEARN-FRAMEWORK.md D111) — the
+// front door for the financial-literacy pillar: the curriculum (with your progress), the
+// class standings, the labs (framed by what each teaches), the browsable glossary, and an
+// Ask Alfred entry. Teaches how the market WORKS, not which stocks to buy. Viewer-readable;
+// chat, exams, and progress are members-only.
 export const dynamic = "force-dynamic";
 
 export default async function LearnPage() {
@@ -16,18 +20,40 @@ export default async function LearnPage() {
   const isMember = session?.role === "member";
   const termCount = Object.keys(GLOSSARY).length;
 
+  // The signed-in member's own progress, for the course cards. Best-effort.
+  const doneBy = new Map<string, number>();
+  const examBy = new Map<string, { best: number; passed: boolean }>();
+  if (isMember && session) {
+    try {
+      const [dones, attempts] = await Promise.all([
+        prisma.learnLessonDone.findMany({ where: { email: session.email }, select: { courseSlug: true } }),
+        prisma.learnExamAttempt.findMany({ where: { email: session.email }, select: { courseSlug: true, scorePct: true, passed: true } }),
+      ]);
+      for (const d of dones) doneBy.set(d.courseSlug, (doneBy.get(d.courseSlug) ?? 0) + 1);
+      for (const a of attempts) {
+        const cur = examBy.get(a.courseSlug);
+        examBy.set(a.courseSlug, { best: Math.max(cur?.best ?? 0, a.scorePct), passed: (cur?.passed ?? false) || a.passed });
+      }
+    } catch {
+      /* the hub never falls over on homework */
+    }
+  }
+  const hasExam = new Set(EXAMS.map((e) => e.courseSlug));
+
   return (
     <main>
       <PageHeader
         title="Learn"
-        sub="How the market actually works — not which stocks to buy. Courses in plain English, every term tap-to-explain, and live experiments to watch the ideas play out."
+        sub="How the market actually works — not which stocks to buy. Courses in plain English, every term tap-to-explain, checks and exams to prove it stuck, and live experiments to watch the ideas play out."
       />
 
       <div className="space-y-10">
         <section>
-          <SectionHeader sub="· eight courses, in order — start at the machine">The curriculum</SectionHeader>
+          <SectionHeader sub="· eight courses, in order — start at market structure">The curriculum</SectionHeader>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {COURSES.map((c) => {
+              const done = doneBy.get(c.slug) ?? 0;
+              const exam = examBy.get(c.slug);
               const inner = (
                 <Card
                   className={`flex h-full flex-col p-5 transition-colors ${
@@ -43,10 +69,30 @@ export default async function LearnPage() {
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
                     ) : c.external ? (
-                      <span>its own portal →</span>
+                      <span>
+                        the portal + its exam
+                        {isMember && exam ? (
+                          <span className={exam.passed ? "text-emerald-300" : "text-amber-300"}>
+                            {" "}
+                            · {exam.best}%{exam.passed ? " ✓" : ""}
+                          </span>
+                        ) : null}{" "}
+                        →
+                      </span>
                     ) : (
                       <span>
-                        {c.lessons.length} lessons →
+                        {isMember ? `${done}/${c.lessons.length} lessons` : `${c.lessons.length} lessons`}
+                        {hasExam.has(c.slug) ? (
+                          isMember && exam ? (
+                            <span className={exam.passed ? "text-emerald-300" : "text-amber-300"}>
+                              {" "}
+                              · exam {exam.best}%{exam.passed ? " ✓" : ""}
+                            </span>
+                          ) : (
+                            <span> · exam</span>
+                          )
+                        ) : null}{" "}
+                        →
                       </span>
                     )}
                   </div>
@@ -54,12 +100,17 @@ export default async function LearnPage() {
               );
               if (c.status !== "live") return <div key={c.slug}>{inner}</div>;
               return (
-                <Link key={c.slug} href={c.external ? c.external.href : `/learn/${c.slug}`} className="group">
+                <Link key={c.slug} href={`/learn/${c.slug}`} className="group">
                   {inner}
                 </Link>
               );
             })}
           </div>
+        </section>
+
+        <section>
+          <SectionHeader sub="· scores published, attempt counts included — that's the honesty policy">The class</SectionHeader>
+          <Standings />
         </section>
 
         <section>

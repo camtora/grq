@@ -1,30 +1,109 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
-import Md from "@/components/Md";
-import { COURSES, courseBySlug, type LearnWidgetKey } from "@/lib/learn/content";
-import OrderBookSim from "@/components/learn/OrderBookSim";
-import CompoundingSim from "@/components/learn/CompoundingSim";
-import ReceiptBlock from "@/components/learn/Receipts";
+import Avatar from "@/components/Avatar";
+import { getSession } from "@/lib/session";
+import { prisma } from "@/lib/db";
+import { COURSES, courseBySlug, readMinutes, lessonChecks } from "@/lib/learn/content";
+import { examForCourse } from "@/lib/learn/exams";
+import { memberEmails } from "@/lib/users";
+import { personByEmail } from "@/lib/people";
 
-// Interactive widgets a lesson can embed (client leaves under this server page).
-const WIDGETS: Record<LearnWidgetKey, React.ReactNode> = {
-  "order-book": <OrderBookSim />,
-  compounding: <CompoundingSim />,
-};
-
-// One Learn-portal course (docs/LEARN-PORTAL.md, D110): the lessons stacked as panels,
-// markdown bodies rendered by Md (so every [[term]] is tap-to-explain), with optional
-// "see it live" links under each lesson. Courses marked `soon` get an honest empty state;
-// the Options course redirects to its own portal.
+// A course SYLLABUS (docs/LEARN-FRAMEWORK.md D111 §3): the overview, the lesson list with
+// per-member checkmarks and minutes, and the final-exam card with the class's results.
+// Lessons live on their own pages now (/learn/[course]/[lesson]). The external Options
+// course renders a landing that points at its portal — its exam still lives here.
 export const dynamic = "force-dynamic";
+
+async function classResults(courseSlug: string) {
+  try {
+    const attempts = await prisma.learnExamAttempt.findMany({
+      where: { courseSlug },
+      select: { email: true, scorePct: true, passed: true },
+    });
+    return memberEmails()
+      .map((email) => {
+        const mine = attempts.filter((a) => a.email === email);
+        if (!mine.length) return null;
+        const person = personByEmail(email);
+        return {
+          email,
+          name: person?.name ?? email.split("@")[0],
+          photo: person?.photo ?? null,
+          best: Math.max(...mine.map((a) => a.scorePct)),
+          count: mine.length,
+          passed: mine.some((a) => a.passed),
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+  } catch {
+    return [];
+  }
+}
+
+function ExamCard({
+  courseSlug,
+  isMember,
+  results,
+  questionCount,
+  passPct,
+}: {
+  courseSlug: string;
+  isMember: boolean;
+  results: Awaited<ReturnType<typeof classResults>>;
+  questionCount: number;
+  passPct: number;
+}) {
+  return (
+    <div className="space-y-2">
+      <PanelHeader>The final exam</PanelHeader>
+      <Card className="p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-teal-200/60">
+            {questionCount} questions · pass ≥ {passPct}% · unlimited retakes — the best score stands, the attempt count shows.
+          </p>
+          {isMember ? (
+            <Link
+              href={`/learn/${courseSlug}/exam`}
+              className="rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+            >
+              {results.length ? "Retake the exam" : "Take the exam"}
+            </Link>
+          ) : (
+            <span className="text-[11px] text-teal-200/40">exams are member-only — the lessons are all yours</span>
+          )}
+        </div>
+        {results.length ? (
+          <div className="mt-3 space-y-1.5 border-t border-teal-400/10 pt-3">
+            {results.map((r) => (
+              <div key={r.email} className="flex items-center gap-2.5 text-xs">
+                <Avatar src={r.photo} name={r.name} size="h-5 w-5" />
+                <span className="w-16 font-semibold text-teal-50">{r.name}</span>
+                <span className={`tabular-nums font-semibold ${r.passed ? "text-emerald-300" : "text-amber-300"}`}>
+                  {r.best}%{r.passed ? " ✓" : ""}
+                </span>
+                <span className="text-teal-200/40">
+                  · {r.count} {r.count === 1 ? "attempt" : "attempts"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Card>
+    </div>
+  );
+}
 
 export default async function CoursePage({ params }: { params: Promise<{ course: string }> }) {
   const { course: slug } = await params;
   const course = courseBySlug(slug);
   if (!course) notFound();
-  if (course.external) redirect(course.external.href);
+
+  const session = await getSession();
+  const isMember = session?.role === "member";
+  const exam = examForCourse(course.slug);
+  const results = exam ? await classResults(course.slug) : [];
 
   if (course.status !== "live") {
     return (
@@ -43,6 +122,57 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
     );
   }
 
+  // The external course (Options) — a landing for its portal, plus its exam.
+  if (course.external) {
+    return (
+      <main>
+        <Link href="/learn" className="text-xs text-teal-300 hover:underline">
+          ← learn
+        </Link>
+        <div className="mt-4 space-y-6">
+          <PageHeader title={`Course ${course.n} · ${course.title}`} sub={course.tagline} />
+          {course.overview?.length ? (
+            <Card className="p-5">
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">After this course</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-teal-100/80">
+                {course.overview.map((o) => (
+                  <li key={o}>{o}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+          <Card className="p-5">
+            <p className="text-sm leading-relaxed text-teal-100/75">
+              This course is taught in its own portal: {course.external.note}
+            </p>
+            <Link
+              href={course.external.href}
+              className="mt-3 inline-block rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+            >
+              Open the Options portal
+            </Link>
+          </Card>
+          {exam ? (
+            <ExamCard courseSlug={course.slug} isMember={isMember} results={results} questionCount={exam.questions.length} passPct={exam.passPct} />
+          ) : null}
+        </div>
+      </main>
+    );
+  }
+
+  let doneSet = new Set<string>();
+  if (isMember && session) {
+    try {
+      const dones = await prisma.learnLessonDone.findMany({
+        where: { email: session.email, courseSlug: course.slug },
+        select: { lessonSlug: true },
+      });
+      doneSet = new Set(dones.map((d) => d.lessonSlug));
+    } catch {
+      /* homework never takes the page down */
+    }
+  }
+
   const next = COURSES.find((c) => c.n > course.n && c.status === "live");
 
   return (
@@ -50,43 +180,58 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
       <Link href="/learn" className="text-xs text-teal-300 hover:underline">
         ← learn
       </Link>
-      <div className="mt-4">
+      <div className="mt-4 space-y-6">
         <PageHeader title={`Course ${course.n} · ${course.title}`} sub={course.tagline} />
 
-        <div className="space-y-6">
-          {course.lessons.map((lesson, i) => (
-            <div key={lesson.slug} className="space-y-2">
-              <PanelHeader>{`${i + 1} · ${lesson.title}`}</PanelHeader>
-              <Card className="p-5">
-                <Md text={lesson.body} />
-                {lesson.widget ? WIDGETS[lesson.widget] : null}
-                {lesson.receipt ? <ReceiptBlock k={lesson.receipt} /> : null}
-                {lesson.tryIt?.length ? (
-                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-teal-400/10 pt-3">
-                    {lesson.tryIt.map((t) => (
-                      <Link key={t.href} href={t.href} className="text-xs text-teal-300 hover:underline">
-                        {t.label} →
-                      </Link>
-                    ))}
-                  </div>
-                ) : null}
-              </Card>
-            </div>
-          ))}
+        {course.overview?.length ? (
+          <Card className="p-5">
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">After this course</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-teal-100/80">
+              {course.overview.map((o) => (
+                <li key={o}>{o}</li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[11px] text-teal-200/40">
-              Every underlined term is tap-to-explain. Something still unclear? Ask Alfred — that&apos;s what the chat is for.
-            </p>
-            {next ? (
-              <Link
-                href={next.external ? next.external.href : `/learn/${next.slug}`}
-                className="text-xs text-teal-300 hover:underline"
-              >
-                Next: Course {next.n} · {next.title} →
-              </Link>
-            ) : null}
-          </div>
+        <div className="space-y-2">
+          <PanelHeader>{`Lessons · ${course.lessons.length}`}</PanelHeader>
+          <Card className="p-2">
+            {course.lessons.map((lesson, i) => {
+              const done = doneSet.has(lesson.slug);
+              const checks = lessonChecks(lesson).length;
+              return (
+                <Link
+                  key={lesson.slug}
+                  href={`/learn/${course.slug}/${lesson.slug}`}
+                  className="group flex items-baseline gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-teal-400/[0.05]"
+                >
+                  <span className="w-5 shrink-0 text-right text-xs tabular-nums text-teal-300/50">{i + 1}</span>
+                  <span className="min-w-0 flex-1 text-sm font-medium text-teal-50 group-hover:underline">{lesson.title}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-teal-200/40">
+                    {checks ? `${checks} ${checks === 1 ? "check" : "checks"} · ` : ""}
+                    {readMinutes(lesson)} min
+                  </span>
+                  <span className={`w-4 shrink-0 text-sm ${done ? "text-emerald-300" : "text-teal-200/15"}`}>✓</span>
+                </Link>
+              );
+            })}
+          </Card>
+        </div>
+
+        {exam ? (
+          <ExamCard courseSlug={course.slug} isMember={isMember} results={results} questionCount={exam.questions.length} passPct={exam.passPct} />
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[11px] text-teal-200/40">
+            Every underlined term is tap-to-explain. Something still unclear? Ask Alfred — that&apos;s what the chat is for.
+          </p>
+          {next ? (
+            <Link href={`/learn/${next.slug}`} className="text-xs text-teal-300 hover:underline">
+              Next: Course {next.n} · {next.title} →
+            </Link>
+          ) : null}
         </div>
       </div>
     </main>

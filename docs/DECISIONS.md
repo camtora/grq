@@ -2833,3 +2833,34 @@ glossary cross-links (it caught two pre-existing ones on day one).
 (15 lessons), 16 new glossary terms, nav entry, `/options` back-nav. 117/117 tests, tsc clean,
 routes smoke-tested. Phases 2–4 (courses 4/5/7 + the toy order-book widget; live-fund "receipts"
 blocks + Course 8; mobile parity + glossary unification): `docs/LEARN-PORTAL.md` §5.
+
+### D111 — The Learn framework: courses that earn the name (Cam, 2026-07-04)
+
+Cam's critique of D110, verbatim: *"calling them 'courses' and 'lessons' is a little ridiculous —
+they're just paragraphs. And the course titles are meaningless."* The full redesign of what a
+course IS lives in `docs/LEARN-FRAMEWORK.md`; this entry records the decisions and the day-one build.
+
+**Decisions (Cam):** viewers stay NON-write — no exams, no progress rows (learn writes are the
+same 403 wall as everything else; lessons/checks/standings stay viewer-readable). Retitles signed
+off — **Market structure · How prices work · Owning stocks · Reading the data · Risk · Options ·
+Long-term investing · How GRQ works** (slugs unchanged, so every deep link survives). Pass ≥ 80%,
+unlimited retakes, best-score-stands with the attempt count published. Push on passes = a normal
+toggleable `learn` category. YouTube embeds are in (click-to-load `youtube-nocookie`, curated,
+each with a written "why"). Per-lesson URLs are in: `/learn/[course]/[lesson]`, with the course
+page reborn as a syllabus.
+
+**Shipped same day (framework L1+L2):** lesson bodies → typed `LearnBlock[]` (prose · callout ·
+figure · widget · receipt · living-example · video · check · tryIt) rendered by
+`components/learn/BlockRenderer`; 35 lessons migrated verbatim; **38 inline checks** authored
+(client-graded, formative — every live lesson now asks something of the learner, test-enforced);
+**8 exams × 8 questions** in server-only `lib/learn/exams.ts` (choice + integer-numeric incl.
+string-math cents; keys stripped from every client payload AND from the learn.json export —
+mobile will sit exams through the API); `GET/POST /api/learn/exam/[course]` (shuffle per sitting,
+per-question teach-backs + review-lesson links) + `/api/learn/progress`; `LearnLessonDone` /
+`LearnExamAttempt` / `LearnExample` models (integer `scorePct` — no floats, even for homework);
+standings ("The class") on the hub with avatars + per-course best/attempts; hub cards show your
+lessons-done + exam best; the Options course page became a landing (portal link + ITS exam — one
+exam system, eight courses). Exams include a field-trip question answered from the live app (XIC
+in Reports; the conviction bar off the guardrails dials). The `example` block renders its authored
+fallback until the L4 nightly engine lands. Remaining phases: L3 media depth (diagrams, annotated
+real-data charts, curated video pass), L4 living examples, L5 mobile.

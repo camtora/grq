@@ -19,6 +19,7 @@ export const TOGGLEABLE_CATEGORIES = [
   { key: "system", label: "System health", desc: "Agent restarts and data-feed or broker hiccups (non-critical)." },
   { key: "priceTargets", label: "Price alerts", desc: "When a stock you set an alert on crosses your target price." },
   { key: "optionsDesk", label: "Options Desk", desc: "When the experimental Options Desk opens or settles an option — a nudge to go read the teaching card. Sandbox only; never the real fund." },
+  { key: "learn", label: "Learn exams", desc: "When the other member passes a Learn course exam — the standings just moved." },
 ] as const;
 
 export type ToggleKey = (typeof TOGGLEABLE_CATEGORIES)[number]["key"];
@@ -37,7 +38,7 @@ export type NotificationPrefs = Record<ToggleKey, boolean>;
 
 /** All-on — the default when a member has never touched their settings. */
 export function defaultPrefs(): NotificationPrefs {
-  return { dossiers: true, hunt: true, agentMoves: true, reports: true, checkins: true, holdingChecks: true, members: true, system: true, priceTargets: true, optionsDesk: true };
+  return { dossiers: true, hunt: true, agentMoves: true, reports: true, checkins: true, holdingChecks: true, members: true, system: true, priceTargets: true, optionsDesk: true, learn: true };
 }
 
 /** Normalize a DB row (or null) into the flat toggle object the API returns. */

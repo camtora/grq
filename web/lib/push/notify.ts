@@ -27,7 +27,8 @@ export type NotifCategory =
   | "system" // agent restarts, data-feed/broker hiccups (non-critical)
   | "priceTargets" // a price alert the member set has crossed (Phase 2 — The Wire)
   | "optionsDesk" // the experimental Options Desk opened/settled an option — a nudge to read the card (sandbox)
-  | "accounts"; // the member's OWN linked brokerage broke / was fixed (SnapTrade reconnect) — FORCED ON (Cam 2026-07-04)
+  | "accounts" // the member's OWN linked brokerage broke / was fixed (SnapTrade reconnect) — FORCED ON (Cam 2026-07-04)
+  | "learn"; // the other member passed a Learn course exam (D111) — standings bragging rights
 
 type Severity = "info" | "warning" | "critical";
 
@@ -48,6 +49,7 @@ const PREF_FIELD: Partial<Record<NotifCategory, keyof PrefRow>> = {
   system: "system",
   priceTargets: "priceTargets",
   optionsDesk: "optionsDesk",
+  learn: "learn",
 };
 
 type PrefRow = {
@@ -64,6 +66,7 @@ type PrefRow = {
   priceTargets: boolean;
   optionsDesk: boolean;
   accounts: boolean;
+  learn: boolean;
 };
 
 // APNs reasons (or a 410) that mean the token is dead and should be pruned.
