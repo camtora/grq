@@ -182,6 +182,8 @@ export type Dossier = {
   symbol: string;
   name: string;
   currency: string;
+  // Prebuilt listing-venue line ("🇨🇦 TSX — Toronto Stock Exchange") — under the ticker.
+  exchangeLine?: string | null;
   lastCents: number | null;
   logoUrl: string | null;
   status: string;

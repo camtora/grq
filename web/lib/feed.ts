@@ -6,6 +6,7 @@ import { soakStatus } from "./soak";
 import { listFxRequests } from "./fx-requests";
 import { getQuotes, getQuote } from "./broker/quotes";
 import { allUniverse, type UniverseRow, bareTicker, yahooForListing } from "./universe";
+import { exchangeLine } from "./exchange";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, isMarketOpen, startOfEtDay } from "@/agent/calendar";
@@ -1907,6 +1908,9 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     symbol: sym,
     name: entry.name,
     currency: entry.currency ?? "CAD",
+    // The listing venue, prebuilt ("🇨🇦 TSX — Toronto Stock Exchange") so the venue map
+    // lives in web/lib/exchange.ts only — the app renders it under the ticker (2026-07-04).
+    exchangeLine: exchangeLine(entry.exchange, entry.yahoo),
     lastCents: cur,
     bodyMarkdown: body,
     call: stanceToCall(stanceEntry?.stance),

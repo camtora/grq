@@ -155,6 +155,11 @@ export default function StockScreen() {
               <StockLogo symbol={d.symbol} logoUrl={d.logoUrl} size={44} />
               <View style={s.heroMain}>
                 <Text style={[s.heroName, { color: p.textPrimary }]} numberOfLines={2}>{d.name}</Text>
+                {/* The listing venue, called out under the name on EVERY stock page (Cam
+                    2026-07-04) — prebuilt server-side so the venue map lives in one place. */}
+                {d.exchangeLine ? (
+                  <Text style={[s.exchangeLine, { color: p.textMuted }]} numberOfLines={1}>{d.exchangeLine}</Text>
+                ) : null}
                 <View style={s.heroTags}>
                   {/* Who's watching, left under the name — the avatars ARE the toggle
                       (tap: the dashed + adds you, tapping while in removes you). The
@@ -1063,6 +1068,7 @@ const s = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   heroMain: { flex: 1, minWidth: 0 },
   heroName: { fontFamily: F.semi, fontSize: 16, lineHeight: 21 },
+  exchangeLine: { fontFamily: F.med, fontSize: 10.5, marginTop: 1.5 },
   heroTags: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
   heroRight: { alignItems: 'flex-end' },
   heroPrice: { fontFamily: 'System', fontWeight: '800', fontSize: 20 },

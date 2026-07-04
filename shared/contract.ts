@@ -378,6 +378,9 @@ export const Dossier = z.object({
   symbol: z.string(),
   name: z.string(),
   currency: z.string().default("CAD"), // labels price/targets/cap (US$ vs C$)
+  // Prebuilt listing-venue line ("🇨🇦 TSX — Toronto Stock Exchange"), shown under the
+  // ticker (2026-07-04). Additive + optional — older payloads/apps simply omit it.
+  exchangeLine: z.string().nullish(),
   lastCents: z.number().int().nullable(), // current (delayed) share price
   bodyMarkdown: z.string(),
   call: AgentCall.nullable(),

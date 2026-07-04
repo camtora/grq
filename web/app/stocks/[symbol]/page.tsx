@@ -2,6 +2,7 @@ import StockBackLink from "@/components/StockBackLink";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { universeEntry, canonicalMember, bareTicker, yahooForListing } from "@/lib/universe";
+import { exchangeMeta } from "@/lib/exchange";
 import { fmpLogo } from "@/lib/logos";
 import { getQuote } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
@@ -276,6 +277,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
   const dayBps = quote?.dayChangeBps ?? 0;
+  // Listing venue for the header call-out — stored exchange first, yahoo-suffix fallback.
+  const xm = exchangeMeta(entry.exchange, entry.yahoo);
 
   // Tier 3 options (CBOE) + tier 8 social (ApeWisdom/Stocktwits): the page renders from the
   // cached rows read in the barrier above; the actual network refreshes run fire-and-forget
@@ -410,6 +413,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 {watch && <Chip tone="teal">agent watching</Chip>}
                 <AvatarStack people={stockWatchers} />
               </div>
+              {/* The listing venue, called out under the ticker on EVERY stock page (Cam
+                  2026-07-04): which market this name actually trades on — the .TO/.V suffix
+                  convention is invisible to humans. w-full wraps it onto its own line. */}
+              <span className="w-full text-xs font-semibold uppercase tracking-wider text-teal-200/60">
+                {xm.flag && <span aria-hidden>{xm.flag} </span>}
+                {xm.label}
+                <span className="ml-1.5 font-normal normal-case tracking-normal text-teal-200/40">
+                  {xm.name} · {xm.note}
+                </span>
+              </span>
             </div>
             {/* Live price, right-justified onto the ticker's baseline; the $/% move (sized to the
                 company name) + live marker stack just beneath it. */}
