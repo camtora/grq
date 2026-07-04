@@ -15,8 +15,13 @@ const MARKETS: Row[] = [
 ];
 
 const LEARNING: Row[] = [
-  { href: '/more/about-grq', icon: 'book-outline', title: 'About GRQ', desc: 'The operating manual — the rules, the rhythm, and every decision on record.' },
   { href: '/more/options', icon: 'school-outline', title: 'Options', desc: 'Lessons + the payoff calculator — modeled, never executable.' },
+];
+
+const ABOUT: Row[] = [
+  { href: '/more/about-grq', icon: 'book-outline', title: 'How GRQ works', desc: 'The operating manual — the rules, the rhythm, and every decision on record.' },
+  { href: '/traffic', icon: 'stats-chart-outline', title: 'Traffic', desc: "Who's using GRQ, and which sections get the views." },
+  { href: '/tokens', icon: 'flame-outline', title: 'Tokens', desc: "What the agent spends of the shared Claude Max quota." },
 ];
 
 const EXPERIMENTS: Row[] = [
@@ -61,6 +66,8 @@ export default function MoreScreen() {
       {renderRows(EXPERIMENTS)}
       <SectionTitle sub="every number explainable">Learning</SectionTitle>
       {renderRows(LEARNING)}
+      <SectionTitle sub="the manual & the meters">About GRQ</SectionTitle>
+      {renderRows(ABOUT)}
     </Screen>
   );
 }
