@@ -925,6 +925,9 @@ model PageView {
   role    String // "owner" | "member" | "viewer" — snapshot at view time
   path    String // raw pathname ("/stocks/AAPL")
   section String // friendly label ("Stock", "Watchlist", "Today")
+  client  String? // "web" | "app" — derived server-side from HOW the request authenticated
+  // (oauth2-proxy header = web, GRQ-JWT Bearer = GRQ Go). Null = logged before the
+  // split; app/web paths overlap (/settings, /learn, /) so history isn't backfillable.
 
   @@index([at])
   @@index([email])

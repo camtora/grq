@@ -16,7 +16,8 @@ type TrafficWire = {
   byUser: { email: string; name: string | null; role: string; views: number; topSection: string | null; lastSeen: string }[];
   matrix: { sections: string[]; rows: { email: string; counts: Record<string, number> }[] };
   viewerQuestions: { at: string; name: string | null; email: string; symbol: string | null; message: string }[];
-  recent: { at: string; name: string | null; email: string; section: string; path: string }[];
+  // `client` "web" | "app" — how the view arrived; null/absent = logged before the split.
+  recent: { at: string; name: string | null; email: string; section: string; path: string; client?: string | null }[];
 };
 
 const WINDOWS = [
@@ -222,6 +223,10 @@ export default function TrafficScreen() {
                     {i > 0 && <Divider />}
                     <View style={s.recentRow}>
                       <Text style={[s.metaSmall, tabular, { color: p.textMuted, width: 52 }]}>{timeAgo(r.at)}</Text>
+                      {/* where from: GRQ Go vs the web — blank for rows logged before the split */}
+                      <Text style={[s.clientTag, { color: r.client === 'app' ? p.accentText : p.textMuted, width: 26 }]}>
+                        {r.client ?? ''}
+                      </Text>
                       <Text style={[s.metaSmall, { color: p.textPrimary, width: 60, fontFamily: F.semi }]} numberOfLines={1}>
                         {r.name ?? r.email.split('@')[0]}
                       </Text>
@@ -260,6 +265,7 @@ const s = StyleSheet.create({
   barFill: { height: 14, borderRadius: 7 },
   barVal: { fontFamily: F.reg, fontSize: 10, width: 72, textAlign: 'right' },
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
+  clientTag: { fontFamily: F.semi, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 0.5 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
   userName: { fontFamily: F.semi, fontSize: 13 },
   userViews: { fontFamily: F.semi, fontSize: 14 },

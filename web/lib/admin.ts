@@ -54,7 +54,7 @@ export type UserStat = {
   lastSeen: Date;
   topSection: string | null;
 };
-export type RecentView = { at: Date; email: string; name: string | null; section: string; path: string };
+export type RecentView = { at: Date; email: string; name: string | null; section: string; path: string; client: string | null };
 export type UsageMatrix = { sections: string[]; rows: { email: string; counts: Record<string, number> }[] };
 export type ViewerQuestionView = { at: Date; email: string; name: string | null; message: string; symbol: string | null };
 
@@ -89,7 +89,7 @@ export async function getUsage(days: number): Promise<Usage> {
       where,
       orderBy: { at: "desc" },
       take: 60,
-      select: { at: true, email: true, path: true },
+      select: { at: true, email: true, path: true, client: true },
     }),
     prisma.viewerQuestion.findMany({
       where,
@@ -182,6 +182,8 @@ export async function getUsage(days: number): Promise<Usage> {
     // not only ones logged after the change.
     section: sectionForPath(r.path),
     path: r.path,
+    // null = a row logged before the web/app split existed — shown unmarked, not guessed.
+    client: r.client,
   }));
 
   const viewerQuestions: ViewerQuestionView[] = viewerQ.map((q) => ({

@@ -29,6 +29,15 @@ export async function POST(req: Request) {
   }
 
   const role = isOwner(session.email) ? "owner" : session.role;
+  // Which client, derived server-side like identity (never self-reported): the
+  // oauth2-proxy header means the web (nginx sets it; `|| null` because the mobile
+  // bypass clears it to empty); otherwise a Bearer means GRQ Go. Mirrors the
+  // resolution order in sessionFromRequest.
+  const client = (req.headers.get("x-forwarded-email") || null)
+    ? "web"
+    : req.headers.get("authorization")?.startsWith("Bearer ")
+      ? "app"
+      : "web";
   await prisma.pageView
     .create({
       data: {
@@ -36,6 +45,7 @@ export async function POST(req: Request) {
         role,
         path: path.slice(0, 512),
         section: sectionForPath(path),
+        client,
       },
     })
     .catch(() => {
