@@ -69,9 +69,10 @@ export default function RootLayout() {
     if (status === 'signedIn') registerForPush();
   }, [status]);
 
-  // Keep the header badges honest with the web (same server rows): refresh on
-  // app-foreground + every 60s while signed in — so clearing on one surface
-  // clears on the other within a minute, not just on navigation.
+  // Keep the header badges honest with the web (same server rows): refresh the
+  // moment a push arrives while the app is foregrounded (messages are always-on,
+  // so a DM lands instantly — Cam 2026-07-04), on app-foreground (covers pushes
+  // that arrived while backgrounded), and every 60s as the no-push fallback.
   const refreshMessages = useMessages((s) => s.refreshUnread);
   const refreshBell = useNotifications((s) => s.refreshUnread);
   useEffect(() => {
@@ -80,11 +81,13 @@ export default function RootLayout() {
       refreshMessages();
       refreshBell();
     };
+    const pushSub = Notifications.addNotificationReceivedListener(tick);
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') tick();
     });
     const t = setInterval(tick, 60_000);
     return () => {
+      pushSub.remove();
       sub.remove();
       clearInterval(t);
     };
