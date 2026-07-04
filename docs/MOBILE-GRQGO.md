@@ -107,7 +107,10 @@ metro.grq.camerontora.ca.
    + avatars; pin/block + chart range selector still open).
 
 **Experiments — build out to match the site:**
-10. Second Opinions: per-day/per-call detail (web `race/[date]`), call browser.
+10. ~~Second Opinions: per-day/per-call detail (web `race/[date]`), call browser~~ ✅ 2026-07-04 —
+    overview rebuilt to web parity (ranked tiles w/ counts+book, how-it-works, race-day list) +
+    `race-day/[date]` (standings strip, champion-vs-challenger session matrix; feed:
+    `/api/race` grew counts/positions/days + new `/api/race/day/[date]`).
 11. Bull Race: past races (the feed's `races[]`), per-bull trade history, richer
     holdings (avg cost, market value).
 12. Options Desk: member desk controls + muteable nudge (D92), per-option decay
