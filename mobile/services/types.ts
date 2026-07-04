@@ -88,6 +88,8 @@ export type ExternalHolding = {
   marketValueCents: number | null;
   currency: string;
   openPnlCents: number | null;
+  quoteSymbol?: string; // the resolved listing our quote feed knows it by
+  logoUrl?: string | null;
 };
 
 export type ExternalAccount = {
@@ -106,6 +108,7 @@ export type ExternalAccount = {
 };
 
 export type AccountsResponse = {
+  fxUsdCad?: number | null; // BoC USD→CAD — NAV renders CAD-first with the US$ line below
   members: {
     email: string;
     name: string;

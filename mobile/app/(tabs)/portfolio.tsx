@@ -63,7 +63,12 @@ type BookRow = {
   dayBps?: number | null;
   pnlCents?: number | null;
   label?: string; // display override for non-stock rows (e.g. Cash) — no link
+  usd?: boolean; // house convention: $ is CAD unless it wears a US prefix
 };
+
+// "US$1,234.56" / "-US$12.34" — the US prefix rides inside the sign.
+const usMoney = (cents: number) => money(cents).replace('$', 'US$');
+const usSignedMoney = (cents: number) => signedMoney(cents).replace('$', 'US$');
 
 function countryOf(currency: string): string {
   if (currency === 'USD') return 'United States';
@@ -83,7 +88,9 @@ function BookRowView({ r }: { r: BookRow }) {
       </View>
       <View style={s.rowRight}>
         {r.valueCents != null && (
-          <Text style={[s.val, tabular, { color: p.textPrimary }]}>{money(r.valueCents)}</Text>
+          <Text style={[s.val, tabular, { color: p.textPrimary }]}>
+            {r.usd ? usMoney(r.valueCents) : money(r.valueCents)}
+          </Text>
         )}
         <View style={s.rowRightSub}>
           {r.dayBps != null && (
@@ -93,7 +100,7 @@ function BookRowView({ r }: { r: BookRow }) {
           )}
           {r.pnlCents != null && (
             <Text style={[s.subPct, tabular, { color: pnlColor(r.pnlCents, p) }]}>
-              {signedMoney(r.pnlCents)}
+              {r.usd ? usSignedMoney(r.pnlCents) : signedMoney(r.pnlCents)}
             </Text>
           )}
         </View>
@@ -174,10 +181,11 @@ function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null
       row: {
         symbol: pos.symbol,
         logoUrl: pos.logoUrl,
-        qtyLine: `${pos.qty} sh @ ${money(pos.avgCostCents)}${pos.currency === 'USD' ? ' US' : ''}`,
+        qtyLine: `${pos.qty} sh @ ${pos.currency === 'USD' ? usMoney(pos.avgCostCents) : money(pos.avgCostCents)}`,
         valueCents: pos.marketValueCents,
         dayBps: pos.dayChangeBps,
         pnlCents: pos.unrealizedPnlCents,
+        usd: pos.currency === 'USD',
       },
       country: countryOf(pos.currency),
     }));
@@ -198,10 +206,15 @@ function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null
         </Card>
       )}
 
-      {/* Hero — NAV + day & total P&L */}
+      {/* Hero — NAV (CAD, house convention) + the US$ equivalent + day & total P&L */}
       <View style={s.hero}>
         <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
         <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(pf.navCents)}</Text>
+        {pf.fxUsdCad != null && pf.fxUsdCad > 0 && (
+          <Text style={[s.heroUsd, tabular, { color: p.textMuted }]}>
+            ≈ {usMoney(Math.round(pf.navCents / pf.fxUsdCad))}
+          </Text>
+        )}
         <View style={s.heroRow}>
           {t && (
             <Text style={[s.heroPnl, tabular, { color: pnlColor(t.dayPnlCents, p) }]}>
@@ -342,12 +355,21 @@ function PersonalView({
         // book — hiding it read as "not connected". The banner below owns the honesty.
         const accounts = m.connected ? m.accounts : [];
         const broken = accounts.find((a) => a.disabled);
+        // House convention: $ is CAD unless US-prefixed. USD accounts convert into
+        // the CAD NAV at the BoC rate; rows below keep their native currency.
+        const rate = data.fxUsdCad ?? null;
+        const inCad = (cents: number, currency: string) =>
+          currency === 'USD' && rate != null ? Math.round(cents * rate) : cents;
         const cad = accounts.filter((a) => a.currency === 'CAD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
         const usd = accounts.filter((a) => a.currency === 'USD').reduce((s2, a) => s2 + (a.cashCents ?? 0), 0);
         const holdings = accounts.flatMap((a) => a.holdings);
-        const positions = holdings.reduce((s2, h) => s2 + (h.marketValueCents ?? 0), 0);
-        const total = accounts.reduce((s2, a) => s2 + (a.totalValueCents ?? 0), 0);
-        const openPnl = holdings.reduce((s2, h) => s2 + (h.openPnlCents ?? 0), 0);
+        const positions = holdings.reduce((s2, h) => s2 + inCad(h.marketValueCents ?? 0, h.currency), 0);
+        const usdSleeve = accounts
+          .filter((a) => a.currency === 'USD')
+          .reduce((s2, a) => s2 + (a.totalValueCents ?? 0), 0);
+        const navCad = accounts.reduce((s2, a) => s2 + inCad(a.totalValueCents ?? 0, a.currency), 0);
+        const navUsd = rate != null && rate > 0 ? Math.round(navCad / rate) : null;
+        const openPnl = holdings.reduce((s2, h) => s2 + inCad(h.openPnlCents ?? 0, h.currency), 0);
         const daily = m.dailyValues ?? [];
         const prev = daily.length >= 2 ? daily[daily.length - 2].valueCents : null;
         const last = daily.length >= 1 ? daily[daily.length - 1].valueCents : null;
@@ -358,10 +380,11 @@ function PersonalView({
           .map((h) => ({
             row: {
               symbol: h.symbol,
-              logoUrl: null,
-              qtyLine: `${h.qty} sh${h.priceCents != null ? ` @ ${money(h.priceCents)}` : ''}${h.currency === 'USD' ? ' US' : ''}`,
+              logoUrl: h.logoUrl ?? null,
+              qtyLine: `${h.qty} sh${h.priceCents != null ? ` @ ${h.currency === 'USD' ? usMoney(h.priceCents) : money(h.priceCents)}` : ''}`,
               valueCents: h.marketValueCents,
               pnlCents: h.openPnlCents,
+              usd: h.currency === 'USD',
             } as BookRow,
             country: countryOf(h.currency),
           }));
@@ -375,7 +398,7 @@ function PersonalView({
         }
         if (usd > 0) {
           rows.push({
-            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash (USD)', valueCents: usd },
+            row: { symbol: '$', label: 'Cash', logoUrl: null, qtyLine: 'uninvested cash (USD)', valueCents: usd, usd: true },
             country: 'United States',
           });
         }
@@ -410,7 +433,13 @@ function PersonalView({
             )}
             <View style={s.hero}>
               <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
-              <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(total)}</Text>
+              <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(navCad)}</Text>
+              {navUsd != null ? (
+                <Text style={[s.heroUsd, tabular, { color: p.textMuted }]}>≈ {usMoney(navUsd)}</Text>
+              ) : usdSleeve > 0 ? (
+                // No BoC rate on the wire (pre-deploy / BoC down) — show the USD sleeve unconverted.
+                <Text style={[s.heroUsd, tabular, { color: p.textMuted }]}>+ {usMoney(usdSleeve)} in USD accounts</Text>
+              ) : null}
               <View style={s.heroRow}>
                 {dayDelta != null && dayBps != null && (
                   <Text style={[s.heroPnl, tabular, { color: pnlColor(dayDelta, p) }]}>
@@ -596,6 +625,7 @@ const s = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 22 },
   heroLabel: { fontFamily: F.semi, fontSize: 10, letterSpacing: 2 },
   heroNav: { fontFamily: 'System', fontWeight: '800', fontSize: 40, marginTop: 4, letterSpacing: -0.5 },
+  heroUsd: { fontFamily: F.semi, fontSize: 13, marginTop: 2 },
   heroRow: { flexDirection: 'row', gap: 14, marginTop: 6 },
   heroPnl: { fontFamily: F.semi, fontSize: 12.5 },
   tapeLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },

@@ -62,6 +62,45 @@ export function fmpLogo(symbol: string): string {
   return `https://financialmodelingprep.com/image-stock/${encodeURIComponent(symbol.trim().toUpperCase())}.png`;
 }
 
+/** White-logo verdict for the app (web StockLogo measures on a canvas; React
+ *  Native has no canvas, so the server measures ONCE with sharp and the app asks
+ *  in batches via /api/logo-meta). Same math as the web: mean luminance of the
+ *  non-transparent mark on a 16×16 sample; > 0.82 = a light mark that needs the
+ *  dark chip. Unmeasurable (fetch/decode failure) = false → the white chip, the
+ *  same graceful default the web takes on a tainted canvas. Cached per URL for
+ *  the process lifetime — logos are static images. */
+const lightVerdicts = new Map<string, boolean>();
+
+export async function logoIsLight(url: string): Promise<boolean> {
+  const hit = lightVerdicts.get(url);
+  if (hit !== undefined) return hit;
+  let light = false;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      const sharp = (await import("sharp")).default;
+      const { data } = await sharp(buf)
+        .resize(16, 16, { fit: "fill" })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 40) continue; // ignore (near-)transparent pixels — the mark is what matters
+        sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        n++;
+      }
+      light = n > 0 && sum / n / 255 > 0.82;
+    }
+  } catch {
+    /* unmeasurable → keep the white chip */
+  }
+  lightVerdicts.set(url, light);
+  return light;
+}
+
 /** Does FMP actually serve a logo for this ticker? (404 on unknown — checked
  *  server-side once at resolution time so we never cache a URL that would 404
  *  on every render.) */

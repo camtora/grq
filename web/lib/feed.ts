@@ -20,6 +20,7 @@ import { funFactOfDay } from "./funfacts";
 import { getScoreboard } from "./scoreboard";
 import { GLOSSARY } from "./glossary";
 import { watchersFor, allWatches } from "./watch";
+import { usdCadRate } from "./fx";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
@@ -1241,7 +1242,7 @@ function toBullets(primary: string | null | undefined, fallback: string | null |
 export async function accountsResponse(meEmail: string) {
   const everyone = memberEmails();
   const ordered = [meEmail, ...everyone.filter((e) => e !== meEmail)];
-  const [views, dailyRows] = await Promise.all([
+  const [views, dailyRows, allU, fxUsdCad] = await Promise.all([
     accountsForMembers(ordered),
     // The nightly personal-value series (ExternalDailyValue) — powers the app's
     // Personal tape. Last ~30 points per member, CAD-valued.
@@ -1249,7 +1250,18 @@ export async function accountsResponse(meEmail: string) {
       where: { ownerEmail: { in: ordered } },
       orderBy: { date: "asc" },
     }),
+    allUniverse(),
+    usdCadRate(), // the app renders NAV in CAD with the US$ equivalent below
   ]);
+  // Company logos for the personal book — tracked names use their resolved logo,
+  // the rest FMP's ticker-keyed image (join on the bare yahoo ticker, the
+  // universe-symbol convention for external symbols).
+  const logoByBare = new Map<string, string>();
+  for (const u of allU) {
+    if (u.status === "RETIRED" || !u.logoUrl) continue;
+    const key = bareTicker(u.yahoo || u.symbol).toUpperCase();
+    if (!logoByBare.has(key)) logoByBare.set(key, u.logoUrl);
+  }
   const dailyBy = new Map<string, { date: string; valueCents: number }[]>();
   for (const d of dailyRows) {
     const arr = dailyBy.get(d.ownerEmail) ?? [];
@@ -1257,6 +1269,7 @@ export async function accountsResponse(meEmail: string) {
     dailyBy.set(d.ownerEmail, arr);
   }
   return {
+    fxUsdCad,
     members: views.map((v) => ({
       email: v.email,
       name: personByEmail(v.email)?.name ?? v.email,
@@ -1283,6 +1296,8 @@ export async function accountsResponse(meEmail: string) {
           marketValueCents: h.marketValueCents,
           currency: h.currency,
           openPnlCents: h.openPnlCents,
+          quoteSymbol: h.quoteSymbol,
+          logoUrl: logoByBare.get(bareTicker(h.quoteSymbol).toUpperCase()) ?? fmpLogo(h.quoteSymbol),
         })),
       })),
     })),
