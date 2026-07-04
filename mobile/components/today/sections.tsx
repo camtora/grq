@@ -553,8 +553,10 @@ const s = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 9,
+    // Always exactly two per row — an odd last cell stays half-width.
     flexBasis: '47%',
-    flexGrow: 1,
+    flexGrow: 0,
+    maxWidth: '48.5%',
   },
   sectorName: { fontFamily: F.semi, fontSize: 13 },
   empty: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, paddingVertical: 10 },
