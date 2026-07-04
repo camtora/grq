@@ -23,9 +23,11 @@ const AVATARS: Record<string, number> = {
   graham: require('../../../assets/people/graham.png'),
 };
 
-// Range slices of the 180d daily closes (web PriceChart parity — 1D intraday
-// is a follow-up; the wire carries daily bars only).
-const RANGE_DAYS = { '1W': 7, '1M': 30, '3M': 91, '6M': 182 } as const;
+// Web PriceChart parity: 1D draws today's intraday line (fetched lazily,
+// re-polled every 60s = the server cache TTL, so it's live during the session);
+// the rest slice the 180d daily closes client-side.
+const RANGE_DAYS = { '1D': 0, '1W': 7, '1M': 30, '3M': 91, '6M': 182 } as const;
+type IntradayPoint = { t: number; c: number; session?: string };
 
 // Tone for a 7-point label when the feed carries only the label (the technical lean).
 function labelTone(label: string | null): string {
@@ -47,7 +49,28 @@ export default function StockScreen() {
   const { data: d, error, loading, refreshing, refresh } = useApi<Dossier>(`/api/dossier/${sym}`);
   const [queueing, setQueueing] = useState(false);
   const [queueMsg, setQueueMsg] = useState<string | null>(null);
-  const [range, setRange] = useState<keyof typeof RANGE_DAYS>('3M');
+  const [range, setRange] = useState<keyof typeof RANGE_DAYS>('1D');
+  const [intraday, setIntraday] = useState<IntradayPoint[] | null>(null);
+
+  // 1D: fetch the intraday line lazily and keep it live (60s poll while selected).
+  useEffect(() => {
+    if (range !== '1D') return;
+    let alive = true;
+    const pull = async () => {
+      try {
+        const r = await api<{ points: IntradayPoint[] }>(`/api/intraday?symbol=${encodeURIComponent(sym)}`);
+        if (alive) setIntraday(r.points);
+      } catch {
+        if (alive) setIntraday((prev) => prev ?? []);
+      }
+    };
+    pull();
+    const t = setInterval(pull, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [range, sym]);
 
   // No verdict and no bottom line = no dossier yet (the feed's bodyMarkdown
   // fallback text doesn't count as a read).
@@ -355,14 +378,30 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* ---- Price chart (range slices of the 180d closes, web PriceChart parity) ---- */}
+            {/* ---- Price chart (web PriceChart parity: 1D intraday live + daily slices) ---- */}
             {closes.length >= 2 && (() => {
+              const is1D = range === '1D';
+              // 1D: the regular session leads; pre/post ride along if that's all there is.
+              const intraPts = is1D
+                ? (() => {
+                    const pts = intraday ?? [];
+                    const regular = pts.filter((x) => !x.session || x.session === 'regular');
+                    return regular.length >= 2 ? regular : pts;
+                  })()
+                : [];
               const days = RANGE_DAYS[range];
               const cutoff = Date.now() - days * 86_400_000;
-              const sliced = closes.filter((x) => x.t >= cutoff);
-              const shown = sliced.length >= 2 ? sliced : closes;
+              const daily = closes.filter((x) => x.t >= cutoff);
+              const shown = is1D ? intraPts : daily.length >= 2 ? daily : closes;
+              const waiting = is1D && intraday === null;
               const rangeBps =
-                shown[0].c > 0 ? Math.round(((shown[shown.length - 1].c - shown[0].c) / shown[0].c) * 10_000) : null;
+                shown.length >= 2 && shown[0].c > 0
+                  ? Math.round(((shown[shown.length - 1].c - shown[0].c) / shown[0].c) * 10_000)
+                  : null;
+              const fmtLabel = (t: number) =>
+                is1D
+                  ? new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                  : new Date(t).toISOString().slice(0, 10);
               return (
                 <View>
                   <SectionTitle sub="daily closes">Price</SectionTitle>
@@ -391,15 +430,24 @@ export default function StockScreen() {
                         </Text>
                       )}
                     </View>
-                    <Sparkline values={shown.map((x) => x.c)} height={72} />
-                    <View style={s.chartLabels}>
-                      <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                        {new Date(shown[0].t).toISOString().slice(0, 10)}
+                    {shown.length >= 2 ? (
+                      <View>
+                        <Sparkline values={shown.map((x) => x.c)} height={72} />
+                        <View style={s.chartLabels}>
+                          <Text style={[s.chartLabel, { color: p.textMuted }]}>{fmtLabel(shown[0].t)}</Text>
+                          {is1D && (
+                            <Text style={[s.chartLabel, { color: p.pos }]}>
+                              ● live · refreshes every minute
+                            </Text>
+                          )}
+                          <Text style={[s.chartLabel, { color: p.textMuted }]}>{fmtLabel(shown[shown.length - 1].t)}</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={[s.mutedBody, { color: p.textMuted, paddingVertical: 20, textAlign: 'center' }]}>
+                        {waiting ? 'loading the session…' : 'no intraday trading yet — markets closed'}
                       </Text>
-                      <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                        {new Date(shown[shown.length - 1].t).toISOString().slice(0, 10)}
-                      </Text>
-                    </View>
+                    )}
                   </Card>
                 </View>
               );

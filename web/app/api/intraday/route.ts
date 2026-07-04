@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sessionFromRequest } from "@/lib/session";
 import { fetchIntradayBars, type IntradayPoint } from "@/lib/broker/yahoo";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ const cache = new Map<string, Cached>();
 const TTL_MS = 60_000;
 
 export async function GET(req: Request) {
+  // Self-guard for the mobile Bearer path (GRQ Go's 1D chart); browser traffic
+  // was already authenticated at the door.
+  const session = sessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Sign in to view this fund." }, { status: 403 });
   const symbol = (new URL(req.url).searchParams.get("symbol") ?? "").trim().toUpperCase();
   if (!symbol) return NextResponse.json({ points: [] });
 
