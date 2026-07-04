@@ -52,6 +52,9 @@ const MOBILE_API = [
   "/api/intraday",        // GRQ Go — the 1D chart line (self-guards; 60s server cache)
   "/api/quotes",          // live FMP ticker for the app's price overlay (self-guards via sessionFromRequest)
   "/api/logo-meta",       // white-logo chip verdicts for the app (RN has no canvas; self-guards)
+  "/api/how-it-works",    // About GRQ — the operating manual + decision log (owner-guarded in-route)
+  "/api/traffic",         // Traffic dashboard for the app (owner-guarded in-route)
+  "/api/tokens",          // Token-usage dashboard for the app (owner-guarded in-route)
   // Member writes (self-guard via memberFromRequest; the order gate still disposes).
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
   "/api/messages",        // D61 member-to-member DMs/shares (GET thread/unread, POST send/read)

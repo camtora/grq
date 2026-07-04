@@ -15,6 +15,7 @@ const MARKETS: Row[] = [
 ];
 
 const LEARNING: Row[] = [
+  { href: '/more/about-grq', icon: 'book-outline', title: 'About GRQ', desc: 'The operating manual — the rules, the rhythm, and every decision on record.' },
   { href: '/more/options', icon: 'school-outline', title: 'Options', desc: 'Lessons + the payoff calculator — modeled, never executable.' },
 ];
 
