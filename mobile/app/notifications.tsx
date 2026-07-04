@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, Divider, Loading } from '../components/Chrome';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { api } from '../services/api';
+import { routeForNotification } from '../lib/notification-routes';
 import { useNotifications } from '../store/notifications';
 
 type NotificationItem = {
@@ -86,27 +87,32 @@ export default function NotificationsScreen() {
               </Card>
             ) : (
               <Card style={s.listCard}>
-                {items.map((n, i) => (
-                  <View key={n.id}>
-                    {i > 0 && <Divider />}
-                    <Pressable
-                      onPress={() => n.symbol && router.push(`/stock/${n.symbol}`)}
-                      style={[s.row, { opacity: n.read ? 0.75 : 1 }]}
-                    >
-                      <View style={[s.dot, { backgroundColor: severityColor(n.severity, p) }]} />
-                      <View style={s.rowMain}>
-                        <Text style={[s.rowTitle, { color: p.textPrimary }]}>{n.title}</Text>
-                        {n.body ? (
-                          <Text style={[s.rowBody, { color: p.textMuted }]} numberOfLines={2}>{n.body}</Text>
-                        ) : null}
-                        <Text style={[s.rowMeta, { color: p.textMuted }]}>
-                          {n.category}{n.symbol ? ` · ${n.symbol} →` : ''}
-                        </Text>
-                      </View>
-                      <Text style={[s.rowMeta, { color: p.textMuted }]}>{timeAgo(n.at)}</Text>
-                    </Pressable>
-                  </View>
-                ))}
+                {items.map((n, i) => {
+                  // Rows route like push taps (lib/notification-routes) — fx/risk →
+                  // Settings, reports/check-ins → Portfolio, a symbol → its stock page.
+                  const path = routeForNotification(n);
+                  return (
+                    <View key={n.id}>
+                      {i > 0 && <Divider />}
+                      <Pressable
+                        onPress={() => path && router.push(path)}
+                        style={[s.row, { opacity: n.read ? 0.75 : 1 }]}
+                      >
+                        <View style={[s.dot, { backgroundColor: severityColor(n.severity, p) }]} />
+                        <View style={s.rowMain}>
+                          <Text style={[s.rowTitle, { color: p.textPrimary }]}>{n.title}</Text>
+                          {n.body ? (
+                            <Text style={[s.rowBody, { color: p.textMuted }]} numberOfLines={2}>{n.body}</Text>
+                          ) : null}
+                          <Text style={[s.rowMeta, { color: p.textMuted }]}>
+                            {n.category}{n.symbol ? ` · ${n.symbol}` : ''}{path ? ' →' : ''}
+                          </Text>
+                        </View>
+                        <Text style={[s.rowMeta, { color: p.textMuted }]}>{timeAgo(n.at)}</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
               </Card>
             )}
 

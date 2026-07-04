@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
@@ -19,6 +19,17 @@ const tabular = { fontVariant: ['tabular-nums' as const] };
  * holdings under Canada / United States headers. */
 export default function PortfolioScreen() {
   const [view, setView] = useState<'alfred' | 'personal'>('alfred');
+
+  // An `accounts` push tap (SnapTrade reconnect) routes here with ?segment=personal
+  // (lib/notification-routes) — apply it, then clear so a later tap re-fires.
+  const router = useRouter();
+  const { segment } = useLocalSearchParams<{ segment?: string }>();
+  useEffect(() => {
+    if (segment !== 'alfred' && segment !== 'personal') return;
+    setView(segment);
+    router.setParams({ segment: '' });
+  }, [segment, router]);
+
   const pf = useApi<Portfolio>('/api/portfolio');
   const today = useApi<Today>('/api/today');
   const accounts = useApi<AccountsResponse>('/api/accounts');

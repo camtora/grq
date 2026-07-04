@@ -80,6 +80,10 @@ export type PushOpts = {
   symbol?: string;
   /** Panel key (e.g. "analyst") — deep-links to that section of the dossier (D61). */
   panel?: string;
+  /** Explicit in-app destination ("smart-money" | "chess" | "hunt") for pushes whose
+   *  category is too coarse to route — the "hunt" family covers three screens. Wins
+   *  over the category rule on the phone (mobile/lib/notification-routes.ts). */
+  dest?: string;
 };
 
 /** Which members should receive this alert — resolved from the member list (NOT
@@ -155,6 +159,7 @@ export async function pushNotify(opts: PushOpts): Promise<void> {
           category: opts.category,
           ...(opts.symbol ? { symbol: opts.symbol } : {}),
           ...(opts.panel ? { panel: opts.panel } : {}),
+          ...(opts.dest ? { dest: opts.dest } : {}),
         },
       },
     );

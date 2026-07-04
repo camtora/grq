@@ -474,7 +474,7 @@ async function maybeScheduledSessions() {
         await runChessMoves({ id: pendingTheme.id, brief: pendingTheme.brief });
         const done = await prisma.chessTheme.findUnique({ where: { id: pendingTheme.id }, select: { status: true, title: true } });
         if (done?.status === "READY") {
-          await alert("info", `Chess Moves board ready: ${done.title}`, "A fresh value-chain board is live on Chess Moves.", { category: "hunt" });
+          await alert("info", `Chess Moves board ready: ${done.title}`, "A fresh value-chain board is live on Chess Moves.", { category: "hunt", dest: "chess" });
         }
       } finally {
         sessionRunning = false;
@@ -574,7 +574,7 @@ async function maybeScheduledSessions() {
       sessionRunning = true;
       try {
         await runSmartMoneyScan();
-        await alert("info", "Smart-money scan posted", "What notable public portfolios are buying — on the Ideas page.", { category: "hunt" });
+        await alert("info", "Smart-money scan posted", "What notable public portfolios are buying — on the Smart Money page.", { category: "hunt", dest: "smart-money" });
       } finally {
         sessionRunning = false;
       }
@@ -592,7 +592,7 @@ async function maybeScheduledSessions() {
     });
     if (recent === 0) {
       await prisma.chessTheme.create({ data: { kind: "WEEKLY", title: "Board of the week", anchor: "", requestedBy: "Alfred" } });
-      await alert("info", "Chess Moves: board of the week queued", "Alfred is about to map a fresh value chain.", { category: "hunt" });
+      await alert("info", "Chess Moves: board of the week queued", "Alfred is about to map a fresh value chain.", { category: "hunt", dest: "chess" });
       return;
     }
   }

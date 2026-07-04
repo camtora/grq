@@ -21,6 +21,7 @@ import { useNotifications } from '../store/notifications';
 import { useThemeStore } from '../store/theme';
 import { registerForPush } from '../services/push';
 import { api } from '../services/api';
+import { routeForNotification } from '../lib/notification-routes';
 import GlossarySheet from '../components/GlossarySheet';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
@@ -89,30 +90,31 @@ export default function RootLayout() {
     };
   }, [status, refreshMessages, refreshBell]);
 
-  // Tapping a push deep-links: a symbol lands on its stock page. Two iOS
-  // gotchas handled here (Cam 2026-07-04 — the TSM test push opened Today):
+  // Tapping a push deep-links — dest/category rules first, then symbol → stock
+  // page (lib/notification-routes; fx opens Settings even though it carries a
+  // symbol). Two iOS gotchas handled here (Cam 2026-07-04 — the TSM test push
+  // opened Today):
   // 1. Remote-push custom keys arrive in request.trigger.payload on iOS, not
-  //    always content.data — read both.
+  //    always content.data — read both (content.data wins).
   // 2. A tap that COLD-STARTS the app fires before the navigator (and the
-  //    tap-through splash) exist — so the symbol is parked in state and the
+  //    tap-through splash) exist — so the route is parked in state and the
   //    navigation happens once the app is actually ready.
-  const [pendingPushSymbol, setPendingPushSymbol] = useState<string | null>(null);
+  const [pendingPushPath, setPendingPushPath] = useState<string | null>(null);
   const handledPushId = useRef<string | null>(null);
-  const symbolOf = (res: Notifications.NotificationResponse | null): string | null => {
+  const routeOf = (res: Notifications.NotificationResponse | null): string | null => {
     if (!res) return null;
     const req = res.notification.request;
-    const fromData = req.content.data?.symbol;
     const trigger = req.trigger as { payload?: Record<string, unknown> } | null;
-    const fromPayload = trigger?.payload?.symbol;
-    const sym = typeof fromData === 'string' && fromData ? fromData : typeof fromPayload === 'string' ? fromPayload : null;
-    return sym;
+    const merged: Record<string, unknown> = { ...(trigger?.payload ?? {}), ...(req.content.data ?? {}) };
+    const str = (k: string): string | null => (typeof merged[k] === 'string' && merged[k] ? (merged[k] as string) : null);
+    return routeForNotification({ category: str('category'), symbol: str('symbol'), dest: str('dest') });
   };
   const takeResponse = (res: Notifications.NotificationResponse | null) => {
     if (!res || handledPushId.current === res.notification.request.identifier) return;
-    const sym = symbolOf(res);
-    if (!sym) return;
+    const path = routeOf(res);
+    if (!path) return;
     handledPushId.current = res.notification.request.identifier;
-    setPendingPushSymbol(sym);
+    setPendingPushPath(path);
   };
   useEffect(() => {
     // Warm/background taps.
@@ -123,11 +125,11 @@ export default function RootLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (!pendingPushSymbol || !fontsLoaded || !splashDone || status !== 'signedIn') return;
-    const sym = pendingPushSymbol;
-    setPendingPushSymbol(null);
-    router.push(`/stock/${sym}`);
-  }, [pendingPushSymbol, fontsLoaded, splashDone, status, router]);
+    if (!pendingPushPath || !fontsLoaded || !splashDone || status !== 'signedIn') return;
+    const path = pendingPushPath;
+    setPendingPushPath(null);
+    router.push(path);
+  }, [pendingPushPath, fontsLoaded, splashDone, status, router]);
 
   // The usage beacon (web components/Tracker.tsx parity, 2026-07-04): every screen
   // change POSTs the pathname to /api/track, so app usage shows up on the Traffic

@@ -5,9 +5,11 @@ import { pushNotify, type NotifCategory } from "../lib/push/notify";
 export type Severity = "info" | "warning" | "critical";
 
 /** Routing for an alert: which notification category it belongs to (gates iOS
- *  push per-user), who triggered it (so we don't ping the actor), and the symbol
- *  it concerns (lock-screen grouping + app deep link). Default category "system". */
-export type AlertOpts = { category?: NotifCategory; actorEmail?: string; symbol?: string };
+ *  push per-user), who triggered it (so we don't ping the actor), the symbol
+ *  it concerns (lock-screen grouping + app deep link), and an optional explicit
+ *  in-app destination (for the coarse "hunt" family — see lib/push/notify.ts).
+ *  Default category "system". */
+export type AlertOpts = { category?: NotifCategory; actorEmail?: string; symbol?: string; dest?: string };
 
 // Single alerting chokepoint (AGENT-SPEC "Alerting"). Discord if configured + iOS
 // push to each member's eligible devices; warning+ always lands in the journal;
@@ -36,6 +38,7 @@ export async function alert(severity: Severity, title: string, body = "", opts: 
     body,
     actorEmail: opts.actorEmail,
     symbol: opts.symbol,
+    dest: opts.dest,
   });
 }
 
@@ -51,6 +54,7 @@ export async function notifyOut(severity: Severity, title: string, body = "", op
     body,
     actorEmail: opts.actorEmail,
     symbol: opts.symbol,
+    dest: opts.dest,
   });
 }
 
