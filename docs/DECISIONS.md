@@ -2864,3 +2864,21 @@ exam system, eight courses). Exams include a field-trip question answered from t
 in Reports; the conviction bar off the guardrails dials). The `example` block renders its authored
 fallback until the L4 nightly engine lands. Remaining phases: L3 media depth (diagrams, annotated
 real-data charts, curated video pass), L4 living examples, L5 mobile.
+
+**D111 addendum — L3 media depth shipped (2026-07-05).** The eight themed SVG diagrams
+(`components/learn/diagrams.tsx` — order-path, market-map, book-ladder, acb-timeline,
+drawdown-ladder, margin-spiral, fee-gravity, grq-pipeline) are live in their lessons: theme-aware
+(teal/red/emerald/amber classes + chart CSS vars only, per DESIGN.md §1.1), identity never
+colour-alone, the two data-shaped ones reusing the CompoundingSim CVD-validated pair. `chart`
+blocks render real daily closes from the Bar cache (self-warming via the chess.ts
+refresh-on-miss pattern): XIC in the indices lesson; NVDA in the earnings lesson with a COMPUTED
+biggest-overnight-gap annotation (derived from the fetched window, so it stays true as the window
+rolls — an authored date would rot). Three curated videos shipped as click-to-load
+`youtube-nocookie` lite-embeds, each oEmbed-verified before commit and carrying a written "why"
+line: TED-Ed "How does the stock market work?" (what-a-stock-is), Ben Felix "Why Most Stock
+Pickers Lose to the Market" (stocks-vs-etfs), TED-Ed "The psychology behind irrational decisions"
+(behavioural-traps) — an OptionsPlay video (product channel) and a CNET news segment failed the
+curation rubric and were dropped. `scripts/check-learn-videos.ts` is the weekly rot-check
+(oEmbed liveness + title/author drift, prefix-matched). Tests grew the diagram/chart validations
++ a per-course ≥1-visual-block lint (127/127). Chat persona updated to the D111 titles + exams/
+standings map — chat-only rebuild, agent untouched (no restart → no boot scan).

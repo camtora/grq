@@ -7,6 +7,8 @@ import CompoundingSim from "./CompoundingSim";
 import ReceiptBlock from "./Receipts";
 import CheckBlock from "./CheckBlock";
 import LiteYouTube from "./LiteYouTube";
+import LearnChart from "./LearnChart";
+import { DIAGRAMS } from "./diagrams";
 
 // Renders one lesson block (docs/LEARN-FRAMEWORK.md D111 §4) — the server side of the
 // framework. prose/callout go through Md (tap-to-explain for free); widget/check are the
@@ -23,7 +25,7 @@ const NICE_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto",
 const CALLOUT: Record<"note" | "trap" | "rule", { label: string; cls: string; labelCls: string }> = {
   note: { label: "Note", cls: "border-teal-400/20 bg-teal-400/[0.04]", labelCls: "text-teal-300/80" },
   trap: { label: "Trap", cls: "border-amber-400/25 bg-amber-400/[0.05]", labelCls: "text-amber-300/90" },
-  rule: { label: "Hard rule", cls: "border-rose-400/25 bg-rose-400/[0.04]", labelCls: "text-rose-300/90" },
+  rule: { label: "Hard rule", cls: "border-red-400/25 bg-red-400/[0.04]", labelCls: "text-red-300/90" },
 };
 
 /** The living-example block: a market illustration refreshed nightly from data GRQ
@@ -79,6 +81,10 @@ export default async function BlockRenderer({ block }: { block: LearnBlock }) {
           ) : null}
         </figure>
       );
+    case "diagram":
+      return DIAGRAMS[block.id] ?? null;
+    case "chart":
+      return <LearnChart spec={block.spec} />;
     case "widget":
       return WIDGETS[block.id] ?? null;
     case "receipt":

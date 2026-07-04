@@ -1,12 +1,16 @@
 # The Learn framework — courses that earn the name
 
-**Status: GREENLIT (Cam, 2026-07-04) — D111. Phases L1+L2 SHIPPED same day** (block model,
-per-lesson routes, retitles, 38 inline checks, 8 exams, grading API, progress + standings, `learn`
-push category). Cam's decisions on §13: **viewers stay non-write** (no exams/progress — lessons,
-checks and standings remain viewer-readable), retitles as proposed, pass ≥80% / unlimited retakes /
+**Status: GREENLIT (Cam, 2026-07-04) — D111. L1+L2 shipped 2026-07-04; L3 shipped 2026-07-05**
+(all 8 themed SVG diagrams live in their lessons; `chart` blocks on real Bar-cache closes — XIC in
+the indices lesson, NVDA with a computed biggest-overnight-gap annotation in the earnings lesson;
+3 curated oEmbed-verified videos — TED-Ed ×2 + Ben Felix — as click-to-load nocookie embeds with
+written "why" lines; trap/rule callouts; `scripts/check-learn-videos.ts` rot-check; per-course
+≥1-visual-block lint; chat persona retitled, chat-only rebuild). Cam's decisions on §13:
+**viewers stay non-write** (no exams/progress — lessons, checks and standings remain
+viewer-readable), retitles as proposed, pass ≥80% / unlimited retakes /
 best-stands-with-attempt-count, push on passes as a normal toggleable category, **YouTube embeds
-in**, **per-lesson URLs in** (course page = syllabus). Remaining: L3 media depth → L4 living
-examples → L5 mobile (§12).
+in**, **per-lesson URLs in** (course page = syllabus). Remaining: L4 living examples → L5 mobile
+(§12).
 
 Cam's original brief: *"calling them 'courses' and 'lessons' is a little ridiculous — they're just
 paragraphs."* This doc is the redesign of what a course **is**: structure, media, live examples,

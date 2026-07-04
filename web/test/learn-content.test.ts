@@ -122,15 +122,21 @@ describe("learn block content", () => {
         assert.ok(m[1].startsWith("#explain:"), `${where} has a non-explain markdown link: ${m[1]}`);
   });
 
-  it("block payloads are well-formed (media ids, video ids, tryIt hrefs)", () => {
+  it("block payloads are well-formed (media ids, video ids, chart specs, tryIt hrefs)", () => {
     const widgets = new Set(["order-book", "compounding"]);
     const receipts = new Set(["real-fills", "drawdown", "vs-xic", "fees", "guardrails", "soak"]);
+    const diagrams = new Set(["order-path", "market-map", "book-ladder", "acb-timeline", "drawdown-ladder", "margin-spiral", "fee-gravity", "grq-pipeline"]);
     for (const c of COURSES)
       for (const l of c.lessons)
         for (const b of l.blocks) {
           const where = `${c.slug}/${l.slug}`;
           if (b.kind === "widget") assert.ok(widgets.has(b.id), `${where} embeds unknown widget "${b.id}"`);
           if (b.kind === "receipt") assert.ok(receipts.has(b.id), `${where} embeds unknown receipt "${b.id}"`);
+          if (b.kind === "diagram") assert.ok(diagrams.has(b.id), `${where} embeds unknown diagram "${b.id}"`);
+          if (b.kind === "chart") {
+            assert.ok(b.spec.symbol.trim().length > 0 && b.spec.label.trim().length > 0, `${where} chart needs symbol + label`);
+            assert.ok(b.spec.days >= 30 && b.spec.days <= 400, `${where} chart days out of range`);
+          }
           if (b.kind === "video") {
             assert.match(b.yt, /^[\w-]{11}$/, `${where} bad YouTube id "${b.yt}"`);
             assert.ok(b.minutes > 0 && b.why.trim().length > 0, `${where} video needs minutes + a why line`);
@@ -139,6 +145,15 @@ describe("learn block content", () => {
           if (b.kind === "figure") assert.ok(b.src.startsWith("/") && b.alt.trim().length > 0, `${where} figure needs a local src + alt`);
           if (b.kind === "example") assert.ok(b.key.trim().length > 0 && b.fallbackMd.trim().length > 0, `${where} example needs key + fallback`);
         }
+  });
+
+  it("every live course shows something beyond prose (≥1 visual/live block — D111 L3)", () => {
+    const visual = new Set(["diagram", "chart", "video", "figure", "widget", "receipt", "example"]);
+    for (const c of COURSES)
+      if (c.status === "live" && !c.external) {
+        const n = c.lessons.reduce((sum, l) => sum + l.blocks.filter((b) => visual.has(b.kind)).length, 0);
+        assert.ok(n >= 1, `${c.slug} is all prose — the framework exists to prevent exactly this`);
+      }
   });
 
   it("inline check questions have valid, globally-unique keys", () => {

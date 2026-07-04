@@ -44,12 +44,33 @@ export type LearnQuestion = {
     }
 );
 
-/** One lesson block. Diagram/chart kinds land with their renderers (framework L3) —
- *  the union stays honest to what actually renders (the no-vaporware rule). */
+/** Hand-built theme-aware SVG diagrams (components/learn/diagrams.tsx — L3). */
+export type LearnDiagramKey =
+  | "order-path"
+  | "market-map"
+  | "book-ladder"
+  | "acb-timeline"
+  | "drawdown-ladder"
+  | "margin-spiral"
+  | "fee-gravity"
+  | "grq-pipeline";
+
+/** A real-data chart (components/learn/LearnChart.tsx — L3): daily closes from the Bar
+ *  cache, self-warming; "biggest-gap" pins the largest overnight move in the window. */
+export type LearnChartSpec = {
+  symbol: string;
+  days: number;
+  label: string;
+  annotate?: "biggest-gap";
+};
+
+/** One lesson block. */
 export type LearnBlock =
   | { kind: "prose"; md: string }
   | { kind: "callout"; tone: "note" | "trap" | "rule"; md: string }
   | { kind: "figure"; src: string; alt: string; caption?: string; credit?: string }
+  | { kind: "diagram"; id: LearnDiagramKey }
+  | { kind: "chart"; spec: LearnChartSpec }
   | { kind: "widget"; id: LearnWidgetKey }
   | { kind: "receipt"; id: LearnReceiptKey }
   | { kind: "example"; key: string; fallbackMd: string }
@@ -104,6 +125,7 @@ Companies sell shares to raise money without borrowing it. The one time your pur
 What do you get for holding it? Three things: a claim on the profits (paid out as a [[dividend]] or reinvested to grow the business), a vote at the annual meeting, and the right to sell your slice to someone else at whatever they'll pay. That last one is the part everyone watches.
 
 And one thing you *don't* get: unlimited downside. A share can go to zero, but never below it — the most you can lose is what you paid. That sounds obvious, but it's the property that separates owning stocks from [short selling](#explain:short-selling) and other bets where the losses have no floor.`),
+          { kind: "diagram", id: "market-map" },
           check({
             id: "what-a-stock-is-c1",
             kind: "choice",
@@ -128,6 +150,14 @@ And one thing you *don't* get: unlimited downside. A share can go to zero, but n
             correct: ["a"],
             explain: "Ownership has a floor at zero. That bounded downside is exactly what short selling and leverage give up.",
           }),
+          {
+            kind: "video",
+            yt: "p7HKvqRI_Bo",
+            title: "How does the stock market work?",
+            author: "TED-Ed",
+            minutes: 5,
+            why: "the Dutch East India Company inventing the share — and why a stock's price moves all day without the company touching the trade.",
+          },
         ],
       },
       {
@@ -139,6 +169,7 @@ And one thing you *don't* get: unlimited downside. A share can go to zero, but n
 That second job is the whole game. When you buy a share, your money goes to *whoever sold it to you* — another investor, a pension fund, an algorithm — not to the company. This is called the secondary market, and it's where essentially all trading happens.
 
 Canada's main venue is the **TSX** (Toronto). The US has two giants: the **NYSE** and the **Nasdaq**. Same machinery, different bouncers, different currencies — which is why GRQ's fund runs a CAD sleeve and a USD sleeve rather than pretending the border isn't there.`),
+          { kind: "diagram", id: "order-path" },
           check({
             id: "what-an-exchange-does-c1",
             kind: "choice",
@@ -185,6 +216,11 @@ Then there are [CDRs](#explain:cdr): TSX-listed, CAD-hedged certificates that *t
 News, meanwhile, doesn't keep market hours. Earnings land after the close, wars start on weekends, and central banks speak whenever they like. All of that piles up while the market sleeps — and the **opening price gaps** to wherever buyers and sellers now agree the stock belongs. Nobody "traded it down" overnight; the first trade of the day simply reprices everything at once. If you only remember one thing: a stock can open far from where it closed, and no [stop-loss](#explain:stop-loss) can save you from a gap.
 
 One more wrinkle for a two-country fund: **holidays don't line up**. On Canada Day the TSX sleeps while New York trades; on July 4th it's the reverse. GRQ's calendar knows the difference — on a TSX-only holiday the fund can still trade its US sleeve.`),
+          {
+            kind: "callout",
+            tone: "trap",
+            md: `A stock can open **far** from where it closed — and no [stop-loss](#explain:stop-loss) can save you from a gap. The stop fires *at* the market, wherever the market reopens.`,
+          },
           check({
             id: "market-hours-c1",
             kind: "choice",
@@ -208,6 +244,7 @@ One more wrinkle for a two-country fund: **holidays don't line up**. On Canada D
 Most indices are weighted by market cap, which means the giants dominate the reading. When the S&P 500 moves, that's mostly its ten biggest names talking — hundreds of smaller members could have a terrible day and barely dent the number. "The market was up" really means "big companies were up, on average."
 
 You can't buy an index directly — it's just math. But an [[etf]] can track one for you: XIC holds essentially the whole TSX in a single ticker. That's why GRQ measures itself against [XIC](#explain:vs-xic) — if Alfred's stock-picking can't beat the thing you could buy in one click and never think about again, the honest conclusion is that the fund shouldn't exist. That bar stays on screen at all times, on purpose.`),
+          { kind: "chart", spec: { symbol: "XIC", days: 180, label: "XIC — the whole TSX in one line" } },
           check({
             id: "indices-c1",
             kind: "choice",
@@ -246,6 +283,7 @@ You can't buy an index directly — it's just math. But an [[etf]] can track one
 Here's the part that stings: you buy at the ask and sell at the bid. Buy a share and sell it one second later and you've lost the spread — guaranteed, before the stock moves at all. Every position you'll ever open starts underwater by that much.
 
 On a giant like Apple the spread is a penny — a rounding error. On an obscure small-cap it can be several percent, which means the stock has to rise several percent *just to get you back to zero*. The spread is both a toll and a warning light: wide spreads are the market telling you few people trade this thing, and getting out may cost as much as getting in.`),
+          { kind: "diagram", id: "book-ladder" },
           check({
             id: "the-spread-c1",
             kind: "numeric",
@@ -438,6 +476,7 @@ The discipline for both: neither changes what the business is *worth* by itself.
 While you still hold the shares, any profit is [unrealized](#explain:unrealized-pnl) — a paper gain. It moves every day, it feels real, and it isn't: it only becomes real (and taxable) the moment you sell. Markets are littered with people who watched a +40% paper gain round-trip to zero because selling felt like quitting.
 
 The CRA only cares when you realize. Sell for more than your ACB and you've got a [capital gain](#explain:capital-gains); sell for less and the loss can offset other gains — **unless** you buy the same name back within 30 days, in which case the [superficial-loss rule](#explain:superficial-loss) throws your loss out entirely. GRQ's agent is code-barred from tripping that rule, which is the correct amount of trust to place in enthusiasm near tax season.`),
+          { kind: "diagram", id: "acb-timeline" },
           check({
             id: "acb-and-paper-gains-c1",
             kind: "numeric",
@@ -482,6 +521,14 @@ Here's the uncomfortable, load-bearing fact: **most professional stock-pickers f
             correct: ["b"],
             explain: "Decades of scorekeeping, not a slogan. It's why the couch-potato option (XIC) stays on GRQ's screen as the opponent to beat.",
           }),
+          {
+            kind: "video",
+            yt: "AecvTErBQY8",
+            title: "Why Most Stock Pickers Lose to the Market",
+            author: "Ben Felix",
+            minutes: 11,
+            why: "the skewness argument — a handful of giant winners carry the whole index, so missing them is the norm, not bad luck. A Canadian portfolio manager, arguing from the academic receipts.",
+          },
           { kind: "tryIt", links: [{ href: "/reports", label: "Reports — the fund vs the couch potato, updated live" }] },
         ],
       },
@@ -533,6 +580,10 @@ That's the part newcomers find maddening: a company can grow profits 20% and the
 Usually the biggest mover isn't even the quarter — it's [[guidance]], management's own forecast for what comes next. A beat with a cut to next year's outlook reads as bad news, and the market treats it that way within seconds. The market prices the future; guidance *is* the future, straight from the people running the place.
 
 Reports land before the open (BMO) or after the close (AMC) — which, per Course 1, is why earnings day so often means an opening gap rather than a slow drift. It's the single biggest *scheduled* risk event a stock has, and it's on the calendar months in advance.`),
+          {
+            kind: "chart",
+            spec: { symbol: "NVDA", days: 150, label: "NVDA — the last six months of daily closes", annotate: "biggest-gap" },
+          },
           check({
             id: "earnings-season-c1",
             kind: "choice",
@@ -692,6 +743,7 @@ So the practical rule inverts the amateur instinct. The answer to "this stock is
 That asymmetry is why professionals obsess more about avoiding catastrophic losses than catching spectacular wins. A portfolio that grinds out modest gains but never craters beats a flashy one that halves itself every few years — compounding (Course 7) does the rest.
 
 It's also why GRQ's defenses are **pre-committed and automatic**: a [stop-loss](#explain:stop-loss) on every position, and a system-level tripwire — if the whole fund draws down past its limit, the [kill switch](#explain:kill-switch) halts trading without asking anyone's opinion. The design assumption is that in the moment, at the bottom, with everything red, *nobody* — human or AI — reliably makes the calm decision. So the calm decision was made in advance, in code.`),
+          { kind: "diagram", id: "drawdown-ladder" },
           check({
             id: "drawdown-c1",
             kind: "numeric",
@@ -736,6 +788,7 @@ Diversification is the other half, and it's subtler than "own many things." Ten 
 The mechanism that does the killing is the [margin call](#explain:margin-call). The loan is secured by your holdings; when they fall far enough, the broker doesn't send a sympathetic note — it **sells your positions, at the bottom, without asking**. Leverage converts a temporary drawdown into a permanent, realized loss at the worst possible price. You can be right about the stock eventually and still be dead first: markets can stay irrational longer than a levered account can stay solvent.
 
 GRQ bans margin borrowing outright — it's one of the fund's hard rules, alongside no shorting and no options, and only humans can change it. Not because leverage never works, but because it removes the one advantage a patient investor has: **the ability to wait**. An unlevered portfolio can ride out any storm it's diversified for. A levered one can be forced to surrender mid-storm.`),
+          { kind: "diagram", id: "margin-spiral" },
           check({
             id: "leverage-c1",
             kind: "numeric",
@@ -758,6 +811,11 @@ GRQ bans margin borrowing outright — it's one of the fund's hard rules, alongs
 **[Day trading](#explain:day-trading):** buying and selling within the day to catch small moves. The quiet killer is cost × frequency: every round trip pays the [spread](#explain:bid-ask-spread), commissions, and [[slippage]] — a small toll that compounds viciously across hundreds of trades, against opponents measured in microseconds.
 
 Neither ban is superstition — both are live experiments here. The Short Lab runs modeled shorts (with real borrow math and margin calls) and shadow-shorts every real sell the fund makes; the Day-Trading Lab races a churning trader against a buy-and-holder with real costs. Understanding a bet and making it are different things: the labs buy the understanding without paying the tuition.`),
+          {
+            kind: "callout",
+            tone: "rule",
+            md: `No [[leverage]]. No [short selling](#explain:short-selling). No options. Hard rules, enforced in code on every order — and only humans can change them.`,
+          },
           check({
             id: "the-bets-we-wont-make-c1",
             kind: "choice",
@@ -865,6 +923,7 @@ Two honest corollaries. Most professionals lose this game over long periods, aft
 The retail-scale version is death by a thousand cuts: [commissions](#explain:commission), the [spread](#explain:bid-ask-spread), FX conversion, all × how often you trade. GRQ has two code-level defenses — a trade must be worth at least 3× its [round-trip](#explain:round-trip) commissions, and a monthly [fee budget](#explain:fee-budget) the gate simply won't let the fund exceed. Small accounts don't usually die of bad picks; they bleed out in costs.
 
 Then taxes, the other drag — and Canada hands you shelters, in order: a [[tfsa]] (gains never taxed, with the fine print that CRA can reclassify a *day-trading* TFSA as a business — cadence matters), an [[rrsp]] (tax deferred to retirement), and only then non-registered accounts, where half your [capital gains](#explain:capital-gains) are taxable and the [superficial-loss rule](#explain:superficial-loss) polices your loss-harvesting. Shelter first is worth more than most stock picks.`),
+          { kind: "diagram", id: "fee-gravity" },
           check({
             id: "fee-gravity-and-tax-drag-c1",
             kind: "choice",
@@ -901,6 +960,14 @@ The only defense with a track record is **deciding in advance**: written rules, 
             correct: ["a"],
             explain: "Losses hurt ~2× as much as gains feel good, so people refuse to *realize* them — the exact backwards of the discipline. The fix with a track record: rules written in advance.",
           }),
+          {
+            kind: "video",
+            yt: "V2EMuoM5IX4",
+            title: "The psychology behind irrational decisions",
+            author: "TED-Ed",
+            minutes: 5,
+            why: "loss aversion and the heuristics zoo, in four minutes — the exact machinery GRQ's written-in-advance rules exist to disarm.",
+          },
         ],
       },
       {
@@ -1028,6 +1095,7 @@ A name enters as a **candidate** — a member watches it, or Alfred's hunt surfa
 Then the part that gives this course its name: **everything is written down and graded.** Every decision lands in a journal with its reasoning. Price targets get scored when they resolve. A panel of rival AI models (Second Opinions) logs what *they* would have done at every check-in, so Alfred's judgment is benchmarked against alternatives. The Report Card tallies whether the calls were right, wrong, or lucky.
 
 The point of all this isn't infallibility — the fund is wrong plenty. The point is **auditability**: for any position, any exit, any miss, you can always pull the receipt and find out *why*. An investment process you can't audit isn't a process; it's a mood with a brokerage account.`),
+          { kind: "diagram", id: "grq-pipeline" },
           check({
             id: "receipts-before-trades-c1",
             kind: "choice",
