@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import ShareButton from '../../components/ShareButton';
+import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
 import { money, signedPctFromBps, pctFromFrac, pnlColor, fmtDate, fmtEps } from '../../lib/format';
 import { api } from '../../services/api';
@@ -358,7 +359,9 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
             </Text>
           )}
           {r.bottomLine && (
-            <Text style={[s.bottomLine, { color: p.textPrimary }]}>{r.bottomLine}</Text>
+            <View style={{ marginTop: 4 }}>
+              <MdText body={r.bottomLine} foldAt={500} />
+            </View>
           )}
           {(r.nearPct != null || r.upsidePct != null) && (
             <Text style={[s.meta, tabular, { color: p.textMuted }]}>
