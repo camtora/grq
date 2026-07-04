@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,10 @@ const AVATARS: Record<string, number> = {
   graham: require('../../../assets/people/graham.png'),
 };
 
+// Range slices of the 180d daily closes (web PriceChart parity — 1D intraday
+// is a follow-up; the wire carries daily bars only).
+const RANGE_DAYS = { '1W': 7, '1M': 30, '3M': 91, '6M': 182 } as const;
+
 // Tone for a 7-point label when the feed carries only the label (the technical lean).
 function labelTone(label: string | null): string {
   if (!label) return 'teal';
@@ -43,6 +47,7 @@ export default function StockScreen() {
   const { data: d, error, loading, refreshing, refresh } = useApi<Dossier>(`/api/dossier/${sym}`);
   const [queueing, setQueueing] = useState(false);
   const [queueMsg, setQueueMsg] = useState<string | null>(null);
+  const [range, setRange] = useState<keyof typeof RANGE_DAYS>('3M');
 
   // No verdict and no bottom line = no dossier yet (the feed's bodyMarkdown
   // fallback text doesn't count as a read).
@@ -322,6 +327,16 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- The agent's note (why it's tracking this) ---- */}
+            {d.agentNote && (
+              <Card style={{ marginTop: 24 }}>
+                <Text style={[s.metaSmall, { color: p.textMuted, textTransform: 'uppercase', letterSpacing: 1, fontFamily: F.semi }]}>
+                  The agent's note
+                </Text>
+                <Text style={[s.mutedBody, { color: p.textPrimary, marginTop: 4 }]}>{d.agentNote}</Text>
+              </Card>
+            )}
+
             {/* ---- Held position + the deterministic bracket ---- */}
             {d.position && (
               <View>
@@ -340,23 +355,55 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* ---- Price chart ---- */}
-            {closes.length >= 2 && (
-              <View>
-                <SectionTitle sub="daily closes">Price</SectionTitle>
-                <Card>
-                  <Sparkline values={closes.map((x) => x.c)} height={72} />
-                  <View style={s.chartLabels}>
-                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                      {new Date(closes[0].t).toISOString().slice(0, 10)}
-                    </Text>
-                    <Text style={[s.chartLabel, { color: p.textMuted }]}>
-                      {new Date(closes[closes.length - 1].t).toISOString().slice(0, 10)}
-                    </Text>
-                  </View>
-                </Card>
-              </View>
-            )}
+            {/* ---- Price chart (range slices of the 180d closes, web PriceChart parity) ---- */}
+            {closes.length >= 2 && (() => {
+              const days = RANGE_DAYS[range];
+              const cutoff = Date.now() - days * 86_400_000;
+              const sliced = closes.filter((x) => x.t >= cutoff);
+              const shown = sliced.length >= 2 ? sliced : closes;
+              const rangeBps =
+                shown[0].c > 0 ? Math.round(((shown[shown.length - 1].c - shown[0].c) / shown[0].c) * 10_000) : null;
+              return (
+                <View>
+                  <SectionTitle sub="daily closes">Price</SectionTitle>
+                  <Card>
+                    <View style={s.rangeRow}>
+                      {(Object.keys(RANGE_DAYS) as (keyof typeof RANGE_DAYS)[]).map((r) => (
+                        <Pressable
+                          key={r}
+                          onPress={() => setRange(r)}
+                          style={[s.rangeChip, range === r && { backgroundColor: p.accent + '26' }]}
+                        >
+                          <Text
+                            style={{
+                              color: range === r ? p.accentText : p.textMuted,
+                              fontFamily: range === r ? F.semi : F.med,
+                              fontSize: 11,
+                            }}
+                          >
+                            {r}
+                          </Text>
+                        </Pressable>
+                      ))}
+                      {rangeBps != null && (
+                        <Text style={[s.rangePct, tabular, { color: pnlColor(rangeBps, p) }]}>
+                          {signedPctFromBps(rangeBps)}
+                        </Text>
+                      )}
+                    </View>
+                    <Sparkline values={shown.map((x) => x.c)} height={72} />
+                    <View style={s.chartLabels}>
+                      <Text style={[s.chartLabel, { color: p.textMuted }]}>
+                        {new Date(shown[0].t).toISOString().slice(0, 10)}
+                      </Text>
+                      <Text style={[s.chartLabel, { color: p.textMuted }]}>
+                        {new Date(shown[shown.length - 1].t).toISOString().slice(0, 10)}
+                      </Text>
+                    </View>
+                  </Card>
+                </View>
+              );
+            })()}
 
             {/* ---- Analyst ratings (Tier 2) ---- */}
             {d.grades && (
@@ -537,6 +584,46 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- The value chain (Chess Moves) — swipeable stage cards, defaulting
+                 to the stock's own stage (Cam 2026-07-03) ---- */}
+            {(d.chess ?? []).slice(0, 1).map((board) => (
+              <ValueChain key={board.themeId} board={board} selfSymbol={d.symbol} p={p} />
+            ))}
+
+            {/* ---- Related names (knowledge graph) ---- */}
+            {(d.related ?? []).length > 0 && (
+              <View>
+                <SectionTitle sub="peers · co-held · co-mentioned">Related names</SectionTitle>
+                <Card style={s.listCard}>
+                  {(d.related ?? []).map((r, i) => (
+                    <View key={r.ticker}>
+                      {i > 0 && <Divider />}
+                      <Pressable
+                        onPress={() => router.push(`/stock/${r.symbol ?? r.ticker}`)}
+                        style={s.relRow}
+                      >
+                        <StockLogo symbol={r.ticker} logoUrl={r.logoUrl} size={26} />
+                        <View style={s.rowMainWide}>
+                          <Text style={[s.sym2, { color: p.accentText }]}>
+                            {r.ticker}
+                            {r.name !== r.ticker ? (
+                              <Text style={[s.metaSmall, { color: p.textMuted, fontFamily: F.reg }]}>  {r.name}</Text>
+                            ) : null}
+                          </Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]} numberOfLines={1}>{r.why}</Text>
+                        </View>
+                        {r.stance && (
+                          <Text style={[s.metaSmall, { color: toneColor(labelTone(r.stance), p), fontFamily: F.semi }]}>
+                            {r.stance}
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
             {/* ---- Smart money ---- */}
             {d.smartMoney?.hasAny && (
               <View>
@@ -689,6 +776,84 @@ export default function StockScreen() {
   );
 }
 
+/** The value chain — one swipeable card per stage of a Chess Moves board,
+ * starting on the stage this stock sits in. Every symbol links out. */
+function ValueChain({ board, selfSymbol, p }: { board: NonNullable<Dossier['chess']>[number]; selfSymbol: string; p: Palette }) {
+  const router = useRouter();
+  const [cardW, setCardW] = useState(0);
+  const [stageIdx, setStageIdx] = useState(board.selfStage);
+  const bare = (sx: string) => sx.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, '');
+  return (
+    <View>
+      <SectionTitle sub={board.title}>The value chain</SectionTitle>
+      <View onLayout={(e) => setCardW(e.nativeEvent.layout.width)}>
+        {cardW > 0 && (
+          <FlatList
+            data={board.stages}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(st, i) => `${st.label}-${i}`}
+            initialScrollIndex={Math.min(board.selfStage, board.stages.length - 1)}
+            getItemLayout={(_, index) => ({ length: cardW, offset: cardW * index, index })}
+            onMomentumScrollEnd={(e) => setStageIdx(Math.round(e.nativeEvent.contentOffset.x / cardW))}
+            renderItem={({ item: st, index: i }) => (
+              <View style={{ width: cardW }}>
+                <Card style={s.stageCard}>
+                  <View style={s.stageHead}>
+                    <Text style={[s.stageLabel, { color: p.textPrimary }]}>{st.label}</Text>
+                    <Text style={[s.metaSmall, { color: p.textMuted }]}>
+                      stage {i + 1}/{board.stages.length}{st.role ? ` · ${st.role}` : ''}
+                    </Text>
+                  </View>
+                  {st.items.map((it, j) => {
+                    const isSelf = !!it.symbol && bare(it.symbol) === bare(selfSymbol);
+                    return (
+                      <View key={`${it.name}-${j}`}>
+                        {j > 0 && <Divider />}
+                        <Pressable
+                          onPress={() => it.symbol && router.push(`/stock/${it.symbol}`)}
+                          style={[s.stageItem, isSelf && { backgroundColor: p.accent + '14', borderRadius: 8 }]}
+                        >
+                          <Text style={[s.sym2, { color: it.symbol ? p.accentText : p.textPrimary }]}>
+                            {it.symbol ?? it.name}
+                            {isSelf ? <Text style={[s.metaSmall, { color: p.accentText }]}>  ← this one</Text> : null}
+                          </Text>
+                          {it.symbol && it.name !== it.symbol && (
+                            <Text style={[s.metaSmall, { color: p.textMuted }]} numberOfLines={1}>{it.name}</Text>
+                          )}
+                          {it.note && (
+                            <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]} numberOfLines={2}>{it.note}</Text>
+                          )}
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </Card>
+              </View>
+            )}
+          />
+        )}
+      </View>
+      {/* stage dots */}
+      <View style={s.dots}>
+        {board.stages.map((_, i) => (
+          <View
+            key={i}
+            style={[
+              s.dotSm,
+              { backgroundColor: i === stageIdx ? p.accent : p.textMuted + '44' },
+            ]}
+          />
+        ))}
+      </View>
+      <Footnote>
+        swipe across the chain · from the Chess Moves board "{board.title}" — research, not orders
+      </Footnote>
+    </View>
+  );
+}
+
 /** The analyst target band — low → consensus → high with "now" marked. */
 function TargetBand({ band, p }: { band: NonNullable<Dossier['analystBand']>; p: Palette }) {
   const lo = Math.min(band.lowCents, band.nowCents);
@@ -769,6 +934,17 @@ const s = StyleSheet.create({
   covStatus: { fontFamily: F.bold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   researchBtn: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, marginTop: 10 },
   rowMainWide: { flex: 1, minWidth: 0 },
+  rangeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  rangeChip: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  rangePct: { fontFamily: F.semi, fontSize: 12, marginLeft: 'auto' },
+  relRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  sym2: { fontFamily: F.semi, fontSize: 13.5 },
+  stageCard: { marginRight: 0 },
+  stageHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 },
+  stageLabel: { fontFamily: F.display, fontSize: 15 },
+  stageItem: { paddingVertical: 8, paddingHorizontal: 6, marginHorizontal: -6 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 },
+  dotSm: { width: 6, height: 6, borderRadius: 3 },
   leverRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9 },
   leverDir: { fontFamily: F.bold, fontSize: 12, width: 16, marginTop: 1 },
   leverGap: { fontFamily: F.med, fontSize: 12.5, lineHeight: 18 },

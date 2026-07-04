@@ -219,6 +219,8 @@ export type Dossier = {
   watchers: { key: string; name: string }[];
   recLabel: string | null; // the technical-signal lean (an input, not a verdict)
   recPos: number | null;
+  agentWatching: boolean;
+  agentNote: string | null;
   confidenceLevers?: {
     gap: string;
     direction: 'up' | 'down' | 'tighten';
@@ -282,6 +284,28 @@ export type Dossier = {
   trades: { id: number; side: string; qty: number; priceCents: number; realizedPnlCents: number | null; at: string }[];
   coverage: { tier: number; name: string; status: string; detail: string }[];
   scoreboard: { source: string; grades: number; hits: number; misses: number; neutral: number; hitRate: number | null }[];
+  related?: {
+    ticker: string;
+    name: string;
+    weight: number;
+    why: string;
+    symbol: string | null;
+    logoUrl: string | null;
+    stance: string | null;
+  }[];
+  chess?: {
+    themeId: number;
+    title: string;
+    anchor: string;
+    role: string | null;
+    thesis: string | null;
+    selfStage: number;
+    stages: {
+      label: string;
+      role: string | null;
+      items: { symbol: string | null; name: string; note: string | null }[];
+    }[];
+  }[];
 };
 
 /* ---------- Alfred's desk printouts (/api/briefings) ---------- */

@@ -25,7 +25,8 @@ import { userForEmail, memberEmails } from "./users";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
-import { parseBoard, buildPlayViews } from "./chess";
+import { parseBoard, buildPlayViews, chessRefsForSymbol, bareChainKey } from "./chess";
+import { relatedFor } from "./graph/related";
 import { parseConfidenceLevers } from "./confidence-levers";
 import { loadStandings } from "./race/standings";
 import { loadBullRace, listRaces } from "./race/bulls";
@@ -1556,7 +1557,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peersRaw,
     position, tradesRaw, watch, settings, grades, gradeActionsRaw, gradesTrend, targetTrend,
     earnings, newsRaw, institutional, holdersRaw, scoreboardRaw, closesRaw, smart,
-    optionsRow, socialRow, personalRaw,
+    optionsRow, socialRow, personalRaw, chessRefs,
   ] = await Promise.all([
     getQuote(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }),
@@ -1586,6 +1587,8 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     getSocial(bareTicker(sym)).catch(() => null),
     // Members' own money in this name (members-only — viewers/agents never see it, D97).
     opts?.requestedBy ? personalPositionsFor(memberEmails(), y).catch(() => []) : Promise.resolve([]),
+    // Chess Moves boards that feature this name (the value-chain cards).
+    chessRefsForSymbol(sym).catch(() => []),
   ]);
 
   const currentReadEntry = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
@@ -1816,6 +1819,39 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
           asOf: socialRow.fetchedAt.toISOString().slice(0, 10),
         }
       : null,
+    // Related names (knowledge graph, Slice 1 — same on-the-fly build as the web page).
+    related: (await relatedFor({ symbol: sym, yahoo: y, peers, sector: entry.sector ?? null, limit: 8 }).catch(() => ({ items: [] }))).items.map((r) => ({
+      ticker: r.ticker,
+      name: r.name,
+      weight: r.weight,
+      why: r.why,
+      symbol: r.symbol,
+      logoUrl: r.logoUrl,
+      stance: r.stance,
+    })),
+    // Chess Moves boards featuring this name → the swipeable value-chain cards
+    // (Cam 2026-07-03): one card per stage, defaulting to the stock's own stage.
+    chess: chessRefs.slice(0, 2).map((r) => {
+      const bare = bareChainKey(sym);
+      const stages = r.board.stages.map((st) => ({
+        label: st.label,
+        role: st.role ?? null,
+        items: st.items.map((it) => ({ symbol: it.symbol ?? null, name: it.name, note: it.note ?? null })),
+      }));
+      const selfStage = Math.max(
+        0,
+        stages.findIndex((st) => st.items.some((it) => it.symbol && bareChainKey(it.symbol) === bare)),
+      );
+      return {
+        themeId: r.themeId,
+        title: r.title,
+        anchor: r.anchor,
+        role: ("role" in r ? (r.role as string | null) : null) ?? null,
+        thesis: ("thesis" in r ? (r.thesis as string | null) : null) ?? null,
+        selfStage,
+        stages,
+      };
+    }),
     // Members' own money in this name (bought-at = avg cost). Empty for viewers.
     personalPositions: personalRaw.map((pp) => ({
       owner: personByEmail(pp.email)?.name ?? pp.email,
