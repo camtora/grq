@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { pushNotify } from "./push/notify";
 import { panelLabel } from "./panels";
 import { memberKeyForEmail, userForEmail } from "./users";
+import { notifyMessagesChanged } from "./messages-live";
 
 // The member-to-member messaging spine (D61). One shared Cam↔Graham thread backs
 // THREE features: plain chat, a full-page stock share, and a per-panel share with a
@@ -56,6 +57,8 @@ export async function createDirectMessage(input: CreateMessageInput): Promise<Db
   const msg = (await prisma.directMessage.create({
     data: { fromEmail: input.fromEmail, toEmail: input.toEmail, body, symbol, panel },
   })) as DbMessage;
+
+  notifyMessagesChanged([input.toEmail]); // wake the recipient's open badge streams
 
   // Compose the push. A share leads with what's being shared; a plain message leads
   // with the body. The 💬 marks it as the other MEMBER talking, not GRQ — until the

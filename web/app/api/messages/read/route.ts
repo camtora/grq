@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest } from "@/lib/session";
 import { pushBadgeSync } from "@/lib/push/notify";
+import { notifyMessagesChanged } from "@/lib/messages-live";
 
 export const dynamic = "force-dynamic";
 
@@ -18,5 +19,6 @@ export async function POST(req: Request) {
   });
 
   void pushBadgeSync(session.email); // best-effort; don't block the response on APNs
+  notifyMessagesChanged([session.email]); // clear the badge in their other open tabs too
   return NextResponse.json({ ok: true, unread: 0 });
 }

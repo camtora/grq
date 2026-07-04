@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 
 // The header messages bubble (matches the iOS bubble.left.and.bubble.right icon) —
 // opens the member↔member Messages drawer and badges the Cam↔Graham unread count
-// (D63). Polls /api/messages/unread; clears instantly when the drawer marks the
-// thread read (the "grq:messages-read" event). Members-only (mounted by NavBar).
-// The Ask-GRQ chat is a separate floating bubble (<GrqChat>), not in here.
+// (D63). Live via the /api/messages/stream SSE (the web twin of iOS's push-received
+// refresh, 2e02e48): the badge updates the instant a DM lands or is read on ANY
+// surface. A slow poll of /api/messages/unread is the no-stream fallback (matching
+// the phone's 60s tick), and "grq:messages-read"/"grq:messages-changed" keep the
+// same tab instant. Members-only (mounted by NavBar). The Ask-GRQ chat is a
+// separate floating bubble (<GrqChat>), not in here.
 
-const POLL_MS = 20_000;
+const POLL_MS = 60_000;
 
 export default function MessageButton() {
   const [unread, setUnread] = useState(0);
@@ -27,6 +30,18 @@ export default function MessageButton() {
   useEffect(() => {
     load();
     const t = setInterval(load, POLL_MS);
+    // The live path: the server pushes {unread} the moment a DM lands or the thread
+    // is marked read. EventSource reconnects on its own; the poll above covers any
+    // stretch where the stream can't.
+    const es = new EventSource("/api/messages/stream");
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (typeof d.unread === "number") setUnread(d.unread);
+      } catch {
+        /* not ours — ignore */
+      }
+    };
     // The drawer fires this after marking the thread read, or after sending — refresh now.
     function onRead() {
       setUnread(0);
@@ -38,6 +53,7 @@ export default function MessageButton() {
     window.addEventListener("grq:messages-changed", onChanged);
     return () => {
       clearInterval(t);
+      es.close();
       window.removeEventListener("grq:messages-read", onRead);
       window.removeEventListener("grq:messages-changed", onChanged);
     };
