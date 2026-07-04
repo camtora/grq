@@ -106,15 +106,15 @@ export default function MarketIndices({
           const delta = fundBps !== null ? fundBps - ix.changePct : null;
           const dTone = delta === null ? "" : delta > 0 ? "text-emerald-400" : delta < 0 ? "text-red-400" : "text-teal-200/50";
           return (
-            <div key={ix.symbol} className="px-4 py-2.5">
+            <div key={ix.symbol} className="px-4 py-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-bold text-teal-50">{ix.label}</span>
-                <span className={`text-[13px] ${tone}`}>{up ? "↗" : down ? "↘" : "→"}</span>
+                <span className="text-sm font-bold text-teal-50">{ix.label}</span>
+                <span className={tone}>{up ? "↗" : down ? "↘" : "→"}</span>
               </div>
               {/* Value + today's move (price change, then % in brackets); wraps if the cell is tight */}
               <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                <span className="text-[13px] tabular-nums text-teal-100/80">{fmtNum(ix.price)}</span>
-                <span className={`text-[11px] tabular-nums ${tone}`}>
+                <span className="tabular-nums text-teal-100/80">{fmtNum(ix.price)}</span>
+                <span className={`text-xs tabular-nums ${tone}`}>
                   {ix.change >= 0 ? "+" : ""}
                   {fmtNum(ix.change)} ({ix.changePct >= 0 ? "+" : ""}
                   {ix.changePct.toFixed(2)}%)

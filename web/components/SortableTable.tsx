@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, type ReactNode } from "react";
+import { useLiveQuotes } from "./LiveQuotes";
 
 // One client wrapper that makes any server-rendered stock table sortable by clicking
 // a column header (Cam 2026-06-23). The rows stay server-rendered — the caller hands
@@ -20,12 +21,19 @@ export type SortableColumn = {
   label: ReactNode;
   align?: "left" | "right" | "center"; // default center
   numeric?: boolean; // sort numerically + default desc on first click
+  /** Sort this column by the LIVE quote (matching what the live cells display) instead of
+   *  the page-load snapshot — "last" = live price, "day" = live $ move per share. Falls back
+   *  to the static `sort` value when no quote has landed. Fixes the sorted-column ordering
+   *  visibly disagreeing with the ticking cells (Cam 2026-07-04 — GD/AAPL/AXP "random"). */
+  liveKind?: "last" | "day";
 };
 
 export type SortableRow = {
   key: string;
   group?: string; // when `groups` is set, rows cluster by this key (a divider sits between clusters)
   sort?: Record<string, string | number | null>;
+  /** The quote-feed symbol for liveKind columns (the LiveQuotesProvider map key). */
+  liveSymbol?: string;
   node: ReactNode;
 };
 
@@ -55,11 +63,25 @@ export default function SortableTable({
 }) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(initialSort);
   const numericByKey = new Map(columns.filter((c) => c.key).map((c) => [c.key as string, !!c.numeric]));
+  const liveKindByKey = new Map(columns.filter((c) => c.key && c.liveKind).map((c) => [c.key as string, c.liveKind!]));
+
+  // Live sort values — the SAME numbers the live cells display, so a sorted column and
+  // its ticking cells can never disagree. Reading the hook re-sorts on each quote poll.
+  const quotes = useLiveQuotes();
+  const liveValue = (r: SortableRow, kind: "last" | "day"): number | null => {
+    if (!r.liveSymbol) return null;
+    const q = quotes[r.liveSymbol.toUpperCase()];
+    if (!q) return null;
+    if (kind === "last") return q.priceCents;
+    const f = q.changePct / 100; // day $ move per share — the LiveDayCell derivation
+    return 1 + f !== 0 ? Math.round(q.priceCents - q.priceCents / (1 + f)) : null;
+  };
 
   const ordered = sort
     ? [...rows].sort((a, b) => {
-        const av = a.sort?.[sort.key] ?? null;
-        const bv = b.sort?.[sort.key] ?? null;
+        const kind = liveKindByKey.get(sort.key);
+        const av = (kind ? liveValue(a, kind) : null) ?? a.sort?.[sort.key] ?? null;
+        const bv = (kind ? liveValue(b, kind) : null) ?? b.sort?.[sort.key] ?? null;
         if (av == null && bv == null) return 0;
         if (av == null) return 1; // nulls last, always
         if (bv == null) return -1;

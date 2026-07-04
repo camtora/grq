@@ -323,12 +323,12 @@ export default async function Portfolio() {
           columns={[
             { key: "symbol", label: "Symbol", align: "left" },
             { key: "qty", label: "Qty", align: "right", numeric: true },
-            { key: "avgCost", label: <Term k="acb" align="right">Avg cost</Term>, align: "right", numeric: true },
+            { key: "avgCost", label: <Term k="acb" align="right" clickThrough>Avg cost</Term>, align: "right", numeric: true },
             { key: "last", label: "Last", align: "right", numeric: true },
             { key: "today", label: "Today", align: "right", numeric: true },
-            { key: "value", label: <Term k="market-value" align="right">Market value</Term>, align: "right", numeric: true },
-            { key: "unrealized", label: <Term k="unrealized-pnl" align="right">Unrealized P&L</Term>, align: "right", numeric: true },
-            { key: "weight", label: <Term k="weight" align="right">Weight</Term>, align: "right", numeric: true },
+            { key: "value", label: <Term k="market-value" align="right" clickThrough>Market value</Term>, align: "right", numeric: true },
+            { key: "unrealized", label: <Term k="unrealized-pnl" align="right" clickThrough>Unrealized P&L</Term>, align: "right", numeric: true },
+            { key: "weight", label: <Term k="weight" align="right" clickThrough>Weight</Term>, align: "right", numeric: true },
           ]}
           rows={pf.positions.map((p) => ({
             key: p.symbol,

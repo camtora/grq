@@ -2751,3 +2751,55 @@ listens for the portal's postMessage result AND polls `GET /api/external/status`
 (`connectionHealthFor` — the LIVE authorization flag) every 15s; first success signal syncs + refreshes,
 a 4-min timeout sends the member to the SnapTrade dashboard. If the every-other-day TD dance proves
 too much friction, the researched alternatives are Plaid-direct or Wealthica (both costlier).
+
+### D108 — Pre-earnings overnight dossiers + Today/Portfolio typography settle (Cam, 2026-07-03)
+
+**Pre-earnings dossiers (agent v2.48):** any name we track or watch that REPORTS today gets a fresh
+dossier queued at **02:30 ET** into the existing overnight drain (`maybeEarningsRefreshEnqueue`,
+runner.ts; matcher `lib/earnings.ts` — universe∪StockWatch∪AgentFocus on the bare-yahoo convention,
+RETIRED shells excluded). Held names queue first; names dossiered <24h ago skip; capped 8/night (peak
+season protection, logs what it drops); pushes a `dossiers`-category note when it queues. Rationale:
+the print should land against a current thesis — a before-open report gets its dossier hours ahead,
+an after-close one gets same-day-fresh. Dry-run matched real reporters (PEP/DAL Jul 9, banks Jul 14,
+held TSM Jul 16).
+
+**Today page (web):** sizes restored one notch after the accidental double-downscale
+(`SectionHeader size="lg"` is Today's scale; Portfolio keeps `md`); reported-earnings bubbles are
+ALWAYS expanded; upcoming reports moved to their own 8-wide wrapping tile strip; **The Wire removed
+from web Today** (API + iOS untouched) — the right rail now stacks "Our market" and "The whole
+market" as separate ~44vh scroll panels; day-archive navigation removed, replaced by the 🇨🇦/🇺🇸
+CAD/USD rate pill (the fund holds both currencies).
+
+**Portfolio + dark-mode legibility:** StatCard grew a `md` size (Portfolio's stat row) with labels
+one size up; new `--stat-label` theme token; and the dark theme now overrides `--color-teal-200`
+(#99f6e4 → #aff8ea) so ALL muted small text (table headers, captions, Weight cells, section subs)
+reads brighter on dark — the light theme defines its own teal-200 and is unaffected. SectionHeader
+titles are flex-centered so sub-descriptors align beside avatar-bearing titles.
+
+### D109 — GRQ Go day one: the full app, its dev loop, and the two-app push world (Cam, 2026-07-03)
+
+D106's scaffold became THE COMPLETE APP in a single day (~64 commits). The decisions that will outlive
+the code:
+
+- **The dev loop is the product's tempo:** Debug builds load JS from `metro.grq.camerontora.ca`
+  (nginx → the permanent `grq-metro` container; `*.grq` DNS + cert expansion) — both members' phones
+  hot-reload live from anywhere after ONE cabled install. The AppDelegate `bundleURL()` patch is the
+  load-bearing line; `expo prebuild` erases it. Native changes are the only re-installs.
+- **Backend grew a mobile feed tier, all additive:** new `/api/{watchlist,briefings,browse,reports/[id]}`
+  + `/api/wire?seed&page` (the infinite research shelf) + guards/exposure for `stock-index` and
+  `intraday`. `dossierResponse` now SYNTHESIZES untracked names (web-page parity + the D46 member
+  auto-kick moved into the feed) and carries nine new blocks (levers, options, social, personal,
+  chess value-chain, related, etc.). `/api/today` was extended additively and gained a 60s in-process
+  cache (11s → 12ms — the single biggest UX lever + FMP quota saver).
+- **Push became two-app aware:** `DeviceToken.bundleId` is the per-token `apns-topic`, and the
+  env-split Apple keys now BOTH live in `.env` — provider JWTs mint per gateway, so sandbox (dev-build)
+  tokens deliver. Verified end-to-end to a simulator (Apple-silicon sims hold real APNs tokens).
+  Agent v2.47 carries it, so agent-originated pushes reach GRQ Go.
+- **Type truth:** `shared/contract.ts` is importable as `@shared` in the app (metro watchFolders/alias,
+  mounted into the metro container and synced into the Mac build) — hand-mirrored types migrate as
+  touched.
+- **Design settlements:** headers/display use the SYSTEM font (the website has no custom font — SF is
+  the site's header face); Inter stays for body. Theme is member-keyed with a per-device override.
+  Every stock mention app-wide links to its page. No error may ever flash before auth settles
+  (quiet-retry `useApi`). Runbook + backlog: `docs/MOBILE-GRQGO.md`; design contract:
+  `docs/MOBILE-DESIGN.md`.

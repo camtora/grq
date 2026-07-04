@@ -15,11 +15,16 @@ export default function Term({
   children,
   className = "",
   align = "left",
+  clickThrough = false,
 }: {
   k: string;
   children?: React.ReactNode;
   className?: string;
   align?: "left" | "right";
+  /** For SORTABLE column headers (Cam 2026-07-04): the click belongs to the header —
+   *  it sorts instead of toggling the popover, which still opens on hover. Body-prose
+   *  Terms keep the default tap-to-explain. */
+  clickThrough?: boolean;
 }) {
   const def = GLOSSARY[k];
   const [open, setOpen] = useState(false);
@@ -60,12 +65,19 @@ export default function Term({
       <button
         type="button"
         onClick={(e) => {
-          // Don't let a glossary tap bubble into an ancestor click handler — a
-          // sortable column header or an expandable row would otherwise also fire.
+          // clickThrough: let the ancestor sortable header take the click (the
+          // definition still shows on hover). Default: don't let a glossary tap
+          // bubble into an ancestor handler — an expandable row would also fire.
+          if (clickThrough) return;
           e.stopPropagation();
           setOpen((o) => !o);
         }}
-        className={`cursor-help border-b border-dotted border-teal-400/60 ${className}`}
+        // [text-transform:inherit] — the CSS reset puts `text-transform: none` on <button>,
+        // which silently un-uppercased every glossary-wrapped header (EARNINGS vs "Avg cost",
+        // Cam 2026-07-04). Inherit restores whatever casing the surrounding header applies;
+        // body-prose Terms inherit "none" and look exactly as before. The popover stays
+        // normal-case via its own explicit class.
+        className={`cursor-help border-b border-dotted border-teal-400/60 [text-transform:inherit] ${className}`}
         aria-label={`Explain ${title}`}
       >
         {children ?? title}

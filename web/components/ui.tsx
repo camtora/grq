@@ -37,12 +37,13 @@ export function StatCard({
 }) {
   const s = size ?? (compact ? "sm" : "lg");
   const pad = s === "sm" ? "p-3" : s === "md" ? "p-4" : "p-5";
-  const labelCls = s === "sm" ? "text-[10px]" : s === "md" ? "text-[11px]" : "text-xs";
+  const labelCls = s === "sm" ? "text-[10px]" : s === "md" ? "text-xs" : "text-xs";
   const valueCls = s === "sm" ? "mt-1 text-base" : s === "md" ? "mt-1.5 text-xl" : "mt-2 text-2xl";
   const noteCls = s === "sm" ? "mt-0.5 text-[10px]" : s === "md" ? "mt-1 text-[11px]" : "mt-1 text-xs";
   return (
     <Card className={pad}>
-      <div className={`uppercase tracking-wider text-teal-200/50 ${labelCls}`}>
+      {/* Label colour is the --stat-label theme token: a notch lighter on dark, unchanged on light. */}
+      <div className={`uppercase tracking-wider text-[color:var(--stat-label)] ${labelCls}`}>
         {term ? <Term k={term}>{label}</Term> : label}
       </div>
       <div className={`font-semibold tabular-nums ${valueClassName} ${valueCls}`}>{value}</div>
@@ -80,20 +81,28 @@ export function SectionHeader({
   children,
   sub,
   right,
+  size = "md",
 }: {
   children: React.ReactNode;
   sub?: React.ReactNode;
   right?: React.ReactNode;
+  /** "lg" — the Today newspaper's section scale (18px title / 14px sub; Cam 2026-07-03:
+   *  Today goes one size UP from the shared default). "md" — the standard page-section
+   *  scale everywhere else (Portfolio). */
+  size?: "lg" | "md";
 }) {
+  const lg = size === "lg";
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-      <h2 className="text-base font-bold uppercase tracking-wide text-teal-100">
+      {/* items-center so the sub descriptor sits vertically centered beside the title even
+          when the title carries a taller block (the avatar in "Alfred's/Cam's positions"). */}
+      <h2 className={`flex flex-wrap items-center gap-x-2 ${lg ? "text-lg" : "text-base"} font-bold uppercase tracking-wide text-teal-100`}>
         {children}
         {sub ? (
-          <span className="ml-2 text-xs font-normal normal-case tracking-normal text-teal-200/45">{sub}</span>
+          <span className={`${lg ? "text-sm" : "text-xs"} font-normal normal-case tracking-normal text-teal-200/45`}>{sub}</span>
         ) : null}
       </h2>
-      {right ? <div className="shrink-0 pb-0.5 text-xs">{right}</div> : null}
+      {right ? <div className={`shrink-0 ${lg ? "pb-1" : "pb-0.5"} text-xs`}>{right}</div> : null}
     </div>
   );
 }

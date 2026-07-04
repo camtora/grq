@@ -1,14 +1,11 @@
-"use client";
-
-import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import StockLogo from "@/components/StockLogo";
 
 // A reported-earnings BUBBLE (Today page) — who reported, beat/miss, the day reaction and a
-// one-line read. Clicking the card EXPANDS it in place (the watchlist row-expand interaction,
-// Cam 2026-07-03) into the numbers we captured on the report: EPS + revenue actual-vs-estimate
-// with surprise %, when it was reported, the day's reaction and Alfred's call. Links inside
-// (symbol, full report) still navigate — same [closest("a")] rule as ExpandableRow.
+// one-line read, with the report numbers ALWAYS showing: EPS + revenue actual-vs-estimate
+// with surprise %, when it was reported, the day's reaction and Alfred's call. (Was
+// click-to-expand; Cam 2026-07-03: "just always leave them expanded — it's good info."
+// No state left, so this is a plain server component again.)
 
 export type EarnView = {
   symbol: string;
@@ -81,7 +78,6 @@ function DetailLine({ label, actual, est, surprise }: { label: string; actual: s
 }
 
 export default function EarningBubble({ e, stance, today }: { e: EarnView; stance: string | null; today: string }) {
-  const [open, setOpen] = useState(false);
   const beat =
     e.epsActual != null && e.epsEstimated != null
       ? e.epsActual >= e.epsEstimated
@@ -93,22 +89,12 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
   const read =
     beat == null ? "Just reported — the numbers and the market's reaction are on the stock page." : `${beat ? "Beat" : "Missed"} estimates${epsPart}${movePart}.`;
 
-  const onClick = (ev: MouseEvent<HTMLDivElement>) => {
-    if ((ev.target as HTMLElement).closest("a,[data-no-expand]")) return;
-    setOpen((v) => !v);
-  };
-
   return (
-    <div
-      onClick={onClick}
-      aria-expanded={open}
-      className="group flex cursor-pointer flex-col rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-3 transition-colors hover:border-teal-400/30 hover:bg-teal-400/[0.03]"
-    >
+    <div className="group flex flex-col rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-3 transition-colors hover:border-teal-400/30">
       <div className="flex items-center gap-2">
-        <span className={`text-xs text-teal-200/30 transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
         <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} className="h-7 w-7 text-[10px]" />
         <div className="min-w-0">
-          <Link href={`/stocks/${e.symbol}`} className="text-[13px] font-semibold text-teal-100 hover:underline">
+          <Link href={`/stocks/${e.symbol}`} className="font-semibold text-teal-100 hover:underline">
             {e.symbol}
           </Link>
           <div className="truncate text-[10px] text-teal-200/40">{e.name}</div>
@@ -120,8 +106,8 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
       </div>
       <p className="mt-2 text-[11.5px] leading-snug text-teal-200/60">{read}</p>
 
-      {open && (
-        <div className="mt-2 space-y-1.5 border-t border-teal-400/10 pt-2 text-[13px]">
+      {(e.epsActual != null || e.revenueActual != null) && (
+        <div className="mt-2 space-y-1.5 border-t border-teal-400/10 pt-2 text-sm">
           <DetailLine label="EPS" actual={fmtEps(e.epsActual)} est={fmtEps(e.epsEstimated)} surprise={surprisePct(e.epsActual, e.epsEstimated)} />
           <DetailLine label="Revenue" actual={fmtRev(e.revenueActual)} est={fmtRev(e.revenueEstimated)} surprise={surprisePct(e.revenueActual, e.revenueEstimated)} />
           <div className="flex items-baseline gap-2">

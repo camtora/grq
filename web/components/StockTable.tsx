@@ -93,7 +93,7 @@ const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   call: { label: <>Alfred&apos;s call</>, align: false },
   upside: {
     label: (
-      <Term k="expected-return" align="right">
+      <Term k="expected-return" align="right" clickThrough>
         12-mo
       </Term>
     ),
@@ -101,7 +101,7 @@ const HEADERS: Record<StockColumn, { label: ReactNode; align: boolean }> = {
   },
   conf: {
     label: (
-      <Term k="confidence" align="right">
+      <Term k="confidence" align="right" clickThrough>
         Conf
       </Term>
     ),
@@ -291,7 +291,15 @@ function sortValues(r: StockRow): Record<string, string | number | null> {
     tier: r.tier,
     watcher: (r.watchers ?? []).map((w) => w.name).join(", ") || null,
     last: r.lastCents,
-    day: r.dayBps,
+    // Day sorts by the DOLLAR move per share — largest gain → largest loss — not the
+    // percent (Cam 2026-07-04). Derived the same way LiveDayCell displays it: prior
+    // close = last/(1+dayFrac). Note the keys are page-load values; the live cells
+    // keep ticking after a sort.
+    day: (() => {
+      if (r.dayBps == null || r.lastCents == null) return null;
+      const f = r.dayBps / 10_000;
+      return 1 + f !== 0 ? Math.round(r.lastCents - r.lastCents / (1 + f)) : null;
+    })(),
     signals: (r.rec ? stanceMeta(r.rec.label)?.pos : null) ?? null,
     call: callPos,
     upside: r.upsidePct,
@@ -324,10 +332,18 @@ export default function StockTable({
   const colSpan = 2 + columns.length + (isMember ? 1 : 0);
 
   // Symbol + Name lead; the page's columns follow; Manage trails (not sortable).
+  // Last + Day sort by the LIVE quote (what the cells display), not the page-load snapshot.
   const sortColumns: SortableColumn[] = [
     { key: "symbol", label: "Symbol" },
     { key: "name", label: "Name" },
-    ...columns.map((c): SortableColumn => ({ key: c, label: HEADERS[c].label, numeric: COL_NUMERIC[c] })),
+    ...columns.map(
+      (c): SortableColumn => ({
+        key: c,
+        label: HEADERS[c].label,
+        numeric: COL_NUMERIC[c],
+        liveKind: c === "last" ? "last" : c === "day" ? "day" : undefined,
+      }),
+    ),
     ...(isMember ? [{ label: "Manage" } as SortableColumn] : []),
   ];
 
@@ -336,6 +352,7 @@ export default function StockTable({
             return {
               key: r.symbol,
               sort: sortValues(r),
+              liveSymbol: r.symbol, // the same key LiveDayCell/LiveLastCell poll with
               node: (
             <ExpandableRow
               key={r.symbol}

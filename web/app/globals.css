@@ -15,6 +15,13 @@
   --glow-b: rgba(20, 184, 166, 0.05);
   --scroll-thumb: rgba(45, 212, 191, 0.25);
   --scroll-thumb-hover: rgba(45, 212, 191, 0.40);
+  /* Stat-tile label (StatCard) — a notch lighter than the old text-teal-200/50 on dark,
+     where /50 read too dim (Cam 2026-07-03); the light theme keeps its original weight. */
+  --stat-label: rgba(175, 248, 234, 0.65);
+  /* The muted-text base: teal-200 nudged brighter than stock Tailwind (#99f6e4 → #aff8ea)
+     so the /40–/60 mutes — table headers, captions, Weight cells, section subs — stay
+     readable on dark (Cam 2026-07-03). The light theme defines its own teal-200 below. */
+  --color-teal-200: #aff8ea;
 }
 
 /* ---------- Light (Cam's pick) ----------
@@ -36,6 +43,7 @@ html[data-theme="light"] {
   --glow-b: rgba(13, 148, 136, 0.05);
   --scroll-thumb: rgba(13, 148, 136, 0.30);
   --scroll-thumb-hover: rgba(13, 148, 136, 0.50);
+  --stat-label: rgba(17, 102, 91, 0.5); /* = this theme's teal-200 at /50 — unchanged */
 
   --color-teal-50: #0f3d36;
   --color-teal-100: #14524a;
