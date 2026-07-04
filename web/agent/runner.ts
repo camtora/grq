@@ -37,6 +37,7 @@ import { runDayLabTick } from "./day-lab/tick";
 import { verifyExperiments } from "../lib/race/verify";
 import { snapshotPredictions } from "../lib/report-card/snapshot";
 import { syncAllConnected, snapshotExternalValues } from "../lib/external/store";
+import { earningsReportersFor } from "../lib/earnings";
 import { memberEmails } from "../lib/users";
 
 const broker = getBroker();
@@ -56,6 +57,7 @@ let lastFundamentalsBackfill = 0;
 let lastWeeklyRefreshDay = "";
 let lastSatHeldRefreshDay = "";
 let lastDailyRefreshDay = "";
+let lastEarningsRefreshDay = "";
 let lastSmartMoneyDay = "";
 let lastExtAcctSyncDay = "";
 let lastOptionsMs = 0;
@@ -895,6 +897,7 @@ async function tick() {
   await maybeWeeklyRefreshEnqueue();
   await maybeSaturdayHeldRefreshEnqueue();
   await maybeDailyRefreshEnqueue();
+  await maybeEarningsRefreshEnqueue();
   await processResearchQueue();
 
   // Bull Races (background — ~8 model calls; self-guarded against overlap, must NOT block the tick).
@@ -1025,6 +1028,69 @@ async function maybeDailyRefreshEnqueue() {
     if (isHeld) heldCount++;
   }
   if (queued > 0) console.log(`[daily-refresh] queued ${queued} dossiers (${heldCount} held + ${queued - heldCount} movers, pre-market)`);
+}
+
+// Pre-earnings dossier pass (Cam 2026-07-03): any name we track or watch that REPORTS
+// today gets a fresh dossier run overnight — the print should land against a current
+// thesis, not a week-old one. Runs in the 02:30 ET lane (the same overnight drain the
+// Sunday full refresh uses): a before-open report gets its dossier hours ahead; an
+// after-close report gets one that's same-day fresh. Deterministic gates only; held
+// names queue first and a per-night cap protects the shared Max quota in peak season.
+const EARNINGS_REFRESH_MIN = 2 * 60 + 30; // 02:30 ET — the overnight lane
+const EARNINGS_REFRESH_STALE_MS = 24 * 60 * 60_000; // already dossiered today → skip
+const EARNINGS_REFRESH_MAX = 8; // per-night cap (peak season can list dozens)
+async function maybeEarningsRefreshEnqueue() {
+  const p = etParts();
+  if (!isMarketDay()) return; // no reports on holidays/weekends; Sat/Sun have their own passes
+  if (p.minutesSinceMidnight < EARNINGS_REFRESH_MIN) return;
+  if (lastEarningsRefreshDay === p.dateStr) return;
+  lastEarningsRefreshDay = p.dateStr;
+
+  const reporters = await earningsReportersFor(p.dateStr).catch((e) => {
+    console.error("[earnings-refresh] calendar lookup failed", e);
+    return [] as string[];
+  });
+  if (reporters.length === 0) return;
+
+  const [inFlightRows, positions] = await Promise.all([
+    prisma.researchRequest.findMany({ where: { status: { in: ["QUEUED", "RUNNING"] } }, select: { symbol: true } }),
+    prisma.position.findMany({ select: { symbol: true } }),
+  ]);
+  const inFlight = new Set(inFlightRows.map((r) => r.symbol));
+  const held = new Set(positions.map((x) => x.symbol.toUpperCase()));
+  const staleBefore = new Date(Date.now() - EARNINGS_REFRESH_STALE_MS);
+  // Held names first — real money meets the print.
+  const ordered = [...reporters].sort(
+    (a, b) => Number(held.has(b.toUpperCase())) - Number(held.has(a.toUpperCase())),
+  );
+
+  let queued = 0;
+  const names: string[] = [];
+  for (const sym of ordered) {
+    if (queued >= EARNINGS_REFRESH_MAX) {
+      console.log(`[earnings-refresh] nightly cap (${EARNINGS_REFRESH_MAX}) hit — ${ordered.length - queued} reporters left unqueued`);
+      break;
+    }
+    if (inFlight.has(sym)) continue;
+    const latest = await prisma.journalEntry.findFirst({
+      where: { kind: "RESEARCH", symbol: sym.toUpperCase(), title: { startsWith: "Dossier" } },
+      orderBy: { at: "desc" },
+      select: { at: true },
+    });
+    if (latest && latest.at > staleBefore) continue; // already fresh for the print
+    await prisma.researchRequest.create({ data: { symbol: sym, requestedBy: "earnings" } });
+    queued++;
+    names.push(sym);
+  }
+  if (queued > 0) {
+    console.log(`[earnings-refresh] queued ${queued} pre-earnings dossier${queued === 1 ? "" : "s"}: ${names.join(", ")}`);
+    await alert(
+      "info",
+      `Pre-earnings research: ${queued} dossier${queued === 1 ? "" : "s"} queued`,
+      `${names.join(", ")} report${names.length === 1 ? "s" : ""} earnings today — fresh dossiers before the print.`,
+      { category: "dossiers" },
+    );
+  }
 }
 
 // Work the research queue one dossier at a time. Uncapped (Cam removed the daily

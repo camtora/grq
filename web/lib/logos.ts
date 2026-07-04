@@ -62,8 +62,24 @@ export function fmpLogo(symbol: string): string {
   return `https://financialmodelingprep.com/image-stock/${encodeURIComponent(symbol.trim().toUpperCase())}.png`;
 }
 
-/** Resolve logos for any universe members not yet tried. Stores the URL on a
- *  hit, "" on a miss, so each name is attempted exactly once. Returns hits. */
+/** Does FMP actually serve a logo for this ticker? (404 on unknown — checked
+ *  server-side once at resolution time so we never cache a URL that would 404
+ *  on every render.) */
+export async function fmpLogoExists(symbol: string): Promise<boolean> {
+  try {
+    const res = await fetch(fmpLogo(symbol), { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve logos for any universe members not yet tried. FMP's ticker-keyed logo
+ *  (proper artwork, keyed on the REAL listing ticker — `yahoo`) is tried FIRST;
+ *  the legacy name→Clearbit→favicon chain is the fallback for names FMP lacks
+ *  (Cam 2026-07-04 — the name-match guard missed TSM + AMD entirely while FMP
+ *  had both). Stores the URL on a hit, "" on a miss, so each name is attempted
+ *  exactly once. Returns hits. */
 export async function backfillLogos(): Promise<number> {
   const rows = await prisma.universeMember.findMany({ where: { logoUrl: null } });
   let hits = 0;
@@ -71,7 +87,8 @@ export async function backfillLogos(): Promise<number> {
     const batch = rows.slice(i, i + CONCURRENCY);
     await Promise.all(
       batch.map(async (r) => {
-        const url = await resolveLogo(r.name);
+        const ticker = (r.yahoo || r.symbol).trim();
+        const url = (await fmpLogoExists(ticker)) ? fmpLogo(ticker) : await resolveLogo(r.name);
         await prisma.universeMember.update({ where: { symbol: r.symbol }, data: { logoUrl: url ?? "" } });
         if (url) hits++;
       }),
