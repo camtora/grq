@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
-import { fmpEnabled, fmpIndices, fmpCadUsd, type IndexQuote, type FxQuote } from "@/lib/fmp";
+import { fmpEnabled, fmpIndices, type IndexQuote } from "@/lib/fmp";
 
 export const dynamic = "force-dynamic";
 
-// Live market-indices strip for the Today page (TSX/S&P/DJIA/NASDAQ/Gold/Oil) + the live CAD/USD
-// rate shown in the strip header. Cookie-gated by middleware (no Bearer entry). A short in-process
-// cache means many open tabs share one FMP hit while the strip polls until the close.
-let cache: { at: number; data: IndexQuote[]; fx: FxQuote | null } | null = null;
+// Live market-indices strip for the Today page (TSX/S&P/DJIA/NASDAQ/Gold/Oil). Cookie-gated by
+// middleware (no Bearer entry). A short in-process cache means many open tabs share one FMP hit
+// while the strip polls until the close. (CAD/USD left this payload 2026-07-04 — the masthead's
+// loonie pill is the one FX readout; it renders server-side off fmpCadUsd.)
+let cache: { at: number; data: IndexQuote[] } | null = null;
 
 export async function GET() {
-  if (!fmpEnabled()) return NextResponse.json({ indices: [], fx: null });
-  if (cache && Date.now() - cache.at < 10_000) return NextResponse.json({ indices: cache.data, fx: cache.fx });
-  const [data, fx] = await Promise.all([
-    fmpIndices().catch(() => [] as IndexQuote[]),
-    fmpCadUsd().catch(() => null),
-  ]);
-  if (data.length > 0) cache = { at: Date.now(), data, fx };
-  return NextResponse.json({ indices: data, fx });
+  if (!fmpEnabled()) return NextResponse.json({ indices: [] });
+  if (cache && Date.now() - cache.at < 10_000) return NextResponse.json({ indices: cache.data });
+  const data = await fmpIndices().catch(() => [] as IndexQuote[]);
+  if (data.length > 0) cache = { at: Date.now(), data };
+  return NextResponse.json({ indices: data });
 }

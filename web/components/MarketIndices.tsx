@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { IndexQuote, FxQuote } from "@/lib/fmp";
+import type { IndexQuote } from "@/lib/fmp";
 
 // The market-indices strip on Today: TSX / S&P 500 / DJIA / NASDAQ / Gold / Oil.
 // Renders the SSR snapshot, then polls /api/indices every 15s WHILE the market is
@@ -25,15 +25,12 @@ function isMarketOpenET(): boolean {
 
 export default function MarketIndices({
   initial,
-  initialFx = null,
   fundDayPct = null,
 }: {
   initial: IndexQuote[];
-  initialFx?: FxQuote | null; // live CAD/USD (the loonie in USD), shown in the strip header
   fundDayPct?: number | null; // fund's day return as a FRACTION (0.0082 = +0.82%), null off a trading day
 }) {
   const [data, setData] = useState<IndexQuote[]>(initial);
-  const [fx, setFx] = useState<FxQuote | null>(initialFx);
   const [fundPct, setFundPct] = useState<number | null>(fundDayPct);
 
   useEffect(() => {
@@ -47,7 +44,6 @@ export default function MarketIndices({
         ]);
         const d = await ri.json();
         if (active && Array.isArray(d.indices) && d.indices.length > 0) setData(d.indices);
-        if (active && d.fx && typeof d.fx.price === "number") setFx(d.fx);
         const f = await rf.json();
         if (active && typeof f.dayPnlPct === "number" && f.marketDay) setFundPct(f.dayPnlPct);
       } catch {
@@ -68,34 +64,19 @@ export default function MarketIndices({
   // directly comparable to each index's changePct. Δ per market = GRQ − index, in points.
   const fundBps = fundPct !== null ? fundPct * 100 : null;
   const fundTone = fundBps === null ? "" : fundBps > 0 ? "text-emerald-400" : fundBps < 0 ? "text-red-400" : "text-teal-200/60";
-  const fxTone = fx === null ? "" : fx.changePct > 0 ? "text-emerald-400" : fx.changePct < 0 ? "text-red-400" : "text-teal-200/50";
 
   return (
     <div className="mb-6 overflow-hidden rounded-2xl border border-teal-400/10 bg-teal-400/[0.02]">
-      {(fundBps !== null || fx) && (
+      {/* CAD/USD left this header 2026-07-04 — the masthead's loonie pill already shows it. */}
+      {fundBps !== null && (
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-teal-400/10 px-4 py-2.5">
-          {fundBps !== null ? (
-            <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
-              GRQ today
-              <span className={`ml-1.5 tabular-nums ${fundTone}`}>
-                {fundBps >= 0 ? "+" : ""}
-                {fundBps.toFixed(2)}%
-              </span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">
+            GRQ today
+            <span className={`ml-1.5 tabular-nums ${fundTone}`}>
+              {fundBps >= 0 ? "+" : ""}
+              {fundBps.toFixed(2)}%
             </span>
-          ) : (
-            <span className="text-xs font-semibold uppercase tracking-wider text-teal-200/50">Markets</span>
-          )}
-          {fx && (
-            <span className="text-[11px] text-teal-200/50" title="Canadian dollar in US dollars (CAD/USD), live during market hours">
-              <span className="font-semibold uppercase tracking-wider text-teal-200/40">CAD/USD</span>{" "}
-              <span className="tabular-nums text-teal-100/80">{fx.price.toFixed(4)}</span>
-              <span className={`ml-1 tabular-nums ${fxTone}`}>
-                {fx.change >= 0 ? "+" : ""}
-                {fx.change.toFixed(4)} ({fx.changePct >= 0 ? "+" : ""}
-                {fx.changePct.toFixed(2)}%)
-              </span>
-            </span>
-          )}
+          </span>
         </div>
       )}
       <div className="grid grid-cols-2 divide-x divide-y divide-teal-400/10 sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-6">

@@ -310,7 +310,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     .map(([name, { sum, n }]) => ({ name, avgBps: Math.round(sum / n), n }))
     .sort((a, b) => b.avgBps - a.avgBps);
 
-  const hitters = [...pf.positions].sort((a, b) => Math.abs(b.dayChangeBps) - Math.abs(a.dayChangeBps));
+  // Top hitters: biggest gainer down to biggest loser (signed, not by magnitude — Cam 2026-07-04).
+  const hitters = [...pf.positions].sort((a, b) => b.dayChangeBps - a.dayChangeBps);
   // Market movers (tracked names) — biggest movers either way, capped to the SAME count as Top
   // Hitters so the two lists sit level beside each other (Cam 2026-07-02).
   const topMovers = [...movers].sort((a, b) => Math.abs(b.dayBps) - Math.abs(a.dayBps)).slice(0, hitters.length || 6);
@@ -492,7 +493,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Market indices ("GRQ today") + Macro run FULL page width above the grid (Cam 2026-07-04),
           so the rail's "Our market" starts level with Headlines. Live data, today only —
           archived days hide the stale ticker (Cam 2026-06-16). */}
-      {isToday && <MarketIndices initial={marketIndices} initialFx={marketCadUsd} fundDayPct={marketDay ? dayPnlPct : null} />}
+      {isToday && <MarketIndices initial={marketIndices} fundDayPct={marketDay ? dayPnlPct : null} />}
 
       {/* The Tape moved to the Portfolio page (Cam 2026-07-02) — above Alfred's positions. */}
 
