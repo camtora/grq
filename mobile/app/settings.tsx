@@ -267,29 +267,6 @@ export default function SettingsScreen() {
               </Footnote>
             </Card>
 
-            {/* Owner dashboards (web /traffic + /tokens parity) */}
-            <SectionTitle sub="owners only">Dashboards</SectionTitle>
-            <Pressable onPress={() => router.push('/traffic')}>
-              <Card>
-                <View style={st.linkRow}>
-                  <Text style={{ color: p.textPrimary, fontFamily: F.med, fontSize: 13.5 }}>
-                    Traffic — who&apos;s using GRQ
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color={p.textMuted} />
-                </View>
-              </Card>
-            </Pressable>
-            <Pressable onPress={() => router.push('/tokens')}>
-              <Card>
-                <View style={st.linkRow}>
-                  <Text style={{ color: p.textPrimary, fontFamily: F.med, fontSize: 13.5 }}>
-                    Token usage — the agent&apos;s Claude burn
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color={p.textMuted} />
-                </View>
-              </Card>
-            </Pressable>
-
             {/* System */}
             <SectionTitle sub="what's running">System</SectionTitle>
             <Card>

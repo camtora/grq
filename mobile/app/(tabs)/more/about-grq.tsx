@@ -38,6 +38,24 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
+/** One owner-dashboard link row (Traffic · Token usage — web settings-page parity). */
+function DashLink({ title, desc, href, p }: { title: string; desc: string; href: string; p: Palette }) {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.push(href)}>
+      <Card style={{ paddingVertical: 11 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: p.textPrimary, fontFamily: F.semi, fontSize: 13.5 }}>{title}</Text>
+            <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]}>{desc}</Text>
+          </View>
+          <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 13 }}>→</Text>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
 /* ---------- the decision log (paged) ---------- */
 
 function DecisionLog({ p }: { p: Palette }) {
@@ -156,6 +174,12 @@ export default function AboutGrqScreen() {
           The plain-English operating manual. The rules and numbers below are pulled live from the same code
           the agent obeys — so this page can&apos;t drift out of sync with reality.
         </Text>
+
+        {/* Owner dashboards (moved here from Settings — Cam 2026-07-04). */}
+        <View style={{ marginTop: 10, gap: 8 }}>
+          <DashLink title="Traffic" desc="who's using GRQ, and which sections get the views" href="/traffic" p={p} />
+          <DashLink title="Token usage" desc="what the agent spends of the shared Claude Max quota" href="/tokens" p={p} />
+        </View>
 
         <View style={s.tabRow}>
           {TABS.map((t) => {
