@@ -111,6 +111,15 @@ Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), no
 
 - **Legacy docker-compose v1** on this host: use `docker-compose` (hyphen), and
   `docker-compose.yaml` must keep `version: "2.4"`. `docker compose` (space) does not exist.
+- **Run `docker-compose` from the repo root, ALWAYS.** Compose v1 finds the yaml by walking
+  up the tree, but reads `.env` for `${…}` interpolation from the CURRENT directory — from
+  `web/` it loads `web/.env`, from `mobile/` it finds nothing, and either way
+  `POSTGRES_PASSWORD` interpolates BLANK, so even a plain `up -d web` sees db config "drift"
+  and **silently recreates `grq-db`** (bit us from `web/` in June, again from `mobile/`
+  2026-07-04). Data survives (volume) and the blank password is inert on an initialized
+  volume, but the drifted container config triggers ANOTHER surprise db recreate on the next
+  root-run `up -d`. Recovery: from the repo root, `docker-compose up -d db web`. Watch for
+  the tell: `Recreating grq-db` in output of a command that shouldn't touch the db.
 - **Host node is via nvm** — non-login shells need `source ~/.nvm/nvm.sh` first.
 - **Ports:** web 3012→3000 · grq-db loopback-only `127.0.0.1:5434→5432` (host 5432 is
   haymaker's postgres, 5433 was taken). Inside compose, containers use `db:5432`.
