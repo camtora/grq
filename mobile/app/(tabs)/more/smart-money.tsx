@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
 import StockLogo from '../../../components/StockLogo';
+import { fmpLogo } from '../../../lib/logos';
 import MdText from '../../../components/MdText';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { useApi } from '../../../services/hooks';
@@ -68,7 +69,8 @@ export default function SmartMoneyScreen() {
                 <View key={`${h.symbol}-${i}`}>
                   <Divider />
                   <Pressable onPress={() => router.push(`/stock/${h.symbol}`)} style={s.row}>
-                    <StockLogo symbol={h.symbol} logoUrl={null} size={24} />
+                    {/* Smart-money names come from FMP's US feeds — bare tickers are real FMP keys. */}
+                    <StockLogo symbol={h.symbol} logoUrl={fmpLogo(h.symbol)} size={24} />
                     <Text style={[s.sym, { color: p.accentText }]}>{h.symbol}</Text>
                     {h.putCall && <Text style={[s.putCall, { color: p.warn }]}>{h.putCall}</Text>}
                     <View style={s.rowRight}>
@@ -87,7 +89,8 @@ export default function SmartMoneyScreen() {
               <View key={`${c.symbol}-${i}`}>
                 {i > 0 && <Divider />}
                 <Pressable onPress={() => router.push(`/stock/${c.symbol}`)} style={s.row}>
-                  <Text style={[s.sym, { color: p.accentText, width: 64 }]}>{c.symbol}</Text>
+                  <StockLogo symbol={c.symbol} logoUrl={fmpLogo(c.symbol)} size={24} />
+                  <Text style={[s.sym, { color: p.accentText, width: 58 }]}>{c.symbol}</Text>
                   <Text style={[s.meta, { color: p.textMuted, flex: 1 }]} numberOfLines={1}>{c.name}</Text>
                   <Text style={[s.meta, { color: p.textPrimary }]}>{c.primary} · {c.secondary}</Text>
                 </Pressable>
@@ -101,7 +104,8 @@ export default function SmartMoneyScreen() {
               <View key={`${c.symbol}-${i}`}>
                 {i > 0 && <Divider />}
                 <Pressable onPress={() => router.push(`/stock/${c.symbol}`)} style={s.row}>
-                  <Text style={[s.sym, { color: p.accentText, width: 64 }]}>{c.symbol}</Text>
+                  <StockLogo symbol={c.symbol} logoUrl={fmpLogo(c.symbol)} size={24} />
+                  <Text style={[s.sym, { color: p.accentText, width: 58 }]}>{c.symbol}</Text>
                   <Text style={[s.meta, { color: p.textMuted, flex: 1 }]} numberOfLines={1}>{c.name}</Text>
                   <Text style={[s.meta, tabular, { color: p.textPrimary }]}>{c.primary}</Text>
                 </Pressable>
@@ -115,7 +119,8 @@ export default function SmartMoneyScreen() {
               <View key={`${c.symbol}-${i}`}>
                 {i > 0 && <Divider />}
                 <Pressable onPress={() => router.push(`/stock/${c.symbol}`)} style={s.row}>
-                  <Text style={[s.sym, { color: p.accentText, width: 64 }]}>{c.symbol}</Text>
+                  <StockLogo symbol={c.symbol} logoUrl={fmpLogo(c.symbol)} size={24} />
+                  <Text style={[s.sym, { color: p.accentText, width: 58 }]}>{c.symbol}</Text>
                   <Text style={[s.meta, { color: p.textMuted, flex: 1 }]}>{c.insiders} insiders</Text>
                   <Text style={[s.meta, tabular, { color: p.textPrimary }]}>{usd(c.totalValueUsd)}</Text>
                 </Pressable>
