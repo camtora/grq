@@ -29,7 +29,8 @@ import { getSocial, socialLine } from "./social/store";
 import { parseBoard, buildPlayViews, chessRefsForSymbol, bareChainKey } from "./chess";
 import { relatedFor } from "./graph/related";
 import { parseConfidenceLevers } from "./confidence-levers";
-import { loadStandings } from "./race/standings";
+import { loadStandings, loadDay, type ModelStanding } from "./race/standings";
+import { stripDecisionBlock } from "./race/models";
 import { loadBullRace, listRaces } from "./race/bulls";
 import { loadDesk, listDesks } from "./options-desk/desk";
 import { loadReportCard } from "./report-card/load";
@@ -1405,15 +1406,65 @@ export async function chessBoardResponse(id: number) {
 // Compact, mobile-shaped distillations of the web loaders (standings/leaderboards; full
 // trade/call history stays on the web). All sandboxes/research — never the live fund.
 
+// One model standing on the wire — the overview tiles and the day standings share it.
+function raceModelWire(m: ModelStanding) {
+  return {
+    model: m.model, label: m.label, role: m.role,
+    pnlCadCents: m.pnlCadCents, scoredCalls: m.scoredCalls, greens: m.greens,
+    hitRate: m.hitRate, avgReturnBps: m.avgReturnBps, vsBenchmarkBps: m.vsBenchmarkBps,
+    totalCalls: m.totalCalls, avgConfidence: m.avgConfidence, spark: m.spark,
+    counts: m.counts,
+    positions: m.positions.map((p) => ({
+      symbol: p.symbol, pnlCadCents: p.pnlCadCents, calls: p.calls,
+      shares: p.shares, avgPriceCents: p.avgPriceCents, currency: p.currency,
+    })),
+  };
+}
+
 export async function raceResponse() {
-  const { models, fxUsdCad } = await loadStandings();
+  const { models, days, asOf, fxUsdCad } = await loadStandings();
   return {
     fxUsdCad,
-    models: models.map((m) => ({
-      model: m.model, label: m.label, role: m.role,
-      pnlCadCents: m.pnlCadCents, scoredCalls: m.scoredCalls, greens: m.greens,
-      hitRate: m.hitRate, avgReturnBps: m.avgReturnBps, vsBenchmarkBps: m.vsBenchmarkBps,
-      totalCalls: m.totalCalls, avgConfidence: m.avgConfidence, spark: m.spark,
+    asOf: asOf.toISOString(),
+    today: etDateStr(),
+    models: models.map(raceModelWire),
+    days: days.map((d) => ({
+      date: d.date, sessions: d.sessions, calls: d.calls,
+      leader: d.leader, champion: d.champion,
+    })),
+  };
+}
+
+// One race day for the app: that day's standings + the session call-matrix cells (the web's
+// /race/[date]). Challenger text is stripped of its trailing ```json decision block server-side.
+export async function raceDayResponse(date: string) {
+  const d = await loadDay(date);
+  return {
+    date: d.date,
+    hasData: d.hasData,
+    fxUsdCad: d.fxUsdCad,
+    models: d.models,
+    standings: d.standings.map(raceModelWire),
+    sessions: d.sessions.map((s) => ({
+      key: s.key,
+      at: s.sessionAt.toISOString(),
+      kind: s.sessionKind,
+      label: s.label,
+      reason: s.reason,
+      cells: Object.fromEntries(
+        Object.entries(s.cells).map(([model, c]) => [model, {
+          role: c.row.role,
+          action: c.row.action,
+          symbol: c.row.symbol,
+          qty: c.row.qty,
+          confidence: c.row.confidence,
+          unpriced: (c.row.action === "BUY" || c.row.action === "SELL") && c.row.entryPriceCents == null,
+          text: c.row.role === "champion" ? c.row.text : stripDecisionBlock(c.row.text),
+          returnBps: c.score?.returnBps ?? null,
+          isGreen: c.score?.isGreen ?? null,
+          pnlCadCents: c.pnlCadCents,
+        }]),
+      ),
     })),
   };
 }
@@ -1439,16 +1490,38 @@ export async function deskResponse(id?: number) {
   return {
     desks: desks.map((d) => ({ id: d.id, name: d.name, status: d.status })),
     current: data && {
-      desk: { id: data.desk.id, name: data.desk.name, status: data.desk.status, startingStakeCents: data.desk.startingStakeCents },
+      desk: {
+        id: data.desk.id,
+        name: data.desk.name,
+        status: data.desk.status,
+        startingStakeCents: data.desk.startingStakeCents,
+        cadence: data.desk.cadence,
+        startedAt: data.desk.startedAt ? data.desk.startedAt.toISOString() : null,
+      },
       realFundReturnPct: data.realFund?.returnPct ?? null,
+      realFundNavCents: data.realFund?.navCents ?? null,
       arms: data.arms.map((a) => ({
         entrantId: a.entrantId, label: a.label, arm: a.arm, returnPct: a.returnPct,
         navCadCents: a.navCadCents, openOptionCount: a.openOptionCount, tradeCount: a.tradeCount,
+        cashPct: a.cashPct,
+        // Return-over-time (the web page's chart + per-arm sparkline).
+        navHistory: a.navHistory.map((n) => ({ at: n.at.toISOString(), returnPct: n.returnPct })),
         holdings: a.holdings.map((h) => ({
           kind: h.kind, underlying: h.underlying, qty: h.qty, mvCadCents: h.mvCadCents, unrealCadCents: h.unrealCadCents,
           strikeCents: h.strikeCents ?? null, expiry: h.expiry ?? null, daysLeft: h.daysLeft ?? null, card: h.card ?? null,
+          // The teaching-card numbers + the Phase-2 decay sparkline (web DeskRow parity).
+          avgCostCents: h.avgCostCents, markCents: h.markCents, currency: h.currency,
+          breakevenCents: h.breakevenCents ?? null, maxLossCadCents: h.maxLossCadCents ?? null,
+          decay: h.decay ?? null,
         })),
-        resolved: a.resolved.map((r) => ({ kind: r.kind, underlying: r.underlying, returnPct: r.returnPct, realizedPnlCents: r.realizedPnlCents, card: r.card })),
+        resolved: a.resolved.map((r) => ({
+          kind: r.kind, underlying: r.underlying, returnPct: r.returnPct, realizedPnlCents: r.realizedPnlCents, card: r.card,
+          strikeCents: r.strikeCents ?? null, expiry: r.expiry ?? null, qty: r.qty, side: r.side,
+        })),
+        calls: a.calls.map((c) => ({
+          at: c.sessionAt.toISOString(), action: c.action, underlying: c.underlying, right: c.right,
+          strikeCents: c.strikeCents, qty: c.qty, thesis: c.thesis, filled: c.filled, rejectReason: c.rejectReason,
+        })),
       })),
     },
   };
