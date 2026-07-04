@@ -15,6 +15,7 @@ const MARKETS: Row[] = [
 ];
 
 const LEARNING: Row[] = [
+  { href: '/more/learn', icon: 'library-outline', title: 'Learn', desc: 'How the market actually works — courses, the glossary, and the labs.' },
   { href: '/more/options', icon: 'school-outline', title: 'Options', desc: 'Lessons + the payoff calculator — modeled, never executable.' },
 ];
 

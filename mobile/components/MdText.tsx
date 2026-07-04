@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { usePalette, F, type Palette } from '../constants/theme';
+import { useGlossary } from '../store/glossary';
+import { glossaryLookup } from '../lib/learn';
 
 /** Lightweight markdown renderer for agent prose (dossiers, briefings) with a
  * read-more fold. Handles: # headings, a lone **bold** line as a section
  * header, - / * / 1. lists, inline **bold** / *italic*, and [[glossary]]
- * terms (accent-tinted; the tappable explainer is a later phase). */
+ * terms — tap-to-explain everywhere via the GlossarySheet (the literacy
+ * pillar, 2026-07-04). */
 
 // Inline: **bold**, *italic*, [[term]].
 function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactNode[] {
@@ -24,9 +27,18 @@ function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactN
         </Text>,
       );
     } else if (tok.startsWith('[[')) {
+      // The marker carries a glossary key ("bid-ask-spread") or a loose term —
+      // show its glossary title when we know it, open the sheet on tap.
+      const raw = tok.slice(2, -2);
+      const hit = glossaryLookup(raw);
+      const display = hit ? hit.entry.term.split(' — ')[0] : raw;
       out.push(
-        <Text key={`${keyPrefix}-t${i}`} style={{ color: p.accentText }}>
-          {tok.slice(2, -2)}
+        <Text
+          key={`${keyPrefix}-t${i}`}
+          onPress={() => useGlossary.getState().open(hit?.key ?? raw)}
+          style={{ color: p.accentText, textDecorationLine: 'underline', textDecorationStyle: 'dotted' }}
+        >
+          {display}
         </Text>,
       );
     } else {

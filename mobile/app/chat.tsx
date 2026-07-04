@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MdText from '../components/MdText';
 import { usePalette, F } from '../constants/theme';
@@ -32,6 +32,13 @@ export default function ChatScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<ChatMsg>>(null);
+
+  // A seeded prompt (?prompt=…) prefills the draft — the Learn hub's starter
+  // questions arrive this way. Prefill only; the member still hits send.
+  const { prompt } = useLocalSearchParams<{ prompt?: string }>();
+  useEffect(() => {
+    if (typeof prompt === 'string' && prompt) setDraft(prompt);
+  }, [prompt]);
 
   useEffect(() => {
     api<{ messages: { id: number; role: string; content: string }[] }>('/api/chat')

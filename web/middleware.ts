@@ -56,6 +56,7 @@ const MOBILE_API = [
   "/api/traffic",         // Traffic dashboard for the app (owner-guarded in-route)
   "/api/tokens",          // Token-usage dashboard for the app (owner-guarded in-route)
   "/api/track",           // the usage beacon — the app logs screen views like the web does (self-guards)
+  "/api/learn",           // the Learn portal's live-fund receipts blocks (self-guards)
   // Member writes (self-guard via memberFromRequest; the order gate still disposes).
   "/api/chat",            // A8 (GET history + POST SSE; members-only in-route)
   "/api/messages",        // D61 member-to-member DMs/shares (GET thread/unread, POST send/read)

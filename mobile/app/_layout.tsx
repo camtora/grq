@@ -21,6 +21,7 @@ import { useNotifications } from '../store/notifications';
 import { useThemeStore } from '../store/theme';
 import { registerForPush } from '../services/push';
 import { api } from '../services/api';
+import GlossarySheet from '../components/GlossarySheet';
 
 // The ID token's audience must match the backend's GRQ_IOS_GOOGLE_CLIENT_ID,
 // so iosClientId only — no webClientId (that would flip the audience).
@@ -131,6 +132,8 @@ export default function RootLayout() {
       )}
       {ready && splashDone && status !== 'signedIn' && <SignIn />}
       {(!ready || !splashDone) && <Splash done={() => setSplashDone(true)} />}
+      {/* The tap-to-explain glossary sheet — mounted once; any [[term]] opens it. */}
+      {ready && <GlossarySheet />}
     </View>
   );
 }

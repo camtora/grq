@@ -9,12 +9,17 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { COURSES, LABS } from "../lib/learn/content";
+import { GLOSSARY } from "../lib/glossary";
 
 const out = resolve(__dirname, "../../shared/content/learn.json");
 const payload = {
   _generated: "web/scripts/export-learn-content.ts — do not edit by hand; edit web/lib/learn/content.ts and re-run",
   courses: COURSES,
   labs: LABS,
+  // The FULL glossary (def + example + related) — GRQ Go's tap-to-explain terms +
+  // glossary browser read this; the older shared/content/glossary.json stays as-is
+  // for its legacy consumers.
+  glossary: GLOSSARY,
 };
 writeFileSync(out, JSON.stringify(payload, null, 2) + "\n");
-console.log(`wrote ${out}: ${COURSES.length} courses (${COURSES.reduce((n, c) => n + c.lessons.length, 0)} lessons), ${LABS.length} labs`);
+console.log(`wrote ${out}: ${COURSES.length} courses (${COURSES.reduce((n, c) => n + c.lessons.length, 0)} lessons), ${LABS.length} labs, ${Object.keys(GLOSSARY).length} glossary terms`);
