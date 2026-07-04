@@ -335,7 +335,8 @@ model Quote {
   askCents     Int
   midCents     Int
   dayChangeBps Int      @default(0)
-  at           DateTime
+  at           DateTime // Yahoo's trade time — pinned at the last close while the market is shut
+  fetchedAt    DateTime @default(now()) // when WE pulled it — cache freshness keys off this, never `at`
   source       String   @default("yahoo-delayed")
 }
 

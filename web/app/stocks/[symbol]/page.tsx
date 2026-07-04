@@ -32,8 +32,8 @@ import OptionsPanel from "@/components/OptionsPanel";
 import SocialPanel from "@/components/SocialPanel";
 import StockChessBoards from "@/components/chess/StockChessBoards";
 import { chessRefsForSymbol } from "@/lib/chess";
-import { refreshOptions } from "@/lib/options/store";
-import { refreshSocialOne } from "@/lib/social/store";
+import { refreshOptions, getOptions } from "@/lib/options/store";
+import { refreshSocialOne, getSocial } from "@/lib/social/store";
 import LiveQuote from "@/components/LiveQuote";
 import StockLogo from "@/components/StockLogo";
 import { Card, Chip, StatCard, Pnl } from "@/components/ui";
@@ -210,7 +210,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings, chessRefs] =
+  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings, chessRefs, optionsData, socialData, watchersMap, iWatch, screenRead] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
@@ -246,6 +246,16 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       getSmartMoneyForSymbol(symbol).catch(() => null),
       prisma.settings.findUnique({ where: { id: 1 } }),
       chessRefsForSymbol(symbol).catch(() => []),
+      // Tier 3 / tier 8 — CACHE READS only (never fetch): the CBOE chain + social board
+      // pulls are kicked fire-and-forget after this barrier, so a cold cache costs THIS
+      // render nothing and the next visit shows fresh data.
+      getOptions(symbol),
+      getSocial(symbol),
+      watchersFor([symbol]),
+      isMember && session ? isWatching(symbol, session.email) : Promise.resolve(false),
+      // Market-screen first-pass read (docs/MARKET-BASE-LAYER.md) — so every screened name
+      // has SOME GRQ read on its page even before a full dossier. Shown only sans dossier.
+      screenReadFor(entry.yahoo).catch(() => null),
     ]);
 
   // Knowledge graph — names this stock is connected to (peers · shared 13F holders ·
@@ -260,24 +270,19 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const currentRead = journal.find((j) => j.kind === "DECISION" || j.kind === "RESEARCH");
   // Who's watching this name (D-watch): the human watcher stack, independent of universe
   // status — a name stays watched after promotion, so show every watcher whenever there
-  // is one. `iWatch` is the CURRENT member's own watch, driving the personal toggle.
-  const stockWatchers = tracked ? (await watchersFor([symbol])).get(symbol.toUpperCase()) ?? [] : [];
-  const iWatch = isMember && session ? await isWatching(symbol, session.email) : false;
+  // is one. `iWatch` (from the barrier) is the CURRENT member's own watch toggle.
+  const stockWatchers = tracked ? watchersMap.get(symbol.toUpperCase()) ?? [] : [];
   // When the agent last researched this name (latest dossier / research entry) — shown
   // in the header under the price so coverage freshness is always visible (Cam 2026-06-19).
   const lastResearched = journal.find((j) => j.kind === "RESEARCH")?.at ?? null;
-  // Market-screen first-pass read (docs/MARKET-BASE-LAYER.md) — so every screened name has
-  // SOME GRQ read on its page even before a full dossier. Shown only when there's no dossier.
-  const screenRead = await screenReadFor(entry.yahoo).catch(() => null);
   const dayBps = quote?.dayChangeBps ?? 0;
 
-  // Tier 3 — options positioning (lib/options): cache-or-fetch from CBOE for US optionable names
-  // (null for CA/illiquid). A SIGNAL about the underlying — the fund never trades options.
-  const optionsData = await refreshOptions(symbol).catch(() => null);
-
-  // Tier 8 — social sentiment (lib/social): cache-or-fetch ApeWisdom (Reddit) + Stocktwits for this
-  // name. null = no retail chatter (off-radar). A CROWDING/risk signal — never traded, on probation.
-  const socialData = await refreshSocialOne(symbol).catch(() => null);
+  // Tier 3 options (CBOE) + tier 8 social (ApeWisdom/Stocktwits): the page renders from the
+  // cached rows read in the barrier above; the actual network refreshes run fire-and-forget
+  // so a stale/cold cache never blocks the render (the CBOE chain alone was ~1-3s inline).
+  // Both refreshers no-op cheaply against a fresh cache, so this is safe on every view.
+  void refreshOptions(symbol).catch(() => {});
+  void refreshSocialOne(symbol).catch(() => {});
 
   // The at-a-glance verdict + the agent's expected return (latest dossier target).
   const rec = signals ? overallSignal(signals) : null;
