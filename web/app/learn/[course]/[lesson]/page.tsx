@@ -1,17 +1,21 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader, Card } from "@/components/ui";
+import PanelHeader from "@/components/PanelHeader";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { courseBySlug, lessonChecks, readMinutes } from "@/lib/learn/content";
 import { examForCourse } from "@/lib/learn/exams";
 import BlockRenderer from "@/components/learn/BlockRenderer";
+import CheckBlock from "@/components/learn/CheckBlock";
 import LessonProgress from "@/components/learn/LessonProgress";
 import AskLesson from "@/components/learn/AskLesson";
 
 // One lesson on its own page (docs/LEARN-FRAMEWORK.md D111 §3): the block sequence, the
 // completion tracker, prev/next navigation, and a lesson-scoped Ask Alfred. The course
-// page is the syllabus; this is the classroom.
+// page is the syllabus; this is the classroom. Inline checks live in a right-hand
+// "Check yourself" rail (1/3 width, sticky on desktop; below the lesson on mobile —
+// Cam 2026-07-05), with the completion tracker underneath them.
 export const dynamic = "force-dynamic";
 
 export default async function LessonPage({ params }: { params: Promise<{ course: string; lesson: string }> }) {
@@ -42,7 +46,8 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
     }
   }
 
-  const checks = lessonChecks(lesson).length;
+  const checks = lessonChecks(lesson);
+  const content = lesson.blocks.filter((b) => b.kind !== "check");
 
   return (
     <main>
@@ -55,20 +60,31 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
           sub={`Course ${course.n} · ${course.title} — lesson ${i + 1} of ${course.lessons.length} · ~${readMinutes(lesson)} min`}
         />
 
-        <Card className="p-5">
-          {lesson.blocks.map((block, bi) => (
-            <BlockRenderer key={bi} block={block} />
-          ))}
-          <div className="mt-5 border-t border-teal-400/10 pt-4">
-            <LessonProgress
-              courseSlug={course.slug}
-              lessonSlug={lesson.slug}
-              totalChecks={checks}
-              initiallyDone={initiallyDone}
-              isMember={isMember}
-            />
-          </div>
-        </Card>
+        <div className="grid items-start gap-6 lg:grid-cols-3">
+          <Card className="p-5 lg:col-span-2">
+            {content.map((block, bi) => (
+              <BlockRenderer key={bi} block={block} />
+            ))}
+          </Card>
+
+          <aside className="space-y-2 lg:sticky lg:top-20">
+            <PanelHeader>Check yourself</PanelHeader>
+            <div className="space-y-3">
+              {checks.map((q) => (
+                <CheckBlock key={q.id} q={q} />
+              ))}
+            </div>
+            <div className="pt-1.5">
+              <LessonProgress
+                courseSlug={course.slug}
+                lessonSlug={lesson.slug}
+                totalChecks={checks.length}
+                initiallyDone={initiallyDone}
+                isMember={isMember}
+              />
+            </div>
+          </aside>
+        </div>
 
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
           {prev ? (

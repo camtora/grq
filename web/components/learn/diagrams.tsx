@@ -111,15 +111,22 @@ function OrderPath() {
         <Flow x1={140} x2={193} y={y + h / 2} marker="op-a" label="your order" />
         <Flow x1={335} x2={388} y={y + h / 2} marker="op-a" />
         <Flow x1={540} x2={593} y={y + h / 2} marker="op-a" label="matched" />
-        {/* the money path */}
+        {/* the money path — an elbow routed clearly BELOW the company box */}
         <g className="text-emerald-300/80">
-          <path d="M 75 84 C 75 150, 650 150, 650 84" fill="none" stroke="currentColor" strokeWidth={1.5} strokeDasharray="5 4" markerEnd="url(#op-m)" />
+          <path
+            d="M 75 84 L 75 150 Q 75 158 83 158 L 637 158 Q 645 158 645 150 L 645 88"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            markerEnd="url(#op-m)"
+          />
           <defs>
             <marker id="op-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
             </marker>
           </defs>
-          <text x={360} y={158} textAnchor="middle" fill="currentColor" className="text-[10px] font-semibold">
+          <text x={360} y={176} textAnchor="middle" fill="currentColor" className="text-[10px] font-semibold">
             your money → the seller
           </text>
         </g>
@@ -157,31 +164,31 @@ function MarketMap() {
         <text x={546} y={24} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-teal-300/60">
           Secondary — every day after
         </text>
-        {/* primary: you -> company */}
-        <NodeBox x={26} y={62} w={120} h={50} lines={["YOU"]} />
-        <NodeBox x={202} y={62} w={120} h={50} lines={["THE COMPANY"]} tone="accent" />
+        {/* primary: you -> company (gap wide enough for the labels — measured, not vibed) */}
+        <NodeBox x={20} y={62} w={110} h={50} lines={["YOU"]} />
+        <NodeBox x={214} y={62} w={124} h={50} lines={["THE COMPANY"]} tone="accent" />
         <g className="text-emerald-300/80">
-          <line x1={146} y1={80} x2={200} y2={80} stroke="currentColor" strokeWidth={1.5} markerEnd="url(#mm-m)" />
+          <line x1={130} y1={80} x2={212} y2={80} stroke="currentColor" strokeWidth={1.5} markerEnd="url(#mm-m)" />
           <defs>
             <marker id="mm-m" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
             </marker>
           </defs>
-          <text x={173} y={70} textAnchor="middle" fill="currentColor" className="text-[9.5px] font-semibold">
+          <text x={171} y={70} textAnchor="middle" fill="currentColor" className="text-[9.5px] font-semibold">
             your money
           </text>
         </g>
-        <Flow x1={200} x2={148} y={96} marker="mm-a" label="new shares" labelAbove={false} />
+        <Flow x1={212} x2={132} y={96} marker="mm-a" label="new shares" labelAbove={false} />
         <text x={174} y={148} textAnchor="middle" fill="currentColor" className="text-[9.5px] text-teal-200/50">
           the only trade that funds the business
         </text>
         {/* secondary: investor <-> investor */}
-        <NodeBox x={398} y={62} w={120} h={50} lines={["INVESTOR A"]} />
-        <NodeBox x={574} y={62} w={120} h={50} lines={["INVESTOR B"]} />
-        <Flow x1={518} x2={572} y={78} marker="mm-a" label="shares" />
-        <Flow x1={572} x2={520} y={96} marker="mm-a" label="money" labelAbove={false} />
+        <NodeBox x={390} y={62} w={124} h={50} lines={["INVESTOR A"]} />
+        <NodeBox x={580} y={62} w={124} h={50} lines={["INVESTOR B"]} />
+        <Flow x1={514} x2={578} y={78} marker="mm-a" label="shares" />
+        <Flow x1={578} x2={516} y={96} marker="mm-a" label="money" labelAbove={false} />
         <g className="text-teal-200/40">
-          <rect x={488} y={136} width={116} height={28} rx={8} className="fill-none stroke-teal-400/15" strokeDasharray="4 3" />
+          <rect x={458} y={136} width={176} height={28} rx={8} className="fill-none stroke-teal-400/15" strokeDasharray="4 3" />
           <text x={546} y={150} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[9.5px]">
             THE COMPANY — uninvolved
           </text>
@@ -212,13 +219,13 @@ function BookLadder() {
   const bw = (s: number) => Math.max(28, (s / maxSize) * maxW);
   const askTop = 34;
   const spreadY = askTop + asks.length * rowH + 4;
-  const bidTop = spreadY + 30;
+  const bidTop = spreadY + 46; // clear of the band — its header must never touch the dashes
   return (
     <Shell
       title="The order book, standing still"
       caption="Six real resting orders around a 20¢ gap nobody has crossed yet. A market buy takes 20.10; a market sell hits 19.90 — the spread is the toll between them. (The toy exchange in the next lesson lets you push these around.)"
     >
-      <svg viewBox="0 0 720 220" className="w-full" role="img" aria-label="A price ladder: sell orders (asks) stacked above at 20.10 to 20.14, buy orders (bids) below at 19.86 to 19.90, with the 20-cent spread gap highlighted between the best ask and best bid.">
+      <svg viewBox="0 0 720 240" className="w-full" role="img" aria-label="A price ladder: sell orders (asks) stacked above at 20.10 to 20.14, buy orders (bids) below at 19.86 to 19.90, with the 20-cent spread gap highlighted between the best ask and best bid.">
         <text x={barX} y={20} fill="currentColor" className="text-[10px] font-bold uppercase tracking-widest text-amber-300/80">
           Asks — sellers waiting
         </text>
@@ -304,20 +311,19 @@ function AcbTimeline() {
             </g>
           </g>
         ))}
-        {/* the sell's two futures */}
+        {/* the sell's two futures — stacked under the sell, a tick connecting them */}
+        <line x1={470} y1={y + 36} x2={470} y2={y + 44} stroke="currentColor" strokeWidth={1.2} className="text-teal-400/30" />
         <g className="text-emerald-300/90">
-          <rect x={545} y={y + 42} width={165} height={26} rx={7} className="fill-emerald-400/10 stroke-emerald-400/40" />
-          <text x={627} y={y + 55} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[10px] font-semibold">
-            realized: +$15.00 — real
+          <rect x={340} y={y + 44} width={300} height={24} rx={7} className="fill-emerald-400/10 stroke-emerald-400/40" />
+          <text x={490} y={y + 56} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[10px] font-semibold">
+            realized: +$15.00 — real money (5 × $3)
           </text>
-          <line x1={478} y1={y + 8} x2={560} y2={y + 44} stroke="currentColor" strokeWidth={1.2} className="text-emerald-400/40" />
         </g>
         <g className="text-teal-200/55">
-          <rect x={330} y={y + 42} width={195} height={26} rx={7} className="fill-none stroke-teal-400/20" strokeDasharray="4 3" />
-          <text x={427} y={y + 55} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[10px]">
-            5 shares left: unrealized — paper
+          <rect x={340} y={y + 74} width={300} height={24} rx={7} className="fill-none stroke-teal-400/20" strokeDasharray="4 3" />
+          <text x={490} y={y + 86} textAnchor="middle" dominantBaseline="middle" fill="currentColor" className="text-[10px]">
+            the other 5 shares: unrealized — still paper
           </text>
-          <line x1={462} y1={y + 8} x2={440} y2={y + 42} stroke="currentColor" strokeWidth={1.2} className="text-teal-400/25" />
         </g>
       </svg>
     </Shell>

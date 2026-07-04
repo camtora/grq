@@ -15,11 +15,12 @@ function announce(qid: string) {
   window.dispatchEvent(new CustomEvent("grq:learn-check", { detail: { qid } }));
 }
 
+// No heading of its own — the lesson page's "Check yourself" rail carries the title
+// (D111 layout: checks live in a right-hand column beside the lesson, Cam 2026-07-05).
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 rounded-xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
-      <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Check yourself</div>
-      <div className="mt-2.5 space-y-3">{children}</div>
+    <div className="rounded-xl border border-teal-400/10 bg-teal-400/[0.02] p-4">
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }

@@ -105,9 +105,13 @@ export default async function LearnChart({ spec }: { spec: LearnChartSpec }) {
             <circle cx={X(gap.i)} cy={Y(closes[gap.i].closeCents)} r={5} fill="none" stroke="currentColor" strokeWidth={1.8} />
             <text
               x={Math.min(Math.max(X(gap.i), M.left + 90), W - M.right - 90)}
-              y={Y(closes[gap.i].closeCents) + (Y(closes[gap.i].closeCents) < M.top + 40 ? 22 : -12)}
+              y={Y(closes[gap.i].closeCents) + (Y(closes[gap.i].closeCents) < M.top + 40 ? 24 : -14)}
               textAnchor="middle"
               fill="currentColor"
+              paintOrder="stroke"
+              stroke="var(--card-bg)"
+              strokeWidth={5}
+              strokeLinejoin="round"
               className="text-[10px] font-semibold"
             >
               {gap.bps > 0 ? "+" : ""}

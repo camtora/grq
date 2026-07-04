@@ -73,7 +73,7 @@ export default function LessonProgress({
   }
   return (
     <p className="text-[11px] text-teal-200/45">
-      Answer the {totalChecks === 1 ? "check" : `${totalChecks} checks`} above to complete this lesson
+      Answer the {totalChecks === 1 ? "check" : `${totalChecks} checks`} to complete this lesson
       {totalChecks > 1 ? ` · ${answered}/${totalChecks}` : ""}
     </p>
   );
