@@ -55,6 +55,9 @@ const MOBILE_API = [
   "/api/settings",         // risk dial set (POST, members-only in-route)
   "/api/fx",               // D62 FX-approval: GET state + POST convert/approve/reject (members-only in-route)
   "/api/universe",
+  "/api/external/connect", // SnapTrade reconnect from the phone (member-guarded in-route; D107 parity)
+  "/api/external/status",  // the reconnect poller's LIVE connection-health read
+  "/api/external/sync",    // pull fresh holdings once the re-auth lands
   "/api/stocks/directive",
   "/api/stocks/share",    // member shares a stock with the other member (push)
   "/api/note",

@@ -1258,6 +1258,7 @@ export async function accountsResponse(meEmail: string) {
         cashCents: a.cashCents,
         disabled: a.disabled,
         syncedAt: a.syncedAt,
+        authorizationId: a.authorizationId, // the one-tap Reconnect key (app parity, D107)
         holdings: a.holdings.map((h) => ({
           symbol: h.symbol,
           description: h.description,
