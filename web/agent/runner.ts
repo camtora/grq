@@ -73,6 +73,20 @@ let lastExperimentCheckDay = "";
 let startupReviewChecked = false;
 let dailyLossAlerted = "";
 let sessionRunning = false;
+let lastHuntPauseLogDay = "";
+
+/** Is the SCHEDULED discovery hunt paused for this ET day? GRQ_HUNT_PAUSE_UNTIL is an ET
+ *  date (YYYY-MM-DD); the hunt is skipped through the day BEFORE it and auto-resumes on it
+ *  (ISO dates sort lexically, so a string compare is correct). Env-only, no rebuild. */
+function huntPausedOn(dateStr: string): boolean {
+  const until = (process.env.GRQ_HUNT_PAUSE_UNTIL ?? "").trim();
+  const paused = until.length > 0 && dateStr < until;
+  if (paused && lastHuntPauseLogDay !== dateStr) {
+    lastHuntPauseLogDay = dateStr;
+    console.log(`[hunt] scheduled hunt PAUSED (GRQ_HUNT_PAUSE_UNTIL=${until}) — resumes ${until}; on-demand refresh still works`);
+  }
+  return paused;
+}
 
 // The research queue drains up to N dossiers CONCURRENTLY (Cam 2026-06-26). Dossiers are
 // independent units — each reads market data → writes ONE JournalEntry, no trades, no
@@ -549,7 +563,13 @@ async function maybeScheduledSessions() {
   // Pre-open (moved from 10:00, D98): the hunt is the heaviest single-lane consumer, and at
   // 10:00 it collided head-on with the first check-in window (D96 halved check-ins to every
   // 30 min). Running it before the open drains the lane so the 10:00 check-in fires on time.
-  if (isMarketDay() && m >= 8 * 60 && m < 8 * 60 + 30) {
+  //
+  // PAUSE (Cam 2026-07-05): the hunt has no per-run token ceiling and has spiked to ~54M in
+  // one run — set GRQ_HUNT_PAUSE_UNTIL=YYYY-MM-DD (ET) to skip the SCHEDULED hunt through the
+  // day BEFORE that date; it auto-resumes on the date (nothing to un-pause). The on-demand
+  // "refresh"/brief path above is a deliberate member action and is NOT paused. Env-only:
+  // edit .env then `docker-compose up -d --force-recreate agent` (no rebuild).
+  if (isMarketDay() && m >= 8 * 60 && m < 8 * 60 + 30 && !huntPausedOn(p.dateStr)) {
     const existing = await prisma.journalEntry.count({
       where: { kind: "RESEARCH", at: { gte: dayStart }, title: { startsWith: "Hunt dossier" } },
     });
