@@ -60,9 +60,9 @@ export default async function LearnPage() {
                     c.status === "live" ? "hover:border-teal-400/30 hover:bg-teal-400/[0.03]" : "opacity-60"
                   }`}
                 >
-                  {/* The course number as a big faded watermark, top-LEFT, with the text
-                      right-adjusted against it (Cam 2026-07-04) — no "Course N" label, the
-                      numeral IS the wayfinding. */}
+                  {/* The course number as a big faded watermark, top-LEFT; the text stays
+                      left-aligned but pads past the numeral (Cam 2026-07-04) — no "Course N"
+                      label, the numeral IS the wayfinding. */}
                   <span
                     aria-hidden
                     className="pointer-events-none absolute -left-1 -top-5 select-none text-[92px] font-black leading-none text-teal-400/[0.08]"
@@ -70,12 +70,12 @@ export default async function LearnPage() {
                     {c.n}
                   </span>
                   <div
-                    className={`relative pl-10 text-right text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
+                    className={`relative pl-16 text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
                   >
                     {c.title}
                   </div>
-                  <p className="relative mt-1.5 flex-1 pl-8 text-right text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
-                  <div className="relative mt-3 text-right text-xs text-teal-300/70">
+                  <p className="relative mt-1.5 flex-1 pl-16 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
+                  <div className="relative mt-3 pl-16 text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
                     ) : c.external ? (
