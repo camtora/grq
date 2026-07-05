@@ -34,6 +34,15 @@
           "icon": "./assets/icon.png",
           "color": "#14b8a6"
         }
+      ],
+      [
+        "expo-alternate-app-icons",
+        [
+          {
+            "name": "AppIconLight",
+            "ios": "./assets/icon-light.png"
+          }
+        ]
       ]
     ]
   }

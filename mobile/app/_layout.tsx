@@ -4,6 +4,7 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as Notifications from 'expo-notifications';
+import { getAppIconName, setAlternateAppIcon, supportsAlternateIcons } from 'expo-alternate-app-icons';
 import {
   useFonts,
   Inter_400Regular,
@@ -70,6 +71,20 @@ export default function RootLayout() {
   useEffect(() => {
     if (status === 'signedIn') registerForPush();
   }, [status]);
+
+  // The app icon follows the resolved theme (member default, or the device
+  // override): light → AppIconLight, dark → the primary (dark) icon. Gated on
+  // signed-in so the pre-auth device-scheme fallback can't flip the icon (and
+  // fire iOS's "changed the icon" alert) before me.theme has loaded.
+  useEffect(() => {
+    if (status !== 'signedIn' || !supportsAlternateIcons) return;
+    const want = scheme === 'light' ? 'AppIconLight' : null;
+    try {
+      if (getAppIconName() !== want) setAlternateAppIcon(want).catch(() => {});
+    } catch {
+      /* unsupported — keep the primary icon */
+    }
+  }, [status, scheme]);
 
   // Keep the header badges honest with the web (same server rows): refresh the
   // moment a push arrives while the app is foregrounded (messages are always-on,
