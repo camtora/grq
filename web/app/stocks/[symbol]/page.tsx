@@ -390,7 +390,10 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <Sparkline values={closes.map((c) => c.closeCents)} className="h-full w-full" />
           </div>
         )}
-        <div className="relative flex flex-col gap-3">
+        {/* gap-2 + the exchange line's mt-1 split the vertical rhythm EVENLY (8px above the
+            venue line, 8px below it to the buttons) without changing the panel height
+            (Cam 2026-07-04 — was 4px/12px). */}
+        <div className="relative flex flex-col gap-2">
           {/* Top row: title group on the left, the live price right-justified onto the ticker's
               own baseline (items-baseline) — the ticker isn't moved; the price just sits inline
               with it instead of floating high (Cam 2026-06-25). */}
@@ -415,13 +418,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </div>
               {/* The listing venue, called out under the ticker on EVERY stock page (Cam
                   2026-07-04): which market this name actually trades on — the .TO/.V suffix
-                  convention is invisible to humans. w-full wraps it onto its own line. */}
-              <span className="w-full text-xs font-semibold uppercase tracking-wider text-teal-200/60">
-                {xm.flag && <span aria-hidden>{xm.flag} </span>}
+                  convention is invisible to humans. Just the venue code (no flag/blurb — Cam
+                  same day); the proper name survives as a hover title. w-full wraps it onto
+                  its own line. */}
+              <span title={xm.name} className="mt-1 w-full text-xs font-semibold uppercase tracking-wider text-teal-200/60">
                 {xm.label}
-                <span className="ml-1.5 font-normal normal-case tracking-normal text-teal-200/40">
-                  {xm.name} · {xm.note}
-                </span>
               </span>
             </div>
             {/* Live price, right-justified onto the ticker's baseline; the $/% move (sized to the
