@@ -13,6 +13,7 @@ import { IBKRBroker } from "../lib/broker/ibkr";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { runLearnExamplesRefresh } from "../lib/learn/examples";
+import { planWeeklyCuration, applyCuration } from "./curation";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runMarketScreenNightly } from "../lib/market-screen/nightly";
@@ -24,7 +25,7 @@ import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
 import { trackedSymbols, trackedUniverse, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
-import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS } from "./policy";
+import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS, REFRESH } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
@@ -934,32 +935,54 @@ async function tick() {
   runDayLabTick().catch((e) => console.error("[daylab] tick error", e instanceof Error ? e.message : e));
 }
 
-// Weekly full-universe dossier refresh: Sunday from 02:00 ET (= Saturday night), every
-// tracked symbol gets re-researched overnight so the whole research library is fresh for
-// the trading week ahead. Decoupled from the Saturday 09:00 review (Cam 2026-06-25) — the
-// review only needs HELD names fresh (see maybeSaturdayHeldRefreshEnqueue), not the pool.
+// Weekly universe dossier refresh: Sunday from 02:00 ET (= Saturday night). SELECTIVE
+// since 2026-07-05 (policy REFRESH / agent/curation.ts): it prunes dead candidates, then
+// re-dossiers only names where something MATERIAL changed since their last dossier (or
+// that crossed the staleness floor) — instead of the old blind re-research of every name,
+// which alone burned ~a third of the week's Claude-Max quota. Decoupled from the Saturday
+// 09:00 review (Cam 2026-06-25) — the review needs HELD names fresh (maybeSaturdayHeld…),
+// not the whole pool. Set GRQ_REFRESH_GATE=off to fall back to the old blind sweep.
 async function maybeWeeklyRefreshEnqueue() {
   const p = etParts();
   if (p.weekday !== WEEKLY_REFRESH_WEEKDAY || p.minutesSinceMidnight < WEEKLY_REFRESH_START_MIN) return;
   if (lastWeeklyRefreshDay === p.dateStr) return;
   lastWeeklyRefreshDay = p.dateStr;
-  const symbols = await trackedSymbols();
-  const inFlight = new Set(
-    (
-      await prisma.researchRequest.findMany({
-        where: { status: { in: ["QUEUED", "RUNNING"] } },
-        select: { symbol: true },
-      })
-    ).map((r) => r.symbol),
-  );
-  let queued = 0;
-  for (const s of symbols) {
-    if (inFlight.has(s)) continue;
-    await prisma.researchRequest.create({ data: { symbol: s, requestedBy: "weekly-refresh" } });
-    queued++;
+
+  if (!REFRESH.enabled) {
+    // Legacy blind sweep (escape hatch): re-dossier the whole tracked pool.
+    const symbols = await trackedSymbols();
+    const inFlight = new Set(
+      (await prisma.researchRequest.findMany({ where: { status: { in: ["QUEUED", "RUNNING"] } }, select: { symbol: true } })).map((r) => r.symbol),
+    );
+    let queued = 0;
+    for (const s of symbols) {
+      if (inFlight.has(s)) continue;
+      await prisma.researchRequest.create({ data: { symbol: s, requestedBy: "weekly-refresh" } });
+      queued++;
+    }
+    console.log(`[weekly-refresh] BLIND sweep (gate off): queued ${queued} dossiers`);
+    await alert("info", `Weekly research refresh: ${queued} dossiers (gate OFF)`, "The materiality gate is disabled — every tracked name is being re-researched.", { category: "dossiers" });
+    return;
   }
-  console.log(`[weekly-refresh] queued ${queued} dossiers for the week ahead`);
-  await alert("info", `Weekly research refresh started: ${queued} dossiers queued`, "Every tracked name gets a fresh dossier overnight for the week ahead.", { category: "dossiers" });
+
+  try {
+    const plan = await planWeeklyCuration();
+    const res = await applyCuration(plan);
+    console.log(
+      `[weekly-refresh] curated: queued ${res.queued} · skipped ${res.skipped} (quiet) · retired ${res.retired} · pool ${plan.total}→${plan.total - res.retired}`,
+    );
+    await alert(
+      "info",
+      `Weekly research refresh: ${res.queued} queued, ${res.skipped} skipped, ${res.retired} retired`,
+      `The materiality gate re-researched only names that changed since their last dossier; ${res.skipped} quiet names were left as-is and ${res.retired} dead candidates retired. Pool ${plan.total} → ${plan.total - res.retired}.`,
+      { category: "dossiers" },
+    );
+  } catch (e) {
+    // A curation bug must never wedge the sweep or the tick. No sweep this week is safe —
+    // the staleness floor catches every name next week, and daily-refresh keeps held fresh.
+    console.error("[weekly-refresh] curation failed — no sweep this week", e);
+    await alert("warning", "Weekly research refresh skipped — curation error", e instanceof Error ? e.message : String(e), { category: "system" }).catch(() => {});
+  }
 }
 
 // Saturday pre-review HELD-names refresh (Cam 2026-06-25): before the 09:00 weekly

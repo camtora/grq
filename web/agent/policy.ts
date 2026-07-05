@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.52-phase4";
+export const AGENT_VERSION = "v2.53-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -61,6 +61,43 @@ export const SELF_INVEST = {
   maxUniverseSize: 60, // anti-runaway: total ACTIVE cap
   promotableTiers: ["large", "mid"] as const, // ETFs stay human-curated; default "mid"
 };
+
+// Research-refresh materiality + pool curation (Cam 2026-07-05). The weekly Sunday
+// sweep used to re-dossier EVERY tracked name blind — ~200 names, ~57M tokens, a third
+// of the week's Claude-Max quota in one overnight batch. These thresholds turn the sweep
+// SELECTIVE: a name is only re-researched when something MATERIAL changed since its last
+// dossier (or it crossed the staleness floor), and dead CANDIDATE names get retired so
+// the pool the sweep iterates over stays lean. This governs whether we SPEND TOKENS
+// re-researching — it never touches the §6 order gate, a dossier's content, or any trade
+// decision; worst case, a quiet name waits a few extra days for a refresh (the staleness
+// floor guarantees nothing goes stale forever). Humans edit this; the agent never does
+// (D11). Pure decision logic + tests live in agent/curation.ts. Set GRQ_REFRESH_GATE=off
+// to fall back to the old blind sweep without a deploy.
+export const REFRESH = {
+  enabled: (process.env.GRQ_REFRESH_GATE ?? "on").toLowerCase() !== "off",
+  // Staleness floor: no dossier in this many days → always refresh, no questions asked.
+  staleMaxDays: 28,
+  heldStaleMaxDays: 14, // held/ACTIVE names get a tighter floor — the money-adjacent set
+  // Price drift since the last dossier's day (|move| in bps) that forces a refresh.
+  driftBps: 800, // ±8% for a candidate
+  heldDriftBps: 500, // ±5% for held/ACTIVE — a smaller move already merits a fresh read
+  // A name reporting earnings within this window (or that reported SINCE the last
+  // dossier) is material — the thesis should meet the print current.
+  earningsWindowDays: 10,
+  // A triaged headline at/above this relevance, filed since the last dossier, is material.
+  newsRelevanceMin: 70,
+  // Distinct open-market insider BUYERS since the last dossier that count as a cluster.
+  insiderClusterMin: 2,
+  // Crowd-buzz level (0–100, the on-probation social signal) that flags a name as heating.
+  crowdBuzzMin: 70,
+  // ── pool curation (the prune) ──
+  // A CANDIDATE whose dossier is older than this — unwatched, un-pinned, not buy-rated —
+  // gets RETIRED (reversible: the hunt can resurface it; opening its page re-adds it).
+  demoteStaleDays: 45,
+  // A CANDIDATE that was NEVER dossiered and has sat unopened this long gets retired too
+  // (a stale hunt lead nobody looked at — D46 says the dossier waits for a human anyway).
+  demoteUnopenedDays: 21,
+} as const;
 
 export type DialPolicy = {
   maxPositionPct: number; // of NAV, post-trade

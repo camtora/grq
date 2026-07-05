@@ -2928,3 +2928,32 @@ receipts. Also fixed: mobile `MdText` never handled the lessons' `[text](#explai
 shadow `../shared` on the host and break host-side bundling). Verified: mobile tsc clean, a
 full `expo export` bundle builds, both endpoints live-verified, endpoint SVGs render-checked in
 both themes. Phones hot-load it all from the grq-metro bind mount — no rebuild, no store dance.
+
+### D112 — Selective research refresh: materiality gate + pool prune (Cam, 2026-07-05)
+
+**Problem:** the weekly Sunday sweep re-dossiered EVERY tracked name blind (~200 names ×
+~284k tokens ≈ 57M), a third of the week's shared Claude-Max quota in one overnight batch —
+against Cam's *weekly* token ceiling, not the 5h window. Daily/earnings passes were already
+scoped (movers+held / reporters-only, capped); the blind spend was entirely the weekly sweep.
+
+**Fix (`agent/curation.ts`, thresholds in `policy.ts` REFRESH — humans-only, D11):** the
+Sunday sweep is now SELECTIVE. Two pure, unit-tested decisions run over the tracked roster in
+~8 batched queries:
+- **The gate (`decideRefresh`)** — a name is re-dossiered only when something MATERIAL changed
+  since its last dossier: price drift ≥8% (candidate) / ≥5% (held·active) vs the dossier-day
+  close, earnings within 10d or reported since, a triaged headline ≥70 relevance since, an
+  insider cluster (≥2 open-market buyers) since, or a social buzz spike. A **staleness floor**
+  (28d candidate / 14d held·active) guarantees nothing goes stale forever. Never-dossiered
+  *unwatched* candidates are LEFT for on-demand research (D46), not blind-dossiered.
+- **The prune (`decidePrune`)** — a CANDIDATE that's unwatched, un-pinned, not buy-rated, and
+  stale (>45d) — or a never-opened lead >21d old — is RETIRED to keep the pool lean. Reversible:
+  the hunt resurfaces a name; opening its stock page re-adds it.
+
+It governs whether we SPEND TOKENS re-researching — never the §6 order gate, a dossier's
+content, or any trade. Worst case a quiet name waits a few extra days (the floor is the
+backstop; daily-refresh keeps held names fresh regardless). `GRQ_REFRESH_GATE=off` restores
+the blind sweep. `scripts/refresh-dryrun.ts` shows projected queue/skip/retire + token savings
+on the live pool without writing. Steady-state estimate (real weekly price action: 33 names
+moved ≥8%, 8 of 39 active ≥5%): sweep drops from ~199 dossiers/57M to ~40–70/~14–20M — **~60–75%
+off the weekly sweep** — plus the pool shrinks as skipped candidates age past the prune floor.
+`curation.test.ts` (11 cases) pins both decisions. Agent v2.53-phase4.
