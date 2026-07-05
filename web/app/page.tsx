@@ -516,12 +516,14 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {isToday && marketNews.length > 0 && (
         <section className="mb-6">
           <SectionHeader size="lg" sub={<>· what&apos;s moving the market today</>}>Headlines</SectionHeader>
-          {/* Equal-height panels (Cam 2026-07-04): cells fill the grid row, the card
-              anchor flexes to absorb the slack, and the touches strip below reserves its
-              line whether or not a story touches the universe — so three cards always
-              share one bottom edge. */}
+          {/* Equal-height panels (Cam 2026-07-04): cells fill the grid row and the card
+              anchor flexes to absorb the slack. The touches strip reserves its line ONLY
+              when some story in the row actually touches the universe — an empty
+              reservation read as double padding against The Market Today below. */}
           <div className="grid items-stretch gap-4 sm:grid-cols-3">
-            {marketNews.slice(0, 3).map((n, i) => (
+            {(() => {
+              const rowHasTouches = marketNews.slice(0, 3).some((n) => n.touches?.length);
+              return marketNews.slice(0, 3).map((n, i) => (
               <div key={i} className="flex h-full flex-col gap-1.5">
               <a
                 href={n.url || "#"}
@@ -551,11 +553,14 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   </div>
                 </div>
               </a>
-              <div className="min-h-[22px]">
-                <NewsTouches touches={n.touches} />
+              {rowHasTouches && (
+                <div className="min-h-[22px]">
+                  <NewsTouches touches={n.touches} />
+                </div>
+              )}
               </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </section>
       )}
