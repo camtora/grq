@@ -2957,3 +2957,29 @@ on the live pool without writing. Steady-state estimate (real weekly price actio
 moved ≥8%, 8 of 39 active ≥5%): sweep drops from ~199 dossiers/57M to ~40–70/~14–20M — **~60–75%
 off the weekly sweep** — plus the pool shrinks as skipped candidates age past the prune floor.
 `curation.test.ts` (11 cases) pins both decisions. Agent v2.53-phase4.
+
+### D112b — Bound the discovery hunt (Cam, 2026-07-05)
+
+**Problem:** the hunt (`runDiscoveryHunt`) spiked from ~1M tokens (Jun 25–26) to 8–54M
+(Jun 30–Jul 3). Traced to two June changes: the Market Base Layer wiring (Jun 27) + D96
+"wider net" (Jun 29, v2.27) which raised turn caps and told the agent "you have ample token
+budget for real breadth, so use it." Mechanism: the hunt WebSearches AND WebFetches many
+names; WebFetch pulls FULL page content into the conversation, and the whole conversation is
+re-billed as input on every later turn — so heavy fetching compounds. The 54M run was 24.9M
+fresh input ÷ 17 turns ≈ 1.5M/turn of accumulated web pages, uncapped.
+
+**Fix (`agent/sessions.ts`):** the hunt is now a BOUNDED breadth pass —
+1. **WebFetch OFF** (`runSession` gained a `webFetch?: boolean`; the hunt passes false).
+   WebSearch (snippets) + the deterministic screen seed are enough to write a LEAD; the deep
+   page-read belongs in the on-demand dossier, not the breadth pass. This is the only hard cap
+   available since WebSearch/WebFetch are SDK-native (can't wrap/truncate their output).
+2. **maxTurns 36 → 22** — belt-and-suspenders; ample for 8–12 leads (Claude writes dossiers in
+   parallel tool-calls), can't spiral into a fetch loop.
+3. **Seed-first prompt** — "START HERE" on the screen shortlist, "use WebSearch only, do NOT
+   deep-read full pages … snippets are enough for a LEAD."
+
+Applies to BOTH the scheduled 8am hunt AND on-demand/briefed hunts (same function) — a member
+"refresh" can no longer spike past ~a few M either. Expected: back to ~1–4M/run (from 8–54M).
+The scheduled hunt is separately PAUSED until 2026-07-10 (`GRQ_HUNT_PAUSE_UNTIL`, D112 session)
+at Cam's request; this fix makes it cheap when it resumes. Agent v2.56-phase4. NB Chess Moves
+(maxTurns 44, WebFetch on) is the same shape — a candidate for the same treatment if it spikes.

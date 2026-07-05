@@ -30,12 +30,17 @@ type SessionOpts = {
   toolset?: "full" | "research"; // default full
   maxTurns: number;
   systemPrompt?: string; // defaults to PERSONA; overridden for non-trading utility calls (e.g. news triage)
+  // WebFetch pulls FULL page content into the conversation, and the whole conversation is
+  // re-billed as input on every later turn — so heavy fetching compounds (the hunt spiked to
+  // ~54M this way, D96 fallout). Set false for a BREADTH pass that should surface names from
+  // WebSearch snippets + our own screen, not deep-read pages (that's the dossier's job). D112b.
+  webFetch?: boolean; // default true
 };
 
 export type { SessionOpts };
 
 export async function runSession(opts: SessionOpts): Promise<string | null> {
-  console.log(`[session] ${opts.label} starting (model=${opts.model})`);
+  console.log(`[session] ${opts.label} starting (model=${opts.model})${opts.webFetch === false ? " [webfetch:off]" : ""}`);
   try {
     let result: string | null = null;
     let resultMsg: any = null;
@@ -53,7 +58,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
               mcpServers: { grq: opts.toolset === "research" ? makeResearchServer() : grqServer },
               allowedTools: [
                 "WebSearch",
-                "WebFetch",
+                ...(opts.webFetch === false ? [] : ["WebFetch"]),
                 ...(opts.toolset === "research" ? GRQ_RESEARCH_TOOL_NAMES : GRQ_TOOL_NAMES),
               ],
             }
@@ -584,7 +589,7 @@ export async function runDiscoveryHunt(brief?: string): Promise<void> {
   const mbl = mblOn ? await huntAvoidAndSeed().catch(() => ({ avoid: [] as string[], seed: [] as ScreenFind[] })) : { avoid: [] as string[], seed: [] as ScreenFind[] };
   const avoidLine = mbl.avoid.length ? `\nAlso SKIP names you've surfaced in recent hunts (find NEW ones, or only revisit one if its thesis genuinely changed): ${mbl.avoid.join(", ")}.` : "";
   const screenBlock = mbl.seed.length
-    ? `\n## Screen shortlist — our market scan already flagged these INTERESTING (vet them and surface the genuine fits — but go BEYOND this list, don't just regurgitate it):\n${mbl.seed.map(findLine).join("\n")}\n`
+    ? `\n## Screen shortlist — START HERE. Our deterministic market scan already flagged these INTERESTING (vet them first and surface the genuine fits; then go BEYOND the list with WebSearch — but don't just regurgitate it):\n${mbl.seed.map(findLine).join("\n")}\n`
     : "";
   const b = brief?.trim();
   const focus = b
@@ -598,7 +603,7 @@ REACH: the fund holds CAD + USD and trades both Canadian listings (TSX · TSX-V 
 
 We already track these — do NOT re-suggest them: ${have || "(none)"}.${avoidLine}
 ${screenBlock}
-Use WebSearch (and WebFetch for promising leads) to find ${b ? "as many genuine fits to the brief as you can (aim for 6–12)" : "8–12 genuinely interesting candidates"}: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on.
+This is a BREADTH pass, and it is deliberately bounded: **use WebSearch only — do NOT deep-read full pages.** Start from the Screen shortlist above, then WebSearch outward for ${b ? "as many genuine fits to the brief as you can (aim for 6–12)" : "8–12 genuinely interesting candidates"}: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on. Search *snippets* are enough to write a LEAD; you do NOT need to read the whole article. The deep read happens later — every find is queued for a full dossier on demand — so don't spend this pass reading pages, spend it finding names. Work efficiently: batch your searches, and once you have your set, write them up. Aim to finish well inside your turn budget.
 
 For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
 - symbol = the bare ticker (e.g. "PRL")
@@ -614,7 +619,10 @@ For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journ
 - sources = every source you used
 
 Lead with WHY it matters, not just what the company is. Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. You can't add anything to the TRADEABLE universe; each name you surface is automatically queued for a FULL dossier, and Cam & Graham decide which to promote to tradeable.`;
-  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 36 });
+  // Bounded breadth pass (D112b, Cam 2026-07-05): WebFetch OFF (its full-page pulls were the
+  // ~54M accumulation driver — the hunt finds names, the dossier reads deep) + a tighter turn
+  // cap. Ample for 8–12 leads via WebSearch + the screen seed; can't spiral into a fetch loop.
+  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 22, webFetch: false });
 
   // D (Cam 2026-06-19): the hunt writes only LEADS ("Hunt dossier — TICKER") — all in this
   // one pass. The full dossier is NO LONGER auto-queued for every find; it's kicked ON
