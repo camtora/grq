@@ -66,7 +66,7 @@ export default async function LearnPage() {
                       the box whatever height the grid row settles at. Text flows over it. */}
                   <svg
                     aria-hidden
-                    viewBox="0 0 60 74"
+                    viewBox="0 0 70 74"
                     preserveAspectRatio="xMinYMid meet"
                     className="pointer-events-none absolute bottom-2 left-2 top-2 h-[calc(100%-16px)] w-auto select-none text-teal-400/[0.08]"
                   >
@@ -75,11 +75,11 @@ export default async function LearnPage() {
                     </text>
                   </svg>
                   <div
-                    className={`relative text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
+                    className={`relative pl-36 text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
                   >
                     {c.title}
                   </div>
-                  <p className="relative mt-1.5 flex-1 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
+                  <p className="relative mt-1.5 line-clamp-3 flex-1 pl-36 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
                   <div className="relative mt-3 text-right text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
