@@ -516,14 +516,18 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {isToday && marketNews.length > 0 && (
         <section className="mb-6">
           <SectionHeader size="lg" sub={<>· what&apos;s moving the market today</>}>Headlines</SectionHeader>
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* Equal-height panels (Cam 2026-07-04): cells fill the grid row, the card
+              anchor flexes to absorb the slack, and the touches strip below reserves its
+              line whether or not a story touches the universe — so three cards always
+              share one bottom edge. */}
+          <div className="grid items-stretch gap-4 sm:grid-cols-3">
             {marketNews.slice(0, 3).map((n, i) => (
-              <div key={i} className="flex flex-col gap-1.5">
+              <div key={i} className="flex h-full flex-col gap-1.5">
               <a
                 href={n.url || "#"}
                 target="_blank"
                 rel="noreferrer"
-                className="group block overflow-hidden rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]"
+                className="group flex flex-1 flex-col overflow-hidden rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)]"
               >
                 {n.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -547,7 +551,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   </div>
                 </div>
               </a>
-              <NewsTouches touches={n.touches} />
+              <div className="min-h-[22px]">
+                <NewsTouches touches={n.touches} />
+              </div>
               </div>
             ))}
           </div>
