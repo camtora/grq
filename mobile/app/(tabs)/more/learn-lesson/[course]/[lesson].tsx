@@ -79,7 +79,7 @@ export default function LearnLessonScreen() {
     <SubScreen title={lesson.title}>
       <View style={{ marginTop: 8, gap: 12 }}>
         <Text style={[s.sub, { color: p.textMuted }]}>
-          Course {course.n} · {course.title} — lesson {i + 1} of {course.lessons.length} · ~{readMinutes(lesson)} min
+          {course.title} — lesson {i + 1} of {course.lessons.length} · ~{readMinutes(lesson)} min
         </Text>
 
         <Card>

@@ -83,7 +83,7 @@ export default function LearnCourseScreen() {
 
   if (course.status !== 'live') {
     return (
-      <SubScreen title={`Course ${course.n} · ${course.title}`}>
+      <SubScreen title={course.title}>
         <Card style={{ marginTop: 8 }}>
           <Text style={[s.body, { color: p.textMuted }]}>
             Not written yet — this course is on the syllabus but the lessons haven&apos;t been written. No vaporware, no placeholders.
@@ -100,7 +100,7 @@ export default function LearnCourseScreen() {
   if (course.external) {
     const dest = appHref(course.external.href);
     return (
-      <SubScreen title={`Course ${course.n} · ${course.title}`}>
+      <SubScreen title={course.title}>
         <View style={{ marginTop: 8, gap: 12 }}>
           <Text style={[s.intro, { color: p.textMuted }]}>{course.tagline}</Text>
           {course.overview?.length ? (
@@ -129,7 +129,7 @@ export default function LearnCourseScreen() {
   }
 
   return (
-    <SubScreen title={`Course ${course.n} · ${course.title}`}>
+    <SubScreen title={course.title}>
       <View style={{ marginTop: 8, gap: 12 }}>
         <Text style={[s.intro, { color: p.textMuted }]}>{course.tagline}</Text>
 
