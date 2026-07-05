@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Divider, Loading, ErrorNote } from '../components/Chrome';
 import ReconnectBanner from '../components/accounts/ReconnectBanner';
@@ -236,6 +235,8 @@ function MyAccountControls({
       // The portal opens in an auth-session sheet; SnapTrade's post-connect redirect
       // (grqgo://accounts) closes it and lands the member right back here — no Safari
       // tab left behind. Ephemeral skips Apple's shared-cookie consent dialog.
+      // Lazy import: a pre-rebuild native app lacks the module — fail on tap, not at boot.
+      const WebBrowser = await import('expo-web-browser');
       await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
       await api('/api/external/sync', { method: 'POST' }).catch(() => {});
       onChanged();

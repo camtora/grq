@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
 import { Card } from '../Chrome';
 import { F, type Palette } from '../../constants/theme';
 import { api } from '../../services/api';
@@ -80,7 +79,9 @@ export default function ReconnectBanner({
       if (!d.url) throw new Error(d.error ?? "Couldn't start the reconnect.");
       setPhase('waiting');
       // Auth-session sheet: SnapTrade's grqgo:// redirect closes it and we're back —
-      // check the flip immediately rather than waiting out the 15s poll.
+      // check the flip immediately rather than waiting out the 15s poll. Lazy import:
+      // a pre-rebuild native app lacks the module — fail on tap, not at boot.
+      const WebBrowser = await import('expo-web-browser');
       await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
       void checkFlip();
     } catch (e) {
