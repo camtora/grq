@@ -60,21 +60,22 @@ export default async function LearnPage() {
                     c.status === "live" ? "hover:border-teal-400/30 hover:bg-teal-400/[0.03]" : "opacity-60"
                   }`}
                 >
-                  {/* The course number as a big faded watermark (Cam 2026-07-04) — no
-                      "Course N" label, the numeral IS the wayfinding. */}
+                  {/* The course number as a big faded watermark, top-LEFT, with the text
+                      right-adjusted against it (Cam 2026-07-04) — no "Course N" label, the
+                      numeral IS the wayfinding. */}
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute -right-2 -top-5 select-none text-[92px] font-black leading-none text-teal-400/[0.08]"
+                    className="pointer-events-none absolute -left-1 -top-5 select-none text-[92px] font-black leading-none text-teal-400/[0.08]"
                   >
                     {c.n}
                   </span>
                   <div
-                    className={`relative pr-8 text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
+                    className={`relative pl-10 text-right text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
                   >
                     {c.title}
                   </div>
-                  <p className="relative mt-1.5 flex-1 pr-6 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
-                  <div className="mt-3 text-xs text-teal-300/70">
+                  <p className="relative mt-1.5 flex-1 pl-8 text-right text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
+                  <div className="relative mt-3 text-right text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
                     ) : c.external ? (
@@ -118,11 +119,6 @@ export default async function LearnPage() {
         </section>
 
         <section>
-          <SectionHeader sub="· scores published, attempt counts included — that's the honesty policy">The class</SectionHeader>
-          <Standings />
-        </section>
-
-        <section>
           <SectionHeader sub="· learn by watching experiments run against the real market">The labs</SectionHeader>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {LABS.map((lab) => (
@@ -134,6 +130,11 @@ export default async function LearnPage() {
               </Link>
             ))}
           </div>
+        </section>
+
+        <section>
+          <SectionHeader sub="· scores published, attempt counts included — that's the honesty policy">Members</SectionHeader>
+          <Standings />
         </section>
 
         <div className="grid items-start gap-x-4 gap-y-10 lg:grid-cols-2">

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SubScreen, Card, MiniLabel, Footnote, ErrorNote } from '../../../../../components/Chrome';
 import { usePalette, F } from '../../../../../constants/theme';
-import { courseBySlug, lessonChecks, readMinutes } from '../../../../../lib/learn';
+import { courseBySlug, lessonChecks, ledeMd, readMinutes } from '../../../../../lib/learn';
 import LearnBlock from '../../../../../components/learn/LearnBlocks';
 import LearnCheck from '../../../../../components/learn/LearnCheck';
 import { type ReceiptWire } from '../../../../../components/learn/ReceiptBlock';
@@ -70,7 +70,10 @@ export default function LearnLessonScreen() {
 
   const prev = i > 0 ? course.lessons[i - 1] : null;
   const next = i < course.lessons.length - 1 ? course.lessons[i + 1] : null;
-  const content = lesson.blocks.filter((b) => b.kind !== 'check');
+  // The magazine lede (web parity): first two words of the opening prose go bold-caps.
+  const content = lesson.blocks
+    .filter((b) => b.kind !== 'check')
+    .map((b, bi) => (bi === 0 && b.kind === 'prose' ? { ...b, md: ledeMd(b.md) } : b));
 
   return (
     <SubScreen title={lesson.title}>

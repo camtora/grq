@@ -139,14 +139,6 @@ export default function LearnHubScreen() {
           ))}
         </View>
 
-        {/* the class — published scores, attempt counts included */}
-        {state.data?.standings?.length ? (
-          <>
-            <SectionTitle sub="scores published, attempt counts included — that's the honesty policy">The class</SectionTitle>
-            <Standings state={state.data} p={p} />
-          </>
-        ) : null}
-
         {/* the labs */}
         <SectionTitle sub="learn by watching experiments run against the real market">The labs</SectionTitle>
         <View style={{ gap: 8 }}>
@@ -168,6 +160,14 @@ export default function LearnHubScreen() {
             );
           })}
         </View>
+
+        {/* members — published scores, attempt counts included (below the labs, Cam 2026-07-04) */}
+        {state.data?.standings?.length ? (
+          <>
+            <SectionTitle sub="scores published, attempt counts included — that's the honesty policy">Members</SectionTitle>
+            <Standings state={state.data} p={p} />
+          </>
+        ) : null}
 
         {/* the glossary */}
         <SectionTitle sub={`${termCount} terms and counting`}>The glossary</SectionTitle>
@@ -218,10 +218,10 @@ const s = StyleSheet.create({
   intro: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   courseCell: { width: '48.7%', flexGrow: 1, flexBasis: '47%' },
-  courseWatermark: { position: 'absolute', right: 2, top: -14, fontFamily: F.black, fontSize: 64, lineHeight: 68 },
-  courseTitle: { fontFamily: F.bold, fontSize: 12.5, letterSpacing: 0.6, paddingRight: 22 },
-  courseTag: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 14.5, marginTop: 4 },
-  courseFoot: { fontFamily: F.semi, fontSize: 10.5, marginTop: 8 },
+  courseWatermark: { position: 'absolute', left: 0, top: -14, fontFamily: F.black, fontSize: 64, lineHeight: 68 },
+  courseTitle: { fontFamily: F.bold, fontSize: 12.5, letterSpacing: 0.6, paddingLeft: 22, textAlign: 'right' },
+  courseTag: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 14.5, marginTop: 4, textAlign: 'right', paddingLeft: 16 },
+  courseFoot: { fontFamily: F.semi, fontSize: 10.5, marginTop: 8, textAlign: 'right' },
   labTitle: { fontFamily: F.semi, fontSize: 13.5 },
   labTeaches: { fontFamily: F.reg, fontSize: 11, lineHeight: 15.5, marginTop: 3 },
   body: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 19 },

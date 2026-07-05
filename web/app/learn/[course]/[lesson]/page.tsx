@@ -4,7 +4,7 @@ import PanelHeader from "@/components/PanelHeader";
 import LearnButton from "@/components/learn/LearnButton";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { courseBySlug, lessonChecks, readMinutes } from "@/lib/learn/content";
+import { courseBySlug, lessonChecks, ledeMd, readMinutes } from "@/lib/learn/content";
 import { examForCourse } from "@/lib/learn/exams";
 import BlockRenderer from "@/components/learn/BlockRenderer";
 import CheckBlock from "@/components/learn/CheckBlock";
@@ -47,17 +47,23 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
   }
 
   const checks = lessonChecks(lesson);
-  const content = lesson.blocks.filter((b) => b.kind !== "check");
+  // The magazine lede: the first prose block's first two words go bold-caps — the
+  // eye's landing spot (Cam 2026-07-04).
+  const content = lesson.blocks
+    .filter((b) => b.kind !== "check")
+    .map((b, i) => (i === 0 && b.kind === "prose" ? { ...b, md: ledeMd(b.md) } : b));
 
   return (
     <main>
-      <LearnButton href={`/learn/${course.slug}`} tone="ghost">
-        ← Back to Course
-      </LearnButton>
-      <div className="mt-4 space-y-6">
+      <div className="mt-1 space-y-6">
         <PageHeader
           title={lesson.title.toUpperCase()}
           sub={`${course.n}. ${course.title} — lesson ${i + 1} of ${course.lessons.length} · ~${readMinutes(lesson)} min`}
+          right={
+            <LearnButton href={`/learn/${course.slug}`} tone="ghost">
+              ← Back to Course
+            </LearnButton>
+          }
         />
 
         <div className="grid items-start gap-6 lg:grid-cols-3">

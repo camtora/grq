@@ -109,6 +109,29 @@ export function choiceCorrect(q: Extract<LearnQuestion, { kind: 'choice' }>, giv
   return given.every((id) => want.has(id));
 }
 
+/** The magazine lede (web lib/learn/content.ts ledeMd — keep in lockstep): bold +
+ * capitalize a lesson's first two words; term links survive ([[x]] → **[[X]]**). */
+export function ledeMd(md: string): string {
+  const token = /\[\[[^\]]+\]\]|\[[^\]]+\]\(#explain:[^)\s]+\)|[A-Za-z0-9$%"'""''’‑–-]+/y;
+  const caps = (t: string): string => {
+    if (t.startsWith('[[')) return `[[${t.slice(2, -2).toUpperCase()}]]`;
+    const link = /^\[([^\]]+)\](\(#explain:[^)\s]+\))$/.exec(t);
+    if (link) return `[${link[1].toUpperCase()}]${link[2]}`;
+    return t.toUpperCase();
+  };
+  token.lastIndex = 0;
+  const first = token.exec(md);
+  if (!first) return md;
+  const gap = /\s+/y;
+  gap.lastIndex = token.lastIndex;
+  const sp = gap.exec(md);
+  if (!sp) return md;
+  token.lastIndex = gap.lastIndex;
+  const second = token.exec(md);
+  if (!second) return md;
+  return `**${caps(first[0])}${sp[0]}${caps(second[0])}**${md.slice(token.lastIndex)}`;
+}
+
 export const unitHint = (unit: 'cents' | 'shares' | 'pct' | 'bps' | 'years'): string =>
   unit === 'cents' ? '$' : unit === 'pct' ? '%' : unit === 'bps' ? 'bps' : unit === 'years' ? 'years' : 'shares';
 

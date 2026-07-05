@@ -1236,6 +1236,31 @@ export function readMinutes(l: LearnLesson): number {
   return Math.max(2, Math.ceil(words / 220) + interactive);
 }
 
+/** The magazine lede (Cam 2026-07-04): bold + capitalize a lesson's first two words so
+ *  the eye knows where to land. Term links survive the treatment — [[volatility]] becomes
+ *  **[[VOLATILITY]]** (both renderers lowercase the key before the glossary lookup).
+ *  Mirrored in mobile lib/learn.ts — keep in lockstep. */
+export function ledeMd(md: string): string {
+  const token = /\[\[[^\]]+\]\]|\[[^\]]+\]\(#explain:[^)\s]+\)|[A-Za-z0-9$%"'""''’‑–-]+/y;
+  const caps = (t: string): string => {
+    if (t.startsWith("[[")) return `[[${t.slice(2, -2).toUpperCase()}]]`;
+    const link = /^\[([^\]]+)\](\(#explain:[^)\s]+\))$/.exec(t);
+    if (link) return `[${link[1].toUpperCase()}]${link[2]}`;
+    return t.toUpperCase();
+  };
+  token.lastIndex = 0;
+  const first = token.exec(md);
+  if (!first) return md;
+  const gap = /\s+/y;
+  gap.lastIndex = token.lastIndex;
+  const sp = gap.exec(md);
+  if (!sp) return md;
+  token.lastIndex = gap.lastIndex;
+  const second = token.exec(md);
+  if (!second) return md;
+  return `**${caps(first[0])}${sp[0]}${caps(second[0])}**${md.slice(token.lastIndex)}`;
+}
+
 /** Flatten a lesson's written content to one markdown string — the mobile/legacy `body`
  *  shape (export-learn-content.ts) and anything that wants the lesson as plain text. */
 export function lessonBodyMd(l: LearnLesson): string {

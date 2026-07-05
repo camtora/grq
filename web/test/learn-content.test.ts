@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COURSES, LABS, courseBySlug, lessonBySlug, lessonChecks, readMinutes, type LearnBlock, type LearnQuestion } from "@/lib/learn/content";
+import { COURSES, LABS, courseBySlug, lessonBySlug, lessonChecks, ledeMd, readMinutes, type LearnBlock, type LearnQuestion } from "@/lib/learn/content";
 import { EXAMS, examForCourse, gradeExam } from "@/lib/learn/exams";
 import { parseNumericAnswer, choiceCorrect } from "@/lib/learn/answers";
 import { GLOSSARY } from "@/lib/glossary";
@@ -239,6 +239,27 @@ describe("answer parsing (the no-floats rule extends to homework)", () => {
     assert.ok(choiceCorrect(q, ["b", "a"]));
     assert.ok(!choiceCorrect(q, ["a"]));
     assert.ok(!choiceCorrect(q, ["a", "b", "c"]));
+  });
+});
+
+describe("the magazine lede (ledeMd)", () => {
+  it("bold-caps two plain words", () => {
+    assert.equal(ledeMd("Every quote you've seen"), "**EVERY QUOTE** you've seen");
+  });
+  it("keeps term links tappable through the caps", () => {
+    assert.equal(ledeMd("[[volatility]] is the size"), "**[[VOLATILITY]] IS** the size");
+    assert.equal(ledeMd("A [[dividend]] is the company"), "**A [[DIVIDEND]]** is the company");
+    assert.equal(ledeMd("Buy a [stock split](#explain:stock-split) now"), "**BUY A** [stock split](#explain:stock-split) now");
+  });
+  it("transforms every lesson's opening without breaking a term reference", () => {
+    for (const c of COURSES)
+      for (const l of c.lessons) {
+        const first = l.blocks[0];
+        if (first?.kind !== "prose") continue;
+        const out = ledeMd(first.md);
+        assert.ok(out.startsWith("**"), `${c.slug}/${l.slug} lede failed`);
+        for (const ref of termRefs(out)) assert.ok(ref in GLOSSARY, `${c.slug}/${l.slug} lede broke term "${ref}"`);
+      }
   });
 });
 

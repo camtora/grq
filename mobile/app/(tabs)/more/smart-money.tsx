@@ -15,6 +15,7 @@ const tabular = { fontVariant: ['tabular-nums' as const] };
 type Overlap = 'universe' | 'watching' | null;
 type Holding = {
   symbol: string;
+  linkSymbol?: string; // page symbol for THIS company (bare-ticker collisions resolved)
   name: string | null;
   changeKind: string | null; // NEW | ADD | TRIM | HOLD | EXIT
   valueUsd: number | null;
@@ -44,16 +45,16 @@ type SmMember = {
   role: string;
   blurb: string;
   avatar?: string | null;
-  trades: { symbol: string; side: string; amountRange: string; txnDate: string; overlap: Overlap }[];
+  trades: { symbol: string; linkSymbol?: string; side: string; amountRange: string; txnDate: string; overlap: Overlap }[];
 };
-type BoardRow = { symbol: string; name: string | null; primary: string; secondary: string | null; value?: number; overlap?: Overlap };
+type BoardRow = { symbol: string; linkSymbol?: string; name: string | null; primary: string; secondary: string | null; value?: number; overlap?: Overlap };
 type SmartMoney = {
   portfolios: SmPortfolio[];
   members?: SmMember[];
   congress: BoardRow[];
   funds?: BoardRow[];
   insiders: BoardRow[];
-  clusters: { symbol: string; insiders: number; totalValueUsd: number | null }[];
+  clusters: { symbol: string; linkSymbol?: string; insiders: number; totalValueUsd: number | null }[];
   narrative: { title: string; body: string; at?: string; sources?: string[] } | null;
   updatedAt?: string | null;
 };
@@ -200,7 +201,7 @@ function FundCard({ pf, p }: { pf: SmPortfolio; p: Palette }) {
           {pf.topHoldings.map((h, i) => (
             <View key={`${h.symbol}-${h.putCall ?? ''}-${i}`}>
               <Divider />
-              <Pressable onPress={() => router.push(`/stock/${h.symbol}`)} style={s.hRow}>
+              <Pressable onPress={() => router.push(`/stock/${h.linkSymbol ?? h.symbol}`)} style={s.hRow}>
                 <Text style={[s.rank, tabular, { color: p.textMuted }]}>{i + 1}</Text>
                 <StockLogo symbol={h.symbol} logoUrl={fmpLogo(h.symbol)} size={24} />
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -263,7 +264,7 @@ function MemberCard({ m, p }: { m: SmMember; p: Palette }) {
           {m.trades.map((t, i) => (
             <View key={`${t.symbol}-${i}`}>
               <Divider />
-              <Pressable onPress={() => router.push(`/stock/${t.symbol}`)} style={s.hRow}>
+              <Pressable onPress={() => router.push(`/stock/${t.linkSymbol ?? t.symbol}`)} style={s.hRow}>
                 <StockLogo symbol={t.symbol} logoUrl={fmpLogo(t.symbol)} size={24} />
                 <Text style={[s.sym, { color: t.overlap ? p.accentText : p.textPrimary, width: 58 }]}>{t.symbol}</Text>
                 <Pill text={t.side} color={t.side === 'BUY' ? p.pos : p.neg} />
@@ -298,7 +299,7 @@ function Board({ title, blurb, rows, empty, p }: { title: string; blurb: string;
           rows.map((r, i) => (
             <View key={`${r.symbol}-${i}`}>
               {i > 0 && <Divider />}
-              <Pressable onPress={() => router.push(`/stock/${r.symbol}`)} style={s.hRow}>
+              <Pressable onPress={() => router.push(`/stock/${r.linkSymbol ?? r.symbol}`)} style={s.hRow}>
                 <Text style={[s.rank, tabular, { color: p.textMuted }]}>{i + 1}</Text>
                 <StockLogo symbol={r.symbol} logoUrl={fmpLogo(r.symbol)} size={24} />
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -390,7 +391,7 @@ export default function SmartMoneyScreen() {
                   {d.clusters.map((c) => (
                     <Pressable
                       key={c.symbol}
-                      onPress={() => router.push(`/stock/${c.symbol}`)}
+                      onPress={() => router.push(`/stock/${c.linkSymbol ?? c.symbol}`)}
                       style={[s.clusterChip, { borderColor: p.cardBorder, backgroundColor: p.cardHi }]}
                     >
                       <Text style={[s.sym, { color: p.accentText, fontSize: 12 }]}>{c.symbol}</Text>
