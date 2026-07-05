@@ -138,14 +138,17 @@ function qtyString(units: number): string {
  *  connect / a reconnect (the steady state is a backend read). Read-only at the
  *  source via connectionType "read". Pass `reconnect` (a broken connection's
  *  authorizationId — ownership checked by the caller) to drop the member straight
- *  into the re-auth flow for THAT connection instead of a fresh connect. */
-export async function buildConnectUrl(email: string, origin: string, reconnect?: string): Promise<string> {
+ *  into the re-auth flow for THAT connection instead of a fresh connect.
+ *  `appReturn` (GRQ Go) swaps the post-connect redirect to the app's own scheme —
+ *  the phone opens the portal in an auth-session browser that intercepts
+ *  grqgo:// and closes itself, instead of stranding the member on the website. */
+export async function buildConnectUrl(email: string, origin: string, reconnect?: string, appReturn?: boolean): Promise<string> {
   const { partner, userId, userSecret } = await resolveUser(email);
   const dark = memberKeyForEmail(email) === "graham"; // Graham runs dark theme
   return readOnlyConnectUrl(partner, {
     userId,
     userSecret,
-    customRedirect: `${origin}/accounts?connected=1`,
+    customRedirect: appReturn ? "grqgo://accounts?connected=1" : `${origin}/accounts?connected=1`,
     darkMode: dark,
     reconnect,
   });

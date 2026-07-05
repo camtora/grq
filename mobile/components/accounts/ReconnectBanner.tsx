@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Card } from '../Chrome';
 import { F, type Palette } from '../../constants/theme';
 import { api } from '../../services/api';
@@ -74,11 +75,14 @@ export default function ReconnectBanner({
     try {
       const d = await api<{ url?: string; error?: string }>('/api/external/connect', {
         method: 'POST',
-        body: JSON.stringify({ reconnect: authorizationId }),
+        body: JSON.stringify({ reconnect: authorizationId, appReturn: true }),
       });
       if (!d.url) throw new Error(d.error ?? "Couldn't start the reconnect.");
-      await Linking.openURL(d.url);
       setPhase('waiting');
+      // Auth-session sheet: SnapTrade's grqgo:// redirect closes it and we're back —
+      // check the flip immediately rather than waiting out the 15s poll.
+      await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
+      void checkFlip();
     } catch (e) {
       setPhase('error');
       setMsg(e instanceof Error ? e.message : "Couldn't start the reconnect.");

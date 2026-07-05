@@ -26,9 +26,11 @@ export async function POST(req: Request) {
   }
 
   let reconnect: string | undefined;
+  let appReturn = false; // GRQ Go: redirect back into the app (grqgo://) instead of the site
   try {
-    const body = (await req.json()) as { reconnect?: unknown };
+    const body = (await req.json()) as { reconnect?: unknown; appReturn?: unknown };
     if (typeof body?.reconnect === "string" && body.reconnect) reconnect = body.reconnect;
+    appReturn = body?.appReturn === true;
   } catch {
     /* no body — a fresh connect */
   }
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const url = await buildConnectUrl(session.email, originFrom(req), reconnect);
+    const url = await buildConnectUrl(session.email, originFrom(req), reconnect, appReturn);
     return NextResponse.json({ url });
   } catch (e) {
     return NextResponse.json(

@@ -330,6 +330,7 @@ export function EarningsSection({ t }: { t: Today }) {
                       <StockLogo symbol={e.symbol} logoUrl={e.logoUrl} size={24} />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={[s.sym, { color: p.accentText }]} numberOfLines={1}>{e.symbol}</Text>
+                        <Text style={[s.upcomingName, { color: p.textMuted }]} numberOfLines={1}>{e.name}</Text>
                         <Text style={[s.metaText, { color: soon ? p.warn : p.textMuted }]} numberOfLines={1}>
                           {rel} · {fmtDate(e.date)}
                         </Text>
@@ -562,6 +563,7 @@ const s = StyleSheet.create({
   name: { fontFamily: F.reg, fontSize: 11, marginTop: 1 },
   rowPct: { fontFamily: F.semi, fontSize: 13 },
   metaText: { fontFamily: F.reg, fontSize: 10 },
+  upcomingName: { fontFamily: F.reg, fontSize: 9.5, marginTop: 1 },
   relDay: { fontFamily: F.semi, fontSize: 11 },
   upcomingGrid: { gap: 8 },
   upcomingRow: { flexDirection: 'row', gap: 8 },

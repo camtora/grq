@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Divider, Loading, ErrorNote } from '../components/Chrome';
 import ReconnectBanner from '../components/accounts/ReconnectBanner';
@@ -227,9 +228,17 @@ function MyAccountControls({
     setErr(null);
     setBusy('connect');
     try {
-      const d = await api<{ url?: string; error?: string }>('/api/external/connect', { method: 'POST' });
+      const d = await api<{ url?: string; error?: string }>('/api/external/connect', {
+        method: 'POST',
+        body: JSON.stringify({ appReturn: true }),
+      });
       if (!d.url) throw new Error(d.error ?? "Couldn't start the connection.");
-      await Linking.openURL(d.url); // SnapTrade Connection Portal (read-only) — refreshed on return
+      // The portal opens in an auth-session sheet; SnapTrade's post-connect redirect
+      // (grqgo://accounts) closes it and lands the member right back here — no Safari
+      // tab left behind. Ephemeral skips Apple's shared-cookie consent dialog.
+      await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
+      await api('/api/external/sync', { method: 'POST' }).catch(() => {});
+      onChanged();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't start the connection.");
     } finally {
