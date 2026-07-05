@@ -59,7 +59,7 @@ export default function NotificationsScreen() {
       <View style={s.bar}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={s.back}>
           <Ionicons name="chevron-back" size={22} color={p.accentText} />
-          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
+          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>Back</Text>
         </Pressable>
         <Text style={[s.title, { color: p.textPrimary }]}>Notifications</Text>
         <View style={[s.back, { justifyContent: 'flex-end' }]}>

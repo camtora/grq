@@ -151,7 +151,7 @@ export function SubScreen({
       <View style={styles.subBar}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={styles.subBack}>
           <Ionicons name="chevron-back" size={22} color={p.accentText} />
-          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
+          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>Back</Text>
         </Pressable>
         <Text style={[styles.subTitle, { color: p.textPrimary }]} numberOfLines={1}>{title}</Text>
         <View style={styles.subBack} />

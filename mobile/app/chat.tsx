@@ -125,7 +125,7 @@ export default function ChatScreen() {
       <View style={s.bar}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={s.back}>
           <Ionicons name="chevron-back" size={22} color={p.accentText} />
-          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>back</Text>
+          <Text style={{ color: p.accentText, fontFamily: F.med, fontSize: 14 }}>Back</Text>
         </Pressable>
         <View style={s.titleWrap}>
           <Image source={require('../assets/bull-splash.png')} style={s.titleBull} resizeMode="contain" />
