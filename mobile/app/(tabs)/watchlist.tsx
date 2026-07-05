@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
@@ -20,11 +20,6 @@ function toneColor(tone: WatchRow['stanceTone'], p: Palette): string {
   if (tone === 'amber') return p.warn;
   return p.accentText;
 }
-
-const AVATARS: Record<string, number> = {
-  cam: require('../../assets/people/cam.png'),
-  graham: require('../../assets/people/graham.png'),
-};
 
 /** Day change in cents, derived from mid + day bps (the wire carries only bps;
  * exact to within the bps rounding — display/sort only, never money math). */
@@ -347,25 +342,16 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
             </Text>
           )}
           {r.dayBps != null && (
-            <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>
+            <>
               {(() => {
                 const dc = dayCentsOf(r);
-                return dc != null ? `${signedMoney(dc)} · ` : '';
+                return dc != null ? (
+                  <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedMoney(dc)}</Text>
+                ) : null;
               })()}
-              {signedPctFromBps(r.dayBps)}
-            </Text>
+              <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedPctFromBps(r.dayBps)}</Text>
+            </>
           )}
-          <View style={s.avatars}>
-            {r.watchers.map((w) =>
-              AVATARS[w.key] ? (
-                <Image
-                  key={w.key}
-                  source={AVATARS[w.key]}
-                  style={[s.avatar, { borderColor: p.cardBg }]}
-                />
-              ) : null,
-            )}
-          </View>
         </View>
       </View>
 
@@ -455,8 +441,6 @@ const s = StyleSheet.create({
   meta: { fontFamily: F.reg, fontSize: 11, marginTop: 2 },
   val: { fontFamily: F.semi, fontSize: 13.5 },
   subPct: { fontFamily: F.semi, fontSize: 11 },
-  avatars: { flexDirection: 'row', marginTop: 3 },
-  avatar: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, marginLeft: -6 },
   expand: { paddingLeft: 42, paddingBottom: 12, gap: 4 },
   blurb: { fontFamily: F.reg, fontStyle: 'italic', fontSize: 12, lineHeight: 17 },
   bottomLine: { fontFamily: F.reg, fontSize: 12.5, lineHeight: 18, marginTop: 2 },
