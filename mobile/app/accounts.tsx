@@ -232,14 +232,20 @@ function MyAccountControls({
         body: JSON.stringify({ appReturn: true }),
       });
       if (!d.url) throw new Error(d.error ?? "Couldn't start the connection.");
-      // The portal opens in an auth-session sheet; SnapTrade's post-connect redirect
-      // (grqgo://accounts) closes it and lands the member right back here — no Safari
-      // tab left behind. Ephemeral skips Apple's shared-cookie consent dialog.
-      // Lazy import: a pre-rebuild native app lacks the module — fail on tap, not at boot.
-      const WebBrowser = await import('expo-web-browser');
-      await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
-      await api('/api/external/sync', { method: 'POST' }).catch(() => {});
-      onChanged();
+      // Open SnapTrade's portal in the SYSTEM browser via Linking — NOT expo-web-browser.
+      // That module isn't compiled into this build, and openAuthSessionAsync on a missing
+      // native module HARD-CRASHES the app. SnapTrade's grqgo://accounts redirect (server
+      // appReturn) brings the member back; a one-shot AppState-active listener then pulls
+      // fresh holdings and refreshes (openURL resolves immediately, so we can't sync inline —
+      // the connection isn't done yet). (Cam 2026-07-05.)
+      await Linking.openURL(d.url);
+      const sub = AppState.addEventListener('change', (st) => {
+        if (st !== 'active') return;
+        sub.remove();
+        void api('/api/external/sync', { method: 'POST' })
+          .catch(() => {})
+          .finally(() => onChanged());
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't start the connection.");
     } finally {

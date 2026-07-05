@@ -78,11 +78,12 @@ export default function ReconnectBanner({
       });
       if (!d.url) throw new Error(d.error ?? "Couldn't start the reconnect.");
       setPhase('waiting');
-      // Auth-session sheet: SnapTrade's grqgo:// redirect closes it and we're back —
-      // check the flip immediately rather than waiting out the 15s poll. Lazy import:
-      // a pre-rebuild native app lacks the module — fail on tap, not at boot.
-      const WebBrowser = await import('expo-web-browser');
-      await WebBrowser.openAuthSessionAsync(d.url, 'grqgo://accounts', { preferEphemeralSession: true });
+      // Open SnapTrade's portal in the SYSTEM browser via Linking — NOT expo-web-browser.
+      // That module isn't compiled into this build, and calling openAuthSessionAsync on a
+      // missing native module HARD-CRASHES the app (a JS try/catch can't catch it). The
+      // server's appReturn sets SnapTrade's redirect to grqgo://accounts, which brings the
+      // member back; the 15s poll + AppState-active checkFlip detect the flip. (Cam 2026-07-05.)
+      await Linking.openURL(d.url);
       void checkFlip();
     } catch (e) {
       setPhase('error');
