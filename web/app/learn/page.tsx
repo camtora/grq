@@ -60,26 +60,21 @@ export default async function LearnPage() {
                     c.status === "live" ? "hover:border-teal-400/30 hover:bg-teal-400/[0.03]" : "opacity-60"
                   }`}
                 >
-                  {/* The course number as a full-height faded watermark (Cam 2026-07-04,
-                      WEB ONLY — mobile intentionally diverges): an SVG scaled to the card's
-                      height with equal 8px top/left/bottom insets, so the digit's ink spans
-                      the box whatever height the grid row settles at. Text flows over it. */}
-                  <svg
+                  {/* The course number as a faded top-left watermark with the text flowing
+                      over it — the mobile look (Cam 2026-07-04, settled after trying
+                      full-height). -top-2 moves the GLYPH, not the em box. */}
+                  <span
                     aria-hidden
-                    viewBox="0 0 70 74"
-                    preserveAspectRatio="xMinYMid meet"
-                    className="pointer-events-none absolute bottom-2 left-2 top-2 h-[calc(100%-16px)] w-auto select-none text-teal-400/[0.08]"
+                    className="pointer-events-none absolute -top-2 left-1 select-none text-[84px] font-black leading-none text-teal-400/[0.08]"
                   >
-                    <text x="0" y="72" fontSize="100" fontWeight="900" fill="currentColor">
-                      {c.n}
-                    </text>
-                  </svg>
+                    {c.n}
+                  </span>
                   <div
-                    className={`relative pl-36 text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
+                    className={`relative text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
                   >
                     {c.title}
                   </div>
-                  <p className="relative mt-1.5 line-clamp-3 flex-1 pl-36 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
+                  <p className="relative mt-1.5 flex-1 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
                   <div className="relative mt-3 text-right text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
