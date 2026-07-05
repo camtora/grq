@@ -390,10 +390,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <Sparkline values={closes.map((c) => c.closeCents)} className="h-full w-full" />
           </div>
         )}
-        {/* gap-2 + the exchange line's mt-1 split the vertical rhythm EVENLY (8px above the
-            venue line, 8px below it to the buttons) without changing the panel height
-            (Cam 2026-07-04 — was 4px/12px). */}
-        <div className="relative flex flex-col gap-2">
+        <div className="relative flex flex-col gap-3">
           {/* Top row: title group on the left, the live price right-justified onto the ticker's
               own baseline (items-baseline) — the ticker isn't moved; the price just sits inline
               with it instead of floating high (Cam 2026-06-25). */}
@@ -403,6 +400,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               <StockLogo symbol={symbol} logoUrl={entry.logoUrl} className="h-10 w-10 self-center text-sm" />
               <h1 className="text-3xl font-bold text-teal-50">{symbol}</h1>
               <span className="text-teal-200/60">{entry.name}</span>
+              {/* The listing venue rides the company-name line (Cam 2026-07-04): venue code +
+                  proper name, no flag, no blurb — which market this actually trades on. */}
+              <span className="text-xs text-teal-200/45">
+                <span className="font-semibold uppercase tracking-wider text-teal-200/60">{xm.label}</span> — {xm.name}
+              </span>
               {/* The chips ride in their own centre-aligned group so the watched-by pill (it
                   carries a face) lines up with the text chips rather than floating high. Status
                   uses the same words as the rest of the site (Cam 2026-06-25). */}
@@ -416,14 +418,6 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 {watch && <Chip tone="teal">agent watching</Chip>}
                 <AvatarStack people={stockWatchers} />
               </div>
-              {/* The listing venue, called out under the ticker on EVERY stock page (Cam
-                  2026-07-04): which market this name actually trades on — the .TO/.V suffix
-                  convention is invisible to humans. Just the venue code (no flag/blurb — Cam
-                  same day); the proper name survives as a hover title. w-full wraps it onto
-                  its own line. */}
-              <span title={xm.name} className="mt-1 w-full text-xs font-semibold uppercase tracking-wider text-teal-200/60">
-                {xm.label}
-              </span>
             </div>
             {/* Live price, right-justified onto the ticker's baseline; the $/% move (sized to the
                 company name) + live marker stack just beneath it. */}
