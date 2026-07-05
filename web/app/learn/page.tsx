@@ -65,7 +65,7 @@ export default async function LearnPage() {
                       label, the numeral IS the wayfinding. */}
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute -left-1 -top-5 select-none text-[92px] font-black leading-none text-teal-400/[0.08]"
+                    className="pointer-events-none absolute left-2 top-1 select-none text-[84px] font-black leading-none text-teal-400/[0.08]"
                   >
                     {c.n}
                   </span>
@@ -75,7 +75,7 @@ export default async function LearnPage() {
                     {c.title}
                   </div>
                   <p className="relative mt-1.5 flex-1 pl-16 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
-                  <div className="relative mt-3 pl-16 text-xs text-teal-300/70">
+                  <div className="relative mt-3 text-right text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
                     ) : c.external ? (
