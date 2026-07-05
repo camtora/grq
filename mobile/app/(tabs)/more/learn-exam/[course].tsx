@@ -149,7 +149,7 @@ export default function LearnExamScreen() {
                 onPress={() => void submit()}
                 style={[s.btn, { backgroundColor: p.accent + '26', opacity: answeredCount < exam.questions.length || submitting ? 0.5 : 1 }]}
               >
-                <Text style={[s.btnText, { color: p.accentText }]}>{submitting ? 'Grading…' : 'Submit'}</Text>
+                <Text style={[s.btnText, { color: p.accentText }]}>{submitting ? 'GRADING…' : 'SUBMIT EXAM'}</Text>
               </Pressable>
               <Text style={[s.meta, { color: p.textMuted }]}>
                 {answeredCount}/{exam.questions.length} answered
@@ -197,10 +197,10 @@ export default function LearnExamScreen() {
 
             <View style={s.submitRow}>
               <Pressable onPress={() => void load()} style={[s.btn, { backgroundColor: p.accent + '26' }]}>
-                <Text style={[s.btnText, { color: p.accentText }]}>Retake</Text>
+                <Text style={[s.btnText, { color: p.accentText }]}>RETAKE THE EXAM</Text>
               </Pressable>
-              <Pressable onPress={() => router.push(`/more/learn-course/${course.slug}` as never)}>
-                <Text style={[s.review, { color: p.accentText }]}>back to the course →</Text>
+              <Pressable onPress={() => router.push(`/more/learn-course/${course.slug}` as never)} style={[s.btn, { borderWidth: 1, borderColor: p.cardBorder }]}>
+                <Text style={[s.btnText, { color: p.textMuted }]}>BACK TO COURSE</Text>
               </Pressable>
             </View>
           </>

@@ -103,25 +103,32 @@ export default function LearnLessonScreen() {
           </View>
         )}
 
+        {/* Every nav affordance says exactly what it does, in a clear large button
+            (Cam 2026-07-04, web parity). */}
         <View style={s.navRow}>
           {prev ? (
-            <Pressable onPress={() => router.push(`/more/learn-lesson/${course.slug}/${prev.slug}` as never)} style={{ flexShrink: 1 }}>
-              <Text style={[s.navLink, { color: p.accentText }]} numberOfLines={1}>
-                ← {prev.title}
-              </Text>
+            <Pressable
+              onPress={() => router.push(`/more/learn-lesson/${course.slug}/${prev.slug}` as never)}
+              style={[s.navBtn, { borderColor: p.cardBorder }]}
+            >
+              <Text style={[s.navBtnText, { color: p.textMuted }]}>← PREVIOUS LESSON</Text>
             </Pressable>
           ) : (
             <View />
           )}
           {next ? (
-            <Pressable onPress={() => router.push(`/more/learn-lesson/${course.slug}/${next.slug}` as never)} style={{ flexShrink: 1 }}>
-              <Text style={[s.navLink, { color: p.accentText, textAlign: 'right' }]} numberOfLines={1}>
-                {next.title} →
-              </Text>
+            <Pressable
+              onPress={() => router.push(`/more/learn-lesson/${course.slug}/${next.slug}` as never)}
+              style={[s.navBtn, { backgroundColor: p.accent + '26', borderColor: p.accent + '44' }]}
+            >
+              <Text style={[s.navBtnText, { color: p.accentText }]}>NEXT LESSON →</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={() => router.push(`/more/learn-exam/${course.slug}` as never)}>
-              <Text style={[s.navLink, { color: p.accentText, fontFamily: F.bold }]}>the final exam →</Text>
+            <Pressable
+              onPress={() => router.push(`/more/learn-exam/${course.slug}` as never)}
+              style={[s.navBtn, { backgroundColor: p.accent + '26', borderColor: p.accent + '44' }]}
+            >
+              <Text style={[s.navBtnText, { color: p.accentText }]}>TAKE THE EXAM →</Text>
             </Pressable>
           )}
         </View>
@@ -133,8 +140,9 @@ export default function LearnLessonScreen() {
               params: { prompt: `I'm reading the Learn lesson “${lesson.title}” (${course.title}). Walk me through the core idea with a fresh, current example.` },
             })
           }
+          style={[s.navBtn, { borderColor: p.cardBorder, alignSelf: 'center' }]}
         >
-          <Text style={[s.ask, { color: p.accentText }]}>Ask Alfred about this lesson →</Text>
+          <Text style={[s.navBtnText, { color: p.textMuted }]}>ASK ALFRED ABOUT THIS LESSON</Text>
         </Pressable>
 
         <Footnote>education only · the same lesson the website renders, blocks and all</Footnote>
@@ -146,7 +154,7 @@ export default function LearnLessonScreen() {
 const s = StyleSheet.create({
   sub: { fontFamily: F.reg, fontSize: 11, lineHeight: 15 },
   progress: { fontFamily: F.semi, fontSize: 10.5, marginTop: 8 },
-  navRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
-  navLink: { fontFamily: F.semi, fontSize: 12 },
-  ask: { fontFamily: F.semi, fontSize: 12, textAlign: 'center' },
+  navRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  navBtn: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  navBtnText: { fontFamily: F.bold, fontSize: 11, letterSpacing: 1 },
 });

@@ -22,8 +22,12 @@ export default function AskLesson({
     );
   };
   return (
-    <button type="button" onClick={ask} className="text-xs text-teal-300 hover:underline">
-      Ask Alfred about this lesson →
+    <button
+      type="button"
+      onClick={ask}
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--card-border)] px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200/80 transition-colors hover:bg-teal-400/10 hover:text-teal-200"
+    >
+      Ask Alfred About This Lesson
     </button>
   );
 }

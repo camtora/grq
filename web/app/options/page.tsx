@@ -32,8 +32,11 @@ export default async function OptionsPage({ searchParams }: { searchParams: Prom
   return (
     <main>
       {/* The portal is Course 6 of the Learn curriculum (D110) — same back-nav home as the other courses. */}
-      <Link href="/learn" className="text-xs text-teal-300 hover:underline">
-        ← learn
+      <Link
+        href="/learn"
+        className="inline-flex items-center rounded-xl border border-[color:var(--card-border)] px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200/80 hover:bg-teal-400/10 hover:text-teal-200"
+      >
+        ← Back to Learn
       </Link>
       <div className="mt-4" />
       <PageHeader

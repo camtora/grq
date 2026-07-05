@@ -140,12 +140,15 @@ export default function ExamRunner({ courseSlug }: { courseSlug: string }) {
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+            className="inline-flex items-center rounded-xl border border-teal-400/30 bg-teal-400/15 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
           >
-            Retake
+            Retake the Exam
           </button>
-          <Link href={`/learn/${courseSlug}`} className="text-xs text-teal-300 hover:underline">
-            back to the course →
+          <Link
+            href={`/learn/${courseSlug}`}
+            className="inline-flex items-center rounded-xl border border-[color:var(--card-border)] px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200/80 hover:bg-teal-400/10 hover:text-teal-200"
+          >
+            Back to Course
           </Link>
         </div>
       </div>
@@ -214,9 +217,9 @@ export default function ExamRunner({ courseSlug }: { courseSlug: string }) {
           type="button"
           disabled={answeredCount < exam.questions.length || submitting}
           onClick={() => void submit()}
-          className="rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25 disabled:opacity-40"
+          className="inline-flex items-center rounded-xl border border-teal-400/30 bg-teal-400/15 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25 disabled:opacity-40"
         >
-          {submitting ? "Grading…" : "Submit"}
+          {submitting ? "Grading…" : "Submit Exam"}
         </button>
         <span className="text-[11px] text-teal-200/45">
           {answeredCount}/{exam.questions.length} answered · pass ≥ {exam.passPct}%

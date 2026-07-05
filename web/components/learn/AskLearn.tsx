@@ -38,7 +38,7 @@ export default function AskLearn({ isMember }: { isMember: boolean }) {
           <button
             type="button"
             onClick={() => open()}
-            className="rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+            className="inline-flex items-center rounded-xl border border-teal-400/30 bg-teal-400/15 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
           >
             Ask Alfred
           </button>

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, EmptyState } from "@/components/ui";
+import LearnButton from "@/components/learn/LearnButton";
 import { getSession } from "@/lib/session";
 import { courseBySlug } from "@/lib/learn/content";
 import { examForCourse } from "@/lib/learn/exams";
@@ -21,12 +21,12 @@ export default async function ExamPage({ params }: { params: Promise<{ course: s
 
   return (
     <main>
-      <Link href={`/learn/${course.slug}`} className="text-xs text-teal-300 hover:underline">
-        ← {course.title.toLowerCase()}
-      </Link>
+      <LearnButton href={`/learn/${course.slug}`} tone="ghost">
+        ← Back to Course
+      </LearnButton>
       <div className="mt-4">
         <PageHeader
-          title={`The exam · ${course.title}`}
+          title={`The Exam · ${course.title}`.toUpperCase()}
           sub={`${exam.questions.length} questions · pass ≥ ${exam.passPct}% · unlimited retakes — the best score stands, the attempt count shows`}
         />
         {isMember ? (

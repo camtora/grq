@@ -56,15 +56,24 @@ export default async function LearnPage() {
               const exam = examBy.get(c.slug);
               const inner = (
                 <Card
-                  className={`flex h-full flex-col p-5 transition-colors ${
+                  className={`relative flex h-full flex-col overflow-hidden p-5 transition-colors ${
                     c.status === "live" ? "hover:border-teal-400/30 hover:bg-teal-400/[0.03]" : "opacity-60"
                   }`}
                 >
-                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">Course {c.n}</div>
-                  <div className={`mt-1.5 text-base font-semibold text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}>
+                  {/* The course number as a big faded watermark (Cam 2026-07-04) — no
+                      "Course N" label, the numeral IS the wayfinding. */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -right-2 -top-5 select-none text-[92px] font-black leading-none text-teal-400/[0.08]"
+                  >
+                    {c.n}
+                  </span>
+                  <div
+                    className={`relative pr-8 text-sm font-bold uppercase tracking-wide text-teal-50 ${c.status === "live" ? "group-hover:underline" : ""}`}
+                  >
                     {c.title}
                   </div>
-                  <p className="mt-1.5 flex-1 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
+                  <p className="relative mt-1.5 flex-1 pr-6 text-xs leading-relaxed text-teal-200/60">{c.tagline}</p>
                   <div className="mt-3 text-xs text-teal-300/70">
                     {c.status === "soon" ? (
                       <Chip tone="dim">soon</Chip>
@@ -138,9 +147,9 @@ export default async function LearnPage() {
               </p>
               <Link
                 href="/learn/glossary"
-                className="mt-3 inline-block rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
+                className="mt-3 inline-flex items-center rounded-xl border border-teal-400/30 bg-teal-400/15 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
               >
-                Browse the glossary
+                Browse the Glossary
               </Link>
             </Card>
           </section>

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader, Card } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
+import LearnButton from "@/components/learn/LearnButton";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { courseBySlug, lessonChecks, readMinutes } from "@/lib/learn/content";
@@ -51,13 +51,13 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
 
   return (
     <main>
-      <Link href={`/learn/${course.slug}`} className="text-xs text-teal-300 hover:underline">
-        ← {course.title.toLowerCase()}
-      </Link>
+      <LearnButton href={`/learn/${course.slug}`} tone="ghost">
+        ← Back to Course
+      </LearnButton>
       <div className="mt-4 space-y-6">
         <PageHeader
-          title={lesson.title}
-          sub={`Course ${course.n} · ${course.title} — lesson ${i + 1} of ${course.lessons.length} · ~${readMinutes(lesson)} min`}
+          title={lesson.title.toUpperCase()}
+          sub={`${course.n}. ${course.title} — lesson ${i + 1} of ${course.lessons.length} · ~${readMinutes(lesson)} min`}
         />
 
         <div className="grid items-start gap-6 lg:grid-cols-3">
@@ -86,23 +86,23 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
           </aside>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        {/* Every nav affordance says exactly what it does, in a clear LARGE button
+            (Cam 2026-07-04) — lesson titles live in the syllabus, not in the buttons. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           {prev ? (
-            <Link href={`/learn/${course.slug}/${prev.slug}`} className="text-xs text-teal-300 hover:underline">
-              ← {prev.title}
-            </Link>
+            <LearnButton href={`/learn/${course.slug}/${prev.slug}`} tone="ghost">
+              ← Previous Lesson
+            </LearnButton>
           ) : (
-            <span />
+            <LearnButton href={`/learn/${course.slug}`} tone="ghost">
+              ← Back to Course
+            </LearnButton>
           )}
           <AskLesson lessonTitle={lesson.title} courseTitle={course.title} isMember={isMember} />
           {next ? (
-            <Link href={`/learn/${course.slug}/${next.slug}`} className="text-xs text-teal-300 hover:underline">
-              {next.title} →
-            </Link>
+            <LearnButton href={`/learn/${course.slug}/${next.slug}`}>Next Lesson →</LearnButton>
           ) : exam ? (
-            <Link href={`/learn/${course.slug}/exam`} className="text-xs font-semibold text-teal-300 hover:underline">
-              the final exam →
-            </Link>
+            <LearnButton href={`/learn/${course.slug}/exam`}>Take the Exam →</LearnButton>
           ) : (
             <span />
           )}

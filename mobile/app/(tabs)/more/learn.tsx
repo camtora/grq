@@ -48,9 +48,12 @@ function CourseCard({ c, p, state }: { c: (typeof COURSES)[number]; p: Palette; 
         : `${state ? `${done}/${c.lessons.length}` : c.lessons.length} lessons · exam${exam ? ` ${exam.best}%${exam.passed ? ' ✓' : ''}` : ''} →`;
   return (
     <Pressable onPress={live ? () => router.push(dest as never) : undefined} style={[s.courseCell, !live && { opacity: 0.55 }]}>
-      <Card style={{ flex: 1 }}>
-        <Text style={[s.courseN, { color: p.accentText }]}>COURSE {c.n}</Text>
-        <Text style={[s.courseTitle, { color: p.textPrimary }]}>{c.title}</Text>
+      <Card style={{ flex: 1, overflow: 'hidden' }}>
+        {/* the course number as a big faded watermark (Cam 2026-07-04, web parity) */}
+        <Text style={[s.courseWatermark, { color: p.accentText + '14' }]} aria-hidden>
+          {c.n}
+        </Text>
+        <Text style={[s.courseTitle, { color: p.textPrimary }]}>{c.title.toUpperCase()}</Text>
         <Text style={[s.courseTag, { color: p.textMuted }]} numberOfLines={3}>
           {c.tagline}
         </Text>
@@ -215,8 +218,8 @@ const s = StyleSheet.create({
   intro: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   courseCell: { width: '48.7%', flexGrow: 1, flexBasis: '47%' },
-  courseN: { fontFamily: F.bold, fontSize: 8.5, letterSpacing: 1.5 },
-  courseTitle: { fontFamily: F.semi, fontSize: 14, marginTop: 4 },
+  courseWatermark: { position: 'absolute', right: 2, top: -14, fontFamily: F.black, fontSize: 64, lineHeight: 68 },
+  courseTitle: { fontFamily: F.bold, fontSize: 12.5, letterSpacing: 0.6, paddingRight: 22 },
   courseTag: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 14.5, marginTop: 4 },
   courseFoot: { fontFamily: F.semi, fontSize: 10.5, marginTop: 8 },
   labTitle: { fontFamily: F.semi, fontSize: 13.5 },

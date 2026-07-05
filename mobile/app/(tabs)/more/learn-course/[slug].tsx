@@ -59,7 +59,7 @@ function ExamCard({ slug, state, p }: { slug: string; state: LearnState | null; 
           </View>
         ) : null}
         <Pressable onPress={() => router.push(`/more/learn-exam/${slug}` as never)} style={[s.btn, { backgroundColor: p.accent + '26' }]}>
-          <Text style={[s.btnText, { color: p.accentText }]}>{exam?.mine ? 'Retake the exam' : 'Take the exam'}</Text>
+          <Text style={[s.btnText, { color: p.accentText }]}>{exam?.mine ? 'RETAKE THE EXAM' : 'TAKE THE EXAM'}</Text>
         </Pressable>
       </Card>
     </View>
@@ -117,7 +117,7 @@ export default function LearnCourseScreen() {
             <Text style={[s.body, { color: p.textMuted }]}>This course is taught in its own portal — lessons, the payoff calculator, and the desk experiment&apos;s live contracts.</Text>
             {dest ? (
               <Pressable onPress={() => router.push(dest as never)} style={[s.btn, { backgroundColor: p.accent + '26' }]}>
-                <Text style={[s.btnText, { color: p.accentText }]}>Open the Options portal</Text>
+                <Text style={[s.btnText, { color: p.accentText }]}>OPEN THE OPTIONS PORTAL</Text>
               </Pressable>
             ) : null}
           </Card>
@@ -174,10 +174,11 @@ export default function LearnCourseScreen() {
         <ExamCard slug={course.slug} state={state.data} p={p} />
 
         {next && (
-          <Pressable onPress={() => router.push(`/more/learn-course/${next.slug}` as never)}>
-            <Text style={[s.nextLink, { color: p.accentText }]}>
-              Next: Course {next.n} · {next.title} →
-            </Text>
+          <Pressable
+            onPress={() => router.push(`/more/learn-course/${next.slug}` as never)}
+            style={[s.btn, { backgroundColor: p.accent + '26', alignSelf: 'flex-end' }]}
+          >
+            <Text style={[s.btnText, { color: p.accentText }]}>NEXT COURSE →</Text>
           </Pressable>
         )}
         <Footnote>every dotted term is tap-to-explain · ask Alfred when something&apos;s still unclear</Footnote>
@@ -199,7 +200,6 @@ const s = StyleSheet.create({
   classRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatar: { width: 22, height: 22, borderRadius: 11 },
   className: { fontFamily: F.semi, fontSize: 12, width: 64 },
-  btn: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 13, paddingVertical: 8, marginTop: 10 },
-  btnText: { fontFamily: F.semi, fontSize: 12 },
-  nextLink: { fontFamily: F.semi, fontSize: 12.5, textAlign: 'right' },
+  btn: { alignSelf: 'flex-start', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, marginTop: 10 },
+  btnText: { fontFamily: F.bold, fontSize: 11.5, letterSpacing: 1 },
 });

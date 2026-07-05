@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
+import LearnButton from "@/components/learn/LearnButton";
 import Avatar from "@/components/Avatar";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/db";
@@ -64,12 +65,7 @@ function ExamCard({
             {questionCount} questions · pass ≥ {passPct}% · unlimited retakes — the best score stands, the attempt count shows.
           </p>
           {isMember ? (
-            <Link
-              href={`/learn/${courseSlug}/exam`}
-              className="rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
-            >
-              {results.length ? "Retake the exam" : "Take the exam"}
-            </Link>
+            <LearnButton href={`/learn/${courseSlug}/exam`}>{results.length ? "Retake the Exam" : "Take the Exam"}</LearnButton>
           ) : (
             <span className="text-[11px] text-teal-200/40">exams are member-only — the lessons are all yours</span>
           )}
@@ -112,7 +108,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
           ← learn
         </Link>
         <div className="mt-4">
-          <PageHeader title={`Course ${course.n} · ${course.title}`} sub={course.tagline} />
+          <PageHeader title={`${course.n}. ${course.title}`.toUpperCase()} sub={course.tagline} />
           <EmptyState
             title="Not written yet"
             body="This course is on the syllabus but the lessons haven't been written. It'll appear on the Learn hub the day it's ready — no vaporware, no placeholders."
@@ -130,7 +126,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
           ← learn
         </Link>
         <div className="mt-4 space-y-6">
-          <PageHeader title={`Course ${course.n} · ${course.title}`} sub={course.tagline} />
+          <PageHeader title={`${course.n}. ${course.title}`.toUpperCase()} sub={course.tagline} />
           {course.overview?.length ? (
             <Card className="p-5">
               <div className="text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">After this course</div>
@@ -145,12 +141,9 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
             <p className="text-sm leading-relaxed text-teal-100/75">
               This course is taught in its own portal: {course.external.note}
             </p>
-            <Link
-              href={course.external.href}
-              className="mt-3 inline-block rounded-lg border border-teal-400/30 bg-teal-400/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200 hover:bg-teal-400/25"
-            >
-              Open the Options portal
-            </Link>
+            <LearnButton href={course.external.href} className="mt-3">
+              Open the Options Portal
+            </LearnButton>
           </Card>
           {exam ? (
             <ExamCard courseSlug={course.slug} isMember={isMember} results={results} questionCount={exam.questions.length} passPct={exam.passPct} />
@@ -177,11 +170,11 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
 
   return (
     <main>
-      <Link href="/learn" className="text-xs text-teal-300 hover:underline">
-        ← learn
-      </Link>
+      <LearnButton href="/learn" tone="ghost">
+        ← Back to Courses
+      </LearnButton>
       <div className="mt-4 space-y-6">
-        <PageHeader title={`Course ${course.n} · ${course.title}`} sub={course.tagline} />
+        <PageHeader title={`${course.n}. ${course.title}`.toUpperCase()} sub={course.tagline} />
 
         {course.overview?.length ? (
           <Card className="p-5">
@@ -227,11 +220,7 @@ export default async function CoursePage({ params }: { params: Promise<{ course:
           <p className="text-[11px] text-teal-200/40">
             Every underlined term is tap-to-explain. Something still unclear? Ask Alfred — that&apos;s what the chat is for.
           </p>
-          {next ? (
-            <Link href={`/learn/${next.slug}`} className="text-xs text-teal-300 hover:underline">
-              Next: Course {next.n} · {next.title} →
-            </Link>
-          ) : null}
+          {next ? <LearnButton href={`/learn/${next.slug}`}>Next Course →</LearnButton> : null}
         </div>
       </div>
     </main>
