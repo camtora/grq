@@ -65,7 +65,7 @@ export default async function LearnPage() {
                       label, the numeral IS the wayfinding. */}
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute left-1 top-1 select-none text-[84px] font-black leading-none text-teal-400/[0.08]"
+                    className="pointer-events-none absolute -top-2 left-1 select-none text-[84px] font-black leading-none text-teal-400/[0.08]"
                   >
                     {c.n}
                   </span>
