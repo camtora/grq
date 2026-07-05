@@ -946,7 +946,21 @@ async function maybeWeeklyRefreshEnqueue() {
   const p = etParts();
   if (p.weekday !== WEEKLY_REFRESH_WEEKDAY || p.minutesSinceMidnight < WEEKLY_REFRESH_START_MIN) return;
   if (lastWeeklyRefreshDay === p.dateStr) return;
+  // Durable guard (Cam 2026-07-05): a Sunday process RESTART (deploy / crash / nightly
+  // recreate) resets the in-memory flag and used to re-run the whole sweep. Check the DB
+  // for today's marker so a restart can't re-spend — the startup-review pattern. The
+  // marker is written once we've decided to run, BEFORE the work, so a mid-run restart
+  // can't re-trigger it either.
+  const dayStart = (await import("./calendar")).startOfEtDay();
+  const already = await prisma.journalEntry.count({ where: { title: { startsWith: "Weekly research refresh" }, at: { gte: dayStart } } });
+  if (already > 0) {
+    lastWeeklyRefreshDay = p.dateStr;
+    return;
+  }
   lastWeeklyRefreshDay = p.dateStr;
+  await prisma.journalEntry.create({
+    data: { kind: "SYSTEM", title: `Weekly research refresh — ${p.dateStr}`, body: "The weekly Sunday sweep ran for this ET day; re-runs are guarded against restarts for the rest of the day.", agentVersion: AGENT_VERSION },
+  });
 
   if (!REFRESH.enabled) {
     // Legacy blind sweep (escape hatch): re-dossier the whole tracked pool.
