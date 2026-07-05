@@ -4,7 +4,8 @@
 // figures are USD reference values, not fund cents.
 
 import { prisma } from "../db";
-import { bareTicker } from "../universe";
+import { bareTicker, usTickerToGrqSymbol } from "../universe";
+import { stripSuffix } from "../fmp";
 import { ROSTER_FUNDS, ROSTER_CONGRESS, type RosterPerson } from "./portfolios";
 import { fmtUsd } from "./types";
 import type {
@@ -35,6 +36,14 @@ const normName = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 const TOP_HOLDINGS = 12;
 
+// These feeds carry bare US tickers, and bare tickers collide across exchanges
+// (US "T" = AT&T, our tracked "T" = Telus). Every row that becomes a stock-page
+// link gets a `linkSymbol` resolved against the universe — batched here so a
+// board of N rows costs one cached universe read, not N.
+async function withLinkSymbols<T extends { symbol: string }>(rows: T[], nameOf: (r: T) => string | null | undefined): Promise<(T & { linkSymbol: string })[]> {
+  return Promise.all(rows.map(async (r) => ({ ...r, linkSymbol: await usTickerToGrqSymbol(r.symbol, nameOf(r)) })));
+}
+
 /** Roster funds, each with its latest 13F snapshot + top holdings. */
 export async function getPortfolios(): Promise<SmPortfolio[]> {
   const out: SmPortfolio[] = [];
@@ -45,8 +54,9 @@ export async function getPortfolios(): Promise<SmPortfolio[]> {
       include: { holdings: { orderBy: { rank: "asc" } } },
     });
     if (!snap) continue;
-    const holdings: SmHolding[] = snap.holdings.map((h) => ({
+    const holdings: SmHolding[] = await withLinkSymbols(snap.holdings, (h) => h.name).then((hs) => hs.map((h) => ({
       symbol: h.symbol,
+      linkSymbol: h.linkSymbol,
       name: h.name,
       shares: Number(h.shares),
       valueUsd: Number(h.valueUsd),
@@ -55,7 +65,7 @@ export async function getPortfolios(): Promise<SmPortfolio[]> {
       action: h.action,
       qoqSharesPct: h.qoqSharesPct,
       rank: h.rank,
-    }));
+    })));
     out.push({
       slug: f.slug,
       name: f.name,
@@ -91,10 +101,11 @@ export async function getCongressLeaderboard(days = 90, limit = 8): Promise<Cong
     e.members.add(r.memberName);
     e.trades++;
   }
-  return [...by.entries()]
+  const leaders = [...by.entries()]
     .map(([symbol, e]) => ({ symbol, assetName: e.assetName, buyers: e.members.size, trades: e.trades, members: [...e.members] }))
     .sort((a, b) => b.buyers - a.buyers || b.trades - a.trades)
     .slice(0, limit);
+  return withLinkSymbols(leaders, (r) => r.assetName);
 }
 
 /** Names the most roster funds NEWLY bought or ADDED to in their latest 13F. */
@@ -114,10 +125,11 @@ export async function getFundsPilingIn(limit = 8): Promise<FundLeader[]> {
       e.value += Number(h.valueUsd);
     }
   }
-  return [...by.entries()]
+  const leaders = [...by.entries()]
     .map(([symbol, e]) => ({ symbol, name: e.name, funds: e.funds.size, fundNames: [...e.funds], totalValueUsd: e.value }))
     .sort((a, b) => b.funds - a.funds || b.totalValueUsd - a.totalValueUsd)
     .slice(0, limit);
+  return withLinkSymbols(leaders, (r) => r.name);
 }
 
 /** Biggest open-market insider purchases over a window (FMP ∪ OpenInsider, deduped). */
@@ -149,29 +161,31 @@ export async function getInsiderTopBuys(days = 14, limit = 12): Promise<InsiderB
     });
     if (out.length >= limit) break;
   }
-  return out;
+  return withLinkSymbols(out, (r) => r.companyName);
 }
 
 /** Stocks several DIFFERENT insiders bought recently — the cluster-buy signal. */
 export async function getInsiderClusters(days = 30, limit = 6): Promise<InsiderCluster[]> {
   const rows = await prisma.insiderTrade.findMany({
     where: { side: "BUY", txnDate: { gte: daysAgo(days) } },
-    select: { symbol: true, insiderName: true, valueUsd: true },
+    select: { symbol: true, insiderName: true, valueUsd: true, companyName: true },
   });
-  const by = new Map<string, { insiders: Map<string, number>; value: number }>();
+  const by = new Map<string, { insiders: Map<string, number>; value: number; companyName: string | null }>();
   for (const r of rows) {
     let e = by.get(r.symbol);
-    if (!e) by.set(r.symbol, (e = { insiders: new Map(), value: 0 }));
+    if (!e) by.set(r.symbol, (e = { insiders: new Map(), value: 0, companyName: r.companyName ?? null }));
+    if (!e.companyName && r.companyName) e.companyName = r.companyName;
     // Count DISTINCT insiders, taking the larger value when one appears via both
     // sources — so a single buyer reported twice isn't a "cluster" and isn't double-counted.
     const nm = normName(r.insiderName);
     e.insiders.set(nm, Math.max(e.insiders.get(nm) ?? 0, r.valueUsd));
   }
-  return [...by.entries()]
-    .map(([symbol, e]) => ({ symbol, insiders: e.insiders.size, totalValueUsd: [...e.insiders.values()].reduce((s, v) => s + v, 0) }))
+  const clusters = [...by.entries()]
+    .map(([symbol, e]) => ({ symbol, companyName: e.companyName, insiders: e.insiders.size, totalValueUsd: [...e.insiders.values()].reduce((s, v) => s + v, 0) }))
     .filter((c) => c.insiders >= 2)
     .sort((a, b) => b.insiders - a.insiders || b.totalValueUsd - a.totalValueUsd)
     .slice(0, limit);
+  return withLinkSymbols(clusters, (r) => r.companyName);
 }
 
 export type CongressMemberTrades = { person: RosterPerson; trades: CongressTrade[] };
@@ -187,14 +201,17 @@ export async function getCongressMembers(days = 180, perMember = 10): Promise<Co
     });
     out.push({
       person: p,
-      trades: rows.map((r) => ({
-        symbol: r.symbol,
-        assetName: r.assetName,
-        side: r.side,
-        amountRange: r.amountRange,
-        txnDate: r.txnDate.toISOString().slice(0, 10),
-        link: r.link,
-      })),
+      trades: await withLinkSymbols(
+        rows.map((r) => ({
+          symbol: r.symbol,
+          assetName: r.assetName,
+          side: r.side,
+          amountRange: r.amountRange,
+          txnDate: r.txnDate.toISOString().slice(0, 10),
+          link: r.link,
+        })),
+        (r) => r.assetName,
+      ),
     });
   }
   return out;
@@ -236,7 +253,7 @@ export type SymbolSmartMoney = {
  *  positions/trades in it, plus aggregate congress/insider activity. Shared by
  *  the stock-page panel and the agent's decision context. */
 export async function getSmartMoneyForSymbol(symbol: string): Promise<SymbolSmartMoney> {
-  const sym = bareTicker(symbol); // tables store bare US tickers (cross-listings included)
+  const sym = stripSuffix(bareTicker(symbol)); // tables store bare US tickers (incl. `.US`-tagged pages + cross-listings)
   const ciks = ROSTER_FUNDS.map((f) => f.cik);
 
   const [holdingRows, congressBuys, congressSells, insiderBuyRows] = await Promise.all([

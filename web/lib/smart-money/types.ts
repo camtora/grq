@@ -6,6 +6,9 @@ export type WatchOverlap = "universe" | "watching";
 
 export type SmHolding = {
   symbol: string;
+  /** GRQ stock-page symbol for THIS company (bare-ticker collisions resolved — US "T"
+   *  links to T.US/AT&T, never Telus). Fall back to `symbol` when absent. */
+  linkSymbol?: string;
   name: string;
   shares: number;
   valueUsd: number;
@@ -34,10 +37,11 @@ export type SmPortfolio = {
   hasPuts: boolean;
 };
 
-export type CongressLeader = { symbol: string; assetName: string; buyers: number; trades: number; members: string[] };
-export type FundLeader = { symbol: string; name: string; funds: number; fundNames: string[]; totalValueUsd: number };
+export type CongressLeader = { symbol: string; linkSymbol?: string; assetName: string; buyers: number; trades: number; members: string[] };
+export type FundLeader = { symbol: string; linkSymbol?: string; name: string; funds: number; fundNames: string[]; totalValueUsd: number };
 export type InsiderBuy = {
   symbol: string;
+  linkSymbol?: string;
   companyName: string | null;
   insiderName: string;
   insiderTitle: string | null;
@@ -48,8 +52,8 @@ export type InsiderBuy = {
   source: string;
   link: string | null;
 };
-export type InsiderCluster = { symbol: string; insiders: number; totalValueUsd: number };
-export type CongressTrade = { symbol: string; assetName: string; side: string; amountRange: string; txnDate: string; link: string | null };
+export type InsiderCluster = { symbol: string; linkSymbol?: string; insiders: number; totalValueUsd: number };
+export type CongressTrade = { symbol: string; linkSymbol?: string; assetName: string; side: string; amountRange: string; txnDate: string; link: string | null };
 
 /** Compact USD with a magnitude suffix — "$263.1B", "$25.0M". Reference figures. */
 export function fmtUsd(n: number): string {

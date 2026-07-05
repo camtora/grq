@@ -32,7 +32,7 @@ function HoldingRow({ h, overlap, maxPct }: { h: SmHolding; overlap?: WatchOverl
       <span className="w-5 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">{h.rank}</span>
       <div className="flex w-20 shrink-0 items-center gap-1.5">
         <Link
-          href={`/stocks/${h.symbol}`}
+          href={`/stocks/${h.linkSymbol ?? h.symbol}`}
           className={`font-semibold hover:underline ${overlap ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
         >
           {h.symbol}

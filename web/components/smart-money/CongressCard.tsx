@@ -46,7 +46,7 @@ export default function CongressCard({ entry, overlap }: { entry: CongressMember
                 <div key={i} className="flex items-center gap-2 border-t border-teal-400/10 py-1.5 text-sm">
                   <span className="w-16 shrink-0">
                     <Link
-                      href={`/stocks/${t.symbol}`}
+                      href={`/stocks/${t.linkSymbol ?? t.symbol}`}
                       className={`font-semibold hover:underline ${overlap[t.symbol] ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
                     >
                       {t.symbol}

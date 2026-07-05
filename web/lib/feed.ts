@@ -1173,6 +1173,7 @@ export async function smartMoneyResponse() {
       securitiesRemoved: p.securitiesRemoved ?? null,
       topHoldings: p.topHoldings.map((h) => ({
         symbol: h.symbol,
+        linkSymbol: h.linkSymbol ?? h.symbol,
         name: h.name ?? null,
         changeKind: h.action ?? null,
         valueUsd: h.valueUsd ?? null,
@@ -1192,6 +1193,7 @@ export async function smartMoneyResponse() {
         avatar: m.person.avatar ?? null,
         trades: m.trades.map((t) => ({
           symbol: t.symbol,
+          linkSymbol: t.linkSymbol ?? t.symbol,
           side: t.side,
           amountRange: t.amountRange,
           txnDate: t.txnDate,
@@ -1200,6 +1202,7 @@ export async function smartMoneyResponse() {
       })),
     congress: congress.map((c) => ({
       symbol: c.symbol,
+      linkSymbol: c.linkSymbol ?? c.symbol,
       name: tidyName(c.assetName),
       primary: `${c.buyers} member${c.buyers > 1 ? "s" : ""}`,
       secondary: `${c.trades} trade${c.trades > 1 ? "s" : ""}`,
@@ -1208,6 +1211,7 @@ export async function smartMoneyResponse() {
     })),
     funds: funds.map((f) => ({
       symbol: f.symbol,
+      linkSymbol: f.linkSymbol ?? f.symbol,
       name: tidyName(f.name),
       primary: `${f.funds} fund${f.funds > 1 ? "s" : ""}`,
       secondary: fmtUsd(f.totalValueUsd),
@@ -1216,13 +1220,14 @@ export async function smartMoneyResponse() {
     })),
     insiders: insiders.map((t) => ({
       symbol: t.symbol,
+      linkSymbol: t.linkSymbol ?? t.symbol,
       name: t.insiderName.length > 26 ? `${t.insiderName.slice(0, 26)}…` : t.insiderName,
       primary: fmtUsd(t.valueUsd),
       secondary: t.insiderTitle ? t.insiderTitle.split(/[,:]/)[0] : null,
       value: t.valueUsd,
       overlap: overlap.get(t.symbol) ?? null,
     })),
-    clusters: clusters.map((c) => ({ symbol: c.symbol, insiders: c.insiders, totalValueUsd: c.totalValueUsd ?? null })),
+    clusters: clusters.map((c) => ({ symbol: c.symbol, linkSymbol: c.linkSymbol ?? c.symbol, insiders: c.insiders, totalValueUsd: c.totalValueUsd ?? null })),
     narrative: narrative ? { title: narrative.title, body: narrative.body, at: iso(narrative.at), sources: narrSources } : null,
     updatedAt: iso(fresh.congress ?? fresh.insider ?? fresh.portfolio),
   };

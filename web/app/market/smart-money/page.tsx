@@ -57,17 +57,18 @@ export default async function SmartMoney() {
   // repeat visits (idempotent). Skip names already in our universe — they have
   // their own research flow. (Cam 2026-06-18)
   const shownSymbols = [
-    ...congress.map((c) => c.symbol),
-    ...funds.map((f) => f.symbol),
-    ...insiders.map((t) => t.symbol),
-    ...clusters.map((c) => c.symbol),
-    ...portfolios.flatMap((p) => p.topHoldings.map((h) => h.symbol)),
-    ...members.flatMap((m) => m.trades.map((t) => t.symbol)),
+    ...congress.map((c) => c.linkSymbol ?? c.symbol),
+    ...funds.map((f) => f.linkSymbol ?? f.symbol),
+    ...insiders.map((t) => t.linkSymbol ?? t.symbol),
+    ...clusters.map((c) => c.linkSymbol ?? c.symbol),
+    ...portfolios.flatMap((p) => p.topHoldings.map((h) => h.linkSymbol ?? h.symbol)),
+    ...members.flatMap((m) => m.trades.map((t) => t.linkSymbol ?? t.symbol)),
   ].filter((s) => s && !overlap[s]);
   await queueDossiers(shownSymbols, "smart-money").catch(() => {});
 
   const congressRows: LeaderRow[] = congress.map((c) => ({
     symbol: c.symbol,
+    linkSymbol: c.linkSymbol,
     name: tidy(c.assetName),
     value: c.buyers,
     primary: `${c.buyers} member${c.buyers > 1 ? "s" : ""}`,
@@ -76,6 +77,7 @@ export default async function SmartMoney() {
   }));
   const fundRows: LeaderRow[] = funds.map((f) => ({
     symbol: f.symbol,
+    linkSymbol: f.linkSymbol,
     name: tidy(f.name),
     value: f.funds,
     primary: `${f.funds} fund${f.funds > 1 ? "s" : ""}`,
@@ -84,6 +86,7 @@ export default async function SmartMoney() {
   }));
   const insiderRows: LeaderRow[] = insiders.map((t) => ({
     symbol: t.symbol,
+    linkSymbol: t.linkSymbol,
     name: t.insiderName.length > 26 ? `${t.insiderName.slice(0, 26)}…` : t.insiderName,
     value: t.valueUsd,
     primary: fmtUsd(t.valueUsd),

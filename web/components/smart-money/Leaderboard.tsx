@@ -9,6 +9,7 @@ import type { WatchOverlap } from "@/lib/smart-money/types";
 // wear an overlap badge.
 export type LeaderRow = {
   symbol: string;
+  linkSymbol?: string; // page symbol for THIS company (bare-ticker collisions resolved)
   name?: string | null;
   value: number; // for bar scaling + sort (already sorted by caller)
   primary: string; // headline metric, e.g. "7 members" / "$25.0M"
@@ -41,7 +42,7 @@ export default function Leaderboard({
               <span className="w-4 shrink-0 text-right text-[11px] tabular-nums text-teal-200/30">{i + 1}</span>
               <div className="flex w-16 shrink-0 items-center gap-1">
                 <Link
-                  href={`/stocks/${r.symbol}`}
+                  href={`/stocks/${r.linkSymbol ?? r.symbol}`}
                   className={`font-semibold hover:underline ${r.overlap ? "text-teal-300" : "text-teal-100/90 hover:text-teal-300"}`}
                 >
                   {r.symbol}

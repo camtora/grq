@@ -114,7 +114,14 @@ export async function canonicalMember(ticker: string): Promise<UniverseRow | nul
   if (exact) return exact;
   const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
   const target = bare(t);
-  return rows.find((r) => r.status !== "RETIRED" && r.symbol !== t && bare(r.symbol) === target) ?? null;
+  // An explicit `.US` request means "the US listing" — a Canadian member that merely
+  // shares the bare ticker is a DIFFERENT company (US T = AT&T, our T = Telus/T.TO),
+  // so it must not capture the URL. Cross-listed members (bare/US yahoo) still match.
+  const wantsUs = /\.US$/i.test(t);
+  const caListed = (r: UniverseRow) => /\.(TO|V|NE|CN)$/i.test((r.yahoo ?? "").toUpperCase());
+  return (
+    rows.find((r) => r.status !== "RETIRED" && r.symbol !== t && bare(r.symbol) === target && !(wantsUs && caListed(r))) ?? null
+  );
 }
 
 export async function inUniverse(symbol: string): Promise<boolean> {
@@ -129,8 +136,9 @@ export async function toYahoo(symbol: string): Promise<string> {
   // listing — the hunt reaches all of North America and CA finds arrive suffixed.
   // Either way, never append ".TO" or rewrite the dot: the old fallback turned
   // "VCM.TO" into "VCM-TO.TO" and forced US tickers (STRT, QTTB…) onto the TSX,
-  // so their quotes/bars came back empty.
-  return symbol.trim().toUpperCase();
+  // so their quotes/bars came back empty. `.US` is OUR disambiguation tag, not a
+  // Yahoo suffix — strip it (Yahoo's US symbols are bare).
+  return symbol.trim().toUpperCase().replace(/\.US$/, "");
 }
 
 /** The native currency a symbol trades in — CAD or USD. Prefers the universe row's
@@ -158,7 +166,10 @@ const EXCHANGE_SUFFIX: Record<string, string> = {
 /** The Yahoo symbol for a listing the user explicitly picked, e.g.
  *  ("RY","TSX")→"RY.TO", ("NVDA","NASDAQ")→"NVDA". Already-suffixed input trusted. */
 export function yahooForListing(symbol: string, exchange?: string | null): string {
-  const s = symbol.trim().toUpperCase();
+  // `.US` is GRQ's internal "the US listing" tag (never a real wire suffix) —
+  // strip it and treat the result as an explicit US pick (bare on Yahoo).
+  const s = symbol.trim().toUpperCase().replace(/\.US$/, "");
+  if (s !== symbol.trim().toUpperCase()) return s;
   if (/\.[A-Z]{1,3}$/.test(s)) return s; // FMP often already qualifies (RY.TO)
   const suf = exchange ? EXCHANGE_SUFFIX[exchange.trim().toUpperCase()] : undefined;
   return suf ? `${s}${suf}` : s;
@@ -167,6 +178,56 @@ export function yahooForListing(symbol: string, exchange?: string | null): strin
 /** Bare ticker (suffix stripped) — the natural storage key when it's free. */
 export function bareTicker(symbol: string): string {
   return symbol.trim().toUpperCase().replace(/\.(TO|V|NE|CN)$/i, "");
+}
+
+// Company-name comparison for the bare-ticker collision check below. Normalizes
+// away punctuation + boilerplate suffix words, then compares the leading tokens —
+// enough to tell "CELESTICA INC" ≈ "Celestica Inc." (cross-listing) apart from
+// "AT&T Inc." vs "TELUS" (different companies sharing bare ticker T).
+const NAME_NOISE = new Set([
+  "INC", "CORP", "CORPORATION", "LTD", "LIMITED", "PLC", "CO", "COMPANY", "COMPANIES",
+  "THE", "HOLDINGS", "HOLDING", "GROUP", "LP", "SA", "NV", "AG", "CLASS", "NEW", "COM",
+  "ORD", "SHS", "ADR",
+]);
+function nameTokens(s: string): string[] {
+  return s
+    .toUpperCase()
+    .replace(/&/g, " AND ")
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t && !NAME_NOISE.has(t));
+}
+function sameCompanyName(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (ta.length === 0 || tb.length === 0) return false;
+  const n = Math.min(ta.length, tb.length, 2);
+  return ta.slice(0, n).join(" ") === tb.slice(0, n).join(" ");
+}
+
+/** Map a US-source bare ticker (13F / congress / insider feeds are US-listed) to the
+ *  GRQ symbol whose stock page shows THAT company. The trap: bare tickers collide
+ *  across exchanges — US "T" is AT&T while our tracked bare "T" is Telus (T.TO), so a
+ *  raw `/stocks/T` link lands on the wrong company (bit us 2026-07-04). Rules:
+ *   - tracked `SYM.US` → that member;
+ *   - tracked bare SYM on a US listing (bare yahoo) → same company → SYM;
+ *   - tracked bare SYM on a CANADIAN listing → SYM only when the names say it's the
+ *     same company cross-listed (CLS/Celestica, SHOP/Shopify); otherwise `SYM.US` —
+ *     the explicit-US URL, which canonicalMember will NOT hand to the CA namesake.
+ *     Never wrong-company; worst case a cross-listing misses its dossier page;
+ *   - untracked → SYM (bare = US listing everywhere downstream).
+ */
+export async function usTickerToGrqSymbol(ticker: string, usName?: string | null): Promise<string> {
+  const sym = ticker.trim().toUpperCase();
+  if (!sym || /\./.test(sym)) return sym; // already qualified (or junk) — pass through
+  const rows = await load();
+  if (rows.some((r) => r.status !== "RETIRED" && r.symbol === `${sym}.US`)) return `${sym}.US`;
+  const bare = rows.find((r) => r.status !== "RETIRED" && r.symbol === sym);
+  if (!bare) return sym;
+  const caListed = /\.(TO|V|NE|CN)$/i.test((bare.yahoo ?? "").toUpperCase());
+  if (!caListed) return sym;
+  return sameCompanyName(bare.name, usName) ? sym : `${sym}.US`;
 }
 
 /** Tradeable in the CAD sim only if the listing is CAD-denominated — CDRs qualify;
