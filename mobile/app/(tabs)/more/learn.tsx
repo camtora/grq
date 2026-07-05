@@ -218,7 +218,7 @@ const s = StyleSheet.create({
   intro: { fontFamily: F.reg, fontSize: 12, lineHeight: 17 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   courseCell: { width: '48.7%', flexGrow: 1, flexBasis: '47%' },
-  courseWatermark: { position: 'absolute', left: 6, top: 2, fontFamily: F.black, fontSize: 58, lineHeight: 60 },
+  courseWatermark: { position: 'absolute', left: 3, top: 3, fontFamily: F.black, fontSize: 58, lineHeight: 60 },
   courseTitle: { fontFamily: F.bold, fontSize: 12.5, letterSpacing: 0.6, paddingLeft: 44 },
   courseTag: { fontFamily: F.reg, fontSize: 10.5, lineHeight: 14.5, marginTop: 4, paddingLeft: 44 },
   courseFoot: { fontFamily: F.semi, fontSize: 10.5, marginTop: 8, textAlign: 'right' },
