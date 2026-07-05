@@ -53,10 +53,10 @@ async function ExampleBlock({ k, fallbackMd }: { k: string; fallbackMd: string }
   );
 }
 
-export default async function BlockRenderer({ block }: { block: LearnBlock }) {
+export default async function BlockRenderer({ block, lede = false }: { block: LearnBlock; lede?: boolean }) {
   switch (block.kind) {
     case "prose":
-      return <Md text={block.md} />;
+      return <Md text={block.md} ledeBoost={lede} />;
     case "callout": {
       const t = CALLOUT[block.tone];
       return (

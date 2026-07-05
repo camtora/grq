@@ -69,7 +69,7 @@ export default async function LessonPage({ params }: { params: Promise<{ course:
         <div className="grid items-start gap-6 lg:grid-cols-3">
           <Card className="p-5 lg:col-span-2">
             {content.map((block, bi) => (
-              <BlockRenderer key={bi} block={block} />
+              <BlockRenderer key={bi} block={block} lede={bi === 0} />
             ))}
           </Card>
 

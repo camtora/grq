@@ -11,8 +11,11 @@ import { glossaryLookup } from '../lib/learn';
  * pillar, 2026-07-04). */
 
 // Inline: **bold**, *italic*, [[term]], and the lessons' [display](#explain:slug) links —
-// both explain forms open the GlossarySheet (web Md.tsx parity, D111 L5).
-function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactNode[] {
+// both explain forms open the GlossarySheet (web Md.tsx parity, D111 L5). Bold runs
+// render their INNER content through renderInline too, so a term inside **…** (the
+// Learn ledes: **[[VOLATILITY]] IS**) stays tappable instead of showing raw brackets.
+// `lede` (an armed flag) sizes the FIRST bold run up — the magazine lede.
+function renderInline(text: string, p: Palette, keyPrefix: string, lede?: { armed: boolean }): React.ReactNode[] {
   const re = /(\[[^\]]+?\]\(#explain:[^)\s]+\)|\*\*[^*]+?\*\*|\*[^*\n]+?\*|\[\[[^\]]+?\]\])/g;
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -22,9 +25,11 @@ function renderInline(text: string, p: Palette, keyPrefix: string): React.ReactN
     if (idx > last) out.push(text.slice(last, idx));
     const tok = m[0];
     if (tok.startsWith('**')) {
+      const big = lede?.armed === true;
+      if (lede) lede.armed = false;
       out.push(
-        <Text key={`${keyPrefix}-b${i}`} style={{ fontFamily: F.semi, color: p.textPrimary }}>
-          {tok.slice(2, -2)}
+        <Text key={`${keyPrefix}-b${i}`} style={{ fontFamily: big ? F.bold : F.semi, color: p.textPrimary, ...(big ? { fontSize: 16, letterSpacing: 0.4 } : {}) }}>
+          {renderInline(tok.slice(2, -2), p, `${keyPrefix}-bb${i}`)}
         </Text>,
       );
     } else if (tok.startsWith('[') && tok.includes('](#explain:')) {
@@ -101,10 +106,12 @@ function parseBlocks(body: string): Block[] {
   return blocks;
 }
 
-export default function MdText({ body, foldAt = 420 }: { body: string; foldAt?: number }) {
+export default function MdText({ body, foldAt = 420, ledeBoost = false }: { body: string; foldAt?: number; ledeBoost?: boolean }) {
   const { p } = usePalette();
   const [open, setOpen] = useState(false);
   const blocks = parseBlocks(body);
+  // The Learn lede: the first bold run of the first block renders a size up.
+  const lede = ledeBoost ? { armed: true } : undefined;
 
   // Fold by whole blocks once the cumulative length passes foldAt.
   let shown = blocks;
@@ -143,7 +150,7 @@ export default function MdText({ body, foldAt = 420 }: { body: string; foldAt?: 
         }
         return (
           <Text key={i} style={[s.body, { color: p.textPrimary, marginTop: i === 0 ? 0 : 8 }]}>
-            {renderInline(b.text, p, `p${i}`)}
+            {renderInline(b.text, p, `p${i}`, i === 0 ? lede : undefined)}
           </Text>
         );
       })}

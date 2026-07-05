@@ -49,17 +49,20 @@ export default function LearnBlock({
   block,
   receipts,
   examples,
+  lede = false,
 }: {
   block: LearnBlock;
   receipts?: Record<string, ReceiptWire>;
   examples?: Record<string, { md: string; asOf: string }>;
+  /** First block of a lesson — its first bold run (the magazine lede) sizes up. */
+  lede?: boolean;
 }) {
   const { p } = usePalette();
   const router = useRouter();
 
   switch (block.kind) {
     case 'prose':
-      return <MdText body={block.md} foldAt={100000} />;
+      return <MdText body={block.md} foldAt={100000} ledeBoost={lede} />;
     case 'callout': {
       const t = CALLOUT[block.tone];
       return (

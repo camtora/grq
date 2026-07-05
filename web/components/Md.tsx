@@ -110,16 +110,38 @@ const components: Components = {
   td: ({ node: _n, ...props }) => <td className="border-b border-teal-400/10 px-2 py-1 align-top" {...props} />,
 };
 
-export default function Md({ text, className = "" }: { text: string; className?: string }) {
+export default function Md({
+  text,
+  className = "",
+  ledeBoost = false,
+}: {
+  text: string;
+  className?: string;
+  /** Learn's magazine lede (D111): the FIRST bold run renders two sizes up. The lesson
+   *  page sets this on a lesson's opening block only — ledeMd() guarantees that block
+   *  starts with the bold-caps lede, so "first strong" IS the lede. */
+  ledeBoost?: boolean;
+}) {
   // Turn the agent's [[jargon]] markers into tap-to-explain links (rendered by
   // the `a` override → <Term>). Plain prose is left untouched.
   const processed = text.replace(/\[\[([^\][]{1,80})\]\]/g, (_m, t) => `[${t}](#explain:${encodeURIComponent(t.trim())})`);
+  let firstStrong = true;
+  const comps: Components = ledeBoost
+    ? {
+        ...components,
+        strong: ({ node: _n, ...props }) => {
+          const big = firstStrong;
+          firstStrong = false;
+          return <strong className={big ? "text-lg font-bold tracking-wide text-teal-50" : "font-semibold text-teal-50"} {...props} />;
+        },
+      }
+    : components;
   return (
     <div className={`space-y-3 text-sm leading-relaxed text-teal-100/80 ${className}`}>
       {/* singleTilde:false — the agent writes ~ for "approximately" (~$870); without
           this, GFM reads a pair of ~ on a line as strikethrough and crosses out the
           text between them. Only ~~double~~ strikes through now. */}
-      <ReactMarkdown remarkPlugins={[[remarkGfm, { singleTilde: false }]]} rehypePlugins={[autoGlossary]} components={components}>
+      <ReactMarkdown remarkPlugins={[[remarkGfm, { singleTilde: false }]]} rehypePlugins={[autoGlossary]} components={comps}>
         {processed}
       </ReactMarkdown>
     </div>

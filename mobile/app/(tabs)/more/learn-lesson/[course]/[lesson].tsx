@@ -84,7 +84,7 @@ export default function LearnLessonScreen() {
 
         <Card>
           {content.map((b, bi) => (
-            <LearnBlock key={bi} block={b} receipts={receipts.data?.blocks} examples={state.data?.examples} />
+            <LearnBlock key={bi} block={b} receipts={receipts.data?.blocks} examples={state.data?.examples} lede={bi === 0} />
           ))}
         </Card>
 
