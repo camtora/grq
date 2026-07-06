@@ -4,7 +4,7 @@ import { greeting } from "@/lib/greetings";
 import { getPortfolio, PAPER_INCEPTION } from "@/lib/portfolio";
 import { prisma } from "@/lib/db";
 import { money, signedMoney, pct, fmtWhen, pnlClass } from "@/lib/money";
-import { Card, StatCard, Chip, SectionHeader } from "@/components/ui";
+import { Card, StatCard, Chip, Pnl, SectionHeader } from "@/components/ui";
 import ActivityFeed from "@/components/ActivityFeed";
 import SortableTable from "@/components/SortableTable";
 import Term from "@/components/Term";
@@ -33,8 +33,12 @@ import {
 import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents } from "@/lib/external/store";
 import { personByEmail } from "@/lib/people";
-import { etDateStr, startOfEtDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
+import { etDateStr, startOfEtDay, isMarketDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
 import LiveTape from "@/components/LiveTape";
+
+function signedPct(bps: number): string {
+  return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
+}
 
 // The agent cites sources in its briefs — show them as chips (moved here with the
 // midday review from the Today page, Cam 2026-06-16).
@@ -124,6 +128,13 @@ export default async function Portfolio() {
   if (tapeDayOpen) tapePts.unshift({ t: tapeDayOpen.at.getTime(), c: tapeDayOpen.navCents });
   if (tapePts.length >= 1 && tapePts[tapePts.length - 1].c !== pf.navCents) tapePts.push({ t: Date.now(), c: pf.navCents });
   const tapeWin = etSessionBounds(new Date());
+
+  // Masthead day change (mirrors the Today page): live NAV vs the prior close, flat on
+  // non-trading days. Reuses the tape's day-open snapshot as the baseline.
+  const marketDay = isMarketDay();
+  const marketOpenNow = isMarketOpen();
+  const dayPnl = marketDay ? pf.navCents - tapeDayOpenNav : 0;
+  const dayPnlPct = marketDay && tapeDayOpenNav > 0 ? dayPnl / tapeDayOpenNav : 0;
 
   // ── Personal accounts: each member's external holdings in a SEPARATE lane (Graham first,
   // then Cam — Cam 2026-06-29), rendered with the SAME columns + spacing as Alfred's positions
@@ -600,10 +611,30 @@ export default async function Portfolio() {
             Live-fire sim on real delayed quotes
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip tone={pf.killSwitch ? "red" : "teal"}>
-            {pf.killSwitch ? "Trading halted" : "Agent on duty"}
-          </Chip>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {pf.killSwitch && <Chip tone="red">Trading halted</Chip>}
+          <div className="text-right text-sm">
+            <div className="mb-1 flex items-center justify-end gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${marketOpenNow ? "animate-pulse bg-emerald-400" : "bg-teal-200/30"}`} />
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-[0.15em] ${marketOpenNow ? "text-emerald-300/80" : "text-teal-200/50"}`}
+              >
+                {marketOpenNow ? "Market open" : "Market closed"}
+              </span>
+            </div>
+            {marketDay ? (
+              <>
+                <Pnl cents={dayPnl} />{" "}
+                <span className="text-teal-200/50">
+                  ({signedPct(Math.round(dayPnlPct * 10_000))} <Term k="day-pnl" align="right">today</Term>)
+                </span>
+              </>
+            ) : (
+              <span className="text-teal-200/60">
+                Flat · <span className="uppercase tracking-wide text-teal-300/70">markets closed</span>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
