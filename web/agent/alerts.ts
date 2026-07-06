@@ -77,7 +77,7 @@ export async function sendDiscord(severity: Severity, title: string, body = ""):
   }
 }
 
-export async function heartbeat(fields: { bootAt?: Date; lastTickAt?: Date; lastSessionAt?: Date; note?: string }): Promise<void> {
+export async function heartbeat(fields: { bootAt?: Date; lastTickAt?: Date; lastSessionAt?: Date; note?: string; brokerReachable?: boolean; brokerCheckedAt?: Date }): Promise<void> {
   try {
     await prisma.agentState.upsert({
       where: { id: 1 },

@@ -722,11 +722,59 @@ async function maybeScheduledSessions() {
   }
 }
 
+// Broker-link health monitor (Tier-1 outage alarm, 2026-07-06). The July-4 ibeam-proxy
+// strand cut the agent off from IBKR for two days in silence: keepAlive() swallowed the
+// transport error, and the only outage signal (a "reconcile failed" warning) only ran
+// while the market was open — so a weekend break produced zero signal. This runs EVERY
+// tick, open or closed, pages CRITICAL (risk = always-on push) once a transport failure
+// persists, and records reachability for /api/health. It watches only `reachable` (the
+// gateway/proxy is unreachable — the call throws), NOT the reachable-but-unauthenticated
+// state, so it never false-pages on the routine nightly IB-Key re-auth.
+let brokerDownStreak = 0;
+let brokerAlertedDown = false;
+// Consecutive failed probes before paging: 3 ticks ≈ 3 min while open (60s tick), ≈ 15 min
+// off-hours (5-min tick) — long enough to ride out a transient blip, short enough to catch a
+// weekend break well before Monday's open.
+const BROKER_DOWN_ALERT_AFTER = 3;
+
+async function monitorBrokerHealth(broker: ReturnType<typeof getBroker>) {
+  if (broker.kind !== "ibkr") return;
+  const h = await (broker as IBKRBroker).ping();
+  await heartbeat({ brokerReachable: h.reachable, brokerCheckedAt: new Date() });
+
+  if (!h.reachable) {
+    brokerDownStreak += 1;
+    if (brokerDownStreak >= BROKER_DOWN_ALERT_AFTER && !brokerAlertedDown) {
+      brokerAlertedDown = true;
+      await alert(
+        "critical",
+        "IBKR broker link is DOWN",
+        `The agent can't reach the IBKR gateway (${brokerDownStreak} consecutive probes failed${h.error ? `: ${h.error}` : ""}). Every order will reject and the position mirror is frozen. Most likely the ibeam-proxy stranded after an ibeam restart — recover with: docker-compose up -d --force-recreate --no-deps ibeam-proxy`,
+        { category: "risk" },
+      ).catch(() => {});
+    }
+    return;
+  }
+
+  // Reachable again — clear the streak, and if we'd paged, announce recovery.
+  if (brokerAlertedDown) {
+    brokerAlertedDown = false;
+    await alert(
+      "info",
+      "IBKR broker link recovered",
+      `Gateway reachable again${h.authenticated ? " and authenticated" : " (session still re-authenticating)"}. Trading + reconcile resume on the next tick.`,
+      { category: "risk" },
+    ).catch(() => {});
+  }
+  brokerDownStreak = 0;
+}
+
 async function tick() {
   const open = isMarketOpen();
 
   await refreshQuotes(open);
   await heartbeat({ lastTickAt: new Date(), note: open ? "market open" : "market closed" });
+  await monitorBrokerHealth(broker);
 
   if (open) {
     if (broker.kind === "ibkr") {

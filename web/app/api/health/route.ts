@@ -22,6 +22,13 @@ export async function GET() {
           lastSessionAt: agent.lastSessionAt,
           tickAgeSeconds: agent.lastTickAt ? Math.round((now - agent.lastTickAt.getTime()) / 1000) : null,
           note: agent.note,
+          // Broker-link health (Tier-1 outage alarm) — so external monitoring can see a
+          // silent broker disconnect. Stale (>10 min) reads as unknown, not healthy.
+          brokerReachable:
+            agent.brokerCheckedAt && now - agent.brokerCheckedAt.getTime() < 10 * 60_000
+              ? agent.brokerReachable
+              : null,
+          brokerCheckedAt: agent.brokerCheckedAt,
         }
       : null,
     time: new Date().toISOString(),

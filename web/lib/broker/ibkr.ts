@@ -121,6 +121,21 @@ export class IBKRBroker implements BrokerAdapter {
     }
   }
 
+  /** Lightweight reachability probe for the runner's broker-health monitor. It
+   *  distinguishes a *transport* failure — the gateway/proxy is unreachable, so the
+   *  call THROWS (connection refused / timeout) — from a reachable-but-unauthenticated
+   *  session (needs a re-auth, which keepAlive handles). The transport-dead case is the
+   *  July-4 proxy-strand failure mode that went silent for two days; the runner turns a
+   *  sustained one into a critical page. `reachable:false` is the actionable signal. */
+  async ping(): Promise<{ reachable: boolean; authenticated: boolean; connected: boolean; error?: string }> {
+    try {
+      const s = await cp<{ authenticated?: boolean; connected?: boolean }>("/iserver/auth/status", "POST");
+      return { reachable: true, authenticated: !!s.authenticated, connected: !!s.connected };
+    } catch (e) {
+      return { reachable: false, authenticated: false, connected: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
   // ---- contract resolution -------------------------------------------------
 
   /** symbol → IBKR conid in the name's own currency: CAD→Toronto (TSE/TSX/Venture),
@@ -154,7 +169,11 @@ export class IBKRBroker implements BrokerAdapter {
         return conid;
       }
       return null;
-    } catch {
+    } catch (e) {
+      // A THROW here means the gateway call failed (transport/parse) — distinct from a
+      // legit "no listing" (handled above with a silent null). Log it so a broker outage
+      // is never fully silent; the runner's health monitor is the loud signal.
+      console.warn(`[ibkr] conidFor(${sym}) gateway error: ${e instanceof Error ? e.message : String(e)}`);
       return null;
     }
   }
@@ -199,7 +218,18 @@ export class IBKRBroker implements BrokerAdapter {
     if (!Number.isInteger(input.qty) || input.qty <= 0) return this.recordReject(input, "Quantity must be a positive whole number of shares.");
 
     const conid = await this.conidFor(input.symbol);
-    if (!conid) return this.recordReject(input, `No IBKR contract found for ${input.symbol.toUpperCase()}.`);
+    if (!conid) {
+      // Don't let a broker outage masquerade as a bad ticker: conidFor() returns null
+      // BOTH when the gateway is unreachable (the July-4 proxy strand) AND when the
+      // symbol genuinely has no listing. Probe reachability so the rejection tells the
+      // truth — a "No contract found" on a name we already hold is almost always the
+      // link, not the symbol.
+      const health = await this.ping();
+      if (!health.reachable) {
+        return this.recordReject(input, `IBKR gateway unreachable — order NOT placed (broker session is down, not a bad symbol for ${input.symbol.toUpperCase()}). The broker link needs attention.`);
+      }
+      return this.recordReject(input, `No IBKR contract found for ${input.symbol.toUpperCase()}.`);
+    }
 
     try {
       const order = {

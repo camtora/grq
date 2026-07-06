@@ -771,6 +771,12 @@ model AgentState {
   // let ATD re-escalate ~13×). Auto-resets when the ET date rolls over.
   adhocDate     String?
   adhocCount    Int       @default(0)
+  // Broker-link health (Tier-1 outage alarm, 2026-07-06): the last reachability probe
+  // of the IBKR gateway, written every tick by the runner's monitorBrokerHealth(). Read
+  // by /api/health so a silent broker disconnect (e.g. the July-4 ibeam-proxy strand)
+  // surfaces to external monitoring, not just to the critical push it also fires.
+  brokerReachable Boolean?
+  brokerCheckedAt DateTime?
   updatedAt     DateTime  @updatedAt
 }
 
