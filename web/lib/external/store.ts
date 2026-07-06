@@ -156,13 +156,37 @@ export async function buildConnectUrl(email: string, origin: string, reconnect?:
 
 /** The member's connection health, read LIVE from SnapTrade (not our mirror) — the
  *  reconnect flow polls this to notice the moment a broken authorization flips back
- *  to enabled (the portal's own "reconnecting…" screen can hang without resolving). */
+ *  to enabled (the portal's own "reconnecting…" screen can hang without resolving).
+ *  Also carries `syncMs` per authorization: the ms timestamp of SnapTrade's newest
+ *  holdings pull FROM the broker (`sync_status.holdings.last_successful_sync`, maxed
+ *  across the authorization's accounts). The "Refresh from broker" flow polls THIS to
+ *  detect a fresh pull landing after a re-login — the healthy-link analogue of the
+ *  disabled→enabled flip (0 = never / unknown). */
 export async function connectionHealthFor(
   email: string,
-): Promise<{ id: string; disabled: boolean; brokerName: string | null }[]> {
+): Promise<{ id: string; disabled: boolean; brokerName: string | null; syncMs: number }[]> {
   const { partner, userId, userSecret } = await resolveUser(email);
-  const auths = await listSnaptradeAuthorizations(partner, { userId, userSecret });
-  return auths.map((a) => ({ id: a.id, disabled: a.disabled, brokerName: a.brokerName }));
+  const [auths, accounts] = await Promise.all([
+    listSnaptradeAuthorizations(partner, { userId, userSecret }),
+    listSnaptradeAccounts(partner, { userId, userSecret }).catch(() => [] as unknown[]),
+  ]);
+  // Newest holdings-pull time per authorization (across all its accounts).
+  const syncByAuth = new Map<string, number>();
+  for (const raw of accounts) {
+    const a = obj(raw);
+    const auth = a.brokerage_authorization;
+    const authId = str(auth) ?? str(obj(auth).id);
+    if (!authId) continue;
+    const last = str(obj(obj(a.sync_status).holdings).last_successful_sync);
+    const ms = last ? Date.parse(last) : NaN;
+    if (Number.isFinite(ms)) syncByAuth.set(authId, Math.max(syncByAuth.get(authId) ?? 0, ms));
+  }
+  return auths.map((a) => ({
+    id: a.id,
+    disabled: a.disabled,
+    brokerName: a.brokerName,
+    syncMs: syncByAuth.get(a.id) ?? 0,
+  }));
 }
 
 // ── sync (SnapTrade → DB) ─────────────────────────────────────────────────────

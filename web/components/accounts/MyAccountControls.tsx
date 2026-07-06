@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import RefreshFromBrokerButton from "./RefreshFromBrokerButton";
 
 const BTN =
   "rounded-lg px-2.5 py-1 text-xs font-semibold transition disabled:opacity-40";
@@ -12,13 +13,20 @@ const DANGER = `${BTN} border border-red-400/30 text-red-300/80 hover:bg-red-400
 /** The logged-in member's own controls. With a Personal key the connection lives
  *  in SnapTrade and GRQ just reads, so this auto-syncs on mount (pure backend
  *  read) and only surfaces a "Connect a brokerage" button when nothing's linked
- *  yet (initial connect / reconnect — the one unavoidably-interactive step). */
+ *  yet (initial connect / reconnect — the one unavoidably-interactive step).
+ *
+ *  `refreshAuth` (the member's primary connection) drives the "⟳ Refresh from broker"
+ *  button — a fresh broker re-login that forces SnapTrade to re-pull holdings NOW, the
+ *  free workaround to the once-a-day cache (SnapTrade's paid manual-refresh 402s on our
+ *  Personal keys). See RefreshFromBrokerButton. */
 export default function MyAccountControls({
   configured,
   hasAccounts,
+  refreshAuth,
 }: {
   configured: boolean;
   hasAccounts: boolean;
+  refreshAuth?: { authorizationId: string; syncedAt: string };
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -61,6 +69,9 @@ export default function MyAccountControls({
     }
   }
 
+  // Re-read SnapTrade's saved copy into our DB. Fast + free, but it does NOT make SnapTrade
+  // re-pull from the broker — for right-now share counts after a trade, use "Refresh from
+  // broker" (a fresh re-login). This just picks up whatever SnapTrade already has cached.
   async function refresh() {
     setErr(null);
     setBusy("refresh");
@@ -100,9 +111,23 @@ export default function MyAccountControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className={TEAL} onClick={refresh} disabled={busy !== null}>
+      <button
+        type="button"
+        className={TEAL}
+        onClick={refresh}
+        disabled={busy !== null}
+        title="Re-read SnapTrade's latest saved holdings (instant)."
+      >
         {busy === "refresh" ? "Refreshing…" : "↻ Refresh"}
       </button>
+      {/* The free "force fresh" — a broker re-login that makes SnapTrade re-pull now. The fix
+          for "I traded but my new shares aren't showing" without paying for manual refresh. */}
+      {hasAccounts && refreshAuth ? (
+        <RefreshFromBrokerButton
+          authorizationId={refreshAuth.authorizationId}
+          baselineSyncedAt={refreshAuth.syncedAt}
+        />
+      ) : null}
       {/* The connection itself lives in SnapTrade — when it breaks (TD forces a re-login),
           the fix is re-authing THERE, not here. Straight to their login/dashboard. */}
       <a

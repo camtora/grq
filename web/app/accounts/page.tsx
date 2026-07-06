@@ -131,7 +131,18 @@ function MemberSection({
         </div>
         {isSelf && configured ? (
           <Suspense fallback={null}>
-            <MyAccountControls configured={configured} hasAccounts={view.accounts.length > 0} />
+            <MyAccountControls
+              configured={configured}
+              hasAccounts={view.accounts.length > 0}
+              refreshAuth={(() => {
+                // The primary connection to re-login for a fresh pull — first account that
+                // carries an authorization (one TD login covers all its accounts).
+                const primary = view.accounts.find((a) => a.authorizationId);
+                return primary?.authorizationId
+                  ? { authorizationId: primary.authorizationId, syncedAt: primary.syncedAt }
+                  : undefined;
+              })()}
+            />
           </Suspense>
         ) : null}
       </div>

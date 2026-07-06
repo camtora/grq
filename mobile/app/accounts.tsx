@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Divider, Loading, ErrorNote } from '../components/Chrome';
 import ReconnectBanner from '../components/accounts/ReconnectBanner';
+import RefreshFromBrokerButton from '../components/accounts/RefreshFromBrokerButton';
 import StockLogo from '../components/StockLogo';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { money } from '../lib/format';
@@ -168,7 +169,19 @@ function MemberSection({
       </View>
 
       {m.isSelf && m.connected && (
-        <MyAccountControls hasAccounts={m.accounts.length > 0} p={p} onChanged={onChanged} />
+        <MyAccountControls
+          hasAccounts={m.accounts.length > 0}
+          refreshAuth={(() => {
+            // The primary connection to re-login for a fresh pull — first account carrying
+            // an authorization (one TD login covers all its accounts).
+            const primary = m.accounts.find((a) => a.authorizationId);
+            return primary?.authorizationId
+              ? { authorizationId: primary.authorizationId, syncedAt: primary.syncedAt }
+              : undefined;
+          })()}
+          p={p}
+          onChanged={onChanged}
+        />
       )}
 
       {!m.connected ? (
@@ -200,28 +213,17 @@ function MemberSection({
 
 function MyAccountControls({
   hasAccounts,
+  refreshAuth,
   p,
   onChanged,
 }: {
   hasAccounts: boolean;
+  refreshAuth?: { authorizationId: string; syncedAt: string | null };
   p: Palette;
   onChanged: () => void;
 }) {
-  const [busy, setBusy] = useState<null | 'connect' | 'refresh' | 'disconnect'>(null);
+  const [busy, setBusy] = useState<null | 'connect' | 'disconnect'>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  const refresh = async () => {
-    setErr(null);
-    setBusy('refresh');
-    try {
-      await api('/api/external/sync', { method: 'POST' });
-      onChanged();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Refresh failed.');
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const connect = async () => {
     setErr(null);
@@ -282,13 +284,18 @@ function MyAccountControls({
   return (
     <View style={{ marginTop: 10 }}>
       <View style={s.controlsRow}>
-        <SmallBtn
-          label={busy === 'refresh' ? 'Refreshing…' : '↻ Refresh'}
-          color={p.accentText}
-          border={p.accent + '4d'}
-          disabled={busy !== null}
-          onPress={refresh}
-        />
+        {/* The free "force fresh" — a broker re-login that makes SnapTrade re-pull now (sits
+            left of Open SnapTrade). Replaces the old "↻ Refresh" (which only re-read the
+            once-a-day cache; the screen still auto-syncs that cache on open + every foreground). */}
+        {hasAccounts && refreshAuth && (
+          <RefreshFromBrokerButton
+            authorizationId={refreshAuth.authorizationId}
+            syncedAt={refreshAuth.syncedAt}
+            disabled={busy !== null}
+            p={p}
+            onDone={onChanged}
+          />
+        )}
         {/* The connection itself lives in SnapTrade — when it breaks (TD forces a
             re-login), the fix is re-authing THERE. Straight to their dashboard. */}
         <SmallBtn
