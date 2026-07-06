@@ -126,6 +126,12 @@ export default function StockScreen() {
       : null;
   const dayBps = live?.changeBps ?? closeBps;
   const cur = live?.priceCents ?? d?.lastCents ?? (closes.length ? closes[closes.length - 1].c : null);
+  // Day change in dollars, derived from the live price + day bps (the wire carries only bps).
+  // Display-only, exact to within the bps rounding — never money math. The hero shows
+  // arrow + $ change + (%): "↘ $0.84 (-0.60%)" instead of the bare percent (Cam 2026-07-06).
+  const dayDenom = dayBps != null ? 1 + dayBps / 10_000 : 0;
+  const dayCents = cur != null && dayBps != null && dayDenom > 0 ? Math.round(cur - cur / dayDenom) : null;
+  const dayArrow = dayBps == null ? '' : dayBps > 0 ? '↗' : dayBps < 0 ? '↘' : '→';
   const nearPct = cur && d?.target?.nearCents ? (d.target.nearCents - cur) / cur : null;
   const farPct = cur && d?.target?.farCents ? (d.target.farCents - cur) / cur : null;
 
@@ -200,7 +206,9 @@ export default function StockScreen() {
                 )}
                 {dayBps != null && (
                   <Text style={[s.heroDay, tabular, { color: pnlColor(dayBps, p) }]}>
-                    {signedPctFromBps(dayBps)}
+                    {dayCents != null
+                      ? `${dayArrow} ${d.currency === 'USD' ? 'US' : ''}${money(Math.abs(dayCents))} (${signedPctFromBps(dayBps)})`
+                      : signedPctFromBps(dayBps)}
                   </Text>
                 )}
               </View>
