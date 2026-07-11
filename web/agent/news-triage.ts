@@ -62,14 +62,25 @@ export async function triageNews(maxBatch = 25): Promise<{ triaged: number }> {
     `[{"id": <id>, "relevance": 0-100, "sentiment": "POS|NEU|NEG", "category": "EARNINGS|GUIDANCE|MNA|MACRO|LEGAL|PRODUCT|RATING|OTHER", "summary": "<=140 chars", "symbols": ["TICKER", ...]}]\n` +
     `Output ONLY the JSON array.`;
 
+  // maxTurns 3 (was 1): a single-turn cap was tripping error_max_turns and returning null on an
+  // otherwise-fine Haiku pass. The extra turns are only ever used on a cut-off/continuation and
+  // cost nothing when the model finishes in one. Still tool-less — it can only ever emit text.
   const out = await runSession({
     label: "news-triage",
     model: MODELS.triage,
     withTools: false,
-    maxTurns: 1,
+    maxTurns: 3,
     systemPrompt: TRIAGE_SYSTEM,
     prompt,
   });
+
+  // A failed/empty session (null — error_max_turns, an API error, quiet mode) must NOT mark this
+  // batch triaged: the query only ever re-pulls triagedAt=null, so marking-on-failure would
+  // silently discard ~maxBatch articles forever. Leave them untouched so the next cycle retries.
+  if (out == null) {
+    console.warn(`[news] triage produced no output for ${rows.length} row(s) — leaving untriaged for retry`);
+    return { triaged: 0 };
+  }
 
   const byId = new Map<number, Record<string, unknown>>();
   for (const p of parseJsonArray(out)) {

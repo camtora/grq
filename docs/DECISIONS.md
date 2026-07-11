@@ -2983,3 +2983,25 @@ Applies to BOTH the scheduled 8am hunt AND on-demand/briefed hunts (same functio
 The scheduled hunt is separately PAUSED until 2026-07-10 (`GRQ_HUNT_PAUSE_UNTIL`, D112 session)
 at Cam's request; this fix makes it cheap when it resumes. Agent v2.56-phase4. NB Chess Moves
 (maxTurns 44, WebFetch on) is the same shape — a candidate for the same treatment if it spikes.
+
+### D114 — News triage: retry a failed pass instead of discarding the batch (2026-07-10)
+
+**Symptom:** a "news triage reached the maximum number of turns" alert (`error_max_turns` from the
+`news-triage` session).
+
+**Cause:** `triageNews` (`web/agent/news-triage.ts`) ran the Haiku classifier with `maxTurns: 1`. A
+full 25-article batch can emit ~13k output tokens, and a long / cut-off pass trips `error_max_turns`,
+so `runSession` returns `null`. The old code then marked EVERY row in the batch `triagedAt = now()`
+with null scores — and because the query only ever re-pulls `triagedAt = null`, that whole batch was
+silently discarded forever (no relevance, no summary, no news-wakeup check). Triage is an INPUT, never
+the gate — no money impact — but the digest lost a batch each time it fired.
+
+**Fix:**
+1. `maxTurns` 1 → 3 — headroom for a long / continuation batch; unused (and free) when the model
+   finishes in one turn, which it does for normal batches.
+2. Non-destructive failure — on a `null` result, return `{ triaged: 0 }` WITHOUT marking the batch, so
+   the rows stay `triagedAt = null` and the next cycle retries instead of throwing them away.
+
+Deployed as agent **v2.62-phase4** (agent-only rebuild; the boot universe scan was suppressed for the
+ET day so the redeploy didn't burn the ~3.8M-token startup pass). Verified end-to-end: a forced
+3-article pass triaged cleanly in 1 turn.
