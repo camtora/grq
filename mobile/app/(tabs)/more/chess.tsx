@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, Footnote, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, Footnote, Loading, ErrorNote, Bounded, Grid } from '../../../components/Chrome';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { api } from '../../../services/api';
 import { useApi } from '../../../services/hooks';
 
@@ -51,11 +52,17 @@ function when(iso: string): string {
 const POLL_MS = 15_000;
 const GIVE_UP_MS = 8 * 60_000;
 
+/** Bounds to the reading column only on a wide (iPad) layout — phone unchanged. */
+function BoundedIf({ wide, children }: { wide: boolean; children: React.ReactNode }) {
+  return wide ? <Bounded>{children}</Bounded> : <>{children}</>;
+}
+
 /** Chess Moves (D94) — thematic / supply-chain second-order reasoning. A member
  * briefs an industry or chain; Alfred names the force in motion and traces who
  * wins vs who loses, 2–3 ripples deep. Leads, never verdicts. */
 export default function ChessScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const { data: d, error, loading, refreshing, refresh, reload } = useApi<{ themes: ChessTheme[] }>('/api/chess');
   const [brief, setBrief] = useState('');
@@ -154,11 +161,14 @@ export default function ChessScreen() {
   };
 
   return (
-    <SubScreen title="Chess Moves" refreshing={refreshing} onRefresh={refresh}>
+    <SubScreen title="Chess Moves" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {d && (
         <View style={{ marginTop: 8, gap: 10 }}>
+          {/* Prose + controls span the full width (matching the boards grid below);
+              on a phone this is just the reading column (docs/MOBILE-DESIGN.md §9). */}
+          <View style={{ gap: 10 }}>
           <Text style={[s.intro, { color: p.textMuted }]}>
             Name an industry or a chain of companies. Alfred spots the force already in motion, then traces
             who wins and who loses two to three moves out — the second-order plays, before the market
@@ -246,6 +256,10 @@ export default function ChessScreen() {
               </Text>
             </Card>
           )}
+          </View>
+
+          {d.themes.length > 0 && (
+            <Grid min={320} gap={10}>
           {d.themes.map((t) => {
             const ready = t.status === 'READY';
             const plays = t.plays ?? t.tickers.map((sym) => ({ symbol: sym, direction: 'NEUTRAL' }));
@@ -328,13 +342,17 @@ export default function ChessScreen() {
               </Pressable>
             );
           })}
+            </Grid>
+          )}
 
+          <BoundedIf wide={isWide}>
           <Footnote>
             the chain is Alfred&apos;s web-researched reasoning, not imported data — there&apos;s no
             supply-chain feed · treat every play as a probabilistic ripple bet, never a fact · nothing here
             trades: a play becomes tradeable only after a full dossier clears the same guardrails as
             everything else
           </Footnote>
+          </BoundedIf>
         </View>
       )}
     </SubScreen>

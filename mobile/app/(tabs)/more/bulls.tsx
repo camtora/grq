@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Loading, ErrorNote, Grid } from '../../../components/Chrome';
 import DeskChart from '../../../components/DeskChart';
 import Sparkline from '../../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../../constants/theme';
@@ -230,13 +230,13 @@ export default function BullsScreen() {
                 </View>
               )}
 
-              {/* leaderboard */}
+              {/* leaderboard — one column on a phone, 2-up on an iPad (self-measuring Grid). */}
               <SectionTitle sub="tap a bull for its book & calls">Leaderboard</SectionTitle>
-              <View style={{ gap: 10 }}>
+              <Grid min={300} gap={10}>
                 {cur.bulls.map((b, i) => (
                   <BullCard key={b.entrantId} b={b} rank={ranks[i]} color={BULL_COLORS[i % BULL_COLORS.length]} p={p} />
                 ))}
-              </View>
+              </Grid>
 
               {cur.realFundReturnPct != null && (
                 <Card>

@@ -3,7 +3,7 @@ import { FlatList, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { Card, SectionTitle, Footnote, Divider, Loading, ErrorNote, Bounded, Grid } from '../../../components/Chrome';
 import { api } from '../../../services/api';
 import StockLogo from '../../../components/StockLogo';
 import Sparkline from '../../../components/Sparkline';
@@ -11,6 +11,7 @@ import MdText from '../../../components/MdText';
 import RatingBar, { toneColor } from '../../../components/RatingBar';
 import ShareButton from '../../../components/ShareButton';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from '../../../lib/format';
 import { useApi, useLiveQuote } from '../../../services/hooks';
 import { useAuth } from '../../../store/auth';
@@ -43,6 +44,7 @@ function labelTone(label: string | null): string {
  * for now (not on the dossier wire). */
 export default function StockScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
   const sym = String(symbol ?? '').toUpperCase();
@@ -135,8 +137,17 @@ export default function StockScreen() {
   const nearPct = cur && d?.target?.nearCents ? (d.target.nearCents - cur) / cur : null;
   const farPct = cur && d?.target?.farCents ? (d.target.farCents - cur) / cur : null;
 
+  // Bottom-line card assembly (web parity) — the verdict box, the plain-English "why",
+  // and "what would change our mind" now share ONE card. These flags decide which
+  // regions render so the card and its two-region layout self-hide cleanly.
+  const showCall = !!d?.rating;
+  const showSignal = !showCall && !!d?.recLabel && d?.recPos != null;
+  const showLevers = (d?.confidenceLevers ?? []).length > 0 || (d?.structuralGaps ?? []).length > 0;
+  const showBottomLine = showCall || showSignal || !!d?.bottomLine || showLevers;
+
   return (
     <SafeAreaView edges={['top']} style={[s.fill, { backgroundColor: p.bodyBg }]}>
+      {/* Back bar + actions anchored to the screen edges, full width. */}
       <View style={s.bar}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={s.back}>
           <Ionicons name="chevron-back" size={22} color={p.accentText} />
@@ -152,6 +163,7 @@ export default function StockScreen() {
         </View>
       </View>
       <ScrollView contentContainerStyle={s.body}>
+        <Bounded>
         {loading && <Loading />}
         {error && !loading && <ErrorNote message={error} />}
         {d && (
@@ -252,192 +264,8 @@ export default function StockScreen() {
               </Card>
             )}
 
-            {/* ---- Alfred's call: the verdict box + the bull/bear gauge (web hero) ---- */}
-            {d.rating ? (
-              <View>
-                <SectionTitle sub="the verdict">Alfred's call</SectionTitle>
-                <Card>
-                  <View style={s.callRow}>
-                    <Text style={[s.callLabel, { color: toneColor(d.rating.tone, p) }]}>{d.rating.label}</Text>
-                    {d.target?.confidence != null && (
-                      <Text style={[s.callConf, tabular, { color: p.textPrimary }]}>
-                        {d.target.confidence}%
-                        <Text style={[s.meta, { color: p.textMuted }]}> conf</Text>
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={[s.blurb, { color: p.textMuted }]}>{d.rating.blurb}</Text>
-                  <View style={{ marginTop: 12 }}>
-                    <RatingBar label={d.rating.label} tone={d.rating.tone} pos={d.rating.pos} hideLabel mascots />
-                  </View>
-                  {(nearPct != null || farPct != null) && (
-                    <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 12 }]}>
-                      {nearPct != null
-                        ? `near${d.target?.nearHorizon ? ` (${d.target.nearHorizon})` : ''} ${nearPct > 0 ? '+' : ''}${(nearPct * 100).toFixed(0)}% → ${money(d.target!.nearCents!)}`
-                        : ''}
-                      {nearPct != null && farPct != null ? '   ·   ' : ''}
-                      {farPct != null ? `12-mo ${farPct > 0 ? '+' : ''}${(farPct * 100).toFixed(0)}% → ${money(d.target!.farCents!)}` : ''}
-                    </Text>
-                  )}
-                </Card>
-              </View>
-            ) : d.recLabel && d.recPos != null ? (
-              <View>
-                <SectionTitle sub="technical signal only — an input, not a verdict">Signal</SectionTitle>
-                <Card>
-                  <RatingBar label={d.recLabel} tone={labelTone(d.recLabel)} pos={d.recPos} mascots />
-                  <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 10 }]}>
-                    No Alfred call yet on this name.
-                  </Text>
-                </Card>
-              </View>
-            ) : null}
-
-            {/* ---- The bottom line ---- */}
-            {d.bottomLine && (
-              <View>
-                <SectionTitle sub="the plain-English why">The bottom line</SectionTitle>
-                <Card>
-                  <MdText body={d.bottomLine} />
-                </Card>
-              </View>
-            )}
-
-            {/* ---- What would change our mind (D93) ---- */}
-            {((d.confidenceLevers ?? []).length > 0 || (d.structuralGaps ?? []).length > 0) && (
-              <View>
-                <SectionTitle sub="what's pinning confidence below 100">What would change our mind</SectionTitle>
-                <Card style={s.listCard}>
-                  {(d.confidenceLevers ?? []).map((l, i) => (
-                    <View key={i}>
-                      {i > 0 && <Divider />}
-                      <View style={s.leverRow}>
-                        <Text
-                          style={[
-                            s.leverDir,
-                            { color: l.direction === 'up' ? p.pos : l.direction === 'down' ? p.neg : p.textMuted },
-                          ]}
-                        >
-                          {l.direction === 'up' ? '▲' : l.direction === 'down' ? '▼' : '◆'}
-                        </Text>
-                        <View style={s.rowMainWide}>
-                          <Text style={[s.leverGap, { color: p.textPrimary }]}>{l.gap}</Text>
-                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>
-                            {l.kind === 'catalyst' ? '⏱ ' : '🔎 '}{l.trigger} · {l.magnitude} move
-                            {l.retrievable ? ' · retrievable now' : ''}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                  {(d.structuralGaps ?? []).map((g, i) => (
-                    <View key={`g-${i}`}>
-                      {((d.confidenceLevers ?? []).length > 0 || i > 0) && <Divider />}
-                      <View style={s.leverRow}>
-                        <Text style={[s.leverDir, { color: p.textMuted }]}>∅</Text>
-                        <View style={s.rowMainWide}>
-                          <Text style={[s.leverGap, { color: p.textMuted }]}>{g.name} is dark</Text>
-                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>{g.detail}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </Card>
-              </View>
-            )}
-
-            {/* ---- Members' own money in this name (members-only; agents never see it, D97) ---- */}
-            {(d.personalPositions ?? []).length > 0 && (
-              <View>
-                <SectionTitle sub="your own accounts — Alfred can't see this">Your money</SectionTitle>
-                <Card style={s.listCard}>
-                  {(d.personalPositions ?? []).map((pp, i) => (
-                    <View key={i}>
-                      {i > 0 && <Divider />}
-                      <View style={s.personalRow}>
-                        {pp.ownerKey && AVATARS[pp.ownerKey] ? (
-                          <Image source={AVATARS[pp.ownerKey]} style={[s.personalAvatar, { borderColor: p.accent + '55' }]} />
-                        ) : null}
-                        <View style={s.rowMainWide}>
-                          <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
-                            {pp.owner} · {pp.qty} sh{pp.avgCostCents != null ? ` @ ${money(pp.avgCostCents)}` : ''}
-                          </Text>
-                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]}>
-                            {pp.institution}{pp.accountType ? ` ${pp.accountType}` : ''}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          {pp.marketValueCents != null && (
-                            <Text style={[s.meta, tabular, { color: p.textPrimary }]}>{money(pp.marketValueCents)}</Text>
-                          )}
-                          {pp.openPnlCents != null && (
-                            <Text style={[s.metaSmall, tabular, { color: pnlColor(pp.openPnlCents, p) }]}>
-                              {signedMoney(pp.openPnlCents)}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-                  ))}
-                </Card>
-              </View>
-            )}
-
-            {/* ---- The agent's note (why it's tracking this) ---- */}
-            {d.agentNote && (
-              <Card style={{ marginTop: 24 }}>
-                <Text style={[s.metaSmall, { color: p.textMuted, textTransform: 'uppercase', letterSpacing: 1, fontFamily: F.semi }]}>
-                  The agent's note
-                </Text>
-                <Text style={[s.mutedBody, { color: p.textPrimary, marginTop: 4 }]}>{d.agentNote}</Text>
-              </Card>
-            )}
-
-            {/* ---- Held position + the deterministic bracket ---- */}
-            {d.position && (
-              <View>
-                <SectionTitle sub="what the fund holds">Position</SectionTitle>
-                <Card>
-                  <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
-                    {d.position.qty} sh @ {money(d.position.avgCostCents)} · {money(d.position.marketValueCents)}
-                  </Text>
-                  <Text style={[s.meta, tabular, { color: pnlColor(d.position.unrealizedPnlCents, p), marginTop: 4 }]}>
-                    {signedMoney(d.position.unrealizedPnlCents)} unrealized
-                  </Text>
-                  <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 4 }]}>
-                    stop {money(d.position.autoStopCents)} · take-profit {money(d.position.takeProfitCents)}
-                  </Text>
-                </Card>
-              </View>
-            )}
-
-            {/* ---- Trades (the fund's own — below Position, Cam 2026-07-04) ---- */}
-            {d.trades.length > 0 && (
-              <View>
-                <SectionTitle sub="the fund's fills">Trades</SectionTitle>
-                <Card style={s.listCard}>
-                  {d.trades.slice(0, 8).map((t, i) => (
-                    <View key={t.id}>
-                      {i > 0 && <Divider />}
-                      <View style={s.tradeRow}>
-                        <Text style={[s.sigSignal, { color: t.side === 'BUY' ? p.pos : p.neg, width: 40 }]}>{t.side}</Text>
-                        <Text style={[s.meta, tabular, { color: p.textPrimary, flex: 1 }]}>
-                          {t.qty} sh @ {money(t.priceCents)}
-                        </Text>
-                        {t.realizedPnlCents != null && (
-                          <Text style={[s.metaSmall, tabular, { color: pnlColor(t.realizedPnlCents, p) }]}>
-                            {signedMoney(t.realizedPnlCents)}
-                          </Text>
-                        )}
-                        <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </Card>
-              </View>
-            )}
-
-            {/* ---- Price chart (web PriceChart parity: 1D intraday live + daily slices) ---- */}
+            {/* ---- Price chart (moved up to mirror the web: the tape rides above the
+                 bottom line). Web PriceChart parity: 1D intraday live + daily slices. ---- */}
             {closes.length >= 2 && (() => {
               const is1D = range === '1D';
               // 1D: the regular session leads; pre/post ride along if that's all there is.
@@ -512,6 +340,208 @@ export default function StockScreen() {
               );
             })()}
 
+            {/* ---- The bottom line — the verdict box + the bull/bear gauge + the
+                 plain-English "why" + "what would change our mind", ONE card (mirrors
+                 the web). Two-region row on iPad; stacked, same order, on a phone. ---- */}
+            {showBottomLine && (
+              <View>
+                <SectionTitle sub="the plain-English why">The bottom line</SectionTitle>
+                <Card>
+                  <View style={isWide ? s.blRow : undefined}>
+                    {/* LEFT (~34% on iPad): the call/verdict box, the bull/bear gauge, targets. */}
+                    {(showCall || showSignal) && (
+                    <View style={isWide ? s.blLeft : undefined}>
+                      {d.rating ? (
+                        <>
+                          <Text style={[s.blEyebrow, { color: p.textMuted }]}>Alfred's call</Text>
+                          <View style={[s.callRow, { marginTop: 4 }]}>
+                            <Text style={[s.callLabel, { color: toneColor(d.rating.tone, p) }]}>{d.rating.label}</Text>
+                            {d.target?.confidence != null && (
+                              <Text style={[s.callConf, tabular, { color: p.textPrimary }]}>
+                                {d.target.confidence}%
+                                <Text style={[s.meta, { color: p.textMuted }]}> conf</Text>
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={[s.blurb, { color: p.textMuted }]}>{d.rating.blurb}</Text>
+                          <View style={{ marginTop: 12 }}>
+                            <RatingBar label={d.rating.label} tone={d.rating.tone} pos={d.rating.pos} hideLabel mascots />
+                          </View>
+                          {(nearPct != null || farPct != null) && (
+                            <Text style={[s.meta, tabular, { color: p.textMuted, marginTop: 12 }]}>
+                              {nearPct != null
+                                ? `near${d.target?.nearHorizon ? ` (${d.target.nearHorizon})` : ''} ${nearPct > 0 ? '+' : ''}${(nearPct * 100).toFixed(0)}% → ${money(d.target!.nearCents!)}`
+                                : ''}
+                              {nearPct != null && farPct != null ? '   ·   ' : ''}
+                              {farPct != null ? `12-mo ${farPct > 0 ? '+' : ''}${(farPct * 100).toFixed(0)}% → ${money(d.target!.farCents!)}` : ''}
+                            </Text>
+                          )}
+                        </>
+                      ) : d.recLabel && d.recPos != null ? (
+                        <>
+                          <Text style={[s.blEyebrow, { color: p.textMuted }]}>Signal · an input, not a verdict</Text>
+                          <View style={{ marginTop: 8 }}>
+                            <RatingBar label={d.recLabel} tone={labelTone(d.recLabel)} pos={d.recPos} mascots />
+                          </View>
+                          <Text style={[s.mutedBody, { color: p.textMuted, marginTop: 10 }]}>
+                            No Alfred call yet on this name.
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                    )}
+
+                    {/* RIGHT (~66% on iPad): the "Why" and — beside it when levers/gaps
+                        exist — "What would change our mind", as two sub-columns. */}
+                    {(d.bottomLine || showLevers) && (
+                      <View style={isWide ? s.blRight : (showCall || showSignal ? { marginTop: 20 } : undefined)}>
+                        <View style={showLevers && isWide ? s.blWhyRow : undefined}>
+                          {d.bottomLine && (
+                            <View style={showLevers && isWide ? s.blWhyCol : undefined}>
+                              <Text style={[s.blEyebrow, { color: p.textMuted }]}>Why</Text>
+                              <View style={{ marginTop: 6 }}>
+                                <MdText body={d.bottomLine} />
+                              </View>
+                            </View>
+                          )}
+                          {showLevers && (
+                            <View style={showLevers && isWide ? s.blLeverCol : (d.bottomLine ? { marginTop: 16 } : undefined)}>
+                              <Text style={[s.blEyebrow, { color: p.textMuted }]}>What would change our mind</Text>
+                              <View style={{ marginTop: 6 }}>
+                                {(d.confidenceLevers ?? []).map((l, i) => (
+                                  <View key={i}>
+                                    {i > 0 && <Divider />}
+                                    <View style={s.leverRow}>
+                                      <Text
+                                        style={[
+                                          s.leverDir,
+                                          { color: l.direction === 'up' ? p.pos : l.direction === 'down' ? p.neg : p.textMuted },
+                                        ]}
+                                      >
+                                        {l.direction === 'up' ? '▲' : l.direction === 'down' ? '▼' : '◆'}
+                                      </Text>
+                                      <View style={s.rowMainWide}>
+                                        <Text style={[s.leverGap, { color: p.textPrimary }]}>{l.gap}</Text>
+                                        <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>
+                                          {l.kind === 'catalyst' ? '⏱ ' : '🔎 '}{l.trigger} · {l.magnitude} move
+                                          {l.retrievable ? ' · retrievable now' : ''}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  </View>
+                                ))}
+                                {(d.structuralGaps ?? []).map((g, i) => (
+                                  <View key={`g-${i}`}>
+                                    {((d.confidenceLevers ?? []).length > 0 || i > 0) && <Divider />}
+                                    <View style={s.leverRow}>
+                                      <Text style={[s.leverDir, { color: p.textMuted }]}>∅</Text>
+                                      <View style={s.rowMainWide}>
+                                        <Text style={[s.leverGap, { color: p.textMuted }]}>{g.name} is dark</Text>
+                                        <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 3 }]}>{g.detail}</Text>
+                                      </View>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Held position → a dense stat strip (mirrors the web): qty · cost ·
+                 value · P&L · the deterministic bracket + the dossier targets. ---- */}
+            {d.position && (
+              <View>
+                <SectionTitle sub="what the fund holds">Position</SectionTitle>
+                <Grid min={150} gap={8}>
+                  <StatCell p={p} label="Held" value={`${d.position.qty} sh`} />
+                  <StatCell p={p} label="Avg cost" value={money(d.position.avgCostCents)} />
+                  <StatCell p={p} label="Market value" value={money(d.position.marketValueCents)} />
+                  <StatCell
+                    p={p}
+                    label="Unrealized P&L"
+                    value={signedMoney(d.position.unrealizedPnlCents)}
+                    valueColor={pnlColor(d.position.unrealizedPnlCents, p)}
+                  />
+                  <StatCell p={p} label="Auto-stop" value={money(d.position.autoStopCents)} note="auto-sells" />
+                  <StatCell p={p} label="Take-profit" value={money(d.position.takeProfitCents)} note="auto-sells" />
+                  {d.target?.nearCents != null && (
+                    <StatCell
+                      p={p}
+                      label="Near target"
+                      value={money(d.target.nearCents)}
+                      note={nearPct != null ? `${nearPct > 0 ? '+' : ''}${(nearPct * 100).toFixed(0)}%` : undefined}
+                      noteColor={nearPct != null ? pnlColor(nearPct, p) : undefined}
+                    />
+                  )}
+                  {d.target?.farCents != null && (
+                    <StatCell
+                      p={p}
+                      label="12-mo target"
+                      value={money(d.target.farCents)}
+                      note={farPct != null ? `${farPct > 0 ? '+' : ''}${(farPct * 100).toFixed(0)}%` : undefined}
+                      noteColor={farPct != null ? pnlColor(farPct, p) : undefined}
+                    />
+                  )}
+                </Grid>
+              </View>
+            )}
+
+            {/* ---- Members' own money in this name (members-only; agents never see it, D97) ---- */}
+            {(d.personalPositions ?? []).length > 0 && (
+              <View>
+                <SectionTitle sub="your own accounts — Alfred can't see this">Your money</SectionTitle>
+                <Card style={s.listCard}>
+                  {(d.personalPositions ?? []).map((pp, i) => (
+                    <View key={i}>
+                      {i > 0 && <Divider />}
+                      <View style={s.personalRow}>
+                        {pp.ownerKey && AVATARS[pp.ownerKey] ? (
+                          <Image source={AVATARS[pp.ownerKey]} style={[s.personalAvatar, { borderColor: p.accent + '55' }]} />
+                        ) : null}
+                        <View style={s.rowMainWide}>
+                          <Text style={[s.meta, tabular, { color: p.textPrimary }]}>
+                            {pp.owner} · {pp.qty} sh{pp.avgCostCents != null ? ` @ ${money(pp.avgCostCents)}` : ''}
+                          </Text>
+                          <Text style={[s.metaSmall, { color: p.textMuted, marginTop: 2 }]}>
+                            {pp.institution}{pp.accountType ? ` ${pp.accountType}` : ''}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {pp.marketValueCents != null && (
+                            <Text style={[s.meta, tabular, { color: p.textPrimary }]}>{money(pp.marketValueCents)}</Text>
+                          )}
+                          {pp.openPnlCents != null && (
+                            <Text style={[s.metaSmall, tabular, { color: pnlColor(pp.openPnlCents, p) }]}>
+                              {signedMoney(pp.openPnlCents)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- The agent's note (why it's tracking this) ---- */}
+            {d.agentNote && (
+              <Card style={{ marginTop: 24 }}>
+                <Text style={[s.metaSmall, { color: p.textMuted, textTransform: 'uppercase', letterSpacing: 1, fontFamily: F.semi }]}>
+                  The agent's note
+                </Text>
+                <Text style={[s.mutedBody, { color: p.textPrimary, marginTop: 4 }]}>{d.agentNote}</Text>
+              </Card>
+            )}
+
+            {/* ---- Key data panels — analyst ratings · price targets · earnings · 13F ·
+                 signals, 2-up on iPad, one on a phone (mirrors the web's 5-wide row). ---- */}
+            <Grid min={300} gap={12}>
             {/* ---- Analyst ratings (Tier 2) ---- */}
             {d.grades && (
               <View>
@@ -547,6 +577,27 @@ export default function StockScreen() {
                 <SectionTitle sub="the street's band">Price targets</SectionTitle>
                 <Card>
                   <TargetBand band={d.analystBand} p={p} />
+                </Card>
+              </View>
+            )}
+
+            {/* ---- Earnings (Tier 6) ---- */}
+            {(d.earnings?.next || d.earnings?.last) && (
+              <View>
+                <SectionTitle sub="reports">Earnings</SectionTitle>
+                <Card>
+                  {d.earnings?.next?.date && (
+                    <Text style={[s.meta, { color: p.textMuted }]}>next report {fmtDate(d.earnings.next.date)}</Text>
+                  )}
+                  {d.earnings?.last && d.earnings.last.epsActual != null && (
+                    <Text style={[s.meta, { color: p.textMuted, marginTop: 4 }]}>
+                      last report{' '}
+                      {d.earnings.last.epsEstimated != null
+                        ? `${d.earnings.last.epsActual >= d.earnings.last.epsEstimated ? 'beat' : 'missed'} (EPS ${fmtEps(d.earnings.last.epsActual)} vs ${fmtEps(d.earnings.last.epsEstimated)} est)`
+                        : `EPS ${fmtEps(d.earnings.last.epsActual)}`}{' '}
+                      · {fmtDate(d.earnings.last.date)}
+                    </Text>
+                  )}
                 </Card>
               </View>
             )}
@@ -602,7 +653,10 @@ export default function StockScreen() {
                 </Card>
               </View>
             )}
+            </Grid>
 
+            {/* ---- Options positioning + social chatter — both signals, never traded ---- */}
+            <Grid min={300} gap={12}>
             {/* ---- Options positioning (Tier 3, D88) — a signal, NEVER traded ---- */}
             {d.options && (
               <View>
@@ -631,29 +685,9 @@ export default function StockScreen() {
                 </Card>
               </View>
             )}
+            </Grid>
 
-            {/* ---- Earnings (Tier 6) ---- */}
-            {(d.earnings?.next || d.earnings?.last) && (
-              <View>
-                <SectionTitle sub="reports">Earnings</SectionTitle>
-                <Card>
-                  {d.earnings?.next?.date && (
-                    <Text style={[s.meta, { color: p.textMuted }]}>next report {fmtDate(d.earnings.next.date)}</Text>
-                  )}
-                  {d.earnings?.last && d.earnings.last.epsActual != null && (
-                    <Text style={[s.meta, { color: p.textMuted, marginTop: 4 }]}>
-                      last report{' '}
-                      {d.earnings.last.epsEstimated != null
-                        ? `${d.earnings.last.epsActual >= d.earnings.last.epsEstimated ? 'beat' : 'missed'} (EPS ${fmtEps(d.earnings.last.epsActual)} vs ${fmtEps(d.earnings.last.epsEstimated)} est)`
-                        : `EPS ${fmtEps(d.earnings.last.epsActual)}`}{' '}
-                      · {fmtDate(d.earnings.last.date)}
-                    </Text>
-                  )}
-                </Card>
-              </View>
-            )}
-
-            {/* ---- The full read (under Earnings — Cam 2026-07-04; only once a real dossier exists) ---- */}
+            {/* ---- The full read (only once a real dossier exists) ---- */}
             {hasDossier && d.bodyMarkdown && (
               <View>
                 <SectionTitle sub="Alfred's full dossier">The full read</SectionTitle>
@@ -663,6 +697,9 @@ export default function StockScreen() {
               </View>
             )}
 
+            {/* ---- Valuation vs peers · related names · smart money · the value chain,
+                 2-up on iPad, one on a phone (mirrors the web's three-panel row). ---- */}
+            <Grid min={300} gap={12}>
             {/* ---- Valuation vs peers ---- */}
             {d.peers.length > 1 && (
               <View>
@@ -700,12 +737,6 @@ export default function StockScreen() {
                 </Card>
               </View>
             )}
-
-            {/* ---- The value chain (Chess Moves) — swipeable stage cards, defaulting
-                 to the stock's own stage (Cam 2026-07-03) ---- */}
-            {(d.chess ?? []).slice(0, 1).map((board) => (
-              <ValueChain key={board.themeId} board={board} selfSymbol={d.symbol} p={p} />
-            ))}
 
             {/* ---- Related names (knowledge graph) ---- */}
             {(d.related ?? []).length > 0 && (
@@ -766,20 +797,36 @@ export default function StockScreen() {
               </View>
             )}
 
-            {/* ---- News (below Smart money — Cam 2026-07-04) ---- */}
-            {d.news.length > 0 && (
+            {/* ---- The value chain (Chess Moves) — swipeable stage cards, defaulting
+                 to the stock's own stage (Cam 2026-07-03) ---- */}
+            {(d.chess ?? []).slice(0, 1).map((board) => (
+              <ValueChain key={board.themeId} board={board} selfSymbol={d.symbol} p={p} />
+            ))}
+            </Grid>
+
+            {/* ---- Trades · scoreboard · news · the record · data coverage, 2-up on
+                 iPad, one on a phone. ---- */}
+            <Grid min={300} gap={12}>
+            {/* ---- Trades (the fund's own) ---- */}
+            {d.trades.length > 0 && (
               <View>
-                <SectionTitle sub="recent coverage">News</SectionTitle>
+                <SectionTitle sub="the fund's fills">Trades</SectionTitle>
                 <Card style={s.listCard}>
-                  {d.news.map((n, i) => (
-                    <View key={i}>
+                  {d.trades.slice(0, 8).map((t, i) => (
+                    <View key={t.id}>
                       {i > 0 && <Divider />}
-                      <Pressable onPress={() => n.url && Linking.openURL(n.url)} style={s.newsRow}>
-                        <Text style={[s.newsTitle, { color: p.textPrimary }]}>{n.title}</Text>
-                        <Text style={[s.chartLabel, { color: p.textMuted, marginTop: 2 }]}>
-                          {n.publisher}{n.at ? ` · ${String(n.at).slice(0, 10)}` : ''}
+                      <View style={s.tradeRow}>
+                        <Text style={[s.sigSignal, { color: t.side === 'BUY' ? p.pos : p.neg, width: 40 }]}>{t.side}</Text>
+                        <Text style={[s.meta, tabular, { color: p.textPrimary, flex: 1 }]}>
+                          {t.qty} sh @ {money(t.priceCents)}
                         </Text>
-                      </Pressable>
+                        {t.realizedPnlCents != null && (
+                          <Text style={[s.metaSmall, tabular, { color: pnlColor(t.realizedPnlCents, p) }]}>
+                            {signedMoney(t.realizedPnlCents)}
+                          </Text>
+                        )}
+                        <Text style={[s.metaSmall, { color: p.textMuted }]}>{t.at.slice(0, 10)}</Text>
+                      </View>
                     </View>
                   ))}
                 </Card>
@@ -801,6 +848,26 @@ export default function StockScreen() {
                           {sb.hitRate != null ? `  ·  ${Math.round(sb.hitRate * 100)}%` : ''}
                         </Text>
                       </View>
+                    </View>
+                  ))}
+                </Card>
+              </View>
+            )}
+
+            {/* ---- News (recent coverage) ---- */}
+            {d.news.length > 0 && (
+              <View>
+                <SectionTitle sub="recent coverage">News</SectionTitle>
+                <Card style={s.listCard}>
+                  {d.news.map((n, i) => (
+                    <View key={i}>
+                      {i > 0 && <Divider />}
+                      <Pressable onPress={() => n.url && Linking.openURL(n.url)} style={s.newsRow}>
+                        <Text style={[s.newsTitle, { color: p.textPrimary }]}>{n.title}</Text>
+                        <Text style={[s.chartLabel, { color: p.textMuted, marginTop: 2 }]}>
+                          {n.publisher}{n.at ? ` · ${String(n.at).slice(0, 10)}` : ''}
+                        </Text>
+                      </Pressable>
                     </View>
                   ))}
                 </Card>
@@ -839,6 +906,7 @@ export default function StockScreen() {
                 </Card>
               </View>
             )}
+            </Grid>
 
             <Footnote>
               {[
@@ -856,8 +924,42 @@ export default function StockScreen() {
             {refreshing ? 'refreshing…' : '↻ refresh'}
           </Text>
         </Pressable>
+        </Bounded>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** A dense stat cell for the held-position strip (mirrors the web's compact
+ * StatCard): a small uppercase label over a tabular value, with an optional
+ * muted note. Laid out in a <Grid> so it's 2-up on a phone, 3–4-up on iPad. */
+function StatCell({
+  label,
+  value,
+  note,
+  valueColor,
+  noteColor,
+  p,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  valueColor?: string;
+  noteColor?: string;
+  p: Palette;
+}) {
+  return (
+    <View style={[s.statCell, { borderColor: p.cardBorder, backgroundColor: p.cardBg }]}>
+      <Text style={[s.statLabel, { color: p.textMuted }]} numberOfLines={1}>{label}</Text>
+      <Text style={[s.statValue, tabular, { color: valueColor ?? p.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      {note ? (
+        <Text style={[s.statNote, { color: noteColor ?? p.textMuted }]} numberOfLines={1}>
+          {note}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -1072,7 +1174,7 @@ const s = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', width: 70 },
   barTitle: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   askBull: { width: 24, height: 24 },
-  body: { paddingHorizontal: 16, paddingBottom: 32 },
+  body: { paddingBottom: 32, alignItems: 'center' },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   heroMain: { flex: 1, minWidth: 0 },
   heroName: { fontFamily: F.semi, fontSize: 16, lineHeight: 21 },
@@ -1140,4 +1242,17 @@ const s = StyleSheet.create({
   personalRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
   personalAvatar: { width: 26, height: 26, borderRadius: 13, borderWidth: 1 },
   regime: { fontFamily: F.black, fontSize: 13, letterSpacing: 0.3 },
+  // The combined "bottom line" card: two regions (call | why) on iPad, stacked on a phone.
+  blRow: { flexDirection: 'row', gap: 16 },
+  blLeft: { flex: 34, minWidth: 0 },
+  blRight: { flex: 66, minWidth: 0 },
+  blWhyRow: { flexDirection: 'row', gap: 16 },
+  blWhyCol: { flex: 1, minWidth: 0 },
+  blLeverCol: { flex: 1, minWidth: 0 },
+  blEyebrow: { fontFamily: F.semi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  // The held-position stat strip (StatCell).
+  statCell: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
+  statLabel: { fontFamily: F.semi, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.6 },
+  statValue: { fontFamily: F.semi, fontSize: 14, marginTop: 3 },
+  statNote: { fontFamily: F.reg, fontSize: 10, marginTop: 2 },
 });

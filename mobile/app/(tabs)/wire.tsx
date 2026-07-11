@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Screen, Card, Loading, ErrorNote } from '../../components/Chrome';
+import { useResponsive } from '../../constants/layout';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
 import RatingBar from '../../components/RatingBar';
@@ -52,6 +53,7 @@ function shortDate(iso: string): string {
 export default function WireScreen() {
   const { data, error, loading, refreshing, refresh } = useApi<{ items: WireItem[] }>('/api/wire');
   const { p } = usePalette();
+  const { isTablet } = useResponsive();
   const [pageH, setPageH] = useState(0);
 
   // The infinite research shelf (Cam 2026-07-03): past the curated feed, keep
@@ -99,7 +101,7 @@ export default function WireScreen() {
             keyExtractor={(it) => it.id}
             renderItem={({ item }) => (
               <View style={{ height: pageH }}>
-                <WireCard item={item} />
+                <WireCard item={item} isTablet={isTablet} />
               </View>
             )}
             pagingEnabled
@@ -119,11 +121,13 @@ export default function WireScreen() {
 
 /* ---------- one card ---------- */
 
-function WireCard({ item }: { item: WireItem }) {
+function WireCard({ item, isTablet = false }: { item: WireItem; isTablet?: boolean }) {
   const { p } = usePalette();
   return (
-    <View style={s.page}>
-      <Card style={s.card}>
+    // iPad: center the story card at a comfortable width instead of stretching
+    // it across the screen; a phone keeps the full-bleed card.
+    <View style={[s.page, isTablet && s.pageTablet]}>
+      <Card style={[s.card, isTablet && s.cardTablet]}>
         {item.kind === 'find' && <FindCard item={item} p={p} />}
         {item.kind === 'dossier' && <DossierCard item={item} p={p} />}
         {item.kind === 'watch' && <WatchCard item={item} p={p} />}
@@ -406,7 +410,9 @@ function LessonCard({ item, p }: { item: WireItem; p: Palette }) {
 
 const s = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 10 },
+  pageTablet: { alignItems: 'center' },
   card: { flex: 1, padding: 0, overflow: 'hidden' },
+  cardTablet: { width: '100%', maxWidth: 520 },
   cardBody: { flex: 1, padding: 16 },
   rail: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
   railText: { fontFamily: F.bold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },

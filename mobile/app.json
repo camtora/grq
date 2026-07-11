@@ -13,10 +13,16 @@
       "backgroundColor": "#060d0c"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.camerontora.grqgo",
       "infoPlist": {
-        "CFBundleDisplayName": "GRQ"
+        "CFBundleDisplayName": "GRQ",
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       }
     },
     "plugins": [

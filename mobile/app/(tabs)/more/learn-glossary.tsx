@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SubScreen, Card, Footnote } from '../../../components/Chrome';
+import { SubScreen, Card, Footnote, Grid } from '../../../components/Chrome';
 import { usePalette, F } from '../../../constants/theme';
 import { GLOSSARY } from '../../../lib/learn';
 
@@ -54,6 +54,8 @@ export default function LearnGlossaryScreen() {
           </Card>
         )}
 
+        {/* iPad: two columns of term cards; a phone stays one column. */}
+        <Grid min={280} gap={10}>
         {shown.map((e) => {
           const open = openKey === e.slug || !!needle; // search results show full entries
           return (
@@ -86,6 +88,7 @@ export default function LearnGlossaryScreen() {
             </Card>
           );
         })}
+        </Grid>
         <Footnote>
           the same definitions behind every dotted term in the app — a figure the app shows but can&apos;t
           explain is a bug

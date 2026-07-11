@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Loading, ErrorNote } from '../../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Loading, ErrorNote, Bounded, Grid } from '../../../../components/Chrome';
 import StockLogo from '../../../../components/StockLogo';
 import Sparkline from '../../../../components/Sparkline';
 import MdText from '../../../../components/MdText';
 import ConfidenceGauge from '../../../../components/hunt/ConfidenceGauge';
 import HeatMeter from '../../../../components/hunt/HeatMeter';
 import { usePalette, F, type Palette } from '../../../../constants/theme';
+import { useResponsive } from '../../../../constants/layout';
 import { money, signedPctFromBps } from '../../../../lib/format';
 import { heatColor, obscurityLabel } from '../../../../lib/hunt';
 import { stanceMeta, toneColor } from '../../../../lib/stance';
@@ -184,6 +185,11 @@ function PlayRow({ play, p }: { play: Play; p: Palette }) {
 
 /* ---------- the page ---------- */
 
+/** Bounds to the reading column only on a wide (iPad) layout — phone unchanged. */
+function BoundedIf({ wide, children }: { wide: boolean; children: React.ReactNode }) {
+  return wide ? <Bounded>{children}</Bounded> : <>{children}</>;
+}
+
 /** One Chess Moves board (web /chess/[id] parity): provenance + the prompt, the
  * take, the position, what would change our mind, the horizontal chain map with
  * per-piece price tapes (shared 1D…1Y toggle), "how it flows", and the
@@ -191,6 +197,7 @@ function PlayRow({ play, p }: { play: Play; p: Palette }) {
 export default function ChessBoardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const { data: d, error, loading, refreshing, refresh } = useApi<BoardWire>(`/api/chess/${id}`);
   const [range, setRange] = useState<BoardRangeKey>('1D');
@@ -200,10 +207,11 @@ export default function ChessBoardScreen() {
   const working = d && d.status !== 'READY' && (d.status === 'PENDING' || d.status === 'RUNNING');
 
   return (
-    <SubScreen title={d?.title ?? 'The board'} refreshing={refreshing} onRefresh={refresh}>
+    <SubScreen title={d?.title ?? 'The board'} wide={isWide} refreshing={refreshing} onRefresh={refresh}>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {d && d.status !== 'READY' && (
+        <BoundedIf wide={isWide}>
         <Card style={{ marginTop: 8 }}>
           <Text style={[s.bannerText, { color: p.textMuted }]}>
             {working
@@ -211,9 +219,13 @@ export default function ChessBoardScreen() {
               : "This board didn't come together — try briefing it again from Chess Moves."}
           </Text>
         </Card>
+        </BoundedIf>
       )}
       {d && d.status === 'READY' && (
         <View style={{ marginTop: 8, gap: 10 }}>
+          {/* The narrative (context → take → position → chain) spans the full width
+              (matching the ripple-play grid below); a phone keeps the reading column (§9). */}
+          <View style={{ gap: 10 }}>
           {!!d.anchor && <Text style={[s.intro, { color: p.textMuted }]}>{d.anchor}</Text>}
 
           {/* Provenance — who generated it, when, and the prompt that produced it. */}
@@ -375,16 +387,17 @@ export default function ChessBoardScreen() {
               )}
             </View>
           )}
+          </View>
 
           {/* The plays — heat-ranked ripple-effect leads. */}
           <View>
             <SectionTitle sub={`${d.plays.length} ripple-effect leads, heat-ranked`}>The plays</SectionTitle>
             {d.plays.length > 0 ? (
-              <View style={{ gap: 10 }}>
+              <Grid min={320} gap={10}>
                 {d.plays.map((play) => (
                   <PlayRow key={play.id} play={play} p={p} />
                 ))}
-              </View>
+              </Grid>
             ) : (
               <Card>
                 <Text style={[s.bannerText, { color: p.textMuted, paddingVertical: 6 }]}>No plays on this board.</Text>
@@ -392,11 +405,13 @@ export default function ChessBoardScreen() {
             )}
           </View>
 
+          <BoundedIf wide={isWide}>
           <Footnote>
             heat is a derived &ldquo;ready to pop&rdquo; read (conviction + recent momentum + obscurity), not a
             promise · each play is a LEAD — Alfred can&apos;t trade these; a name becomes tradeable only after
             a full dossier clears the same guardrails as everything else
           </Footnote>
+          </BoundedIf>
         </View>
       )}
     </SubScreen>

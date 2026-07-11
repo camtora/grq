@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, Footnote, Divider, Loading, ErrorNote, MiniLabel } from '../../../components/Chrome';
+import { SubScreen, Card, Footnote, Divider, Loading, ErrorNote, MiniLabel, Grid } from '../../../components/Chrome';
 import MdText from '../../../components/MdText';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { useApi } from '../../../services/hooks';
@@ -99,6 +99,8 @@ export default function ReportsScreen() {
                 </Text>
               </Card>
             )}
+            {(d.days ?? []).length > 0 && (
+            <Grid min={320} gap={10}>
             {(d.days ?? []).map((day) => (
               <Card key={day.dateISO}>
                 <View style={s.dayHead}>
@@ -135,6 +137,8 @@ export default function ReportsScreen() {
                 </View>
               </Card>
             ))}
+            </Grid>
+            )}
           </View>
         )}
 
@@ -149,6 +153,8 @@ export default function ReportsScreen() {
                 </Text>
               </Card>
             )}
+            {(d.reports ?? []).length > 0 && (
+            <Grid min={320} gap={10}>
             {(d.reports ?? []).map((r) => (
               <Card key={r.id}>
                 <Pressable onPress={() => router.push(`/more/report/${r.id}`)}>
@@ -175,6 +181,8 @@ export default function ReportsScreen() {
                 </Pressable>
               </Card>
             ))}
+            </Grid>
+            )}
           </View>
         )}
 
@@ -191,6 +199,8 @@ export default function ReportsScreen() {
                 </Text>
               </Card>
             )}
+            {(d.entries ?? []).length > 0 && (
+            <Grid min={320} gap={10}>
             {(d.entries ?? []).map((j) => (
               <Card key={j.id}>
                 <View style={s.dayHead}>
@@ -216,6 +226,8 @@ export default function ReportsScreen() {
                 </View>
               </Card>
             ))}
+            </Grid>
+            )}
           </View>
         )}
 

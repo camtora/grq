@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePalette, F } from '../constants/theme';
+import { useResponsive } from '../constants/layout';
 import { useAuth } from '../store/auth';
 import { useMessages } from '../store/messages';
 import { useNotifications } from '../store/notifications';
@@ -29,6 +30,104 @@ import { useNotifications } from '../store/notifications';
 function avatarFor(email: string | undefined) {
   if (email?.includes('appleby')) return require('../assets/people/graham.png');
   return require('../assets/people/cam.png');
+}
+
+/**
+ * Centered content column (docs/MOBILE-DESIGN.md §9). On a phone this is a
+ * transparent full-width pass-through; on an iPad it caps the width and centers,
+ * so cards don't sprawl edge-to-edge and line lengths stay readable. `wide`
+ * uses the roomier grid bound (for card grids); default is the reading column.
+ */
+export function Bounded({
+  children,
+  wide = false,
+  style,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const { maxContentWidth, maxGridWidth, gutter } = useResponsive();
+  return (
+    <View
+      style={[
+        { width: '100%', maxWidth: wide ? maxGridWidth : maxContentWidth, alignSelf: 'center', paddingHorizontal: gutter },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+/**
+ * Responsive card grid (docs/MOBILE-DESIGN.md §9). Lays its children into as
+ * many columns of >= `min` width as fit, so it's a single stacked column on a
+ * phone and 2–3 up on an iPad. Measures its own width (`onLayout`) rather than
+ * guessing, so it's correct inside any container and in iPad Split View. Each
+ * child fills its cell — pass items that stretch (most Cards already do).
+ */
+export function Grid({
+  children,
+  min = 340,
+  gap = 12,
+  style,
+}: {
+  children: React.ReactNode;
+  min?: number;
+  gap?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [w, setW] = React.useState(0);
+  const items = React.Children.toArray(children).filter(Boolean);
+  const cols = w > 0 ? Math.max(1, Math.floor((w + gap) / (min + gap))) : 1;
+  const cellW = cols > 1 ? (w - gap * (cols - 1)) / cols : undefined;
+  return (
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      style={[{ flexDirection: cols > 1 ? 'row' : 'column', flexWrap: 'wrap', gap }, style]}
+    >
+      {items.map((child, i) => (
+        <View key={i} style={cols > 1 ? { width: cellW } : undefined}>
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Column masonry (docs/MOBILE-DESIGN.md §9). Distributes its children across
+ * `columns` fixed columns round-robin (child i → column i % columns), so on an
+ * iPad a tall stack of independent panels fills two columns instead of one long
+ * strip. `columns={1}` is a plain stack (phone). Vertical spacing comes from the
+ * panels' own margins; `gap` is the space BETWEEN columns. No height measurement
+ * — order zigzags across columns, which is fine for independent reference cards.
+ */
+export function Masonry({
+  children,
+  columns = 2,
+  gap = 16,
+  style,
+}: {
+  children: React.ReactNode;
+  columns?: number;
+  gap?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const items = React.Children.toArray(children).filter(Boolean);
+  if (columns <= 1) return <View style={style}>{items}</View>;
+  const cols: React.ReactNode[][] = Array.from({ length: columns }, () => []);
+  items.forEach((child, i) => cols[i % columns].push(child));
+  return (
+    <View style={[{ flexDirection: 'row', gap }, style]}>
+      {cols.map((col, ci) => (
+        <View key={ci} style={{ flex: 1, minWidth: 0 }}>
+          {col}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 /** Unread count pill on a header icon (hidden at 0, capped at 9+). */
@@ -57,40 +156,42 @@ export function Header({ title }: { title: string }) {
     }
   }, [me, refreshUnread, refreshBell]);
 
+  // The chrome is anchored to the SCREEN edges (bull top-left, bell/chat/avatar
+  // top-right), full width — NOT the centered content column (Cam 2026-07-10).
   return (
     <View style={[styles.header, { backgroundColor: p.bodyBg }]}>
-      <View style={styles.side}>
-        {/* The bull = talk to the agent (the web's floating launcher, moved up
-            here — Cam 2026-07-03). Opens the member's Ask Alfred thread. */}
-        <Pressable onPress={() => router.push('/chat')} hitSlop={8}>
-          <View style={[styles.bull, { backgroundColor: p.cardBg, borderColor: p.accent + '66' }]}>
-            <Image source={require('../assets/bull-splash.png')} style={styles.bullImg} resizeMode="contain" />
-          </View>
-        </Pressable>
-      </View>
-      <Text style={[styles.title, { color: p.textPrimary }]} numberOfLines={1}>
-        {title}
-      </Text>
-      <View style={[styles.side, styles.right]}>
-        <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
-          <View>
-            <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
-            <CountBadge n={bellUnread} />
-          </View>
-        </Pressable>
-        <Pressable onPress={() => router.push('/messages')} hitSlop={8}>
-          <View>
-            <Ionicons name="chatbubble-outline" size={21} color={p.textMuted} />
-            <CountBadge n={unread} />
-          </View>
-        </Pressable>
-        <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
-          <Image
-            source={avatarFor(me?.email)}
-            style={[styles.avatar, { borderColor: p.accent + '73' }]}
-          />
-        </Pressable>
-      </View>
+        <View style={styles.side}>
+          {/* The bull = talk to the agent (the web's floating launcher, moved up
+              here — Cam 2026-07-03). Opens the member's Ask Alfred thread. */}
+          <Pressable onPress={() => router.push('/chat')} hitSlop={8}>
+            <View style={[styles.bull, { backgroundColor: p.cardBg, borderColor: p.accent + '66' }]}>
+              <Image source={require('../assets/bull-splash.png')} style={styles.bullImg} resizeMode="contain" />
+            </View>
+          </Pressable>
+        </View>
+        <Text style={[styles.title, { color: p.textPrimary }]} numberOfLines={1}>
+          {title}
+        </Text>
+        <View style={[styles.side, styles.right]}>
+          <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
+            <View>
+              <Ionicons name="notifications-outline" size={22} color={p.textMuted} />
+              <CountBadge n={bellUnread} />
+            </View>
+          </Pressable>
+          <Pressable onPress={() => router.push('/messages')} hitSlop={8}>
+            <View>
+              <Ionicons name="chatbubble-outline" size={21} color={p.textMuted} />
+              <CountBadge n={unread} />
+            </View>
+          </Pressable>
+          <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
+            <Image
+              source={avatarFor(me?.email)}
+              style={[styles.avatar, { borderColor: p.accent + '73' }]}
+            />
+          </Pressable>
+        </View>
     </View>
   );
 }
@@ -101,12 +202,16 @@ export function Screen({
   refreshing,
   onRefresh,
   scroll = true,
+  wide = false,
 }: {
   title: string;
   children: React.ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
   scroll?: boolean;
+  /** Widen the content column for grid/master-detail screens (default: reading
+   * column). Wrap any prose inside a plain <Bounded> to keep it readable. */
+  wide?: boolean;
 }) {
   const { p } = usePalette();
   return (
@@ -115,17 +220,19 @@ export function Screen({
       {scroll ? (
         <ScrollView
           style={styles.fill}
-          contentContainerStyle={styles.body}
+          contentContainerStyle={styles.bodyScroll}
           refreshControl={
             onRefresh ? (
               <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={p.accent} />
             ) : undefined
           }
         >
-          {children}
+          <Bounded wide={wide}>{children}</Bounded>
         </ScrollView>
       ) : (
-        <View style={[styles.fill, styles.body]}>{children}</View>
+        <View style={[styles.fill, styles.centerCol]}>
+          <Bounded wide={wide} style={[styles.fill, styles.bodyPad]}>{children}</Bounded>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -138,16 +245,21 @@ export function SubScreen({
   children,
   refreshing,
   onRefresh,
+  wide = false,
 }: {
   title: string;
   children: React.ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
+  /** Widen the content column for grid/master-detail screens (default: reading
+   * column). Wrap any prose inside a plain <Bounded> to keep it readable. */
+  wide?: boolean;
 }) {
   const { p } = usePalette();
   const router = useRouter();
   return (
     <SafeAreaView edges={['top']} style={[styles.fill, { backgroundColor: p.bodyBg }]}>
+      {/* Back bar is anchored to the screen edges, full width — not the content column. */}
       <View style={styles.subBar}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={styles.subBack}>
           <Ionicons name="chevron-back" size={22} color={p.accentText} />
@@ -158,14 +270,14 @@ export function SubScreen({
       </View>
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={styles.body}
+        contentContainerStyle={styles.bodyScroll}
         refreshControl={
           onRefresh ? (
             <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={p.accent} />
           ) : undefined
         }
       >
-        {children}
+        <Bounded wide={wide}>{children}</Bounded>
       </ScrollView>
     </SafeAreaView>
   );
@@ -267,6 +379,7 @@ export function ErrorNote({ message }: { message: string }) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  centerCol: { alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -303,7 +416,8 @@ const styles = StyleSheet.create({
   bullImg: { width: 22, height: 22 },
   title: { flex: 1, textAlign: 'center', fontFamily: 'System', fontWeight: '800', fontSize: 17 },
   avatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
+  bodyScroll: { paddingTop: 8, paddingBottom: 32, alignItems: 'center' },
+  bodyPad: { paddingTop: 8, paddingBottom: 32 },
   card: { borderWidth: 1, borderRadius: 16, padding: 14 },
   section: {
     fontFamily: 'System',

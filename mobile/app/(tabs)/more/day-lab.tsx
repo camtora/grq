@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote, Masonry } from '../../../components/Chrome';
 import DeskChart from '../../../components/DeskChart';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { money, signedMoney, pnlColor } from '../../../lib/format';
 import { api } from '../../../services/api';
 import { useApi } from '../../../services/hooks';
@@ -49,6 +50,7 @@ function StatCell({ k, v, tone, note, p }: { k: string; v: string; tone?: string
  * round trips (§6). */
 export default function DayLabScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const { data: d, error, loading, refreshing, refresh, reload } = useApi<DayLabWire>('/api/day-lab');
   const [ticker, setTicker] = useState('');
   const [shares, setShares] = useState('100');
@@ -82,11 +84,15 @@ export default function DayLabScreen() {
   const nShares = Math.max(1, Math.floor(Number(shares) || 0));
 
   return (
-    <SubScreen title="Day-Trading Lab" refreshing={refreshing} onRefresh={refresh}>
+    <SubScreen title="Day-Trading Lab" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {d && (
         <View style={{ marginTop: 8, gap: 10 }}>
+          {/* Cockpit — the explainer, controls, and the Trader-vs-Holder verdict span
+              the full width (matching the chart/trade-log/reference columns below);
+              on a phone this is just the reading column. */}
+          <View style={{ gap: 10 }}>
           <Text style={[s.intro, { color: p.textMuted }]}>
             Day-trade a real name against a Holder who just buys once and sits — same stock, same day, and
             {lab ? ` ${money(lab.startingCashCents)}` : ' $50,000'} of virtual buying power each. Watch whether
@@ -211,8 +217,13 @@ export default function DayLabScreen() {
                   )}
                 </Text>
               </Card>
+            </>
+          )}
+          </View>
 
-              {/* the two equity lines */}
+          <Masonry columns={isWide ? 2 : 1} style={{ gap: 10 }}>
+          {/* the two equity lines */}
+          {lab && (
               <View>
                 <SectionTitle sub="equity over the session">Trader vs Holder</SectionTitle>
                 <Card>
@@ -229,8 +240,10 @@ export default function DayLabScreen() {
                   )}
                 </Card>
               </View>
+          )}
 
-              {/* the trade log */}
+          {/* the trade log */}
+          {lab && (
               <View>
                 <SectionTitle sub={`${lab.symbol} @ ${money(lab.markCents)} ${lab.currency} ${open ? '(live)' : '(closed)'}`}>
                   Your trades
@@ -270,7 +283,6 @@ export default function DayLabScreen() {
                   </Card>
                 )}
               </View>
-            </>
           )}
 
           {/* past rounds */}
@@ -324,6 +336,7 @@ export default function DayLabScreen() {
               ))}
             </Card>
           </View>
+          </Masonry>
 
           <Footnote>
             sandbox · modeled, never executable · the fund is code-blocked from same-day round trips · fills

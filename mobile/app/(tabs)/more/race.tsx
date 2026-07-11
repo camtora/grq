@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote, Bounded, Grid } from '../../../components/Chrome';
 import Sparkline from '../../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { signedMoney, pnlColor, fmtDate } from '../../../lib/format';
 import { useApi } from '../../../services/hooks';
 import {
@@ -39,7 +40,7 @@ function ModelTile({ m, rank, today }: { m: RaceModel; rank: number; today: stri
     m.vsBenchmarkBps == null ? p.textMuted : m.vsBenchmarkBps >= 0 ? p.pos : p.neg;
   return (
     <Pressable onPress={() => router.push(dayHref(today, m))}>
-      <Card style={[{ marginBottom: 10 }, champ && { borderColor: p.accent + '66' }, idle && { opacity: 0.45 }]}>
+      <Card style={[champ && { borderColor: p.accent + '66' }, idle && { opacity: 0.45 }]}>
         <View style={s.head}>
           <Text style={[s.rank, tabular, { color: p.textMuted }]}>#{rank}</Text>
           <Text numberOfLines={1} style={[s.label, { color: p.textPrimary, flex: 1 }]}>{m.label}</Text>
@@ -149,12 +150,18 @@ function HowItWorks({ fx }: { fx: number | null }) {
   );
 }
 
+/** Bounds to the reading column only on a wide (iPad) layout — phone unchanged. */
+function BoundedIf({ wide, children }: { wide: boolean; children: React.ReactNode }) {
+  return wide ? <Bounded>{children}</Bounded> : <>{children}</>;
+}
+
 /** Second Opinions — the model bake-off on the fund's REAL calls (web /race).
  * Every decision session the live agent (the champion — Opus, the only model
  * that trades) and the shadow challengers get the EXACT same frozen prompt;
  * challengers only say what they WOULD do. No separate portfolio. */
 export default function RaceScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const { data: d, error, loading, refreshing, refresh } = useApi<RaceResponse>('/api/race');
 
@@ -163,11 +170,13 @@ export default function RaceScreen() {
   const days = d?.days ?? [];
 
   return (
-    <SubScreen title="Second Opinions" refreshing={refreshing} onRefresh={refresh}>
+    <SubScreen title="Second Opinions" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {d && (
         <View>
+          {/* The lead + Today's-race button span the full width (matching the scorecard
+              grid below); a phone keeps the reading column (docs/MOBILE-DESIGN.md §9). */}
           <Text style={[s.lead, { color: p.textMuted }]}>
             What other minds would do — on the SAME real call. At every decision the champion and
             the challengers get the exact same frozen prompt; the challengers are shadow-only,
@@ -183,6 +192,7 @@ export default function RaceScreen() {
           </Pressable>
 
           {models.length === 0 ? (
+            <BoundedIf wide={isWide}>
             <Card style={{ marginTop: 16 }}>
               <Text style={[s.emptyTitle, { color: p.textPrimary }]}>No races yet</Text>
               <Text style={[s.howBody, { color: p.textMuted, marginTop: 4 }]}>
@@ -190,18 +200,22 @@ export default function RaceScreen() {
                 challengers on the same data and land here.
               </Text>
             </Card>
+            </BoundedIf>
           ) : (
             <View>
               <SectionTitle sub="every mind ranked on the fund's real decisions — tap one to compare it with ★ Opus today">
                 The scorecard
               </SectionTitle>
+              <Grid min={320} gap={10} style={{ marginBottom: 10 }}>
               {models.map((m, i) => (
                 <ModelTile key={m.model} m={m} rank={i + 1} today={today} />
               ))}
+              </Grid>
             </View>
           )}
 
           {days.length > 0 && (
+            <BoundedIf wide={isWide}>
             <View>
               <SectionTitle sub="a race = one trading day — tap for the session-by-session calls">
                 Race days
@@ -233,8 +247,10 @@ export default function RaceScreen() {
                 ))}
               </Card>
             </View>
+            </BoundedIf>
           )}
 
+          <BoundedIf wide={isWide}>
           <HowItWorks fx={d.fxUsdCad} />
 
           <Pressable onPress={() => router.push('/more/bulls')} style={{ marginTop: 10 }} hitSlop={6}>
@@ -247,6 +263,7 @@ export default function RaceScreen() {
             every model sees the same decision sessions as the live agent and files its own call —
             no shadow ever touches the order gate
           </Footnote>
+          </BoundedIf>
         </View>
       )}
     </SubScreen>

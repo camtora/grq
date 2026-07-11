@@ -1,12 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, MiniLabel, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, MiniLabel, Loading, ErrorNote, Bounded, Grid } from '../../../components/Chrome';
 import PayoffChart from '../../../components/options/PayoffChart';
 import Sparkline from '../../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { money, signedMoney, pnlColor } from '../../../lib/format';
 import { useApi, useLiveQuote } from '../../../services/hooks';
+import { useResponsive } from '../../../constants/layout';
 import { STRATEGY_LIST, STRATEGIES, seedLegs, buildStrategyLegs, optionTemplates, type StrategyKey, type LegValue } from '../../../lib/options/strategies';
 import { payoffStats } from '../../../lib/options/payoff';
 import { probOfProfit } from '../../../lib/options/probability';
@@ -154,6 +155,7 @@ function NumInput({
 
 function Calculator({ calc, setCalc, p }: { calc: CalcState; setCalc: (c: CalcState) => void; p: Palette }) {
   const spec = STRATEGIES[calc.strat];
+  const { isWide } = useResponsive();
   const legsDirty = useRef(false);
   const live = useLiveQuote(calc.sym.trim() ? calc.sym.trim().toUpperCase() : null);
 
@@ -195,8 +197,8 @@ function Calculator({ calc, setCalc, p }: { calc: CalcState; setCalc: (c: CalcSt
   const tpls = optionTemplates(spec);
   const $ = (c: number) => (c / 100).toFixed(2);
 
-  return (
-    <View style={{ gap: 10 }}>
+  const controls = (
+    <>
       {/* strategy picker */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
         {STRATEGY_LIST.map((st) => {
@@ -277,7 +279,11 @@ function Calculator({ calc, setCalc, p }: { calc: CalcState; setCalc: (c: CalcSt
           <Text style={[s.liveLine, { color: p.textMuted }]}>↻ reseed strikes & premiums from spot (Black-Scholes)</Text>
         </Pressable>
       </Card>
+    </>
+  );
 
+  const output = (
+    <>
       {/* the picture */}
       <Card>
         <PayoffChart legs={built} spotCents={calc.spotCents} daysLeft={calc.dte} breakevens={stats.breakevensCents} />
@@ -310,6 +316,19 @@ function Calculator({ calc, setCalc, p }: { calc: CalcState; setCalc: (c: CalcSt
         </View>
         <Text style={[s.riskNote, { color: p.warn }]}>{spec.riskNote}</Text>
       </Card>
+    </>
+  );
+
+  // On a big iPad: the knobs on the left, the picture + numbers on the right.
+  return isWide ? (
+    <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 10 }}>{controls}</View>
+      <View style={{ flex: 1, minWidth: 0, gap: 10 }}>{output}</View>
+    </View>
+  ) : (
+    <View style={{ gap: 10 }}>
+      {controls}
+      {output}
     </View>
   );
 }
@@ -370,8 +389,10 @@ function Experiment({ p, onLoad }: { p: Palette; onLoad: (c: Partial<CalcState>)
           </Text>
         </Card>
       )}
-      {options.map((h, i) => (
-        <Card key={i} style={{ borderColor: p.warn + '33' }}>
+      {options.length > 0 && (
+        <Grid min={320} gap={10}>
+          {options.map((h, i) => (
+            <Card key={i} style={{ borderColor: p.warn + '33' }}>
           <Text style={[s.optTitle, { color: p.textPrimary }]}>
             {h.underlying} {h.expiry?.slice(5) ?? ''} {h.strikeCents != null ? money(h.strikeCents) : ''}{' '}
             <Text style={{ color: h.kind === 'CALL' ? p.pos : p.warn }}>{h.kind}</Text>{' '}
@@ -403,11 +424,13 @@ function Experiment({ p, onLoad }: { p: Palette; onLoad: (c: Partial<CalcState>)
             <Text style={[s.liveLine, { color: p.accentText }]}>Load into calculator →</Text>
           </Pressable>
         </Card>
-      ))}
+          ))}
+        </Grid>
+      )}
       {resolved.length > 0 && (
         <View>
           <MiniLabel>Resolved — the punchlines</MiniLabel>
-          <View style={{ gap: 8 }}>
+          <Grid min={320} gap={8}>
             {resolved.map((r, i) => (
               <Card key={i}>
                 <Text style={[s.optTitle, { color: p.textPrimary }]}>
@@ -424,7 +447,7 @@ function Experiment({ p, onLoad }: { p: Palette; onLoad: (c: Partial<CalcState>)
                 {r.card && <Text style={[s.teach, { color: p.textMuted, marginTop: 6 }]}>{r.card}</Text>}
               </Card>
             ))}
-          </View>
+          </Grid>
         </View>
       )}
     </View>
@@ -447,6 +470,7 @@ type TabKey = (typeof TABS)[number]['key'];
  * the live fund is code-blocked from options. */
 export default function OptionsLearningScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>('learn');
   const [calc, setCalc] = useState<CalcState>(() => ({
@@ -464,35 +488,50 @@ export default function OptionsLearningScreen() {
     setTab('calculator');
   };
 
+  // The intro + tab selector spans the FULL body width above the wide
+  // Calculator / Experiment layouts (matching them), but stays in the reading
+  // column above the Learn / Ask single-column reading flows.
+  const wideSplit = isWide && (tab === 'calculator' || tab === 'experiment');
+  const header = (
+    <>
+      <Text style={[s.intro, { color: p.textMuted }]}>
+        Learn how options actually work — lessons, a payoff calculator, and the desk experiment&apos;s real
+        (modeled) contracts. Educational only: the live fund holds no options, by guardrail.
+      </Text>
+
+      <View style={s.tabRow}>
+        {TABS.map((t) => {
+          const on = t.key === tab;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => setTab(t.key)}
+              style={[s.tabChip, { borderColor: on ? p.accent + '88' : p.cardBorder, backgroundColor: on ? p.accent + '26' : p.cardBg }]}
+            >
+              <Text style={{ color: on ? p.accentText : p.textMuted, fontFamily: on ? F.semi : F.med, fontSize: 12 }}>
+                {t.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
+  );
+
   return (
-    <SubScreen title="Options">
+    <SubScreen title="Options" wide={isWide}>
       <View style={{ marginTop: 8 }}>
-        <Text style={[s.intro, { color: p.textMuted }]}>
-          Learn how options actually work — lessons, a payoff calculator, and the desk experiment&apos;s real
-          (modeled) contracts. Educational only: the live fund holds no options, by guardrail.
-        </Text>
+        {wideSplit ? <View>{header}</View> : <Bounded style={{ paddingHorizontal: 0 }}>{header}</Bounded>}
 
-        <View style={s.tabRow}>
-          {TABS.map((t) => {
-            const on = t.key === tab;
-            return (
-              <Pressable
-                key={t.key}
-                onPress={() => setTab(t.key)}
-                style={[s.tabChip, { borderColor: on ? p.accent + '88' : p.cardBorder, backgroundColor: on ? p.accent + '26' : p.cardBg }]}
-              >
-                <Text style={{ color: on ? p.accentText : p.textMuted, fontFamily: on ? F.semi : F.med, fontSize: 12 }}>
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {tab === 'learn' && <Learn p={p} goCalc={() => setTab('calculator')} />}
+        {tab === 'learn' && (
+          <Bounded style={{ paddingHorizontal: 0 }}>
+            <Learn p={p} goCalc={() => setTab('calculator')} />
+          </Bounded>
+        )}
         {tab === 'calculator' && <Calculator calc={calc} setCalc={setCalc} p={p} />}
         {tab === 'experiment' && <Experiment p={p} onLoad={loadIntoCalc} />}
         {tab === 'ask' && (
+          <Bounded style={{ paddingHorizontal: 0 }}>
           <View style={{ gap: 10 }}>
             <Card>
               <Text style={[s.lesson, { color: p.textMuted }]}>
@@ -511,12 +550,15 @@ export default function OptionsLearningScreen() {
               </Text>
             </Card>
           </View>
+          </Bounded>
         )}
 
+        <Bounded style={{ paddingHorizontal: 0 }}>
         <Footnote>
           everything here is modeled (Black-Scholes / delayed quotes), never executable · prices education, not
           advice · the Options Desk experiment (More ▸ Options Desk) is the live A/B this teaches from
         </Footnote>
+        </Bounded>
       </View>
     </SubScreen>
   );

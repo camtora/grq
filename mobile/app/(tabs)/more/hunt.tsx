@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SubScreen, Card, Segmented, Footnote, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, Segmented, Footnote, Loading, ErrorNote, Grid, Masonry } from '../../../components/Chrome';
 import HuntRow, { type LiveQuoteMap } from '../../../components/hunt/HuntRow';
 import HuntHero from '../../../components/hunt/HuntHero';
 import HuntGridCard from '../../../components/hunt/HuntGridCard';
 import ScannerTable from '../../../components/hunt/ScannerTable';
 import { usePalette, F } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { HEAT_TIP } from '../../../lib/hunt';
 import { api } from '../../../services/api';
 import { useApi, useLiveQuotes } from '../../../services/hooks';
@@ -33,6 +34,7 @@ function relTime(iso: string): string {
  * persisted switcher, steerable in plain English (D38). Leads, not verdicts. */
 export default function HuntScreen() {
   const { p } = usePalette();
+  const { isTablet } = useResponsive();
   const { data, error, loading, refreshing, refresh, reload } = useApi<HuntFeed>('/api/hunt');
   const [view, setView] = useState<HuntView>('board');
   const [brief, setBrief] = useState('');
@@ -246,17 +248,27 @@ export default function HuntScreen() {
           )}
 
           <View style={{ gap: 10, opacity: pending ? 0.55 : 1 }}>
-            {view === 'board' &&
-              finds.map((f, i) => (
-                <HuntRow key={f.sym} f={f} rank={i + 1} live={live} onChanged={reload} onDismissed={onDismissed} />
-              ))}
+            {view === 'board' && (
+              // iPad: two independent columns so an expanded row doesn't gap its
+              // neighbour; one column on a phone (identical to before).
+              <Masonry columns={isTablet ? 2 : 1}>
+                {finds.map((f, i) => (
+                  <View key={f.sym} style={{ marginBottom: 10 }}>
+                    <HuntRow f={f} rank={i + 1} live={live} onChanged={reload} onDismissed={onDismissed} />
+                  </View>
+                ))}
+              </Masonry>
+            )}
 
             {view === 'top' && finds.length > 0 && (
               <>
                 <HuntHero f={finds[0]} live={live} onChanged={reload} onDismissed={onDismissed} />
-                {finds.slice(1).map((f) => (
-                  <HuntGridCard key={f.sym} f={f} live={live} onChanged={reload} />
-                ))}
+                {/* Tiles go 2–3 up on an iPad, one column on a phone. */}
+                <Grid min={300} gap={10}>
+                  {finds.slice(1).map((f) => (
+                    <HuntGridCard key={f.sym} f={f} live={live} onChanged={reload} />
+                  ))}
+                </Grid>
               </>
             )}
 

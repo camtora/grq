@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Segmented, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Segmented, Loading, ErrorNote, Bounded } from '../../../components/Chrome';
 import DeskChart from '../../../components/DeskChart';
 import Sparkline from '../../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { money, signedMoney, pnlColor } from '../../../lib/format';
 import { api } from '../../../services/api';
 import { useApi } from '../../../services/hooks';
+import { useResponsive } from '../../../constants/layout';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
 
@@ -303,6 +304,7 @@ function Bullet({ head, rest, p }: { head: string; rest: string; p: Palette }) {
  * the real fund is code-blocked from options and that isn't changing here. */
 export default function DeskScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const [deskId, setDeskId] = useState<number | null>(null);
   const { data: d, error, loading, refreshing, refresh, reload } = useApi<DeskResponse>(
     `/api/desk${deskId != null ? `?id=${deskId}` : ''}`,
@@ -360,11 +362,14 @@ export default function DeskScreen() {
   };
 
   return (
-    <SubScreen title="Options Desk" refreshing={refreshing} onRefresh={refresh}>
+    <SubScreen title="Options Desk" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {d && (
         <View style={{ marginTop: 8 }}>
+          {/* Above the arms — spans the full body width (matching the arms row
+              below), not capped at the reading column. */}
+          <View>
           <Text style={[s.intro, { color: p.textMuted }]}>
             Same money, same menu, one difference: one Opus can only buy and sell stocks (exactly what the
             fund does today); the other can ALSO buy call and put options. Which one compounds better? A pure
@@ -428,13 +433,19 @@ export default function DeskScreen() {
               </Text>
             </Card>
           )}
+          </View>
 
           {!cur || cur.arms.length === 0 ? (
+            <Bounded style={{ paddingHorizontal: 0 }}>
             <Card>
               <Text style={[s.meta, { color: p.textMuted, paddingVertical: 8 }]}>No desk yet — spin one up with ＋ new desk above.</Text>
             </Card>
+            </Bounded>
           ) : (
             <>
+              {/* meta + controls + the return-over-time chart — full body width,
+                  aligning with the two arms below. */}
+              <View>
               {/* meta + member controls */}
               <View style={s.metaRow}>
                 <Text style={[s.metaSmall, tabular, { color: p.textMuted, flex: 1 }]}>
@@ -482,12 +493,30 @@ export default function DeskScreen() {
                 />
               </Card>
 
-              {/* the two arms */}
-              <SectionTitle sub="position for position">The two arms</SectionTitle>
-              {cur.arms.map((a) => (
-                <ArmCard key={a.entrantId} a={a} p={p} deskStake={cur.desk.startingStakeCents} />
-              ))}
+              </View>
 
+              {/* the two arms — side by side on a big iPad, stacked on a phone */}
+              {isWide ? (
+                <>
+                  <SectionTitle sub="position for position">The two arms</SectionTitle>
+                  <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }}>
+                    {cur.arms.map((a) => (
+                      <View key={a.entrantId} style={{ flex: 1, minWidth: 0 }}>
+                        <ArmCard a={a} p={p} deskStake={cur.desk.startingStakeCents} />
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <Bounded style={{ paddingHorizontal: 0 }}>
+                  <SectionTitle sub="position for position">The two arms</SectionTitle>
+                  {cur.arms.map((a) => (
+                    <ArmCard key={a.entrantId} a={a} p={p} deskStake={cur.desk.startingStakeCents} />
+                  ))}
+                </Bounded>
+              )}
+
+              <Bounded style={{ paddingHorizontal: 0 }}>
               {cur.realFundReturnPct != null && (
                 <Card style={{ marginBottom: 4 }}>
                   <Text style={[s.meta, { color: p.textMuted, lineHeight: 17 }]}>
@@ -526,6 +555,7 @@ export default function DeskScreen() {
                 volatility) — educational, not executable · options are US-only; CA names have none · books are
                 CAD; US fills convert at the live FX rate · learn the mechanics in More ▸ Learning ▸ Options
               </Footnote>
+              </Bounded>
             </>
           )}
         </View>

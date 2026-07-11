@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote } from '../../components/Chrome';
+import { Screen, Card, SectionTitle, Footnote, Divider, Segmented, MiniLabel, Loading, ErrorNote, Bounded } from '../../components/Chrome';
 import ReconnectBanner from '../../components/accounts/ReconnectBanner';
 import StockLogo from '../../components/StockLogo';
 import Sparkline from '../../components/Sparkline';
 import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
+import { useResponsive } from '../../constants/layout';
 import { money, signedMoney, signedPctFromBps, pnlColor } from '../../lib/format';
 import { useApi } from '../../services/hooks';
 import type { Portfolio, AccountsResponse, Today, BriefingItem } from '../../services/types';
@@ -19,6 +20,7 @@ const tabular = { fontVariant: ['tabular-nums' as const] };
  * holdings under Canada / United States headers. */
 export default function PortfolioScreen() {
   const [view, setView] = useState<'alfred' | 'personal'>('alfred');
+  const { isWide } = useResponsive();
 
   // An `accounts` push tap (SnapTrade reconnect) routes here with ?segment=personal
   // (lib/notification-routes) — apply it, then clear so a later tap re-fires.
@@ -44,17 +46,19 @@ export default function PortfolioScreen() {
   };
 
   return (
-    <Screen title="Portfolio" refreshing={refreshing} onRefresh={refresh}>
-      <View style={{ marginTop: 8 }}>
-        <Segmented
-          options={[
-            { key: 'alfred', label: 'Alfred' },
-            { key: 'personal', label: 'Personal' },
-          ]}
-          value={view}
-          onChange={setView}
-        />
-      </View>
+    <Screen title="Portfolio" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
+      <Bounded style={{ paddingHorizontal: 0 }}>
+        <View style={{ marginTop: 8 }}>
+          <Segmented
+            options={[
+              { key: 'alfred', label: 'Alfred' },
+              { key: 'personal', label: 'Personal' },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        </View>
+      </Bounded>
       {view === 'alfred' ? (
         <AlfredView pf={pf.data} t={today.data} briefings={briefings.data?.items ?? []} loading={pf.loading} error={pf.error} />
       ) : (
@@ -203,6 +207,7 @@ function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
 
 function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null; t: Today | null; briefings: BriefingItem[]; loading: boolean; error: string | null }) {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   if (loading) return <Loading />;
   if (error && !pf) return <View style={{ marginTop: 16 }}><ErrorNote message={error} /></View>;
   if (!pf) return null;
@@ -225,55 +230,9 @@ function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null
   const bookGroups = new Map([...groups.entries()].map(([k, v]) => [k, v.map((x) => x.row)]));
   const tape = t?.tape ?? [];
 
-  return (
+  // The book — cash strip, then holdings by country.
+  const bookSection = (
     <View>
-      {pf.killSwitch && (
-        <Card style={{ marginTop: 14, borderColor: p.neg }}>
-          <Text style={{ color: p.neg, fontFamily: F.bold, fontSize: 13 }}>
-            KILL SWITCH ENGAGED{pf.killSwitchBy ? ` — by ${pf.killSwitchBy}` : ''}
-          </Text>
-          <Text style={{ color: p.textMuted, fontFamily: F.reg, fontSize: 11.5, marginTop: 3 }}>
-            Nothing trades while it's on. Flip it back on the web Settings page.
-          </Text>
-        </Card>
-      )}
-
-      {/* Hero — NAV (CAD, house convention) + the US$ equivalent + day & total P&L */}
-      <View style={s.hero}>
-        <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
-        <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(pf.navCents)}</Text>
-        {pf.fxUsdCad != null && pf.fxUsdCad > 0 && (
-          <Text style={[s.heroUsd, tabular, { color: p.textMuted }]}>
-            ≈ {usMoney(Math.round(pf.navCents / pf.fxUsdCad))}
-          </Text>
-        )}
-        <View style={s.heroRow}>
-          {t && (
-            <Text style={[s.heroPnl, tabular, { color: pnlColor(t.dayPnlCents, p) }]}>
-              {signedMoney(t.dayPnlCents)} ({signedPctFromBps(t.dayPnlBps)}) today
-            </Text>
-          )}
-          <Text style={[s.heroPnl, tabular, { color: pnlColor(pf.totalPnlCents, p) }]}>
-            {signedMoney(pf.totalPnlCents)} all-time
-          </Text>
-        </View>
-      </View>
-
-      {/* The Tape — intraday NAV */}
-      {tape.length >= 2 && (
-        <View>
-          <SectionTitle sub="intraday NAV, open → now">The Tape</SectionTitle>
-          <Card>
-            <Sparkline values={tape.map((x) => x.navCents)} height={64} />
-            <View style={s.tapeLabels}>
-              <Text style={[s.tapeLabel, { color: p.textMuted }]}>{tape[0].at}</Text>
-              <Text style={[s.tapeLabel, { color: p.textMuted }]}>{tape[tape.length - 1].at}</Text>
-            </View>
-          </Card>
-        </View>
-      )}
-
-      {/* The book — cash strip, then holdings by country */}
       <SectionTitle sub="what the fund is holding">The book</SectionTitle>
       <CashStrip cad={pf.cadCashCents} usd={pf.usdCashCents} positions={pf.positionsCents} p={p} />
       <View style={{ marginTop: 10 }}>
@@ -286,26 +245,91 @@ function AlfredView({ pf, t, briefings, loading, error }: { pf: Portfolio | null
           {pf.quotesAsOf ? ` · quotes ${pf.quotesAsOf.slice(11, 16)}Z` : ''}
         </Footnote>
       </View>
+    </View>
+  );
 
-      {/* From the desk — the current day's printouts, latest auto-opened (Cam
-          2026-07-03). Weekends show the most recent day that HAS printouts. */}
-      {(() => {
-        const dayKey = (iso: string) => new Date(iso).toDateString();
-        const latestDay = briefings.length ? dayKey(briefings[0].at) : null;
-        const todays = briefings.filter((b) => dayKey(b.at) === latestDay);
-        if (!todays.length) return null;
-        return (
-          <View>
-            <SectionTitle sub="Alfred's printouts — pre-market to close">From the desk</SectionTitle>
-            <Card style={s.listCard}>
-              {todays.map((b, i) => (
-                <BriefingRow key={b.id} b={b} prev={i > 0 ? todays[i - 1] : null} first={i === 0} defaultOpen={i === 0} />
-              ))}
-            </Card>
-            <Footnote>fund-level reads only — per-name notes live on each stock page</Footnote>
+  // From the desk — the current day's printouts, latest auto-opened (Cam
+  // 2026-07-03). Weekends show the most recent day that HAS printouts.
+  const deskSection = (() => {
+    const dayKey = (iso: string) => new Date(iso).toDateString();
+    const latestDay = briefings.length ? dayKey(briefings[0].at) : null;
+    const todays = briefings.filter((b) => dayKey(b.at) === latestDay);
+    if (!todays.length) return null;
+    return (
+      <View>
+        <SectionTitle sub="Alfred's printouts — pre-market to close">From the desk</SectionTitle>
+        <Card style={s.listCard}>
+          {todays.map((b, i) => (
+            <BriefingRow key={b.id} b={b} prev={i > 0 ? todays[i - 1] : null} first={i === 0} defaultOpen={i === 0} />
+          ))}
+        </Card>
+        <Footnote>fund-level reads only — per-name notes live on each stock page</Footnote>
+      </View>
+    );
+  })();
+
+  return (
+    <View>
+      {/* NAV hero + the intraday tape span the full width (matching the book +
+          desk columns below). */}
+        {pf.killSwitch && (
+          <Card style={{ marginTop: 14, borderColor: p.neg }}>
+            <Text style={{ color: p.neg, fontFamily: F.bold, fontSize: 13 }}>
+              KILL SWITCH ENGAGED{pf.killSwitchBy ? ` — by ${pf.killSwitchBy}` : ''}
+            </Text>
+            <Text style={{ color: p.textMuted, fontFamily: F.reg, fontSize: 11.5, marginTop: 3 }}>
+              Nothing trades while it's on. Flip it back on the web Settings page.
+            </Text>
+          </Card>
+        )}
+
+        {/* Hero — NAV (CAD, house convention) + the US$ equivalent + day & total P&L */}
+        <View style={s.hero}>
+          <Text style={[s.heroLabel, { color: p.textMuted }]}>NET ASSET VALUE</Text>
+          <Text style={[s.heroNav, tabular, { color: p.textPrimary }]}>{money(pf.navCents)}</Text>
+          {pf.fxUsdCad != null && pf.fxUsdCad > 0 && (
+            <Text style={[s.heroUsd, tabular, { color: p.textMuted }]}>
+              ≈ {usMoney(Math.round(pf.navCents / pf.fxUsdCad))}
+            </Text>
+          )}
+          <View style={s.heroRow}>
+            {t && (
+              <Text style={[s.heroPnl, tabular, { color: pnlColor(t.dayPnlCents, p) }]}>
+                {signedMoney(t.dayPnlCents)} ({signedPctFromBps(t.dayPnlBps)}) today
+              </Text>
+            )}
+            <Text style={[s.heroPnl, tabular, { color: pnlColor(pf.totalPnlCents, p) }]}>
+              {signedMoney(pf.totalPnlCents)} all-time
+            </Text>
           </View>
-        );
-      })()}
+        </View>
+
+        {/* The Tape — intraday NAV */}
+        {tape.length >= 2 && (
+          <View>
+            <SectionTitle sub="intraday NAV, open → now">The Tape</SectionTitle>
+            <Card>
+              <Sparkline values={tape.map((x) => x.navCents)} height={64} />
+              <View style={s.tapeLabels}>
+                <Text style={[s.tapeLabel, { color: p.textMuted }]}>{tape[0].at}</Text>
+                <Text style={[s.tapeLabel, { color: p.textMuted }]}>{tape[tape.length - 1].at}</Text>
+              </View>
+            </Card>
+          </View>
+        )}
+
+      {/* iPad: the book and the desk sit side by side; phone stacks them. */}
+      {isWide && deskSection ? (
+        <View style={{ flexDirection: 'row', gap: 20, marginTop: 4, alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>{bookSection}</View>
+          <View style={{ flex: 1, minWidth: 0 }}>{deskSection}</View>
+        </View>
+      ) : (
+        <Bounded style={{ paddingHorizontal: 0 }}>
+          {bookSection}
+          {deskSection}
+        </Bounded>
+      )}
     </View>
   );
 }

@@ -2,8 +2,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Screen, Card, SectionTitle, Footnote, Divider } from '../../../components/Chrome';
+import { Screen, Card, SectionTitle, Footnote, Divider, Masonry } from '../../../components/Chrome';
 import { usePalette, F } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 
 type Row = { href: string; icon: keyof typeof Ionicons.glyphMap; title: string; desc: string };
 
@@ -38,6 +39,7 @@ const EXPERIMENTS: Row[] = [
 export default function MoreScreen() {
   const { p } = usePalette();
   const router = useRouter();
+  const { isTablet } = useResponsive();
 
   const renderRows = (rows: Row[]) => (
     <Card style={s.listCard}>
@@ -60,15 +62,28 @@ export default function MoreScreen() {
   );
 
   return (
-    <Screen title="More">
-      <SectionTitle sub="the wider view">Markets</SectionTitle>
-      {renderRows(MARKETS)}
-      <SectionTitle sub="modeled, never the real fund">Experiments</SectionTitle>
-      {renderRows(EXPERIMENTS)}
-      <SectionTitle sub="every number explainable">Learning</SectionTitle>
-      {renderRows(LEARNING)}
-      <SectionTitle sub="the manual & the meters">About GRQ</SectionTitle>
-      {renderRows(ABOUT)}
+    <Screen title="More" wide={isTablet}>
+      {/* Phone: a single stack (columns=1 is a plain pass-through). iPad: the four
+          titled sections split into two columns (Masonry keeps each section's
+          title attached and avoids row-alignment gaps between uneven heights). */}
+      <Masonry columns={isTablet ? 2 : 1}>
+        <View>
+          <SectionTitle sub="the wider view">Markets</SectionTitle>
+          {renderRows(MARKETS)}
+        </View>
+        <View>
+          <SectionTitle sub="modeled, never the real fund">Experiments</SectionTitle>
+          {renderRows(EXPERIMENTS)}
+        </View>
+        <View>
+          <SectionTitle sub="every number explainable">Learning</SectionTitle>
+          {renderRows(LEARNING)}
+        </View>
+        <View>
+          <SectionTitle sub="the manual & the meters">About GRQ</SectionTitle>
+          {renderRows(ABOUT)}
+        </View>
+      </Masonry>
     </Screen>
   );
 }

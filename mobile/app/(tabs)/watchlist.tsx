@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote } from '../../components/Chrome';
+import { Screen, Card, Divider, Segmented, Footnote, Loading, ErrorNote, Bounded } from '../../components/Chrome';
 import StockLogo from '../../components/StockLogo';
 import ShareButton from '../../components/ShareButton';
 import MdText from '../../components/MdText';
 import { usePalette, F, type Palette } from '../../constants/theme';
+import { useResponsive } from '../../constants/layout';
 import { money, signedMoney, signedPctFromBps, pctFromFrac, pnlColor, fmtDate, fmtEps } from '../../lib/format';
 import { api } from '../../services/api';
 import { useApi } from '../../services/hooks';
@@ -35,9 +36,13 @@ function dayCentsOf(r: WatchRow): number | null {
  * reasoning + the dossier's targets + lazy earnings/analyst extras. */
 export default function WatchlistScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const { data, error, loading, refreshing, refresh } = useApi<WatchlistResponse>('/api/watchlist');
   const me = useAuth((s) => s.me);
   const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
+
+  // Wide iPad only: the row selected into the right-hand detail pane.
+  const [selected, setSelected] = useState<string | null>(null);
 
   const [tab, setTab] = useState<'all' | 'cam' | 'graham'>('all');
   // Tap a sort chip again to reverse it (Cam 2026-07-03).
@@ -85,59 +90,108 @@ export default function WatchlistScreen() {
     );
   })();
 
+  // On a wide iPad, always keep one name selected into the detail pane — default
+  // to the top of the list, and re-home if the current pick leaves the filter.
+  useEffect(() => {
+    if (!isWide || visible.length === 0) return;
+    if (!selected || !visible.some((r) => r.symbol === selected)) setSelected(visible[0].symbol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWide, visible, selected]);
+
+  const selectedRow = visible.find((r) => r.symbol === selected) ?? null;
+
   return (
-    <Screen title="Watchlist" refreshing={refreshing} onRefresh={refresh}>
-      <AddTicker onAdded={refresh} />
+    <Screen title="Watchlist" wide={isWide} refreshing={refreshing} onRefresh={refresh}>
+      <BoundedIf wide={isWide}>
+        <AddTicker onAdded={refresh} />
+      </BoundedIf>
       {loading && <Loading />}
       {error && !loading && <ErrorNote message={error} />}
       {data && (
         <View>
-          <Segmented
-            options={[
-              { key: 'all', label: `All ${counts.all}` },
-              { key: 'cam', label: `Cam ${counts.cam}` },
-              { key: 'graham', label: `Graham ${counts.graham}` },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-          <View style={s.sortRow}>
-            <Text style={[s.sortLabel, { color: p.textMuted }]}>SORT</Text>
-            {(
-              [
-                { key: 'ticker', label: sort.key === 'ticker' && sort.dir === 'desc' ? 'Z–A' : 'A–Z' },
-                { key: 'change', label: sort.key === 'change' && sort.dir === 'asc' ? '% change ↑' : '% change ↓' },
-                { key: 'dollar', label: sort.key === 'dollar' && sort.dir === 'asc' ? '$ change ↑' : '$ change ↓' },
-              ] as const
-            ).map((o) => (
-              <Pressable
-                key={o.key}
-                onPress={() => tapSort(o.key)}
-                style={[
-                  s.sortChip,
-                  { borderColor: p.cardBorder },
-                  sort.key === o.key && { backgroundColor: p.accent + '26', borderColor: p.accent + '55' },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: sort.key === o.key ? p.accentText : p.textMuted,
-                    fontFamily: sort.key === o.key ? F.semi : F.med,
-                    fontSize: 11.5,
-                  }}
+          <BoundedIf wide={isWide}>
+            <Segmented
+              options={[
+                { key: 'all', label: `All ${counts.all}` },
+                { key: 'cam', label: `Cam ${counts.cam}` },
+                { key: 'graham', label: `Graham ${counts.graham}` },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
+            <View style={s.sortRow}>
+              <Text style={[s.sortLabel, { color: p.textMuted }]}>SORT</Text>
+              {(
+                [
+                  { key: 'ticker', label: sort.key === 'ticker' && sort.dir === 'desc' ? 'Z–A' : 'A–Z' },
+                  { key: 'change', label: sort.key === 'change' && sort.dir === 'asc' ? '% change ↑' : '% change ↓' },
+                  { key: 'dollar', label: sort.key === 'dollar' && sort.dir === 'asc' ? '$ change ↑' : '$ change ↓' },
+                ] as const
+              ).map((o) => (
+                <Pressable
+                  key={o.key}
+                  onPress={() => tapSort(o.key)}
+                  style={[
+                    s.sortChip,
+                    { borderColor: p.cardBorder },
+                    sort.key === o.key && { backgroundColor: p.accent + '26', borderColor: p.accent + '55' },
+                  ]}
                 >
-                  {o.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+                  <Text
+                    style={{
+                      color: sort.key === o.key ? p.accentText : p.textMuted,
+                      fontFamily: sort.key === o.key ? F.semi : F.med,
+                      fontSize: 11.5,
+                    }}
+                  >
+                    {o.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </BoundedIf>
+
           {visible.length === 0 ? (
-            <Card style={{ marginTop: 12 }}>
-              <Text style={[s.empty, { color: p.textMuted }]}>
-                Nothing on this list yet — add a ticker above and GRQ starts researching it the
-                moment you do.
-              </Text>
-            </Card>
+            <BoundedIf wide={isWide}>
+              <Card style={{ marginTop: 12 }}>
+                <Text style={[s.empty, { color: p.textMuted }]}>
+                  Nothing on this list yet — add a ticker above and GRQ starts researching it the
+                  moment you do.
+                </Text>
+              </Card>
+            </BoundedIf>
+          ) : isWide ? (
+            /* iPad: list on the left, the selected name's detail on the right. */
+            <View style={s.split}>
+              <View style={s.splitList}>
+                <Card style={s.listCard}>
+                  {visible.map((r, i) => (
+                    <View key={r.symbol}>
+                      {i > 0 && <Divider />}
+                      <WatchRowView
+                        r={r}
+                        myKey={myKey}
+                        onChanged={refresh}
+                        selectable
+                        selected={r.symbol === selected}
+                        onSelect={() => setSelected(r.symbol)}
+                      />
+                    </View>
+                  ))}
+                </Card>
+              </View>
+              <View style={s.splitDetail}>
+                {selectedRow ? (
+                  <Card key={selectedRow.symbol}>
+                    <WatchDetail r={selectedRow} myKey={myKey} onChanged={refresh} header />
+                  </Card>
+                ) : (
+                  <Card>
+                    <Text style={[s.empty, { color: p.textMuted }]}>Pick a name to see Alfred&apos;s read.</Text>
+                  </Card>
+                )}
+              </View>
+            </View>
           ) : (
             <Card style={[s.listCard, { marginTop: 12 }]}>
               {visible.map((r, i) => (
@@ -148,14 +202,22 @@ export default function WatchlistScreen() {
               ))}
             </Card>
           )}
-          <Footnote>
-            Alfred's call is the verdict · 12-mo is the target upside · tap a row for the reasoning;
-            pinned names sort first
-          </Footnote>
+          <BoundedIf wide={isWide}>
+            <Footnote>
+              Alfred's call is the verdict · 12-mo is the target upside · tap a row for the reasoning;
+              pinned names sort first
+            </Footnote>
+          </BoundedIf>
         </View>
       )}
     </Screen>
   );
+}
+
+/** Bounds content to the reading column only on a wide (split) layout — so the
+ * controls and prose stay readable while the list+detail split spreads wide. */
+function BoundedIf({ wide, children }: { wide: boolean; children: React.ReactNode }) {
+  return wide ? <Bounded>{children}</Bounded> : <>{children}</>;
 }
 
 /* ---------- add a ticker ---------- */
@@ -256,26 +318,132 @@ function AddTicker({ onAdded }: { onAdded: () => void }) {
 
 /* ---------- a watchlist row ---------- */
 
-function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onChanged: () => void }) {
+function WatchRowView({
+  r,
+  myKey,
+  onChanged,
+  selectable = false,
+  selected = false,
+  onSelect,
+}: {
+  r: WatchRow;
+  myKey: string;
+  onChanged: () => void;
+  /** Wide iPad: tapping selects into the detail pane instead of expanding. */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
   const { p } = usePalette();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  const onPress = () => {
+    if (selectable) onSelect?.();
+    else setOpen((o) => !o);
+  };
+
+  return (
+    <View style={selected ? { backgroundColor: p.accent + '14', borderRadius: 10 } : undefined}>
+      <Pressable onPress={onPress}>
+        <View style={s.row}>
+          <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
+          <View style={s.rowMain}>
+            <View style={s.symRow}>
+              {/* The symbol is the link (web §1.7); the rest of the row expands. */}
+              <Text
+                onPress={() => router.push(`/stock/${r.symbol}`)}
+                style={[s.sym, { color: p.accentText, textDecorationLine: 'underline' }]}
+              >
+                {r.symbol}
+              </Text>
+              {r.pinnedBy && <Text style={s.flag}>📌</Text>}
+              {r.status === 'ACTIVE' && (
+                <Text style={[s.tag, { color: p.pos }]}>in universe</Text>
+              )}
+              {r.researchInFlight && <Text style={[s.tag, { color: p.warn }]}>researching…</Text>}
+              {r.blocked && <Text style={[s.tag, { color: p.neg }]}>blocked</Text>}
+            </View>
+            <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{r.name}</Text>
+            <View style={s.metaRow}>
+              {r.stance && (
+                <Text style={[s.call, { color: toneColor(r.stanceTone, p) }]}>{r.stance}</Text>
+              )}
+              {r.upsidePct != null && (
+                <Text style={[s.meta, tabular, { color: p.textMuted }]}>
+                  12-mo{' '}
+                  <Text style={{ color: r.upsidePct > 0 ? p.pos : p.neg }}>
+                    {r.upsidePct > 0 ? '+' : ''}{pctFromFrac(r.upsidePct)}
+                  </Text>
+                </Text>
+              )}
+              {r.confidence != null && (
+                <Text style={[s.meta, tabular, { color: p.textMuted }]}>conf {r.confidence}%</Text>
+              )}
+            </View>
+          </View>
+          <View style={s.rowRight}>
+            {r.lastCents != null && (
+              <Text style={[s.val, tabular, { color: p.textPrimary }]}>
+                {r.currency === 'USD' ? 'US' : ''}{money(r.lastCents)}
+              </Text>
+            )}
+            {r.dayBps != null && (
+              <>
+                {(() => {
+                  const dc = dayCentsOf(r);
+                  return dc != null ? (
+                    <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedMoney(dc)}</Text>
+                  ) : null;
+                })()}
+                <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedPctFromBps(r.dayBps)}</Text>
+              </>
+            )}
+          </View>
+        </View>
+      </Pressable>
+
+      {/* Phone: expand the detail in place. iPad: it lives in the right pane. */}
+      {!selectable && open && <WatchDetail r={r} myKey={myKey} onChanged={onChanged} />}
+    </View>
+  );
+}
+
+/* ---------- the row's detail (reasoning, targets, lazy extras, actions) ----------
+ * Reused two ways: inline under a row (phone) and in the right-hand pane (iPad,
+ * `header` renders the identity strip so the pane stands on its own). */
+function WatchDetail({
+  r,
+  myKey,
+  onChanged,
+  header = false,
+}: {
+  r: WatchRow;
+  myKey: string;
+  onChanged: () => void;
+  header?: boolean;
+}) {
+  const { p } = usePalette();
+  const router = useRouter();
   const [extras, setExtras] = useState<StockExtras | null>(null);
   const [extrasLoading, setExtrasLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const iWatch = r.watchers.some((w) => w.key === myKey);
 
-  const toggleOpen = () => {
-    const next = !open;
-    setOpen(next);
-    if (next && !extras && !extrasLoading) {
-      setExtrasLoading(true);
-      api<StockExtras>(`/api/stock-extras/${r.symbol}`)
-        .then(setExtras)
-        .catch(() => setExtras(null))
-        .finally(() => setExtrasLoading(false));
-    }
-  };
+  // Load the lazy extras when the detail appears — on expand (phone) or whenever
+  // the selected symbol changes (iPad pane).
+  useEffect(() => {
+    let alive = true;
+    setExtras(null);
+    setExtrasLoading(true);
+    api<StockExtras>(`/api/stock-extras/${r.symbol}`)
+      .then((d) => alive && setExtras(d))
+      .catch(() => alive && setExtras(null))
+      .finally(() => alive && setExtrasLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [r.symbol]);
 
   const toggleWatch = async () => {
     if (busy) return;
@@ -298,133 +466,104 @@ function WatchRowView({ r, myKey, onChanged }: { r: WatchRow; myKey: string; onC
   };
 
   return (
-    <Pressable onPress={toggleOpen}>
-      <View style={s.row}>
-        <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={32} />
-        <View style={s.rowMain}>
-          <View style={s.symRow}>
-            {/* The symbol is the link (web §1.7); the rest of the row expands. */}
+    <View style={header ? s.detailPane : s.expand}>
+      {header && (
+        <View style={s.detailHead}>
+          <StockLogo symbol={r.symbol} logoUrl={r.logoUrl} size={36} />
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text
               onPress={() => router.push(`/stock/${r.symbol}`)}
-              style={[s.sym, { color: p.accentText, textDecorationLine: 'underline' }]}
+              style={[s.detailSym, { color: p.accentText }]}
             >
               {r.symbol}
             </Text>
-            {r.pinnedBy && <Text style={s.flag}>📌</Text>}
-            {r.status === 'ACTIVE' && (
-              <Text style={[s.tag, { color: p.pos }]}>in universe</Text>
-            )}
-            {r.researchInFlight && <Text style={[s.tag, { color: p.warn }]}>researching…</Text>}
-            {r.blocked && <Text style={[s.tag, { color: p.neg }]}>blocked</Text>}
+            <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{r.name}</Text>
           </View>
-          <Text style={[s.name, { color: p.textMuted }]} numberOfLines={1}>{r.name}</Text>
-          <View style={s.metaRow}>
-            {r.stance && (
-              <Text style={[s.call, { color: toneColor(r.stanceTone, p) }]}>{r.stance}</Text>
-            )}
-            {r.upsidePct != null && (
-              <Text style={[s.meta, tabular, { color: p.textMuted }]}>
-                12-mo{' '}
-                <Text style={{ color: r.upsidePct > 0 ? p.pos : p.neg }}>
-                  {r.upsidePct > 0 ? '+' : ''}{pctFromFrac(r.upsidePct)}
-                </Text>
-              </Text>
-            )}
-            {r.confidence != null && (
-              <Text style={[s.meta, tabular, { color: p.textMuted }]}>conf {r.confidence}%</Text>
-            )}
-          </View>
-        </View>
-        <View style={s.rowRight}>
           {r.lastCents != null && (
-            <Text style={[s.val, tabular, { color: p.textPrimary }]}>
-              {r.currency === 'USD' ? 'US' : ''}{money(r.lastCents)}
-            </Text>
-          )}
-          {r.dayBps != null && (
-            <>
-              {(() => {
-                const dc = dayCentsOf(r);
-                return dc != null ? (
-                  <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedMoney(dc)}</Text>
-                ) : null;
-              })()}
-              <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedPctFromBps(r.dayBps)}</Text>
-            </>
-          )}
-        </View>
-      </View>
-
-      {open && (
-        <View style={s.expand}>
-          {r.stanceBlurb && (
-            <Text style={[s.blurb, { color: p.textMuted }]}>
-              Alfred: {r.stance} — {r.stanceBlurb}
-            </Text>
-          )}
-          {r.bottomLine && (
-            <View style={{ marginTop: 4 }}>
-              <MdText body={r.bottomLine} foldAt={500} />
-            </View>
-          )}
-          {(r.nearPct != null || r.upsidePct != null) && (
-            <Text style={[s.meta, tabular, { color: p.textMuted }]}>
-              {r.nearPct != null
-                ? `near${r.nearDays ? ` ~${Math.max(1, Math.round(r.nearDays / 5))}w` : ''} ${r.nearPct > 0 ? '+' : ''}${pctFromFrac(r.nearPct)}`
-                : ''}
-              {r.nearPct != null && r.upsidePct != null ? '  ·  ' : ''}
-              {r.upsidePct != null ? `12-mo ${r.upsidePct > 0 ? '+' : ''}${pctFromFrac(r.upsidePct)}` : ''}
-            </Text>
-          )}
-          {extrasLoading && <ActivityIndicator color={p.accent} size="small" style={{ marginTop: 8 }} />}
-          {extras?.earnings?.next?.date && (
-            <Text style={[s.meta, { color: p.textMuted }]}>
-              next report {fmtDate(extras.earnings.next.date)}
-            </Text>
-          )}
-          {extras?.earnings?.last && extras.earnings.last.epsActual != null && (
-            <Text style={[s.meta, { color: p.textMuted }]}>
-              last report{' '}
-              {extras.earnings.last.epsEstimated != null
-                ? `${extras.earnings.last.epsActual >= extras.earnings.last.epsEstimated ? 'beat' : 'missed'} (EPS ${fmtEps(extras.earnings.last.epsActual)} vs ${fmtEps(extras.earnings.last.epsEstimated)} est)`
-                : `EPS ${fmtEps(extras.earnings.last.epsActual)}`}{' '}
-              · {fmtDate(extras.earnings.last.date)}
-            </Text>
-          )}
-          {extras?.grades && (
-            <Text style={[s.meta, tabular, { color: p.textMuted }]}>
-              analysts {extras.grades.consensus} · SB {extras.grades.strongBuy} / B {extras.grades.buy} / H {extras.grades.hold} / S{' '}
-              {extras.grades.sell + extras.grades.strongSell}
-            </Text>
-          )}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-            <Pressable
-              onPress={toggleWatch}
-              disabled={busy}
-              style={[s.watchBtn, { borderColor: p.cardBorder, opacity: busy ? 0.5 : 1 }]}
-            >
-              <Text style={{ color: iWatch ? p.neg : p.accentText, fontFamily: F.semi, fontSize: 12 }}>
-                {busy ? '…' : iWatch ? 'Unwatch' : '+ Watch too'}
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[s.val, tabular, { color: p.textPrimary }]}>
+                {r.currency === 'USD' ? 'US' : ''}{money(r.lastCents)}
               </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/stock/${r.symbol}`)}
-              style={[s.watchBtn, { borderColor: p.cardBorder }]}
-            >
-              <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12 }}>full dossier →</Text>
-            </Pressable>
-            <View style={[s.watchBtn, { borderColor: p.cardBorder }]}>
-              <ShareButton symbol={r.symbol} size={15} />
+              {r.dayBps != null && (
+                <Text style={[s.subPct, tabular, { color: pnlColor(r.dayBps, p) }]}>{signedPctFromBps(r.dayBps)}</Text>
+              )}
             </View>
-          </View>
+          )}
         </View>
       )}
-    </Pressable>
+      {r.stanceBlurb && (
+        <Text style={[s.blurb, { color: p.textMuted }]}>
+          Alfred: {r.stance} — {r.stanceBlurb}
+        </Text>
+      )}
+      {r.bottomLine && (
+        <View style={{ marginTop: 4 }}>
+          <MdText body={r.bottomLine} foldAt={500} />
+        </View>
+      )}
+      {(r.nearPct != null || r.upsidePct != null) && (
+        <Text style={[s.meta, tabular, { color: p.textMuted }]}>
+          {r.nearPct != null
+            ? `near${r.nearDays ? ` ~${Math.max(1, Math.round(r.nearDays / 5))}w` : ''} ${r.nearPct > 0 ? '+' : ''}${pctFromFrac(r.nearPct)}`
+            : ''}
+          {r.nearPct != null && r.upsidePct != null ? '  ·  ' : ''}
+          {r.upsidePct != null ? `12-mo ${r.upsidePct > 0 ? '+' : ''}${pctFromFrac(r.upsidePct)}` : ''}
+        </Text>
+      )}
+      {extrasLoading && <ActivityIndicator color={p.accent} size="small" style={{ marginTop: 8 }} />}
+      {extras?.earnings?.next?.date && (
+        <Text style={[s.meta, { color: p.textMuted }]}>
+          next report {fmtDate(extras.earnings.next.date)}
+        </Text>
+      )}
+      {extras?.earnings?.last && extras.earnings.last.epsActual != null && (
+        <Text style={[s.meta, { color: p.textMuted }]}>
+          last report{' '}
+          {extras.earnings.last.epsEstimated != null
+            ? `${extras.earnings.last.epsActual >= extras.earnings.last.epsEstimated ? 'beat' : 'missed'} (EPS ${fmtEps(extras.earnings.last.epsActual)} vs ${fmtEps(extras.earnings.last.epsEstimated)} est)`
+            : `EPS ${fmtEps(extras.earnings.last.epsActual)}`}{' '}
+          · {fmtDate(extras.earnings.last.date)}
+        </Text>
+      )}
+      {extras?.grades && (
+        <Text style={[s.meta, tabular, { color: p.textMuted }]}>
+          analysts {extras.grades.consensus} · SB {extras.grades.strongBuy} / B {extras.grades.buy} / H {extras.grades.hold} / S{' '}
+          {extras.grades.sell + extras.grades.strongSell}
+        </Text>
+      )}
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+        <Pressable
+          onPress={toggleWatch}
+          disabled={busy}
+          style={[s.watchBtn, { borderColor: p.cardBorder, opacity: busy ? 0.5 : 1 }]}
+        >
+          <Text style={{ color: iWatch ? p.neg : p.accentText, fontFamily: F.semi, fontSize: 12 }}>
+            {busy ? '…' : iWatch ? 'Unwatch' : '+ Watch too'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push(`/stock/${r.symbol}`)}
+          style={[s.watchBtn, { borderColor: p.cardBorder }]}
+        >
+          <Text style={{ color: p.accentText, fontFamily: F.semi, fontSize: 12 }}>full dossier →</Text>
+        </Pressable>
+        <View style={[s.watchBtn, { borderColor: p.cardBorder }]}>
+          <ShareButton symbol={r.symbol} size={15} />
+        </View>
+      </View>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   listCard: { paddingVertical: 2, paddingHorizontal: 12 },
+  // iPad master-detail: fixed list column + a flexible detail pane.
+  split: { flexDirection: 'row', gap: 16, marginTop: 12, alignItems: 'flex-start' },
+  splitList: { width: 360 },
+  splitDetail: { flex: 1, minWidth: 0 },
+  detailPane: { gap: 4 },
+  detailHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  detailSym: { fontFamily: F.semi, fontSize: 16, textDecorationLine: 'underline' },
   sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
   sortLabel: { fontFamily: F.semi, fontSize: 9, letterSpacing: 1.5 },
   sortChip: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 5 },

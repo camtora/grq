@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote, Grid } from '../../../components/Chrome';
 import StockLogo from '../../../components/StockLogo';
 import { fmpLogo } from '../../../lib/logos';
 import MdText from '../../../components/MdText';
@@ -156,7 +156,7 @@ function FundCard({ pf, p }: { pf: SmPortfolio; p: Palette }) {
   const ownsCount = pf.topHoldings.filter((h) => h.overlap).length;
 
   return (
-    <Card style={[s.pfCard, { marginBottom: 10 }]}>
+    <Card style={s.pfCard}>
       <Pressable onPress={() => setOpen(!open)} style={s.pfHead}>
         <SmAvatar name={pf.name} avatar={pf.avatar} p={p} />
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -244,7 +244,7 @@ function MemberCard({ m, p }: { m: SmMember; p: Palette }) {
   const ownsCount = m.trades.filter((t) => t.overlap).length;
 
   return (
-    <Card style={[s.pfCard, { marginBottom: 10 }]}>
+    <Card style={s.pfCard}>
       <Pressable onPress={() => setOpen(!open)} style={s.pfHead}>
         <SmAvatar name={m.name} avatar={m.avatar} p={p} />
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -290,7 +290,7 @@ function Board({ title, blurb, rows, empty, p }: { title: string; blurb: string;
   const router = useRouter();
   const max = Math.max(...rows.map((r) => r.value ?? 0), 1);
   return (
-    <View style={{ marginBottom: 14 }}>
+    <View>
       <SectionTitle sub={blurb}>{title}</SectionTitle>
       <Card style={s.listCard}>
         {rows.length === 0 ? (
@@ -354,34 +354,39 @@ export default function SmartMoneyScreen() {
           </Text>
 
           <SectionTitle sub="who notable investors hold — tap a card to see the book">Tracked portfolios</SectionTitle>
-          {d.portfolios.map((pf) => (
-            <FundCard key={pf.slug} pf={pf} p={p} />
-          ))}
-          {(d.members ?? []).map((m) => (
-            <MemberCard key={m.slug} m={m} p={p} />
-          ))}
+          {/* Portfolio cards go 2–3 up on an iPad, one column on a phone. */}
+          <Grid min={320} gap={10}>
+            {d.portfolios.map((pf) => (
+              <FundCard key={pf.slug} pf={pf} p={p} />
+            ))}
+            {(d.members ?? []).map((m) => (
+              <MemberCard key={m.slug} m={m} p={p} />
+            ))}
+          </Grid>
 
-          <Board
-            title="Congress's most-bought"
-            blurb="most members disclosed buying · last 90 days"
-            rows={d.congress}
-            empty="No congressional buys in range."
-            p={p}
-          />
-          <Board
-            title="Funds piling in"
-            blurb="most tracked funds newly bought or added · latest 13F"
-            rows={d.funds ?? []}
-            empty="No new fund positions yet."
-            p={p}
-          />
-          <Board
-            title="Biggest insider buys"
-            blurb="largest open-market Form 4 purchases · last 14 days"
-            rows={d.insiders}
-            empty="No insider buys in range."
-            p={p}
-          />
+          <Grid min={320} gap={14}>
+            <Board
+              title="Congress's most-bought"
+              blurb="most members disclosed buying · last 90 days"
+              rows={d.congress}
+              empty="No congressional buys in range."
+              p={p}
+            />
+            <Board
+              title="Funds piling in"
+              blurb="most tracked funds newly bought or added · latest 13F"
+              rows={d.funds ?? []}
+              empty="No new fund positions yet."
+              p={p}
+            />
+            <Board
+              title="Biggest insider buys"
+              blurb="largest open-market Form 4 purchases · last 14 days"
+              rows={d.insiders}
+              empty="No insider buys in range."
+              p={p}
+            />
+          </Grid>
 
           {d.clusters.length > 0 && (
             <View style={{ marginBottom: 14 }}>

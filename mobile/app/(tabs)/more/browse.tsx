@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SubScreen, Card, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
+import { useResponsive } from '../../../constants/layout';
 import StockLogo from '../../../components/StockLogo';
 import { usePalette, F, type Palette } from '../../../constants/theme';
 import { money } from '../../../lib/format';
@@ -299,6 +300,7 @@ export default function BrowseScreen() {
 
   const { data: d, error, loading, refreshing, refresh, reload } = useApi<{ rows: BrowseRow[]; total: number; note?: string }>(path);
   const live = useLiveQuotes((d?.rows ?? []).map((r) => r.symbol));
+  const { isTablet } = useResponsive();
 
   const activeFilters = [exchange, sector, country, cap].filter(Boolean).length;
 
@@ -326,6 +328,12 @@ export default function BrowseScreen() {
     });
     return list;
   }, [d, sort, live]);
+
+  // iPad: split the screener into two columns; a phone stays one list.
+  const twoCol = isTablet && rows.length > 4;
+  const resultCols = twoCol
+    ? [rows.slice(0, Math.ceil(rows.length / 2)), rows.slice(Math.ceil(rows.length / 2))]
+    : [rows];
 
   const sortChips: { key: SortKey; label: string }[] = [
     { key: 'score', label: sort.key === 'score' && sort.dir === 'asc' ? 'Score ↑' : 'Score ↓' },
@@ -415,14 +423,22 @@ export default function BrowseScreen() {
           </Card>
         ) : d ? (
           <View style={{ marginTop: 8 }}>
-            <Card style={s.listCard}>
-              {rows.map((r, i) => (
-                <View key={`${r.symbol}-${r.exchange}`}>
-                  {i > 0 && <Divider />}
-                  <Row r={r} live={live} p={p} onChanged={reload} />
+            {/* iPad: two screener columns (contiguous halves) so an expanded row
+                only grows its own column; a phone keeps one dense list card. */}
+            <View style={twoCol ? { flexDirection: 'row', gap: 12 } : undefined}>
+              {resultCols.map((colRows, ci) => (
+                <View key={ci} style={twoCol ? { flex: 1, minWidth: 0 } : undefined}>
+                  <Card style={s.listCard}>
+                    {colRows.map((r, i) => (
+                      <View key={`${r.symbol}-${r.exchange}`}>
+                        {i > 0 && <Divider />}
+                        <Row r={r} live={live} p={p} onChanged={reload} />
+                      </View>
+                    ))}
+                  </Card>
                 </View>
               ))}
-            </Card>
+            </View>
             <Footnote>
               {submittedQ
                 ? `search matches · the dropdown filters still apply`

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Segmented, Loading, ErrorNote } from '../../../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, MiniLabel, Segmented, Loading, ErrorNote, Masonry } from '../../../components/Chrome';
 import DeskChart from '../../../components/DeskChart';
 import PayoffChart from '../../../components/options/PayoffChart';
 import Sparkline from '../../../components/Sparkline';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { money, signedMoney, pnlColor } from '../../../lib/format';
 import { api } from '../../../services/api';
 import { useApi } from '../../../services/hooks';
@@ -191,6 +192,7 @@ function ShortCard({ h, p, onChanged }: { h: ShortHolding; p: Palette; onChanged
  * resolved lessons, the shadow-shorts study, and the double-gated agent A/B. */
 export default function ShortLabScreen() {
   const { p } = usePalette();
+  const { isWide } = useResponsive();
   const router = useRouter();
   const lab = useApi<ShortLabWire>('/api/short-lab');
   const desk = useApi<ShortDeskWire>('/api/short-desk');
@@ -268,11 +270,15 @@ export default function ShortLabScreen() {
   const h = d?.health;
 
   return (
-    <SubScreen title="The Short Lab" refreshing={lab.refreshing || desk.refreshing} onRefresh={() => { void lab.refresh(); void desk.refresh(); }}>
+    <SubScreen title="The Short Lab" wide={isWide} refreshing={lab.refreshing || desk.refreshing} onRefresh={() => { void lab.refresh(); void desk.refresh(); }}>
       {lab.loading && <Loading />}
       {lab.error && !lab.loading && <ErrorNote message={lab.error} />}
       {d && h && (
         <View style={{ marginTop: 8, gap: 10 }}>
+          {/* Dashboard header — prose + controls + the stat/margin strips span the
+              full width (matching the panel columns below); on a phone this is just
+              the reading column. */}
+          <View style={{ gap: 10 }}>
           <Text style={[s.intro, { color: p.textMuted }]}>
             Short selling is the one bet the fund can&apos;t make — and the only one with unbounded loss. Open
             modeled shorts on real names, watch them evolve, and learn why shorts blow up. A pure sandbox:
@@ -328,7 +334,9 @@ export default function ShortLabScreen() {
               (a modeled margin call).
             </Text>
           </Card>
+          </View>
 
+          <Masonry columns={isWide ? 2 : 1} style={{ gap: 10 }}>
           {/* open a short */}
           <View>
             <SectionTitle sub="modeled, at the live quote — US names">Open a short</SectionTitle>
@@ -641,6 +649,7 @@ export default function ShortLabScreen() {
               </Card>
             </View>
           )}
+          </Masonry>
 
           <Footnote>
             sandbox · modeled, never executable · the fund never shorts (a hard guardrail) · prices are

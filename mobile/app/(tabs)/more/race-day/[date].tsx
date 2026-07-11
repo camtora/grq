@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SubScreen, Card, Loading, ErrorNote, Footnote } from '../../../../components/Chrome';
+import { SubScreen, Card, Loading, ErrorNote, Footnote, Masonry } from '../../../../components/Chrome';
 import MdText from '../../../../components/MdText';
 import { usePalette, F } from '../../../../constants/theme';
+import { useResponsive } from '../../../../constants/layout';
 import { signedMoney, pnlColor, fmtDate } from '../../../../lib/format';
 import { useApi } from '../../../../services/hooks';
 import {
@@ -140,6 +141,7 @@ function ModelCell({
  * (web /race/[date]). Tap a challenger in the strip to swap the compare. */
 export default function RaceDayScreen() {
   const { p } = usePalette();
+  const { isTablet } = useResponsive();
   const router = useRouter();
   const params = useLocalSearchParams<{ date: string; vs?: string }>();
   const today = etToday();
@@ -238,12 +240,13 @@ export default function RaceDayScreen() {
           <Text style={[s.miniLabel, { color: p.textMuted, marginTop: 16, marginBottom: 6 }]}>
             Today so far · ★ {labelFor(champion)} vs {selected ? labelFor(selected) : 'pick a challenger above'}
           </Text>
-          <View style={{ gap: 8 }}>
+          {/* Champion vs challenger sit side by side on an iPad, stacked on a phone (§9). */}
+          <Masonry columns={isTablet && !!selected ? 2 : 1} style={{ gap: 8 }}>
             <SummaryCard model={champion} label={labelFor(champion)} sessions={d.sessions} book={bookFor(champion)} champ />
             {selected ? (
               <SummaryCard model={selected} label={labelFor(selected)} sessions={d.sessions} book={bookFor(selected)} champ={false} />
             ) : null}
-          </View>
+          </Masonry>
 
           {/* Session-by-session calls */}
           {d.sessions.map((sess) => (
@@ -253,12 +256,12 @@ export default function RaceDayScreen() {
                 <Text numberOfLines={2} style={[s.sessReason, { color: p.textMuted, flex: 1 }]}>{sess.reason}</Text>
                 <Text style={[s.sessTime, tabular, { color: p.textMuted }]}>{fmtTime(sess.at)}</Text>
               </View>
-              <View style={{ gap: 8, marginTop: 10 }}>
+              <Masonry columns={isTablet && !!selected ? 2 : 1} style={{ gap: 8, marginTop: 10 }}>
                 <ModelCell session={sess} model={champion} label={labelFor(champion)} champ />
                 {selected ? (
                   <ModelCell session={sess} model={selected} label={labelFor(selected)} champ={false} />
                 ) : null}
-              </View>
+              </Masonry>
             </Card>
           ))}
 

@@ -107,3 +107,73 @@ names index. More holds settings/kill-switch/labs (building out).
   Alfred = NAV hero → the Tape → the book (cash + positions) → latest fund-level
   briefing. Personal = each member's SnapTrade accounts, read-only, with the honest
   footer that Alfred can neither see nor trade them (D97).
+
+## 9. iPad — one app, responsive (not a separate project)
+
+GRQ Go is a **universal** Expo app: the same binary/codebase runs on iPhone and
+iPad (`app.json` → `ios.supportsTablet: true`; iPhone stays portrait-locked while
+iPad gets all orientations via `UISupportedInterfaceOrientations~ipad`). There is
+**no separate iPad project** — iPad is a layout target, handled by responsive
+primitives, never a fork.
+
+**Size classes are width-driven, not device-driven** (`constants/layout.ts`
+`useResponsive()`), so iPad Split View / Slide Over collapse to the phone layout
+automatically:
+
+| class | width | layout |
+|---|---|---|
+| `compact` | `< 700` | iPhone / iPad slide-over → single column, phone layout |
+| `medium` | `700–999` | iPad portrait / split → centered reading column, 2-up grids |
+| `expanded` | `>= 1000` | iPad landscape / full-screen → wide, master-detail |
+
+**The two primitives (both in `components/Chrome.tsx`):**
+
+- **`<Bounded>`** — the centered content column. `Screen`/`SubScreen` wrap header +
+  body in it, so on a phone it's a full-width pass-through and on an iPad content
+  caps (reading column 760, or the wider grid bound with `wide`) and centers —
+  nothing sprawls edge-to-edge. The dossier (`stock/[symbol]`) rolls its own chrome
+  and so wraps `<Bounded>` itself.
+- **`<Grid min={…}>`** — a self-measuring (`onLayout`) card grid: one column on a
+  phone, 2–3 up on an iPad. Used by the Hunt (Top Pick tiles) and Smart Money
+  (portfolio cards + boards). Pass items that stretch to fill their cell.
+
+**`wide` screens** (`Screen`/`SubScreen wide`) widen the column to the grid bound for
+master-detail / two-column pages; wrap any prose inside a plain `<Bounded>` so text
+stays readable. Shipped `wide` layouts:
+
+- **Watchlist** — master-detail on `expanded`: list on the left, the selected name's
+  detail pane (Alfred's read + targets + lazy earnings/analyst extras + actions) on
+  the right. Phone keeps expand-in-place. The row detail is one `WatchDetail`
+  component reused both ways (no dossier refactor).
+- **Today** — broadsheet on `expanded`: masthead + strips span the top, story
+  sections split into two ordered columns (reading order kept per column).
+- **Portfolio (Alfred)** — NAV hero + Tape stay in the reading column; the book and
+  the desk sit side-by-side on `expanded`.
+- **Dossier (`stock/[symbol]`)** — the hero + Alfred's-call verdict span full width
+  as the headline; every reference panel below (bottom line, position, trades, price,
+  analyst, earnings, signals, 13F, news, …) flows into a `<Masonry columns={2}>` on
+  `expanded`, one column on a phone. Distribution is round-robin (not height-balanced)
+  — reassign panels or add measurement if a column runs long.
+
+**Full-app coverage (every screen is built-for-iPad, not just the tab bar):**
+- **Card grids** (`<Grid>`): Hunt (Top Pick), Smart Money, Browse (two screener
+  columns), Chess, Chess-board (ripple cards), Race (scorecard), Bulls, Reports,
+  Report-card (3-up tiles), the glossary, Traffic ("who uses what"), Options
+  (Experiment).
+- **Masonry / two-column** (`<Masonry>` / flex split): the dossier, Today, More menu,
+  Day-Lab, Short-Lab, Race-day (champion ◀▶ challenger), the Options calculator
+  (knobs ◀▶ output), the Options Desk (arm ◀▶ arm).
+- **Master-detail**: Watchlist (list ◀▶ detail).
+- **Centered story column**: The Wire (each card capped, not stretched).
+
+**Intentionally left centered** (a single reading/sequential flow reads best in the
+760 column — this is a design call, not a gap): every Learn lesson/exam/course
+syllabus, the Learn hub (a 2-up catalog), Reports detail, About GRQ, Tokens. The six
+**modal** screens (Settings, Chat, Messages, Notifications, Notification-settings,
+Accounts) render as centered iOS sheets on iPad and need no change.
+
+**The phone is untouched everywhere**: all wide behavior gates on `isWide`/`isTablet`;
+`<Bounded>`/`Grid`/`Masonry` collapse to the exact phone tree on `compact`. Final
+sizing (column widths, the 1000px `expanded` threshold, Today's/dossier's column
+balance) is meant to be **eyeballed on the device** — the structure is here; tune the
+numbers on an iPad.

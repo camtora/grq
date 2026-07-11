@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useRouter } from 'expo-router';
 import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../../../components/Chrome';
 import { usePalette, F, type Palette } from '../../../constants/theme';
+import { useResponsive } from '../../../constants/layout';
 import { money } from '../../../lib/format';
 import { useApi } from '../../../services/hooks';
 
@@ -68,9 +69,11 @@ function when(iso: string): string {
 /** Hit-rate stat card (web TallyCard): % colored by ≥50%, "G/N right · avg · pending" note. */
 function TallyCard({ label, t }: { label: string; t: Tally }) {
   const { p } = usePalette();
+  const { isTablet } = useResponsive();
   const color = t.hitRate == null ? p.textMuted : t.hitRate >= 0.5 ? p.pos : p.neg;
+  // Phone keeps the 47% basis (2-up); iPad narrows it so the tiles go 3-up.
   return (
-    <Card style={s.tally}>
+    <Card style={[s.tally, isTablet && { flexBasis: '31%' as const }]}>
       <Text numberOfLines={1} style={[s.tallyLabel, { color: p.textMuted }]}>{label}</Text>
       <Text style={[s.tallyValue, tabular, { color }]}>
         {t.hitRate == null ? '—' : `${Math.round(t.hitRate * 100)}%`}

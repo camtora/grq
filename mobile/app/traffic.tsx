@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote } from '../components/Chrome';
+import { SubScreen, Card, SectionTitle, Footnote, Divider, Loading, ErrorNote, Grid } from '../components/Chrome';
 import { usePalette, F, type Palette } from '../constants/theme';
 import { useApi } from '../services/hooks';
 
@@ -153,7 +153,9 @@ export default function TrafficScreen() {
                 matrix doesn't survive a narrow screen — Cam 2026-07-04) */}
             <View>
               <SectionTitle sub="each person's sections, ranked">Who uses what</SectionTitle>
-              <View style={{ gap: 8 }}>
+              {/* Independent per-person cards → 2-up on an iPad, one column on a phone
+                  (gap 8 keeps the phone stack identical). */}
+              <Grid min={320} gap={8}>
                 {d.matrix.rows.map((row) => {
                   const name = d.byUser.find((u) => u.email === row.email)?.name;
                   const entries = Object.entries(row.counts)
@@ -188,7 +190,7 @@ export default function TrafficScreen() {
                     </Card>
                   );
                 })}
-              </View>
+              </Grid>
             </View>
 
             {/* viewer questions */}

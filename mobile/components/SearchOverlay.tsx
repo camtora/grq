@@ -248,8 +248,8 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
-  panelWrap: { flex: 1 },
-  panel: { marginHorizontal: 16 },
+  panelWrap: { flex: 1, paddingHorizontal: 16 },
+  panel: { width: '100%', maxWidth: 560, alignSelf: 'center' },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
