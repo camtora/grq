@@ -82,7 +82,12 @@ export async function resolvePrimaryListing(
   // dollar-volume) — a junk look-alike (JPM.TO is ~0.1% of NYSE JPM) falls through to the US listing.
   // The ~1000× gap dwarfs CAD/USD FX, so no conversion is needed to compare.
   const pick = caBest && caBest.dollarVol >= 0.1 * best.dollarVol ? caBest : best;
-  return { yahoo: pick.yahoo, priceCents: pick.priceCents, name: pick.name, currency: isCa(pick.yahoo) ? "CAD" : "USD" };
+  // Currency = the exchange's OWN (Yahoo meta.currency, carried on the probe) — the source of
+  // truth. Suffix is only a fallback if the feed didn't say. (Old code derived from the suffix,
+  // which is what let reporting-currency/exchange-map guesses drift — WPM/ATD, 2026-07-09.)
+  const fed = (pick.currency ?? "").toUpperCase();
+  const currency: "CAD" | "USD" = fed === "CAD" ? "CAD" : fed === "USD" ? "USD" : isCa(pick.yahoo) ? "CAD" : "USD";
+  return { yahoo: pick.yahoo, priceCents: pick.priceCents, name: pick.name, currency };
 }
 
 export async function addCandidate(symbol: string, reason: string, name?: string): Promise<CandidateResult> {
@@ -111,13 +116,16 @@ export async function addCandidate(symbol: string, reason: string, name?: string
   let resolved: { yahoo: string; priceCents: number; name: string | null; currency: "CAD" | "USD" } | null;
   if (symbol.includes(".")) {
     const p = await probeYahooSymbol(symbol.toUpperCase()).catch(() => null);
-    resolved = p ? { yahoo: symbol.toUpperCase(), priceCents: p.priceCents, name: p.name, currency: /\.(TO|V|NE|CN)$/i.test(symbol) ? "CAD" : "USD" } : null;
+    const fed = (p?.currency ?? "").toUpperCase();
+    resolved = p ? { yahoo: symbol.toUpperCase(), priceCents: p.priceCents, name: p.name, currency: fed === "CAD" ? "CAD" : fed === "USD" ? "USD" : /\.(TO|V|NE|CN)$/i.test(symbol) ? "CAD" : "USD" } : null;
   } else {
     resolved = await resolvePrimaryListing(key);
   }
   if (!resolved) return { ok: false, reason: `couldn't find a live quote for ${key}.` };
-  // Keep the old storage semantics: CAD is explicit, US stays null (inferred as USD downstream).
-  const currency = resolved.currency === "CAD" ? "CAD" : null;
+  // Store the listing's OWN trading currency EXPLICITLY (from the exchange feed) — no more
+  // "US stays null", which risked the §6 gate defaulting a US name to CAD funding. The tick's
+  // reconcileListingCurrencies keeps this honest against the feed thereafter.
+  const currency: "CAD" | "USD" = resolved.currency;
 
   if (existing) {
     await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: "agent" } });

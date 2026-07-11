@@ -3,6 +3,7 @@ import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse, isTradeable, currencyForSymbol } from "../lib/universe";
+import { exchangeLine } from "../lib/exchange";
 import { setBootstrapMode } from "./promote";
 import { queueDossiers } from "../lib/hunt";
 import { huntAvoidAndSeed, findLine, type ScreenFind } from "../lib/market-screen/retrieval";
@@ -322,6 +323,8 @@ async function runShadow(opts: {
       })(),
     );
   }
+  const meteredTotal = meteredModels.length;
+  let meteredOk = 0;
   for (const model of meteredModels) {
     tasks.push(
       (async () => {
@@ -330,6 +333,7 @@ async function runShadow(opts: {
           if (r && r.text) {
             await writeChallengerRow({ ...opts, model, text: r.text, isDecision, resolveEntry });
             await recordOpenRouterUsage(`race:${opts.label}`, model, r);
+            meteredOk++;
           }
         } catch (e) {
           console.error(`[race] challenger ${model} failed`, e instanceof Error ? e.message : e);
@@ -338,6 +342,39 @@ async function runShadow(opts: {
     );
   }
   await Promise.allSettled(tasks);
+
+  // If we HAD metered challengers to run but not ONE returned, the whole OpenRouter slate is down —
+  // nearly always depleted prepaid credits (the shadow call reserves 8000 max_tokens, which 402s once
+  // the balance can't pre-authorize it; chatComplete swallows that and returns null). This rotted
+  // silently for a week once the $10 ran out (2026-07-03→10), so surface it — throttled to once/ET-day.
+  if (meteredTotal > 0 && meteredOk === 0) await alertMeteredRaceDown(meteredModels).catch(() => {});
+}
+
+/** One throttled alert (≤ once per ET day) when EVERY metered OpenRouter challenger failed in a
+ *  session — the depleted-credits signature. Writes a SYSTEM day-marker to throttle (the token-
+ *  milestone pattern), then alerts on the `system` category. The champion and the free Claude
+ *  challengers are unaffected. Best-effort; never throws into a shadow run. */
+async function alertMeteredRaceDown(models: string[]): Promise<void> {
+  try {
+    const markerTitle = `Race metered down — ${etDateStr()}`;
+    if ((await prisma.journalEntry.count({ where: { kind: "SYSTEM", title: markerTitle } })) > 0) return;
+    await prisma.journalEntry.create({
+      data: {
+        kind: "SYSTEM",
+        title: markerTitle,
+        body: `Every metered challenger failed to return today (${models.join(", ")}) — almost always depleted OpenRouter credits; the shadow call's 8000-token pre-auth 402s. Top up: https://openrouter.ai/settings/credits`,
+        agentVersion: AGENT_VERSION,
+      },
+    });
+    await alert(
+      "warning",
+      "The Race — metered challengers down",
+      `Every OpenRouter challenger failed to return this session (${models.length} model${models.length === 1 ? "" : "s"}). Most likely the prepaid credits ran out — top up at https://openrouter.ai/settings/credits. The champion and the free Claude challengers are unaffected.`,
+      { category: "system" },
+    );
+  } catch (e) {
+    console.error("[race] metered-down alert failed:", e instanceof Error ? e.message : e);
+  }
 }
 
 /** Persist one challenger's ShadowRun row (champion's row is written separately by the caller). */
@@ -878,9 +915,21 @@ export async function runStockDossier(symbol: string, requestedBy: string): Prom
   const smLine = sm ? smartMoneySummaryLine(sm) : "";
   const optLine = opt ? optionsLine(opt) : "";
   const socLine = soc ? socialLine(soc) : "";
+  // State the LISTING explicitly — venue + funding currency — so the model doesn't fill the gap
+  // with world knowledge and mislabel a cross-listed name (WPM = Wheaton, "known" on the NYSE in
+  // USD) as a "USD buy — needs USD cash" when GRQ actually tracks the CAD/TSX listing whose CAD
+  // price it's being shown (2026-07-09). `cur` matches the §6 gate's own funding authority
+  // (entry.currency ?? CAD), now kept honest by the tick's currency reconcile.
+  const cur = (entry?.currency ?? "CAD").toUpperCase() === "USD" ? "USD" : "CAD";
+  const venue = exchangeLine(entry?.exchange ?? null, entry?.yahoo ?? sym);
+  // Defense-in-depth: the quote carries the exchange's own currency. If it ever disagrees with the
+  // stored currency (a row the reconcile hasn't healed yet), say so rather than assert a wrong one.
+  const qCur = (quote?.currency ?? "").toUpperCase();
+  const ccyMismatch = (qCur === "CAD" || qCur === "USD") && qCur !== cur;
   const prompt = `# STOCK DOSSIER ASSIGNMENT: ${sym}${entry ? ` — ${entry.name} (${entry.status}${entry.tier ? `, ${entry.tier}` : ""})` : ""}
 Requested by: ${requestedBy} · Today: ${etDateStr()}
-Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
+Listing: ${venue} — trades in ${cur}. This is a ${cur} buy funded from the ${cur} sleeve; the Quote below and every price target you set are in ${cur}. Do NOT relabel its currency${cur === "CAD" ? " — a Canadian/TSX listing is bought with CAD, it does NOT need USD cash" : ""}.${ccyMismatch ? ` ⚠️ DATA CHECK: our live quote reports ${qCur}, which disagrees with the stored ${cur} — treat the currency as UNVERIFIED and flag it in your Verdict rather than assuming either.` : ""}
+Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} ${cur} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
 Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
 Smart money (disclosed — weigh it, don't follow blindly): ${smLine || "(none tracked on this name)"}
 Options positioning (a SIGNAL about the underlying — we NEVER trade options): ${optLine || "(no listed options for this name)"}

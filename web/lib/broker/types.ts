@@ -4,6 +4,7 @@ export type Quote = {
   askCents: number;
   midCents: number;
   dayChangeBps?: number;
+  currency?: string | null; // the listing's trading currency, from the exchange feed (Yahoo meta.currency)
   at: Date;
 };
 

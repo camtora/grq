@@ -1,5 +1,5 @@
 import { prisma } from "../db";
-import { trackedSymbols } from "../universe";
+import { trackedSymbols, trackedUniverse, invalidateUniverseCache } from "../universe";
 import { fetchYahooQuotes, type FetchedQuote } from "./yahoo";
 import { isMarketOpen } from "../../agent/calendar";
 import type { Quote } from "./types";
@@ -25,6 +25,7 @@ type QuoteRow = {
   askCents: number;
   midCents: number;
   dayChangeBps: number;
+  currency: string | null;
   at: Date;
   fetchedAt: Date;
 };
@@ -36,6 +37,7 @@ function toQuote(r: QuoteRow): Quote {
     askCents: r.askCents,
     midCents: r.midCents,
     dayChangeBps: r.dayChangeBps,
+    currency: r.currency,
     at: r.at,
   };
 }
@@ -100,6 +102,29 @@ export async function refreshQuotesFor(symbols: string[]): Promise<number> {
 /** Bulk refresh of all tracked symbols — called by the agent tick loop. */
 export async function refreshAllQuotes(): Promise<number> {
   return refreshQuotesFor(await trackedSymbols());
+}
+
+/** Heal each tracked name's stored currency from the EXCHANGE's own currency (the quote's
+ *  `currency`, straight from Yahoo's feed for the exact listing we quote — see Quote.currency).
+ *  This is the durable end to the cross-listing currency drift (WPM/ATD, 2026-07-09): stored
+ *  currency stops being a guess (FMP reporting-currency, an exchange map, a suffix, world
+ *  knowledge) and self-corrects to what the listing actually trades in. Only heals to CAD/USD
+ *  (what the fund holds); an unknown/foreign fed currency is left alone. Returns the corrections
+ *  so the caller can log/alert — no logging here to keep this a pure data lib (no import cycle).
+ *  Cheap: reads the warm quote cache; the tick refreshes quotes just before calling this. */
+export async function reconcileListingCurrencies(): Promise<{ symbol: string; from: string | null; to: "CAD" | "USD"; yahoo: string }[]> {
+  const rows = await trackedUniverse();
+  const quotes = await getQuotes(rows.map((r) => r.symbol));
+  const fixes: { symbol: string; from: string | null; to: "CAD" | "USD"; yahoo: string }[] = [];
+  for (const r of rows) {
+    const fed = (quotes.get(r.symbol.toUpperCase())?.currency ?? "").toUpperCase();
+    if (fed !== "CAD" && fed !== "USD") continue; // only heal to a currency the fund actually holds
+    if ((r.currency ?? "").toUpperCase() === fed) continue; // already correct
+    await prisma.universeMember.update({ where: { symbol: r.symbol }, data: { currency: fed } });
+    fixes.push({ symbol: r.symbol, from: r.currency ?? null, to: fed, yahoo: r.yahoo });
+  }
+  if (fixes.length) invalidateUniverseCache();
+  return fixes;
 }
 
 export function isHardStale(q: Quote, now = Date.now()): boolean {

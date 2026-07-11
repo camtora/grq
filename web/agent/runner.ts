@@ -5,7 +5,7 @@
  *   npx tsx agent/runner.ts
  */
 import { prisma } from "../lib/db";
-import { refreshAllQuotes, refreshQuotesFor, getQuotes } from "../lib/broker/quotes";
+import { refreshAllQuotes, refreshQuotesFor, getQuotes, reconcileListingCurrencies } from "../lib/broker/quotes";
 import { BENCHMARK } from "../lib/universe";
 import { writeNavSnapshot } from "../lib/broker/sim";
 import { getBroker } from "../lib/broker";
@@ -88,6 +88,28 @@ function huntPausedOn(dateStr: string): boolean {
   return paused;
 }
 
+// METERED-KEY BRIDGE MODE (Cam 2026-07-07): the agent runs on a metered ANTHROPIC_API_KEY instead
+// of the weekly-limited Max token. GRQ_QUIET_UNTIL is an ET date (YYYY-MM-DD): through the day
+// BEFORE it, quiet mode trims only the heaviest/spikiest work to keep the metered bill sane — it
+// SKIPS the startup-universe scan, the research-queue DRAIN (the refresh enqueues still fill it),
+// and the half-hour check-in slots. It KEEPS the hourly (+15:30) check-ins, the 9:00 game plan,
+// the refresh enqueues, weekly chess, the Race/Options-Desk ticks, and all reads. Auto-resumes the
+// full every-30-min cadence on the date (ISO dates sort lexically). Env-only to change the date.
+let lastQuietLogDay = "";
+function quietModeOn(dateStr: string): boolean {
+  const until = (process.env.GRQ_QUIET_UNTIL ?? "").trim();
+  const quiet = until.length > 0 && dateStr < until;
+  if (quiet && lastQuietLogDay !== dateStr) {
+    lastQuietLogDay = dateStr;
+    console.log(`[bridge] metered-key mode (GRQ_QUIET_UNTIL=${until}) — hourly check-ins + reads ON; startup-scan + research-drain skipped; full cadence resumes ${until}`);
+  }
+  return quiet;
+}
+
+// Hourly (+15:30 pre-close capstone) check-in slots kept while metered-bridge mode is active —
+// a subset of CHECKIN_TIMES_ET; the gate in the check-in loop skips the rest. Cam 2026-07-07.
+const QUIET_CHECKIN_SLOTS = new Set(["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "15:30"]);
+
 // The research queue drains up to N dossiers CONCURRENTLY (Cam 2026-06-26). Dossiers are
 // independent units — each reads market data → writes ONE JournalEntry, no trades, no
 // cross-dossier deps — so a bounded pool turns a big refresh batch (weekly/daily/Saturday
@@ -148,6 +170,17 @@ async function refreshQuotes(open: boolean) {
     lastFullRefresh = now;
     lastFastRefresh = now;
     if (n === 0) await alert("warning", "Quote refresh returned 0 symbols", "Yahoo may be unhappy. Engine staleness guard will refuse blind fills.", { category: "system" });
+    // Self-heal stored currency from the exchange's own (fresh quotes carry the listing's
+    // trading currency straight from Yahoo). Ends the cross-listing currency drift for good:
+    // a name like ATD.TO wrongly tagged USD is corrected to CAD here, once, automatically.
+    const fixes = await reconcileListingCurrencies().catch((e) => { console.error("currency reconcile failed", e); return []; });
+    if (fixes.length) {
+      const summary = fixes.map((f) => `${f.symbol} (${f.yahoo}) ${f.from ?? "—"}→${f.to}`).join(", ");
+      await prisma.journalEntry.create({
+        data: { kind: "SYSTEM", title: `Currency reconciled — ${fixes.length} name(s)`, body: `Stored currency healed from the exchange feed: ${summary}. The listing's own trading currency is the source of truth (Quote.currency).`, agentVersion: AGENT_VERSION },
+      }).catch(() => {});
+      await alert("info", `Currency reconciled — ${fixes.length} name(s)`, summary, { category: "system" });
+    }
     return;
   }
   if (open && now - lastFastRefresh >= 2 * 60_000) {
@@ -416,6 +449,7 @@ async function maybeScheduledSessions() {
   const p = etParts();
   const m = p.minutesSinceMidnight;
   const dayStart = (await import("./calendar")).startOfEtDay();
+  const quiet = quietModeOn(p.dateStr);
 
   // Startup universe review (D30, Cam 2026-06-17): on process boot the agent reviews the
   // watchlist, self-promotes the names it would invest in, then plans entries. This is a BIG
@@ -433,7 +467,7 @@ async function maybeScheduledSessions() {
       prisma.journalEntry.count({ where: { title: { startsWith: "Startup universe review" }, at: { gte: dayStart } } }),
       prisma.universeMember.count({ where: { status: "CANDIDATE" } }),
     ]);
-    if (todayReviews === 0 && candidates > 0) {
+    if (!quiet && todayReviews === 0 && candidates > 0) {
       // Mark STARTED before running — this is the durable per-day guard against re-runs.
       await prisma.journalEntry.create({
         data: { kind: "SYSTEM", title: "Startup universe review — started", body: "Boot review of the watchlist began; re-runs are guarded for the rest of the ET day.", agentVersion: AGENT_VERSION },
@@ -651,6 +685,10 @@ async function maybeScheduledSessions() {
   // decision budget (a short fixed list).
   if (isMarketOpen()) {
     for (const hhmm of CHECKIN_TIMES_ET) {
+      // Metered-bridge mode (GRQ_QUIET_UNTIL) runs an HOURLY check-in cadence (top-of-hour + a
+      // 15:30 pre-close capstone) instead of the every-30-min CHECKIN_TIMES_ET list — Cam can
+      // sustain that load on the metered key (2026-07-07). Full every-30-min resumes when quiet lifts.
+      if (quiet && !QUIET_CHECKIN_SLOTS.has(hhmm)) continue;
       const [hh, mm] = hhmm.split(":").map(Number);
       const slot = hh * 60 + mm;
       if (m < slot || m >= slot + 25) continue;
@@ -981,7 +1019,10 @@ async function tick() {
   await maybeSaturdayHeldRefreshEnqueue();
   await maybeDailyRefreshEnqueue();
   await maybeEarningsRefreshEnqueue();
-  await processResearchQueue();
+  // Research-queue drain = the per-dossier Opus spend. Skipped in reads-only quiet mode
+  // (GRQ_QUIET_UNTIL): the enqueues above still fill the queue, but nothing generates a
+  // dossier until quiet lifts, at which point the backlog drains.
+  if (!quietModeOn(p.dateStr)) await processResearchQueue();
 
   // Bull Races (background — ~8 model calls; self-guarded against overlap, must NOT block the tick).
   runRaceTick().catch((e) => console.error("[bullrace] tick error", e instanceof Error ? e.message : e));

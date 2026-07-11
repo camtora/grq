@@ -2984,6 +2984,45 @@ The scheduled hunt is separately PAUSED until 2026-07-10 (`GRQ_HUNT_PAUSE_UNTIL`
 at Cam's request; this fix makes it cheap when it resumes. Agent v2.56-phase4. NB Chess Moves
 (maxTurns 44, WebFetch on) is the same shape — a candidate for the same treatment if it spikes.
 
+### D113 — Listing currency: the exchange feed is the single source of truth (Cam, 2026-07-09)
+
+**Context:** WPM's dossier read "a Buy … Needs USD cash" for a name GRQ tracks as **WPM.TO on
+the TSX in CAD** (whose CAD price the agent was even shown). This was the **5th** cross-listing
+currency incident (cf. D24 SPCX, D105 liquidity-resolution, the T=AT&T/Telus collision, the
+`toYahoo` `.TO`-mangling). Each prior fix patched one *derivation site*; the class survived.
+
+**Root cause:** currency was **computed**, not **stored from the source that knows it**. The
+quote fetch (`fetchOne`) receives Yahoo's authoritative `meta.currency` on every refresh and
+**threw it away** — the `Quote` table had no currency column. Every consumer then re-derived
+currency from a weaker proxy: FMP's `currency` (the company's *reporting* currency — Couche-Tard
+reports USD though ATD.TO trades CAD, the conflation that poisoned that row), an exchange→ccy map,
+a `.TO`/suffix guess, a "US stays null → infer USD" convention, or — in the dossier prompt, which
+never stated the currency — the model's own world knowledge ("WPM is on the NYSE → USD").
+
+**Decision:** make the **listing's own trading currency, captured from the exchange feed, the
+single source of truth**, and stop deriving it elsewhere:
+1. **`Quote.currency`** (new nullable column) is written in `fetchOne` from `meta.currency` — the
+   price and its currency now travel together, atomically, from the feed.
+2. **`reconcileListingCurrencies()`** runs on the tick's full quote refresh (`runner.ts`): for each
+   tracked name it heals `UniverseMember.currency` to the fed currency (CAD/USD only; foreign left
+   alone), logs a `SYSTEM` journal + alert on any correction. This **self-corrects drift** and would
+   have caught all five incidents — it healed **ATD USD→CAD** (which was mis-funding the §6 gate,
+   demanding USD to buy a Canadian stock) and a null BQE.V on first run.
+3. **`promote.ts`** sources currency from the probe's `meta.currency` (not the suffix) and now stores
+   US currency **explicitly** as `"USD"` (was null → which risked the gate's `entry.currency ?? "CAD"`
+   defaulting a US name to CAD funding).
+4. **Dossier prompt** (`sessions.ts`) states venue + funding currency, matched to the gate's own
+   authority, labels the quote + targets in that currency, and carries a mismatch guard if the fed
+   quote currency ever disagrees with the stored one. No raw `.TO` in the prompt (Cam's ask — the
+   suffix is no longer a *source*, only a last-resort fallback).
+
+**Blast radius:** one additive nullable column (no destructive migration); the ~30 read sites are
+unchanged — they keep reading `UniverseMember.currency`, now kept honest by (2). The **§6 gate is
+untouched** — it still funds by `entry.currency`; we only made that field self-correcting instead of
+a stale guess. Verified end-to-end against the live DB (216 names carry a fed currency; zero
+currency/suffix disagreements; zero Quote-vs-row conflicts). Agent **v2.61-phase4**; `web` shipped
+2026-07-09, `agent` rides the evening quiet-mode revert.
+
 ### D114 — News triage: retry a failed pass instead of discarding the batch (2026-07-10)
 
 **Symptom:** a "news triage reached the maximum number of turns" alert (`error_max_turns` from the

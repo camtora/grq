@@ -11,6 +11,7 @@ export type FetchedQuote = {
   askCents: number;
   midCents: number;
   dayChangeBps: number;
+  currency: string | null; // the exchange's own trading currency (meta.currency) — the authoritative "what is this price in", captured at the source instead of re-derived downstream
   at: Date;
 };
 
@@ -58,6 +59,7 @@ async function fetchOne(symbol: string): Promise<FetchedQuote | null> {
       midCents: mid,
       bidCents: mid - half,
       askCents: mid + half,
+      currency: typeof meta.currency === "string" && meta.currency ? meta.currency.toUpperCase() : null,
       dayChangeBps:
         typeof prev === "number" && prev > 0 ? Math.round((price / prev - 1) * 10_000) : 0,
       at:

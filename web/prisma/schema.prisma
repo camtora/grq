@@ -335,6 +335,7 @@ model Quote {
   askCents     Int
   midCents     Int
   dayChangeBps Int      @default(0)
+  currency     String? // the LISTING's trading currency, straight from the exchange feed (Yahoo meta.currency). THE source of truth for "what is this price in" — nullable only until the next quote sweep backfills it. Everything else infers currency from this or the universe row that reconciles to it (2026-07-09).
   at           DateTime // Yahoo's trade time — pinned at the last close while the market is shut
   fetchedAt    DateTime @default(now()) // when WE pulled it — cache freshness keys off this, never `at`
   source       String   @default("yahoo-delayed")
