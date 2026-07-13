@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.63-phase4";
+export const AGENT_VERSION = "v2.64-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -195,6 +195,22 @@ export const RACE = {
   // fixed virtual portfolio so the book stays BOUNDED — no model can "hold" more than this stake
   // (the bug that let llama show 659 TSM ≈ $250k). CAD board, cents. Read-time only; never trades.
   shadowStakeCents: Number(process.env.GRQ_RACE_SHADOW_STAKE_CENTS ?? "5000000") || 5_000_000,
+};
+
+// The LLM Council (D115) — a five-lens advisory panel for high-stakes JUDGMENT. Not a bake-off
+// (that's the Race) and not a sandbox (that's the Desk): the council makes ONE Opus model argue a
+// question from five deliberately-conflicting lenses — Contrarian, First-Principles, Expansionist,
+// Outsider, Executor — then a sixth Opus pass (the Chairman) synthesizes one verdict. It runs in TWO
+// places: (1) the chat HARD-GATES stock-judgment questions through it (a Haiku router decides), and
+// (2) the decision session is PROMPTED to convene_council before any BUY / close-call SELL. It is
+// ADVISORY ONLY — it produces text, never touches the §6 gate, the broker, or an order path
+// (guardrail #1). Six Opus passes/convene on Cam's Max token, so kill it without a deploy:
+// GRQ_COUNCIL_ENABLED=false (chat falls back to normal Alfred; the agent tool no-ops). Humans edit this.
+export const COUNCIL = {
+  enabled: (process.env.GRQ_COUNCIL_ENABLED ?? "true").toLowerCase() !== "false",
+  // How many named symbols' dossiers/signals we pre-load into the council's context (chat side).
+  // Brevity of each seat's take is enforced in the prompt (the SDK has no output-token knob).
+  maxSymbols: Number(process.env.GRQ_COUNCIL_MAX_SYMBOLS ?? "3") || 3,
 };
 
 // The Options Desk (docs/THE-OPTIONS-DESK.md) — a Bulls-style SANDBOX pitting a CONTROL (Opus,

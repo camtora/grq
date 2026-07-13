@@ -3044,3 +3044,40 @@ the gate — no money impact — but the digest lost a batch each time it fired.
 Deployed as agent **v2.62-phase4** (agent-only rebuild; the boot universe scan was suppressed for the
 ET day so the redeploy didn't burn the ~3.8M-token startup pass). Verified end-to-end: a forced
 3-article pass triaged cleanly in 1 turn.
+
+### D115 — The LLM Council: a five-lens advisory panel for high-stakes judgment (Cam, 2026-07-12)
+
+**What:** an "LLM Council" (Karpathy's pattern, persona variant) added to GRQ. One question is argued
+by **five deliberately-conflicting lenses** — Contrarian, First-Principles, Expansionist, Outsider,
+Executor — then a sixth pass, the **Chairman**, synthesizes ONE verdict ending in *The one thing /
+Biggest risk / First step*. The point is to beat single-answer sycophancy: surface disagreement BEFORE
+a call is trusted. Cam chose **Opus in all six seats** (max quality over the cheaper multi-model /
+Haiku options), the seats run in parallel to hold latency down.
+
+**Guardrail stance (unchanged):** the council is **advisory only** — like the Race/Desk challengers it
+imports no broker/order path and never touches the §6 gate (guardrail #1). A favourable verdict never
+lowers the 70% conviction bar or the order gate; the gate still disposes of every order.
+
+**Two integration points:**
+1. **Chat — HARD GATE** (`agent/chat-server.ts`). A cheap **Haiku router** (`routeChatToCouncil`)
+   classifies each message: a *judgment* question on a stock/holding/the portfolio ("is NVDA a buy?",
+   "trim XIC?") is answered by the council (verdict first, the full room below, live status as each
+   seat lands); chit-chat / how-does-X / factual lookups stay with normal Alfred. Fails **open** to
+   Alfred on any router/council error — a member never gets a blocked chat.
+2. **Agent — prompted tool** (`convene_council`, wired into the decision session's `grqServer`). The
+   persona (`agent/persona.ts`) instructs Alfred to convene it **before every proposed BUY and any
+   close-call SELL**. It loads the name's dossier/signals/quote/position, returns the verdict, and is
+   framed as advice, not an order. Not a hard gate (Cam's call) — a prompt.
+
+**Design/ops:** one shared module `agent/council.ts` (both consumers) — Agent-SDK one-shots on Cam's
+Max token, so it lives ONLY in the agent+chat images (never the alpine web image, same rule as
+sessions.ts/persona.ts). No-deploy kill switch `GRQ_COUNCIL_ENABLED=false` (chat → normal Alfred, tool
+→ no-op). Cost is real: **six Opus passes per convene** — every gated chat question and every proposed
+BUY — bounded by the Haiku gate (chit-chat doesn't convene) and the kill switch. `GRQ_COUNCIL_MAX_SYMBOLS`
+caps how many dossiers load into a chat council's context (default 3).
+
+Deployed as agent **v2.64-phase4** (agent+chat rebuild, Sunday-night window — market closed, no check-in
+to interrupt; boot scan suppressed for the ET day). `tsc` clean; 148 unit tests pass (7 new for the
+tolerant router-JSON parse + render contract, `test/council-route.test.ts`). Live end-to-end smoke of a
+full six-pass convene deferred (each costs the six Opus passes) — the SDK one-shot path is the same one
+`/explain` already runs in prod.

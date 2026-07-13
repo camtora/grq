@@ -10,7 +10,8 @@ import { agentSelfPromote, addCandidate } from "./promote";
 import { createFxRequest } from "../lib/fx-requests";
 import { usdCadRate } from "../lib/fx";
 import { notifyOut } from "./alerts";
-import { computeSignals, overallSignal } from "./signals";
+import { computeSignals, overallSignal, signalsOneLine } from "./signals";
+import { conveneCouncil, councilToolText, councilEnabled } from "./council";
 import { fmpProfile } from "../lib/fmp";
 import { upsertChainEdges } from "../lib/graph/edges";
 import { bareChainKey } from "../lib/chess";
@@ -592,6 +593,63 @@ const saveChessBoardTool = tool(
   },
 );
 
+// The LLM Council (D115) — convene five deliberately-conflicting lenses on a real decision, then a
+// chairman synthesizes ONE verdict. ADVISORY: it produces text only, imports no order path, and
+// never touches the §6 gate (guardrail #1). The decision session is PROMPTED (persona.ts) to convene
+// it before a BUY / close-call SELL; the gate still disposes of every order regardless.
+const conveneCouncilTool = tool(
+  "convene_council",
+  "Convene Alfred's LLM Council on a decision: five deliberately-conflicting lenses (Contrarian, First-Principles, Expansionist, Outsider, Executor) argue the question, then a Chairman synthesizes ONE verdict. You MUST convene it before you propose_order a BUY, and on any SELL you are genuinely unsure about — it pressure-tests the call against its own strongest bear/bull/base cases before real money moves. It reads the name's dossier, signals, quote, and the fund's position and returns the chairman's verdict plus the full room. It is ADVICE, not an order: the §6 gate and your conviction bar still decide, and a convene never lowers the bar. (Six Opus passes — convene for a real BUY / close-call, not for idle browsing.)",
+  {
+    symbol: z.string().min(1).max(16),
+    question: z
+      .string()
+      .min(8)
+      .max(400)
+      .describe("The exact decision to put to the room, e.g. 'Open a starter position in NVDA at ~$1,240 here, or wait?'"),
+  },
+  async (args) => {
+    if (!councilEnabled())
+      return text("The council is disabled right now (GRQ_COUNCIL_ENABLED=false). Proceed on your own read, within the guardrails.");
+    const sym = args.symbol.toUpperCase();
+    const [entries, sig, quotes, pf] = await Promise.all([
+      prisma.journalEntry.findMany({
+        where: { symbol: sym, kind: { in: ["RESEARCH", "DECISION", "RETRO"] } },
+        orderBy: { at: "desc" },
+        take: 4,
+      }),
+      computeSignals(sym).catch(() => null),
+      getQuotes([sym]).catch(() => new Map()),
+      getPortfolio().catch(() => null),
+    ]);
+    const q = quotes.get(sym);
+    const pos = pf?.positions.find((p) => p.symbol === sym);
+    const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+    const contextParts = [
+      `# NAME UNDER REVIEW: ${sym}`,
+      sig ? `SIGNALS: ${signalsOneLine(sig)}` : "SIGNALS: (no bar history)",
+      q ? `QUOTE: mid ${money(q.midCents)} ${q.currency ?? ""} (as of ${q.at.toISOString()})` : "QUOTE: (unavailable)",
+      pf
+        ? `FUND: NAV ${money(pf.navCents)}, cash ${money(pf.cashCents)} (CAD-valued). ${
+            pos
+              ? `WE HOLD ${sym}: ${pos.qty} sh, unrealized ${money(pos.unrealizedPnlCents)}.`
+              : `We do NOT currently hold ${sym}.`
+          }`
+        : "",
+      "",
+      "# DOSSIER & JOURNAL (most recent first):",
+      entries
+        .map((j) => `[${j.at.toISOString()}] ${j.kind} — ${j.title}\n${j.body.slice(0, 1200)}`)
+        .join("\n\n---\n\n") ||
+        "(no dossier on file — SAY SO in your read: the council is reasoning without research, which is itself a reason to research before acting.)",
+    ];
+    const result = await conveneCouncil({ question: args.question, context: contextParts.filter(Boolean).join("\n") });
+    if (!result)
+      return text("The council could not convene right now (a model call failed). Proceed on your own read, within the guardrails.");
+    return text(councilToolText(result));
+  },
+);
+
 export const grqServer = createSdkMcpServer({
   name: "grq",
   version: "1.0.0",
@@ -607,6 +665,7 @@ export const grqServer = createSdkMcpServer({
     addCandidateTool,
     requestResearchTool,
     promoteToUniverseTool,
+    conveneCouncilTool,
     proposeOrderTool,
     requestFxTool,
     scheduleCheckinTool,
@@ -630,6 +689,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__add_candidate",
   "mcp__grq__request_research",
   "mcp__grq__promote_to_universe",
+  "mcp__grq__convene_council",
   "mcp__grq__propose_order",
   "mcp__grq__request_fx",
   "mcp__grq__schedule_checkin",

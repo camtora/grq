@@ -12,7 +12,8 @@ import { prisma } from "../lib/db";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { makeReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
-import { MODELS, HARD } from "./policy";
+import { MODELS, HARD, COUNCIL } from "./policy";
+import { routeChatToCouncil, conveneCouncil, councilMarkdown, councilEnabled } from "./council";
 
 const PORT = Number(process.env.CHAT_PORT ?? 3014);
 
@@ -74,6 +75,34 @@ async function universeRoster(): Promise<string> {
   return `\n# UNIVERSE ROSTER — every name the fund tracks. Each has (almost certainly) been researched; read its latest dossier with get_journal{symbol} before answering about it.\n${lines.join("\n")}\n`;
 }
 
+// The chat HARD GATE (D115): a stock-judgment question is answered by the LLM Council — five Opus
+// lenses + a chairman verdict — instead of a single Alfred pass. Builds the council's context from
+// the fund state, the roster, and the named symbols' dossiers/signals, streams status as each seat
+// lands, and returns the verdict markdown (persisted by the caller) — or null if the council
+// collapses, so the caller can fall back to normal Alfred.
+async function runChatCouncil(
+  res: http.ServerResponse,
+  opts: { message: string; ctx: string; roster: string; symbols: string[]; focusSymbol?: string },
+): Promise<string | null> {
+  const syms = [
+    ...new Set([...opts.symbols, ...(opts.focusSymbol ? [opts.focusSymbol] : [])].map((s) => s.toUpperCase())),
+  ].slice(0, COUNCIL.maxSymbols);
+  const focusBlocks = syms.length
+    ? (await Promise.all(syms.map((s) => symbolFocus(s).catch(() => "")))).join("")
+    : "";
+  const context = `${opts.ctx}${opts.roster}${focusBlocks}`;
+  sse(res, { type: "status", text: "Convening the council — five lenses…" });
+  const result = await conveneCouncil({
+    question: opts.message,
+    context,
+    onSeat: (label, landed, total) => sse(res, { type: "status", text: `${label} weighed in (${landed}/${total})…` }),
+  });
+  if (!result) return null;
+  const md = councilMarkdown(result);
+  sse(res, { type: "text", text: md });
+  return md;
+}
+
 async function handleChat(res: http.ServerResponse, body: ChatBody) {
   const email = body.email?.trim().toLowerCase();
   const message = body.message?.trim();
@@ -101,6 +130,33 @@ async function handleChat(res: http.ServerResponse, body: ChatBody) {
   ]);
   history.reverse();
   const focus = body.symbol ? await symbolFocus(body.symbol) : "";
+
+  // HARD GATE (D115): route stock-judgment questions through the LLM Council. A cheap Haiku router
+  // decides; on any router/council failure we fall through to normal Alfred so a member never gets
+  // a blocked chat.
+  if (councilEnabled()) {
+    try {
+      const route = await routeChatToCouncil(message, body.symbol);
+      if (route.council) {
+        const md = await runChatCouncil(res, {
+          message,
+          ctx,
+          roster,
+          symbols: route.symbols,
+          focusSymbol: body.symbol,
+        });
+        if (md) {
+          await prisma.chatMessage.create({ data: { owner, email: "agent", role: "assistant", content: md } });
+          sse(res, { type: "done" });
+          res.end();
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("[chat] council gate error, falling back to Alfred:", e instanceof Error ? e.message : e);
+    }
+  }
+
   const convo = history
     .map((m) => `${m.role === "user" ? authorName(m.email) : "Alfred"}: ${m.content}`)
     .join("\n\n");
