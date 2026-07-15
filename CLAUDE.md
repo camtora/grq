@@ -111,6 +111,13 @@ Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), no
 
 - **Legacy docker-compose v1** on this host: use `docker-compose` (hyphen), and
   `docker-compose.yaml` must keep `version: "2.4"`. `docker compose` (space) does not exist.
+- **`docker-compose logs` does not support `--since` — it prints its USAGE TEXT instead.** Piped
+  into a `grep`, that looks exactly like "no matching log lines", so a check for recent activity
+  comes back confidently empty (bit me 2026-07-15: reported an agent check-in hadn't fired when it
+  had run on time, and a wait-loop built on it could never have matched). Use **`docker logs
+  grq-agent --since 25m`** for time-windowed reads — but note it reads bare timestamps as **local
+  (ET), not UTC**, so `--since 2026-07-15T16:30:00` at 13:00 ET silently means the future and
+  returns nothing. Prefer relative windows (`--since 25m`). `docker-compose logs --tail=N` is fine.
 - **Run `docker-compose` from the repo root, ALWAYS.** Compose v1 finds the yaml by walking
   up the tree, but reads `.env` for `${…}` interpolation from the CURRENT directory — from
   `web/` it loads `web/.env`, from `mobile/` it finds nothing, and either way

@@ -3081,3 +3081,73 @@ to interrupt; boot scan suppressed for the ET day). `tsc` clean; 148 unit tests 
 tolerant router-JSON parse + render contract, `test/council-route.test.ts`). Live end-to-end smoke of a
 full six-pass convene deferred (each costs the six Opus passes) — the SDK one-shot path is the same one
 `/explain` already runs in prod.
+
+### D116 — The FMP earnings calendar caps at 4000 rows; never trust a bulk window (Cam, 2026-07-15)
+
+**Symptom:** Cam asked why TSM — reporting the next morning — wasn't on Today's "Upcoming reports".
+Nothing was broken about TSM: it's watched by both members, and the matching logic resolved it fine.
+
+**Cause:** FMP's `stable/earnings-calendar?from=&to=` **hard-caps a response at 4000 rows, serves them
+date-DESCENDING, and ignores `limit`** (verified: `limit=10000` and `limit=20000` both return exactly
+4000). A window wide enough to overflow therefore loses its **earliest** days. Today's panel asks for
+-7d→+14d, which holds ~5,600 reports globally, so the cap cut everything before day +2. The response was
+a clean HTTP 200 full of plausible rows — just missing the near term, which is the worst end to lose:
+it's *tomorrow's docket*.
+
+Three wide-window callers were affected, and the damage was wider than the one missing tile:
+- `app/page.tsx` (web Today) — "Upcoming reports" started at day +2, and **"Reported this week" was
+  empty on every render**, because the whole 7-day lookback fell off the truncated end.
+- `lib/feed.ts` (GRQ Go Today) — same window, same loss.
+- `agent/curation.ts` (the D112 materiality gate, -21d→+10d) — blind to 6 days of its own "reported
+  since last dossier" lookback, so names that printed in that gap were never flagged for a refresh.
+  This one had been silently degrading the weekly sweep since the window was widened.
+
+`lib/earnings.ts` was never affected — it queries a single day (~260 rows), far under the cap.
+
+**Fix** (`web/lib/fmp.ts`): adaptive window-splitting *inside* `fmpEarningsCalendar`, so every caller
+inherits it rather than each remembering to chunk. If a window comes back at the cap, halve it and
+refetch the two halves in parallel, recursing (depth-bounded 6) and merging on a `symbol|date` key.
+~3 calls / ~400ms for a 22-day window. Returned order is now unspecified — every caller already sorts.
+Verified against the live API: the 22-day window went **4000 rows / 13 days → 5616 rows / all 22**, TSM
+present. Shipped web + agent **v2.65-phase4**.
+
+**The rule this buys us: never widen an FMP bulk-calendar window and trust the row count.** A capped
+response is byte-for-byte indistinguishable from a complete one — no error, no flag, no short-read — so
+this hid for as long as the window has been that wide. The busiest single day this season is ~1,400
+rows, so a per-day query can't realistically cap out; anything wider must assume it can, which is why
+the guard lives in the fetch helper and not in a caller's head.
+
+### D117 — Earnings bubbles: in line ≠ beat, and the % beside a print is the report-day move (Cam, 2026-07-15)
+
+**Symptom:** Cam, reading the Today earnings strip: *"PGR says -10.9%, with a beat checkmark. What's the
+-% mean? Same on ELV and C."* The number is the stock's day move — but it sat bare, directly under
+"beat ✓", so it read as part of the earnings result. A figure the app shows but can't explain is a bug
+(`docs/LITERACY.md`); a figure that *invites* the wrong reading is the same bug wearing a hat.
+
+Two real defects came out of chasing it:
+
+1. **Matching the estimate is not beating it.** The check was `epsActual >= epsEstimated`, so PGR
+   printing EPS **$4.64 against a $4.64 estimate** — a 0.0% surprise — rendered "beat ✓". Now
+   **beat / in line / miss**, with the band tied to the surprise we actually PRINT: if it rounds to
+   "0.0%", the badge reads "in line", so the words and the number can never disagree. A genuine +0.4%
+   beat still reads as a beat; a negative estimate (expected a loss, earned a profit — AEHR, live the
+   same day) resolves correctly because the surprise divides by `|est|`.
+2. **The % was today's move, whatever the report date.** The strip looks back 7 days, so for anything
+   that didn't print today it was unrelated drift — while the copy called it "on the print". Now it's
+   the move **ON the report date**, from that day's `Bar` close vs the prior close (the live quote when
+   it reported today). C's real report-day move was **-5.29%**; the page had been showing -4.80%.
+
+**We do not claim causation.** FMP's calendar carries no before-open/after-close field, so we cannot
+know whether a print's reaction landed on the report day or the session after. The copy says *"moved
++2.5% on Jul 14, the day it reported"* — true under either timing — and never *"on the print"*. If we
+ever want the real reaction, that needs a BMO/AMC flag we don't have from this source.
+
+**A layout finding that only showed up on screen:** the move had been rendering three times per card,
+and in the expanded rows it sat in the **surprise column** beside "+20.0%" / "+2.0%" — reading as a
+third surprise, which is plausibly what made it confusing in the first place. It now appears once,
+labelled, at top-right, and once spelled out in the read. Worth noting the markup looked fine; only a
+screenshot showed it.
+
+Shipped web + GRQ Go (which carried the identical `>=` bug). `printBps` is **additive** on
+`shared/contract.ts` per the wire-compat rule — older builds ignore it and keep rendering `dayBps`.
+`tsc` clean both projects, 148 tests pass.
