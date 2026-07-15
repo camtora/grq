@@ -365,18 +365,26 @@ export async function fmpEarningsReport(symbol: string): Promise<FmpEarningsRepo
   return { last, next };
 }
 
-// Bulk earnings calendar across ALL companies in a date window — ONE call covers
-// the whole tracked list, vs. a per-symbol fetch each. The Today page filters the
-// result down to our universe∪watchlist. Same row shape as the per-symbol endpoint.
-// (FMP's stable endpoint carries no before-open/after-close field, so we don't.) Tier 6.
+// Same row shape as the per-symbol endpoint, plus the ticker.
 export type EarningsCalRow = EarningsRow & { symbol: string };
 
-export async function fmpEarningsCalendar(from: string, to: string): Promise<EarningsCalRow[]> {
+// FMP caps this endpoint at 4000 rows and serves them date-DESCENDING, ignoring `limit`.
+// A window wide enough to overflow therefore loses its EARLIEST days *silently* — a 200 with
+// plausible data, just missing the near term. That is the worst end to lose: it's tomorrow's
+// docket. (Bit us 2026-07-15: a -7d→+14d window returned 4000 rows starting at day +2, so TSM
+// reporting the next morning never appeared, and "Reported this week" was empty every render.)
+// So: split any window that comes back at the cap and merge the halves.
+const CAL_ROW_CAP = 4000;
+const CAL_DAY_MS = 86_400_000;
+const calDay = (s: string) => Date.parse(`${s}T00:00:00Z`);
+const calStr = (t: number) => new Date(t).toISOString().slice(0, 10);
+
+async function fmpCalWindow(from: string, to: string, out: Map<string, EarningsCalRow>, depth: number): Promise<void> {
   const raw = await fmpGet<Array<Record<string, unknown>>>(
     `earnings-calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
-  if (!Array.isArray(raw)) return [];
-  return raw
+  if (!Array.isArray(raw)) return;
+  const rows = raw
     .map((r) => ({
       symbol: String(r.symbol ?? ""),
       date: String(r.date ?? ""),
@@ -386,6 +394,31 @@ export async function fmpEarningsCalendar(from: string, to: string): Promise<Ear
       revenueActual: numOrNull(r.revenueActual),
     }))
     .filter((r) => r.symbol && r.date);
+
+  // At the cap on a multi-day window → we're missing days. Halve and refetch. Depth-bounded
+  // so a pathological response can't fan out; a single day at the cap is genuinely all we can
+  // get (~1400 rows on the busiest day of this season, so there's real headroom).
+  const a = calDay(from);
+  const b = calDay(to);
+  if (rows.length >= CAL_ROW_CAP && b > a && depth < 6) {
+    const mid = a + Math.floor((b - a) / CAL_DAY_MS / 2) * CAL_DAY_MS;
+    await Promise.all([
+      fmpCalWindow(from, calStr(mid), out, depth + 1),
+      fmpCalWindow(calStr(mid + CAL_DAY_MS), to, out, depth + 1),
+    ]);
+    return;
+  }
+  for (const r of rows) out.set(`${r.symbol}|${r.date}`, r);
+}
+
+/** Bulk earnings calendar across ALL companies in a date window — ONE logical call covers the
+ *  whole tracked list, vs. a per-symbol fetch each. Callers filter the result down to the names
+ *  they care about and sort it themselves, so the merged order here is unspecified. Tier 6.
+ *  (FMP's stable endpoint carries no before-open/after-close field, so we don't.) */
+export async function fmpEarningsCalendar(from: string, to: string): Promise<EarningsCalRow[]> {
+  const out = new Map<string, EarningsCalRow>();
+  await fmpCalWindow(from, to, out, 0);
+  return [...out.values()];
 }
 
 // --- Tier 7: per-stock news ---------------------------------------------------
