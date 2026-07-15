@@ -399,7 +399,37 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     const key = `${hit.symbol}|${r.date}`;
     if (earnSeen.has(key)) continue;
     earnSeen.add(key);
-    earnMatched.push({ ...r, symbol: hit.symbol, name: hit.name, logoUrl: hit.logoUrl, dayBps: dayBpsBy.get(hit.symbol) ?? null });
+    earnMatched.push({ ...r, symbol: hit.symbol, name: hit.name, logoUrl: hit.logoUrl, dayBps: dayBpsBy.get(hit.symbol) ?? null, printBps: null });
+  }
+
+  // The move ON each report date, from the daily bars — `dayBps` is only the reaction for a name
+  // that printed TODAY; for the rest of the 7-day lookback it's just today's unrelated drift
+  // (Cam 2026-07-15). Close-on-D vs the prior close, one query for every reported name.
+  const reportedSyms = [...new Set(earnMatched.filter((e) => e.epsActual != null || e.revenueActual != null).map((e) => e.symbol))];
+  if (reportedSyms.length > 0) {
+    const bars = await prisma.bar
+      .findMany({
+        // A little slack before the window so the earliest report still has a PRIOR close to
+        // measure against (weekends/holidays can put it several days back).
+        where: { symbol: { in: reportedSyms }, date: { gte: new Date(start.getTime() - 14 * 24 * 60 * 60 * 1000), lt: end } },
+        orderBy: { date: "asc" },
+        select: { symbol: true, date: true, closeCents: true },
+      })
+      .catch(() => [] as { symbol: string; date: Date; closeCents: number }[]);
+    const barsBy = new Map<string, { day: string; closeCents: number }[]>();
+    for (const b of bars) {
+      const list = barsBy.get(b.symbol) ?? barsBy.set(b.symbol, []).get(b.symbol)!;
+      list.push({ day: b.date.toISOString().slice(0, 10), closeCents: b.closeCents });
+    }
+    for (const e of earnMatched) {
+      const list = barsBy.get(e.symbol);
+      if (!list) continue;
+      const i = list.findIndex((b) => b.day === e.date);
+      if (i < 1) continue; // no bar for the report day (or no prior close to compare against)
+      const prev = list[i - 1].closeCents;
+      if (prev <= 0) continue;
+      e.printBps = Math.round(((list[i].closeCents - prev) / prev) * 10_000);
+    }
   }
   // Reported (actuals filed) vs upcoming (no actuals, still to come) — the same
   // split the stock-page dossier uses.
@@ -612,7 +642,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               <Card className="p-4 text-sm text-teal-200/40">None of our names reported in the last week.</Card>
             )}
             <p className="mt-2 px-1 text-[10px] text-teal-200/40">
-              earnings for names we track or watch · beat/miss is actual vs the analyst <Term k="eps">EPS</Term> estimate · the full report lives on the stock page
+              earnings for names we track or watch · beat / in line / miss is actual vs the analyst <Term k="eps">EPS</Term> estimate · the full report lives on
+              the stock page
             </p>
           </div>
           {/* Upcoming — its own row: tiles 6-wide, wrapping (was 8 — Cam 2026-07-04: room for the company name under the ticker, matching the reported bubbles) */}

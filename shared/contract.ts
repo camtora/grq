@@ -478,7 +478,10 @@ export const Today = z.object({
     epsActual: z.number().nullable(),
     revenueEstimated: z.number().nullable(),
     revenueActual: z.number().nullable(),
-    dayBps: z.number().int().nullable(),
+    dayBps: z.number().int().nullable(),      // TODAY's move — the print reaction only if it reported today
+    // The move ON the report date, from that day's bar (null when we have no bar for it). Additive
+    // (D-wire-compat): older builds ignore it and keep rendering dayBps.
+    printBps: z.number().int().nullable().default(null),
     stance: z.string().nullable(),            // Alfred's call on the name
   })).optional(),
   earningsUpcoming: z.array(z.object({

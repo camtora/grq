@@ -210,6 +210,25 @@ function DetailLine({ label, actual, est, surprise, p }: { label: string; actual
   );
 }
 
+// Beat / in line / miss — matching the estimate is NOT beating it (the old `actual >= est` called
+// PGR's $4.64-vs-$4.64 print a beat; Cam 2026-07-15). Band tied to the surprise we PRINT, so a
+// displayed "0.0%" always reads "in line". Mirrors web components/EarningBubble.tsx.
+type Verdict = 'beat' | 'in line' | 'miss';
+
+function verdictOf(actual: number | null, est: number | null): Verdict | null {
+  if (actual == null || est == null) return null;
+  if (est === 0) return actual > 0 ? 'beat' : actual < 0 ? 'miss' : 'in line';
+  const s = ((actual - est) / Math.abs(est)) * 100;
+  if (Math.abs(s) < 0.05) return 'in line';
+  return s > 0 ? 'beat' : 'miss';
+}
+
+/** "today" when it printed today, else a short date like "Jul 14". */
+function moveLabel(date: string, today: string): string {
+  if (date === today) return 'today';
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 // Tap the card → expand in place (the web EarningBubble interaction, Cam
 // 2026-07-03): EPS + revenue vs estimates with surprise %, when it reported,
 // the day's reaction. The symbol and "full report →" still navigate.
@@ -217,17 +236,21 @@ function EarningBubble({ e, today }: { e: EarningReported; today: string }) {
   const { p } = usePalette();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const beat =
-    e.epsActual != null && e.epsEstimated != null
-      ? e.epsActual >= e.epsEstimated
-      : e.revenueActual != null && e.revenueEstimated != null
-        ? e.revenueActual >= e.revenueEstimated
-        : null;
+  const verdict = verdictOf(e.epsActual, e.epsEstimated) ?? verdictOf(e.revenueActual, e.revenueEstimated);
+  // Show the move on the REPORT date, not today's drift; and never claim "on the print" — the
+  // calendar has no before-open/after-close flag, so we can't know the reaction landed that day.
+  const reportedToday = e.date === today;
+  const moveBps = reportedToday ? e.dayBps : (e.printBps ?? null);
+  const moveOn = moveLabel(e.date, today);
   const epsPart = e.epsActual != null && e.epsEstimated != null ? ` (EPS ${fmtEps(e.epsActual)} vs ${fmtEps(e.epsEstimated)} est)` : '';
-  const movePart = e.dayBps != null ? `; the stock is ${signedPctFromBps(e.dayBps)} on the print` : '';
-  const read = beat == null
+  const movePart = moveBps == null
+    ? ''
+    : reportedToday
+      ? `; the stock is ${signedPctFromBps(moveBps)} today`
+      : `; the stock moved ${signedPctFromBps(moveBps)} on ${moveOn}, the day it reported`;
+  const read = verdict == null
     ? 'Just reported — numbers and the market’s reaction are on the stock page.'
-    : `${beat ? 'Beat' : 'Missed'} estimates${epsPart}${movePart}.`;
+    : `${verdict === 'beat' ? 'Beat' : verdict === 'miss' ? 'Missed' : 'In line with'} estimates${epsPart}${movePart}.`;
   return (
     <Pressable onPress={() => setOpen(!open)}>
     <Card style={s.bubble}>
@@ -241,11 +264,16 @@ function EarningBubble({ e, today }: { e: EarningReported; today: string }) {
           </View>
         </Pressable>
         <View style={s.rowRight}>
-          {beat != null && (
-            <Text style={[s.beatMiss, { color: beat ? p.pos : p.neg }]}>{beat ? 'beat ✓' : 'miss ✗'}</Text>
+          {verdict != null && (
+            <Text style={[s.beatMiss, { color: verdict === 'beat' ? p.pos : verdict === 'miss' ? p.neg : p.textMuted }]}>
+              {verdict === 'beat' ? 'beat ✓' : verdict === 'miss' ? 'miss ✗' : 'in line'}
+            </Text>
           )}
-          {e.dayBps != null && (
-            <Text style={[s.rowPct, tabular, { color: pnlColor(e.dayBps, p) }]}>{signedPctFromBps(e.dayBps)}</Text>
+          {/* Labelled — bare, it reads as part of the earnings result rather than the share price. */}
+          {moveBps != null && (
+            <Text style={[s.rowPct, tabular, { color: pnlColor(moveBps, p) }]}>
+              {signedPctFromBps(moveBps)} <Text style={[s.rowPctWhen, { color: p.textMuted }]}>{moveOn}</Text>
+            </Text>
           )}
         </View>
       </View>
@@ -259,9 +287,12 @@ function EarningBubble({ e, today }: { e: EarningReported; today: string }) {
             <Text style={[s.detailLabel, { color: p.textMuted }]}>Reported</Text>
             <Text style={[s.detailVal, { color: p.textPrimary }]}>{fmtDate(e.date)}</Text>
             <Text style={[s.detailEst, { color: p.textMuted }]}>{relDay(e.date, today)}</Text>
+            {/* No move here: this column is the SURPRISE column, and a share-price % in it
+                read as a third surprise. It's labelled up top and spelled out in the read. */}
           </View>
           <Text style={[s.detailFootnote, { color: p.textMuted }]}>
-            surprise = actual vs the analyst estimate · the full report and Alfred's take live on the stock page
+            surprise = actual vs the analyst estimate · the % up top is the share price, not the result · the full report and Alfred's take live on the
+            stock page
           </Text>
         </View>
       )}
@@ -562,6 +593,7 @@ const s = StyleSheet.create({
   sym: { fontFamily: F.semi, fontSize: 14 },
   name: { fontFamily: F.reg, fontSize: 11, marginTop: 1 },
   rowPct: { fontFamily: F.semi, fontSize: 13 },
+  rowPctWhen: { fontFamily: F.reg, fontSize: 10 },
   metaText: { fontFamily: F.reg, fontSize: 10 },
   upcomingName: { fontFamily: F.reg, fontSize: 9.5, marginTop: 1 },
   relDay: { fontFamily: F.semi, fontSize: 11 },

@@ -16,7 +16,8 @@ export type EarnView = {
   epsActual: number | null;
   revenueEstimated: number | null;
   revenueActual: number | null;
-  dayBps: number | null;
+  dayBps: number | null; // TODAY's live move — the reaction only if it reported today
+  printBps: number | null; // the move on the REPORT date, from the daily bars (null if we have no bar)
 };
 
 const fmtEps = (v: number | null) => (v == null ? "—" : `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`);
@@ -60,6 +61,32 @@ function surpriseClass(s: number | null): string {
   return s == null ? "text-teal-200/40" : s >= 0 ? "text-emerald-400" : "text-red-400";
 }
 
+// Beat / in line / miss. Matching the estimate is NOT beating it (Cam 2026-07-15: PGR printed
+// EPS $4.64 against a $4.64 estimate and the old `actual >= est` called it a beat). The band is
+// tied to the surprise we actually PRINT — if it rounds to "0.0%", the badge reads "in line", so
+// the words and the number can never disagree.
+type Verdict = "beat" | "in line" | "miss";
+
+function verdictOf(actual: number | null, est: number | null): Verdict | null {
+  if (actual == null || est == null) return null;
+  if (est === 0) return actual > 0 ? "beat" : actual < 0 ? "miss" : "in line"; // no % to speak of
+  const s = ((actual - est) / Math.abs(est)) * 100;
+  if (Math.abs(s) < 0.05) return "in line";
+  return s > 0 ? "beat" : "miss";
+}
+
+const VERDICT_STYLE: Record<Verdict, { badge: string; cls: string }> = {
+  beat: { badge: "beat ✓", cls: "text-emerald-400" },
+  "in line": { badge: "in line", cls: "text-teal-200/60" },
+  miss: { badge: "miss ✗", cls: "text-red-400" },
+};
+
+/** Short report-date label for the move — "today" when it printed today, else "Jul 14". */
+function moveLabel(date: string, today: string): string {
+  if (date === today) return "today";
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 /** One expanded-detail line: label · actual vs estimate · surprise. */
 function DetailLine({ label, actual, est, surprise }: { label: string; actual: string; est: string; surprise: number | null }) {
   return (
@@ -78,16 +105,27 @@ function DetailLine({ label, actual, est, surprise }: { label: string; actual: s
 }
 
 export default function EarningBubble({ e, stance, today }: { e: EarnView; stance: string | null; today: string }) {
-  const beat =
-    e.epsActual != null && e.epsEstimated != null
-      ? e.epsActual >= e.epsEstimated
-      : e.revenueActual != null && e.revenueEstimated != null
-        ? e.revenueActual >= e.revenueEstimated
-        : null;
+  const verdict = verdictOf(e.epsActual, e.epsEstimated) ?? verdictOf(e.revenueActual, e.revenueEstimated);
+
+  // The move to show beside the result is the one on the REPORT date — not today's drift. If it
+  // printed today they're the same number (and it's live); otherwise it comes from that day's bar.
+  // FMP's calendar carries no before-open/after-close flag, so we can't know whether the reaction
+  // actually landed on the report day or the session after — hence "on Jul 14", never "on the print".
+  const reportedToday = e.date === today;
+  const moveBps = reportedToday ? e.dayBps : e.printBps;
+  const moveOn = moveLabel(e.date, today);
+
   const epsPart = e.epsActual != null && e.epsEstimated != null ? ` (EPS ${fmtEps(e.epsActual)} vs ${fmtEps(e.epsEstimated)} est)` : "";
-  const movePart = e.dayBps != null ? `; the stock is ${signedPct(e.dayBps)} on the print` : "";
+  const movePart =
+    moveBps == null
+      ? ""
+      : reportedToday
+        ? `; the stock is ${signedPct(moveBps)} today`
+        : `; the stock moved ${signedPct(moveBps)} on ${moveOn}, the day it reported`;
   const read =
-    beat == null ? "Just reported — the numbers and the market's reaction are on the stock page." : `${beat ? "Beat" : "Missed"} estimates${epsPart}${movePart}.`;
+    verdict == null
+      ? "Just reported — the numbers and the market's reaction are on the stock page."
+      : `${verdict === "beat" ? "Beat" : verdict === "miss" ? "Missed" : "In line with"} estimates${epsPart}${movePart}.`;
 
   return (
     <div className="group flex flex-col rounded-xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-3 transition-colors hover:border-teal-400/30">
@@ -100,8 +138,14 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
           <div className="truncate text-[10px] text-teal-200/40">{e.name}</div>
         </div>
         <div className="ml-auto shrink-0 text-right tabular-nums">
-          {beat != null && <div className={`text-[10px] font-black ${beat ? "text-emerald-400" : "text-red-400"}`}>{beat ? "beat ✓" : "miss ✗"}</div>}
-          {e.dayBps != null && <div className={`text-xs ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)}</div>}
+          {verdict && <div className={`text-[10px] font-black ${VERDICT_STYLE[verdict].cls}`}>{VERDICT_STYLE[verdict].badge}</div>}
+          {/* The move carries its own label — bare, it read as part of the earnings result
+              rather than the share price (Cam 2026-07-15: "beat ✓ / −10.9% — what's the −%?"). */}
+          {moveBps != null && (
+            <div className={`text-xs ${dayClass(moveBps)}`} title={`Share price ${signedPct(moveBps)} on ${moveOn} — the stock's move, not an earnings figure`}>
+              {signedPct(moveBps)} <span className="text-[10px] font-normal text-teal-200/40">{moveOn}</span>
+            </div>
+          )}
         </div>
       </div>
       <p className="mt-2 text-[11.5px] leading-snug text-teal-200/60">{read}</p>
@@ -114,12 +158,13 @@ export default function EarningBubble({ e, stance, today }: { e: EarnView; stanc
             <span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-teal-200/40">Reported</span>
             <span className="text-teal-100/80">{fmtEarnDate(e.date)}</span>
             <span className="text-xs text-teal-200/40">{relDay(e.date, today)}</span>
-            {e.dayBps != null && (
-              <span className={`ml-auto text-xs font-semibold tabular-nums ${dayClass(e.dayBps)}`}>{signedPct(e.dayBps)} on the day</span>
-            )}
+            {/* No move here on purpose: this column is the SURPRISE column (EPS/revenue vs
+                estimate), and a share-price % sitting in it read as a third surprise. It's
+                labelled up top and spelled out in the read. */}
           </div>
           <p className="text-[10px] leading-snug text-teal-200/40">
-            surprise = actual vs the analyst estimate · the full report, transcript notes and Alfred&apos;s take live on the stock page
+            surprise = actual vs the analyst estimate · the % up top is the share price, not the result · the full report, transcript notes and
+            Alfred&apos;s take live on the stock page
           </p>
         </div>
       )}

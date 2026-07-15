@@ -31,7 +31,8 @@ export type EarningReported = {
   epsActual: number | null;
   revenueEstimated: number | null;
   revenueActual: number | null;
-  dayBps: number | null;
+  dayBps: number | null; // TODAY's move — the print reaction only if it reported today
+  printBps?: number | null; // the move ON the report date (server-additive)
   stance: string | null;
 };
 

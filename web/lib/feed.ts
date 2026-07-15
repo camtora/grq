@@ -652,6 +652,7 @@ export async function todayResponse() {
       revenueEstimated: r.revenueEstimated,
       revenueActual: r.revenueActual,
       dayBps: dayBpsBy.get(u.symbol) ?? null,
+      printBps: null as number | null,
       stance: stanceBy.get(u.symbol) ?? null,
     }];
   });
@@ -659,6 +660,34 @@ export async function todayResponse() {
     .filter((e) => e.epsActual != null || e.revenueActual != null)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 8);
+
+  // The move ON each report date (web parity, Cam 2026-07-15): dayBps is the reaction only for a
+  // name that printed TODAY — for the rest of the lookback it's just today's unrelated drift.
+  if (earningsReported.length > 0) {
+    const bars = await prisma.bar
+      .findMany({
+        where: {
+          symbol: { in: [...new Set(earningsReported.map((e) => e.symbol))] },
+          date: { gte: new Date(start.getTime() - 14 * 24 * 60 * 60 * 1000), lt: end },
+        },
+        orderBy: { date: "asc" },
+        select: { symbol: true, date: true, closeCents: true },
+      })
+      .catch(() => [] as { symbol: string; date: Date; closeCents: number }[]);
+    const barsBy = new Map<string, { day: string; closeCents: number }[]>();
+    for (const b of bars) {
+      const list = barsBy.get(b.symbol) ?? barsBy.set(b.symbol, []).get(b.symbol)!;
+      list.push({ day: b.date.toISOString().slice(0, 10), closeCents: b.closeCents });
+    }
+    for (const e of earningsReported) {
+      const list = barsBy.get(e.symbol);
+      if (!list) continue;
+      const i = list.findIndex((b) => b.day === e.date);
+      if (i < 1) continue;
+      const prev = list[i - 1].closeCents;
+      if (prev > 0) e.printBps = Math.round(((list[i].closeCents - prev) / prev) * 10_000);
+    }
+  }
   const earningsUpcoming = earnMatched
     .filter((e) => e.date >= todayStr && e.epsActual == null && e.revenueActual == null)
     .sort((a, b) => a.date.localeCompare(b.date))
