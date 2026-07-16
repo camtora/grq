@@ -3308,3 +3308,43 @@ caught its absence.
 **Soak impact:** the IBKR-paper soak clock (§9, ≥2 clean weeks) is Cam's call. This was a code defect
 that opened a forbidden position, not a bad trade — but "clean" has to mean something, and the fund held
 a naked short for ~75 minutes.
+
+### D118d — The council was spending Opus in the dark (Cam, 2026-07-16)
+
+Found while raising the news-triage turn cap. `council.ts` couldn't import `runSession` — `sessions.ts`
+→ `tools.ts` → `council.ts` is a cycle — so `oneShot()` hand-rolled its own `query()` loop. The copy
+lost everything `runSession` does *around* the call, and the losses were all silent:
+
+- **A dead seat vanished.** The loop only read `m.subtype === "success"`, so a seat that ended
+  `error_max_turns` fell through, returned null, and got filtered out at the `takes.filter(...)`. No
+  alert, no log (the `console.error` only fires on a throw).
+- **The council was invisible in `/admin/usage`.** Six Opus passes per convene wrote **no `AgentUsage`
+  row at all** — and therefore never counted toward the **40M/day burn alarm**, the alarm that exists
+  precisely because the agent can drain Cam's shared Max quota by 11am.
+- **The renderer lied.** `councilMarkdown` hardcoded *"five lenses, one verdict"* and printed it
+  whether five landed or three did. `conveneCouncil` only bails under **two** seats, so a three-lens
+  panel rendered as five, to the member's face.
+
+A short room is the failure that looks most like success: the chairman writes with identical
+confidence off whoever showed up. The whole point of five lenses is that they disagree — losing the
+Contrarian quietly is worse than losing the council outright, because you still get a verdict.
+
+**Fix** (agent + web **v2.70-phase4**):
+- `agent/usage.ts` — `recordAgentUsage` + `checkTokenMilestones` extracted out of `sessions.ts` into a
+  module with no tools dependency, so **anything that spends tokens can import it without the cycle**.
+  Council seats now appear in `/admin/usage` (labelled `council:contrarian`, `council:chair`,
+  `council:router`) and count toward the burn alarm.
+- `oneShot` alerts on a non-success seat and on a throw, and logs stderr — parity with `runSession`.
+- `CouncilResult.seated {landed,total}` + a thin-room note in `councilToolText`, so the **agent**
+  discounts a three-lens verdict; `seatedLine()` in `councilMarkdown`, so the **member** sees "3 of 5
+  lenses spoke (no The Contrarian…)". Locked by tests, including that a full room never renders the
+  short phrasing and vice-versa.
+- Seat `maxTurns` **1 → 4**. Evidence, not superstition: **345 of 345** successful one-shots on record
+  used exactly **one** turn, so extra turns are provably free — they're only ever consumed by the
+  transient mode that still tripped news-triage's cap of 3 today. At 1 a seat had zero headroom, on
+  Opus.
+
+**The rule this buys us:** *a copy of a helper inherits its behaviour and none of its instrumentation.*
+`oneShot` was a reasonable 20-line workaround for an import cycle, and it silently opted the most
+expensive thing in the codebase out of every guard we'd built around model calls. Same shape as D118:
+the code that mattered lived on the path nobody was looking at.

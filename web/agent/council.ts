@@ -18,6 +18,8 @@
  */
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { MODELS, COUNCIL } from "./policy";
+import { alert } from "./alerts";
+import { recordAgentUsage } from "./usage";
 
 export type CouncilSeat = { key: string; label: string; emoji: string; brief: string };
 
@@ -77,30 +79,53 @@ const CHAIR_SYSTEM = `You are THE CHAIRMAN of Alfred's investment council. Five 
 **First step:** <the concrete next action — or "nothing yet; revisit when <trigger>">`;
 
 export type CouncilAdvisor = { key: string; label: string; emoji: string; take: string };
-export type CouncilResult = { question: string; advisors: CouncilAdvisor[]; verdict: string };
+// `seated` is the honesty field: how many of the five lenses actually spoke. Without it a verdict
+// synthesized from three seats is indistinguishable from one synthesized from five (D118d).
+export type CouncilResult = { question: string; advisors: CouncilAdvisor[]; verdict: string; seated: { landed: number; total: number } };
 
 // One-shot completion on Cam's Max token via the Agent SDK (no tools, context pre-injected).
 // Returns the trimmed text, or null on any failure — a single seat dying can't sink the council.
-async function oneShot(model: string, system: string, user: string): Promise<string | null> {
+//
+// It cannot import runSession (sessions.ts → tools.ts → council.ts would cycle), so this is a
+// deliberate copy of that loop — but it now records usage and alerts like runSession does. Until
+// 2026-07-16 it did neither: a seat that ended non-success (error_max_turns) fell through the
+// success-only branch below, returned null, and got filtered out of the panel without a word. Six
+// Opus passes per convene wrote no AgentUsage row either, so the council was invisible to
+// /admin/usage and to the 40M/day burn alarm. `label` is what makes a seat legible in both.
+async function oneShot(label: string, model: string, system: string, user: string): Promise<string | null> {
+  console.log(`[session] ${label} starting (model=${model})`);
   try {
     const q = query({
       prompt: user,
       options: {
         model,
         systemPrompt: system,
-        maxTurns: 1,
+        // 4, not 1. Every one of 345 successful one-shot passes on record used exactly ONE turn, so
+        // the extra turns here are provably free — they are only ever consumed by the transient mode
+        // that still tripped news-triage's cap of 3 on 2026-07-16. At maxTurns 1 a seat had zero
+        // headroom for that, and a seat that trips it is a wasted Opus pass AND a quieter room.
+        maxTurns: 4,
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],
-        stderr: () => {},
+        stderr: (data: string) => console.error(`[session:${label}] ${data.slice(0, 400)}`),
       },
     });
     let out = "";
+    let resultMsg: any = null;
     for await (const m of q) {
-      if (m.type === "result" && m.subtype === "success") out = m.result;
+      if (m.type === "result") {
+        resultMsg = m;
+        if (m.subtype === "success") out = m.result;
+        // A non-success seat used to vanish here. It is a wasted Opus pass AND a quieter room —
+        // say so, the same way runSession does.
+        else await alert("warning", `Council seat "${label}" ended: ${m.subtype}`, "", { category: "system" });
+      }
     }
+    await recordAgentUsage(label, model, resultMsg, out || null);
     return out.trim() || null;
   } catch (e) {
+    await alert("warning", `Council seat "${label}" failed`, e instanceof Error ? e.message : String(e), { category: "system" });
     console.error("[council] oneShot failed:", e instanceof Error ? e.message : e);
     return null;
   }
@@ -131,7 +156,7 @@ export async function conveneCouncil(opts: {
   let landed = 0;
   const takes = await Promise.all(
     SEATS.map(async (s) => {
-      const take = await oneShot(MODELS.decision, SEAT_SYSTEM(s), userFor(s));
+      const take = await oneShot(`council:${s.key}`, MODELS.decision, SEAT_SYSTEM(s), userFor(s));
       landed += 1;
       try {
         opts.onSeat?.(s.label, landed, SEATS.length);
@@ -142,28 +167,65 @@ export async function conveneCouncil(opts: {
     }),
   );
   const advisors = takes.filter((t): t is CouncilAdvisor => t !== null);
-  if (advisors.length < 2) return null; // not enough of a room to be worth a verdict
+
+  // A short room is a QUIETER room, not an obviously broken one: the chairman still writes a
+  // confident verdict off whoever showed up, and a four-lens panel reads exactly like a five-lens
+  // one. The whole point of five lenses is that they disagree — losing the Contrarian silently is
+  // the failure that looks most like success. Surface it; `seated` lets callers say "4 of 5".
+  const missing = SEATS.filter((s) => !advisors.some((a) => a.key === s.key));
+  if (missing.length) {
+    await alert(
+      "warning",
+      `Council convened short — ${advisors.length}/${SEATS.length} seats`,
+      `Missing: ${missing.map((m) => m.label).join(", ")}. The verdict below was synthesized from the seats that landed.`,
+      { category: "system" },
+    );
+  }
+  if (advisors.length < 2) {
+    await alert("warning", "Council collapsed — no verdict", `Only ${advisors.length}/${SEATS.length} seat(s) landed; falling back.`, { category: "system" });
+    return null; // not enough of a room to be worth a verdict
+  }
 
   const room = advisors.map((a) => `## ${a.label}\n${a.take}`).join("\n\n");
   const verdict = await oneShot(
+    "council:chair",
     MODELS.decision,
     CHAIR_SYSTEM,
     `# QUESTION\n${question}\n\n# THE COUNCIL'S TAKES\n${room}\n\n# CONTEXT\n${context}\n\nDeliver the chairman's verdict.`,
   );
-  if (!verdict) return null;
-  return { question, advisors, verdict };
+  if (!verdict) {
+    await alert("warning", "Council chairman failed — no verdict", "The seats landed but the synthesis did not; falling back.", { category: "system" });
+    return null;
+  }
+  return { question, advisors, verdict, seated: { landed: advisors.length, total: SEATS.length } };
+}
+
+/** How many lenses actually spoke — the header used to hardcode "five lenses" and say it whether five
+ *  landed or three did, which is the same silence as the filtered nulls, just out loud (D118d). */
+function seatedLine(r: CouncilResult): string {
+  const { landed, total } = r.seated;
+  if (landed === total) return `${total} lenses, one verdict`;
+  const missing = SEATS.filter((s) => !r.advisors.some((a) => a.key === s.key)).map((s) => s.label);
+  return `${landed} of ${total} lenses spoke (no ${missing.join(", no ")}), one verdict`;
 }
 
 /** Render a verdict as chat markdown: the verdict FIRST (answer up top), then the full room below. */
 export function councilMarkdown(r: CouncilResult): string {
   const room = r.advisors.map((a) => `**${a.emoji} ${a.label}**\n\n${a.take}`).join("\n\n");
-  return `🏛️ **The council convened** — five lenses, one verdict.\n\n${r.verdict}\n\n---\n\n### The room\n\n${room}`;
+  return `🏛️ **The council convened** — ${seatedLine(r)}.\n\n${r.verdict}\n\n---\n\n### The room\n\n${room}`;
 }
 
 /** Compact text form for the AGENT's convene_council tool result (verdict first, then the room). */
 export function councilToolText(r: CouncilResult): string {
   const room = r.advisors.map((a) => `— ${a.label} —\n${a.take}`).join("\n\n");
-  return `THE COUNCIL DELIBERATED. Weigh this in your decision; it is advice, not an order — the §6 gate and your conviction bar still bind.\n\nCHAIRMAN'S VERDICT:\n${r.verdict}\n\nTHE ROOM (for your reasoning; do not just repeat it):\n${room}`;
+  // Tell the agent when the room was thin. A verdict from three lenses deserves less weight than one
+  // from five, and it cannot know that from the text alone — the chairman writes with the same
+  // confidence either way.
+  const short =
+    r.seated.landed < r.seated.total
+      ? `\n\nNOTE: only ${r.seated.landed} of ${r.seated.total} lenses landed — this is a THINNER room than usual; weigh the verdict accordingly.`
+      : "";
+  return `THE COUNCIL DELIBERATED. Weigh this in your decision; it is advice, not an order — the §6 gate and your conviction bar still bind.${short}\n\nCHAIRMAN'S VERDICT:\n${r.verdict}\n\nTHE ROOM (for your reasoning; do not just repeat it):\n${room}`;
 }
 
 export type ChatRoute = { council: boolean; symbols: string[] };
@@ -187,7 +249,7 @@ Respond with ONLY a compact JSON object, no prose, no code fence:
 {"council": <true|false>, "symbols": ["TICKER", ...]}
 symbols = the tickers or company names the judgment is about (UPPERCASE tickers when obvious; use the company name if you don't know the ticker; [] when it's portfolio-wide or none). When council is false, symbols must be [].`;
 
-  const raw = await oneShot(MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`);
+  const raw = await oneShot("council:router", MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`);
   if (!raw) return { council: false, symbols: [] };
   return parseRouteJson(raw, COUNCIL.maxSymbols);
 }

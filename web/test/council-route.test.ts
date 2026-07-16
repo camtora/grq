@@ -43,6 +43,7 @@ test("councilMarkdown — verdict leads, the room follows, all five labels prese
       { key: "contrarian", label: "The Contrarian", emoji: "⚖️", take: "Overbought." },
       { key: "executor", label: "The Executor", emoji: "🔧", take: "Set a limit at 1200." },
     ],
+    seated: { landed: 5, total: 5 },
   });
   assert.match(md, /The council convened/);
   // verdict appears before the room divider
@@ -56,8 +57,51 @@ test("councilToolText — frames the verdict as advice, not an order", () => {
     question: "Buy NVDA?",
     verdict: "Buy a starter.",
     advisors: [{ key: "expansionist", label: "The Expansionist", emoji: "🚀", take: "Big TAM." }],
+    seated: { landed: 5, total: 5 },
   });
   assert.match(t, /advice, not an order/);
   assert.match(t, /§6 gate/);
   assert.match(t, /CHAIRMAN'S VERDICT/);
+});
+
+// D118d — a short room must never render as a full one. The header hardcoded "five lenses" and said
+// it whether five landed or three did, and a seat that died was filtered out silently: a four-lens
+// verdict was byte-indistinguishable from a five-lens one, to the member AND to the agent.
+const shortRoom = {
+  question: "Buy NVDA here?",
+  verdict: "Hold.",
+  advisors: [
+    { key: "contrarian", label: "The Contrarian", emoji: "⚖️", take: "Overbought." },
+    { key: "executor", label: "The Executor", emoji: "🔧", take: "Limit at 1200." },
+    { key: "outsider", label: "The Outsider", emoji: "🌍", take: "Looks like 1999 networking." },
+  ],
+  seated: { landed: 3, total: 5 },
+};
+
+test("councilMarkdown — a full room says so, and doesn't claim a count it didn't have", () => {
+  const md = councilMarkdown({ ...shortRoom, seated: { landed: 5, total: 5 } });
+  assert.match(md, /5 lenses, one verdict/);
+  assert.doesNotMatch(md, /lenses spoke/); // the short-room phrasing must not appear
+});
+
+test("councilMarkdown — a SHORT room admits it and names who's missing", () => {
+  const md = councilMarkdown(shortRoom);
+  assert.match(md, /3 of 5 lenses spoke/);
+  // The seats that never landed are named — losing the First-Principles Thinker is the whole point.
+  assert.match(md, /no The First-Principles Thinker/);
+  assert.match(md, /no The Expansionist/);
+  // …and it must not still be advertising a full panel.
+  assert.doesNotMatch(md, /5 lenses, one verdict/);
+});
+
+test("councilToolText — warns the AGENT when the room was thin, so it can discount the verdict", () => {
+  const t = councilToolText(shortRoom);
+  assert.match(t, /only 3 of 5 lenses landed/);
+  assert.match(t, /THINNER room/);
+});
+
+test("councilToolText — a full room carries no thin-room warning", () => {
+  const t = councilToolText({ ...shortRoom, seated: { landed: 5, total: 5 } });
+  assert.doesNotMatch(t, /THINNER room/);
+  assert.doesNotMatch(t, /lenses landed/);
 });
