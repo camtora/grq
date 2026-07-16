@@ -1,3 +1,4 @@
+import { isMeteredModel } from "../lib/usage";
 // The Race — Phase 2 (D68): a tiny OpenRouter chat-completion client for SHADOW challengers only.
 //
 // Phase 1 already made the shadow path one-shot / no-tools, so a non-Claude challenger is a single
@@ -14,7 +15,10 @@ export type ChatResult = { text: string; inTokens: number; outTokens: number; co
 /** A challenger id routes to OpenRouter when it's a `vendor/model` slug (e.g. `deepseek/deepseek-chat`,
  *  `openai/gpt-5.1`). Claude ids (`claude-sonnet-4-6`) ride the Max-token SDK path instead. */
 export function isOpenRouterModel(model: string): boolean {
-  return model.includes("/") && !model.startsWith("claude-");
+  // Single-sourced in lib/usage.ts as isMeteredModel — the SAME question ("which wallet does this
+  // model spend?") that the burn alarm and the /tokens page ask. Two copies of it would be two
+  // spellings of one rule, free to drift (D118d).
+  return isMeteredModel(model);
 }
 
 /** One-shot completion against OpenRouter. Returns null when unconfigured (no key) or on ANY

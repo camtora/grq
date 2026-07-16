@@ -39,7 +39,7 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const valid = sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d);
   const viewAnchor = valid ? new Date(`${sp.d}T12:00:00Z`) : undefined;
-  const { today, byModel, rolling5h, recent, maxFiveH, window, anchorResetAt, generatedAt, isToday } = await getUsageDashboard(60, viewAnchor);
+  const { today, todayWallet, byModel, rolling5h, recent, maxFiveH, window, anchorResetAt, generatedAt, isToday } = await getUsageDashboard(60, viewAnchor);
   const dateStr = etDateStr(viewAnchor ?? new Date());
 
   const dayTotal = today.totals.total || 1; // avoid /0
@@ -51,7 +51,11 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
       </Link>
       <PageHeader
         title="Token usage"
-        sub={isToday ? "What the autonomous agent spends of Cam's shared Claude Max quota." : `Agent token burn for ${dateStr}.`}
+        sub={
+          isToday
+            ? "What the fund spends of Cam's shared Claude Max quota — and, separately, the real money the metered challengers spend."
+            : `Token burn for ${dateStr}.`
+        }
         right={<DateNav date={dateStr} basePath="/tokens" mode="query" />}
       />
 
@@ -64,18 +68,26 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
         <div className="space-y-8">
           {/* Today's headline numbers */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <StatCard label={isToday ? "Tokens today" : "Tokens that day"} value={fmtTokens(today.totals.total)} note={`${today.totals.calls} sessions`} />
-            <StatCard label="Fresh input" value={fmtTokens(today.totals.input)} />
-            <StatCard label="Output" value={fmtTokens(today.totals.output)} />
+            <StatCard
+              label={isToday ? "Max quota today" : "Max quota that day"}
+              value={fmtTokens(todayWallet.max.total)}
+              note={`${todayWallet.max.calls} Claude sessions`}
+            />
+            <StatCard label="Fresh input" value={fmtTokens(todayWallet.max.input)} note="Max quota" />
+            <StatCard label="Output" value={fmtTokens(todayWallet.max.output)} note="Max quota" />
             <StatCard
               label="Cache (write / read)"
-              value={`${fmtTokens(today.totals.cacheWrite)} / ${fmtTokens(today.totals.cacheRead)}`}
+              value={`${fmtTokens(todayWallet.max.cacheWrite)} / ${fmtTokens(todayWallet.max.cacheRead)}`}
               note="reads are cheap, still count"
             />
             <StatCard
-              label="Est. cost"
-              value={today.totals.costMicroUsd > 0 ? fmtUsd(today.totals.costMicroUsd) : "—"}
-              note={today.totals.costMicroUsd > 0 ? "if metered" : "Max token: unmetered"}
+              label="Metered spend"
+              value={todayWallet.metered.calls > 0 ? fmtUsd(todayWallet.metered.costMicroUsd) : "—"}
+              note={
+                todayWallet.metered.calls > 0
+                  ? `real $ · ${todayWallet.metered.calls} challenger calls`
+                  : "no challenger calls"
+              }
             />
             {isToday && (
               <StatCard

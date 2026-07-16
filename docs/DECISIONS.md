@@ -3361,10 +3361,37 @@ first, and mutation-validated as usual: stripping chat-server's recording → re
 an un-instrumented `query()` loop → red.
 
 Writing that test found a fourth thing: the assertion "only `usage.ts` writes AgentUsage" **failed**,
-because The Race and the Options Desk legitimately write metered rows there. Which surfaces a real
-wrinkle, **not fixed here**: `checkTokenMilestones` sums *every* AgentUsage row and reports the total as
-*"tokens of Cam's shared Claude Max quota"* — so OpenRouter tokens, a different wallet entirely, inflate
-the Max burn alarm. Harmless while the challengers are dark on credits, wrong whenever they aren't.
+because The Race and the Options Desk legitimately write metered rows there. Which surfaced a real
+wrinkle — **one table, two wallets** — fixed in **v2.72**:
+
+- **MAX** — Claude via the Agent SDK on Cam's flat Max subscription. **Tokens** are the scarce thing;
+  `costMicroUsd` is **notional**, what the call *would* have cost metered. No money moves.
+- **METERED** — OpenRouter challengers. Real dollars from a prepaid balance. **Cost** is the scarce
+  thing; at zero they go dark silently.
+
+Summing them was wrong in both directions at once. `checkTokenMilestones` aggregated the whole table and
+called it *"tokens of Cam's shared Claude Max quota"*, and `/tokens` rendered one **"Est. cost"** figure.
+Measured 2026-07-16: **Max 34.89M / notional $93.56** vs **metered 961.5k / real $1.20** — the page
+advertised **$93.56 of "cost"** when **$1.20** actually left an account, and the alarm counted **35.85M**
+against a 40M floor when only 34.89M touched the quota. A busy day trips it ~1M early.
+
+`lib/usage.ts` now owns `isMeteredModel()` (single-sourced — `agent/openrouter.ts isOpenRouterModel`
+delegates rather than keeping a second spelling) and `splitByWallet()`. The alarm and the 5h window count
+**Max only**; `/tokens` shows *Max quota* in tokens beside *Metered spend* in real dollars, never added;
+the CLI prints notional and real on separate lines. The alarm filters in **JS with the shared predicate**
+rather than a Prisma where-clause — re-spelling `includes("/") && !startsWith("claude-")` in query form
+would be one rule in two places, which is the day's whole lesson.
+
+**This is the class the parity test cannot catch** — the rule was wired *everywhere* and simply **wrong**.
+Presence-checking can't see that; only arithmetic can. `test/usage-wallets.test.ts` pins it, including the
+exact alarm case (39M Max + 1M metered must NOT fire) and the exact cost case ($9.28 notional + $1.19 real
+must never render as $10.47). Same defence that caught the 1¢ commission: test the math, not the wiring.
+
+**Correction for the record:** this investigation twice asserted from stale memory that the challengers
+were "dark on credits" and burning "$12/day". Both were checkable in one query and both were wrong — the
+`race:` label prefix mixes BOTH wallets, so that $12 was mostly notional Claude. Real OpenRouter burn is
+~$1.19/day. (They *are* out now: balance −$0.17, dark since 2026-07-16 12:36 ET; the v2.63 alert fired
+correctly at 13:07 ET. Top up at openrouter.ai/settings/credits — they auto-resume.)
 
 **The rule this buys us:** *a copy of a helper inherits its behaviour and none of its instrumentation.*
 `oneShot` was a reasonable 20-line workaround for an import cycle, and it silently opted the most

@@ -12,6 +12,7 @@
 import { prisma } from "../lib/db";
 import { AGENT_VERSION } from "./policy";
 import { startOfEtDay, etDateStr } from "./calendar";
+import { isMeteredModel } from "../lib/usage";
 import { alert } from "./alerts";
 
 // Notify BOTH members when the day's cumulative agent token burn crosses 40M, then every 10M above
@@ -24,12 +25,21 @@ const TOKEN_MILESTONE_FLOOR = 40_000_000; // start at 40M/day
 export async function checkTokenMilestones(): Promise<void> {
   try {
     const dayStart = startOfEtDay(new Date());
-    const agg = await prisma.agentUsage.aggregate({
+    // MAX-QUOTA ROWS ONLY. This used to aggregate the whole table and call the result "Cam's shared
+    // Claude Max quota" — but AgentUsage also holds the metered OpenRouter challengers, which are
+    // real dollars from a prepaid balance and never touch the subscription. Counting them tripped the
+    // alarm early on tokens the quota never saw (~1M/day when the Race is funded) (D118d).
+    //
+    // Filtered in JS with the SHARED predicate rather than a Prisma where-clause: re-spelling
+    // `includes("/") && !startsWith("claude-")` in query form would be the same rule in two places,
+    // free to drift — which is the whole lesson of today. A day is a few hundred rows.
+    const rows = await prisma.agentUsage.findMany({
       where: { at: { gte: dayStart } },
-      _sum: { inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
+      select: { model: true, inputTokens: true, outputTokens: true, cacheCreationTokens: true, cacheReadTokens: true },
     });
-    const total =
-      (agg._sum.inputTokens ?? 0) + (agg._sum.outputTokens ?? 0) + (agg._sum.cacheCreationTokens ?? 0) + (agg._sum.cacheReadTokens ?? 0);
+    const total = rows
+      .filter((r) => !isMeteredModel(r.model))
+      .reduce((s, r) => s + r.inputTokens + r.outputTokens + r.cacheCreationTokens + r.cacheReadTokens, 0);
     if (total < TOKEN_MILESTONE_FLOOR) return;
     const M = (Math.floor(total / TOKEN_MILESTONE_STEP) * TOKEN_MILESTONE_STEP) / 1_000_000; // 47.3M → 40
     const day = etDateStr();

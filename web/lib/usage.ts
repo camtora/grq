@@ -1,11 +1,28 @@
 import { prisma } from "./db";
 
-// Token accounting for the autonomous agent's Claude sessions (AgentUsage rows, written by
-// runSession()). The agent runs on Cam's shared Claude Max token, so this is how we see how much
-// of that quota the agent eats — and which session types eat the most. Used by the /admin/usage
-// page and the scripts/token-report.ts CLI.
+// Token accounting for every model call the fund makes (AgentUsage rows — see agent/usage.ts).
+// Used by the /tokens page and the scripts/token-report.ts CLI.
+//
+// ⚠ ONE TABLE, TWO WALLETS. This is the thing to keep straight:
+//   MAX     — Claude via the Agent SDK, on Cam's shared Claude Max subscription. The TOKENS are the
+//             scarce resource (a runaway scan has drained the day's quota by 11am). `costMicroUsd`
+//             on these rows is NOTIONAL — what the call WOULD have cost on the metered API. Cam
+//             pays a flat subscription; that money never moves.
+//   METERED — OpenRouter challengers (The Race, the Options Desk). Real dollars leaving a prepaid
+//             balance. The COST is the scarce resource; when it hits zero they silently go dark.
+// Summing them is wrong in both directions: it inflates the Max burn alarm with tokens that never
+// touched the quota, and it reports notional Max cost as money spent. Until 2026-07-16 both the
+// alarm and the /tokens page did exactly that (D118d).
 
 const FIVE_H_MS = 5 * 60 * 60 * 1000;
+
+/** Which wallet a row spends. OpenRouter ids are `vendor/model` (`z-ai/glm-4.6`); Claude on the Max
+ *  token is bare (`claude-opus-4-8`). A slash-named `claude-*` would be Claude routed THROUGH
+ *  OpenRouter — metered, correctly. Single-sourced here and re-exported as isOpenRouterModel from
+ *  agent/openrouter.ts: one rule, one spelling (the D118 lesson). */
+export function isMeteredModel(model: string): boolean {
+  return model.includes("/") && !model.startsWith("claude-");
+}
 
 // A SOFT, configurable estimate of the Max-plan 5-hour token budget. Anthropic does not expose a
 // real "remaining quota" number for a subscription, so the page's "remaining" is OUR measured
@@ -31,8 +48,20 @@ type UsageRow = {
   cacheReadTokens: number;
   costMicroUsd: number;
   label: string;
+  model: string;
   at: Date;
 };
+
+/** The day split by wallet. `max.total` is the number the burn alarm and the 5h window care about;
+ *  `metered.costMicroUsd` is the only real money on the page. */
+export type WalletSplit = { max: Totals; metered: Totals };
+
+export function splitByWallet(rows: UsageRow[]): WalletSplit {
+  const max = emptyTotals();
+  const metered = emptyTotals();
+  for (const r of rows) add(isMeteredModel(r.model) ? metered : max, r);
+  return { max, metered };
+}
 
 function emptyTotals(): Totals {
   return { calls: 0, input: 0, output: 0, cacheWrite: 0, cacheRead: 0, total: 0, costMicroUsd: 0 };
@@ -84,6 +113,10 @@ function aggregate(rows: UsageRow[]): { totals: Totals; byGroup: GroupAgg[] } {
 
 export type UsageDashboard = {
   today: { totals: Totals; byGroup: GroupAgg[] };
+  // The day split by wallet (D118d). `todayWallet.max` is Cam's Max-quota burn — the number the
+  // headline and the 40M alarm mean; `todayWallet.metered.costMicroUsd` is real OpenRouter money.
+  // `today.totals` remains the union (every call, for the by-type table).
+  todayWallet: WalletSplit;
   // Per-MODEL breakdown for the viewed day (group = the model id). `costMicroUsd` is real spend for
   // OpenRouter challengers (slash-named) and the metered-EQUIVALENT for claude-* on the Max plan.
   byModel: GroupAgg[];
@@ -168,7 +201,11 @@ export async function getUsageDashboard(recentLimit = 60, viewAnchor?: Date): Pr
 
   const dayRows = rows.filter((r) => r.at >= dayStart && r.at < dayEnd);
   const today = aggregate(dayRows);
-  const rolling5h = isToday ? aggregate(rows.filter((r) => r.at >= windowStart)).totals : emptyTotals();
+  const todayWallet = splitByWallet(dayRows);
+  // The 5h window is a MAX-PLAN concept — it exists to answer "how close am I to the subscription
+  // wall?". OpenRouter tokens never touched that quota, so counting them here overstated the burn
+  // against MAX_5H_TOKENS and would trip the estimate early (D118d).
+  const rolling5h = isToday ? splitByWallet(rows.filter((r) => r.at >= windowStart)).max : emptyTotals();
 
   // Per-model breakdown — which models ate the tokens (and $), sorted by cost then tokens.
   const modelMap = new Map<string, GroupAgg>();
@@ -200,6 +237,7 @@ export async function getUsageDashboard(recentLimit = 60, viewAnchor?: Date): Pr
 
   return {
     today,
+    todayWallet,
     byModel,
     rolling5h,
     recent,
