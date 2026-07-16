@@ -3344,6 +3344,28 @@ Contrarian quietly is worse than losing the council outright, because you still 
   transient mode that still tripped news-triage's cap of 3 today. At 1 a seat had zero headroom, on
   Opus.
 
+**And it wasn't only the council.** Asked "so that's all fixed?", a grep for `query({` found the same
+gap in **`chat-server.ts`, twice** — including **Ask Alfred itself: Opus, `maxTurns: 12`, with WebFetch**
+(the tool `sessions.ts` warns "compounds — the hunt spiked to ~54M this way"). Not one AgentUsage row
+since the chat shipped: every conversation Cam and Graham have ever had with Alfred was invisible to
+`/admin/usage` and to the burn alarm — on the surface that scales with how much they actually *use* the
+product. Both sites now record (`chat`, `explain`), and the explainer's `maxTurns` went 1 → 4 on the same
+evidence as the seats.
+
+Fixing the council and walking past the chat, eight hours after fixing three guardrails and walking past
+their cause, is the tell: **an instance is not a class.** So `test/agent-instrumentation.test.ts` asserts
+the class — *if a file calls `query({`, it must call `recordAgentUsage`* — plus that nobody invents a
+third accounting path (AgentUsage has two legitimate writers because it tracks two WALLETS: the SDK on
+Cam's Max quota, and the metered OpenRouter challengers billed in real dollars). Comments are stripped
+first, and mutation-validated as usual: stripping chat-server's recording → red; a new file hand-rolling
+an un-instrumented `query()` loop → red.
+
+Writing that test found a fourth thing: the assertion "only `usage.ts` writes AgentUsage" **failed**,
+because The Race and the Options Desk legitimately write metered rows there. Which surfaces a real
+wrinkle, **not fixed here**: `checkTokenMilestones` sums *every* AgentUsage row and reports the total as
+*"tokens of Cam's shared Claude Max quota"* — so OpenRouter tokens, a different wallet entirely, inflate
+the Max burn alarm. Harmless while the challengers are dark on credits, wrong whenever they aren't.
+
 **The rule this buys us:** *a copy of a helper inherits its behaviour and none of its instrumentation.*
 `oneShot` was a reasonable 20-line workaround for an import cycle, and it silently opted the most
 expensive thing in the codebase out of every guard we'd built around model calls. Same shape as D118:

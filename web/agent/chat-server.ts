@@ -14,6 +14,7 @@ import { computeSignals, signalsOneLine } from "./signals";
 import { makeReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
 import { MODELS, HARD, COUNCIL } from "./policy";
 import { routeChatToCouncil, conveneCouncil, councilMarkdown, councilEnabled } from "./council";
+import { recordAgentUsage } from "./usage";
 
 const PORT = Number(process.env.CHAT_PORT ?? 3014);
 
@@ -180,6 +181,7 @@ ${convo}`;
         stderr: (d: string) => console.error(`[chat] ${d.slice(0, 300)}`),
       },
     });
+    let resultMsg: any = null;
     for await (const m of q) {
       if (m.type === "assistant") {
         for (const block of m.message.content) {
@@ -194,10 +196,16 @@ ${convo}`;
           }
         }
       }
-      if (m.type === "result" && m.subtype !== "success") {
-        sse(res, { type: "error", text: `session ended: ${m.subtype}` });
+      if (m.type === "result") {
+        resultMsg = m;
+        if (m.subtype !== "success") sse(res, { type: "error", text: `session ended: ${m.subtype}` });
       }
     }
+    // Every Ask Alfred turn is Opus with tools (incl. WebFetch, which compounds — see sessions.ts).
+    // Until 2026-07-16 none of it wrote an AgentUsage row, so the chat was invisible to /admin/usage
+    // AND to the 40M/day burn alarm — on the same shared Max quota as the fund, and the one surface
+    // that scales with how much Cam and Graham actually use the product (D118d).
+    await recordAgentUsage("chat", MODELS.decision, resultMsg, finalText || null);
   } catch (e) {
     sse(res, { type: "error", text: e instanceof Error ? e.message : String(e) });
   }
@@ -225,16 +233,23 @@ async function handleExplain(res: http.ServerResponse, body: { term?: string }) 
         model: MODELS.triage,
         systemPrompt:
           "You are GRQ's plain-English explainer. You make finance and investing concepts legible to a smart non-expert: 2–3 short sentences, concrete, honest, never jargon-to-explain-jargon. The financial-literacy pillar in action.",
-        maxTurns: 1,
+        // 4, not 1: 345 of 345 successful one-shots on record used exactly one turn, so the headroom
+        // is free and only ever spent on the transient mode that tripped news-triage's cap (D118d).
+        maxTurns: 4,
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],
         stderr: () => {},
       },
     });
+    let resultMsg: any = null;
     for await (const m of q) {
-      if (m.type === "result" && m.subtype === "success") text = m.result;
+      if (m.type === "result") {
+        resultMsg = m;
+        if (m.subtype === "success") text = m.result;
+      }
     }
+    await recordAgentUsage("explain", MODELS.triage, resultMsg, text || null);
   } catch {
     res.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({ error: "explain failed" }));
     return;
