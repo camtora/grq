@@ -2,7 +2,9 @@ import https from "node:https";
 import { prisma } from "../db";
 import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
 import { activeSymbols, universeEntry } from "../universe";
-import { ibkrFixedCommissionCents, writeNavSnapshot } from "./sim";
+import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents } from "./sim";
+import { shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
+import { effectiveHeldQty } from "./positions";
 import { usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
@@ -217,6 +219,66 @@ export class IBKRBroker implements BrokerAdapter {
     }
     if (!Number.isInteger(input.qty) || input.qty <= 0) return this.recordReject(input, "Quantity must be a positive whole number of shares.");
 
+    // Rule #3, no shorting: a SELL may never exceed the shares actually held. The sim engine has
+    // enforced this inline since day one; it was never ported here, so once the fund moved to
+    // BROKER=ibkr-paper the rule was enforced by assumption only — and on 2026-07-16 a stop firing
+    // against a stale position mirror sold the same 24 CCO five times and opened a 96-share short.
+    // effectiveHeldQty() nets off fills the mirror hasn't absorbed, so a re-fire sees 0, not 24.
+    if (input.side === "SELL") {
+      const held = await effectiveHeldQty(input.symbol);
+      const shortfall = shortingShortfallQty(input.qty, held);
+      if (shortfall > 0) {
+        return this.recordReject(
+          input,
+          `Insufficient shares: selling ${input.qty} ${input.symbol.toUpperCase()}, hold ${held} (no shorting — guardrail).`,
+        );
+      }
+    }
+
+    // Monthly fee budget (§6, a hard stop). This lived ONLY in sim.ts — so from the move to
+    // BROKER=ibkr-paper until 2026-07-16 nothing read the budget on the path the fund actually traded
+    // (D118, same failure as the no-shorting rule). It's a PRE-trade gate, so it prices the order from
+    // an estimate: a MARKET order has no limit price, and ibkrFixedCommissionCents deliberately errs
+    // high there rather than hand the gate a flattering penny. The fill is re-priced below and is what
+    // reaches the ledger.
+    const estCommissionCents = ibkrFixedCommissionCents(input.qty, input.limitPriceCents ?? 0);
+    const budgetCents = settings?.feeBudgetCentsMonth ?? 2000;
+    const spentCents = await feeSpendThisMonthCents();
+    if (breachesFeeBudget(spentCents, estCommissionCents, budgetCents)) {
+      return this.recordReject(
+        input,
+        `Monthly fee budget exhausted: ${(spentCents / 100).toFixed(2)} spent of ${(budgetCents / 100).toFixed(2)}, this order adds ~${(estCommissionCents / 100).toFixed(2)} (guardrail).`,
+      );
+    }
+
+    // Funding / no margin borrowing (guardrail #3). sim.ts has rejected an underfunded BUY since day
+    // one; this adapter never checked cash AT ALL. The agent is covered by validator.ts, but a member's
+    // manual order (/api/sim/order) calls placeOrder directly with no validator — so on a margin-enabled
+    // IBKR account it would simply fill on borrowed money. Third instance of the D118 seam bug: a §6 rule
+    // that lived only in the engine the fund stopped trading through.
+    //
+    // Cash comes from the Account mirror — the same source sim.ts and validator.ts read (reconcile keeps
+    // it in step with broker truth each tick). A MARKET order has no limit price, so it's funded against
+    // a live quote; no usable price means we cannot prove the order is funded, and an unprovable order is
+    // refused rather than guessed at.
+    if (input.side === "BUY") {
+      const priceCents = input.limitPriceCents ?? (await yahooQuote(input.symbol).catch(() => null))?.midCents ?? 0;
+      if (!(priceCents > 0)) {
+        return this.recordReject(input, `No usable price for ${input.symbol.toUpperCase()} — cannot verify funding (no margin borrowing — guardrail).`);
+      }
+      const heldPos = await prisma.position.findUnique({ where: { symbol: input.symbol.toUpperCase() } });
+      const ccy = (heldPos?.currency ?? (await universeEntry(input.symbol))?.currency ?? "CAD").toUpperCase();
+      const account = await prisma.account.findUnique({ where: { id: 1 } });
+      const cashCents = ccy === "USD" ? account?.usdCashCents ?? 0 : account?.cashCents ?? 0;
+      const shortfall = fundingShortfallCents(input.qty, priceCents, estCommissionCents, cashCents);
+      if (shortfall > 0) {
+        return this.recordReject(
+          input,
+          `Insufficient ${ccy} cash: need ${((input.qty * priceCents + estCommissionCents) / 100).toFixed(2)}, have ${(cashCents / 100).toFixed(2)} (no margin borrowing — guardrail).`,
+        );
+      }
+    }
+
     const conid = await this.conidFor(input.symbol);
     if (!conid) {
       // Don't let a broker outage masquerade as a bad ticker: conidFor() returns null
@@ -265,7 +327,7 @@ export class IBKRBroker implements BrokerAdapter {
 
       // Poll the fill (~12s). Paper fills on liquid names are usually near-instant.
       let filledPriceCents: number | null = null;
-      let commissionCents = ibkrFixedCommissionCents(input.qty, input.limitPriceCents ?? 0) || 100;
+      let brokerCommissionCents: number | null = null;
       for (let i = 0; i < 8; i++) {
         await sleep(1500);
         const st = await cp<OrderStatus>(`/iserver/account/order/status/${orderId}`).catch(() => ({}) as OrderStatus);
@@ -273,13 +335,26 @@ export class IBKRBroker implements BrokerAdapter {
         if (status === "filled") {
           const avg = parseFloat(st.average_price ?? st.avgPrice ?? st.avg_price ?? "0");
           if (avg > 0) filledPriceCents = Math.round(avg * 100);
-          if (typeof st.commission === "number" && st.commission > 0) commissionCents = Math.round(st.commission * 100);
+          if (typeof st.commission === "number" && st.commission > 0) brokerCommissionCents = Math.round(st.commission * 100);
           break;
         }
         if (status === "cancelled" || status === "rejected") {
           return this.recordReject(input, `IBKR order ${orderId} ${status}.`);
         }
       }
+
+      // Price the commission off what actually happened, the way finalizePending() already does.
+      // This used to read `ibkrFixedCommissionCents(input.qty, input.limitPriceCents ?? 0)` — but a
+      // MARKET order has no limit price, so it priced a $0 trade: value 0 → cap 0 → the function
+      // floored to 1 cent, and the `|| 100` fallback never fired because 1 is truthy. Every stop,
+      // take-profit and liquidation (all MARKET) booked $0.01 against IBKR's real ~$1.00 from Phase 3
+      // until 2026-07-16 (D118). IBKR's order-status payload rarely carries `commission`, so the
+      // estimate is what lands in the ledger — it has to be priced off the fill.
+      const commissionCents =
+        brokerCommissionCents ??
+        (filledPriceCents !== null
+          ? ibkrFixedCommissionCents(input.qty, filledPriceCents)
+          : ibkrFixedCommissionCents(input.qty, input.limitPriceCents ?? 0));
 
       if (filledPriceCents === null) {
         // Working but not yet filled — record PENDING with the broker order id so

@@ -37,9 +37,33 @@ export function fundingShortfallCents(qty: number, priceCents: number, commissio
   return qty * priceCents + commissionCents - cashCents;
 }
 
+/** Rule #3 (no shorting): a SELL may never exceed the shares actually held. Returns the shortfall in
+ *  SHARES — positive means the order would open/deepen a short (→ reject); ≤ 0 means it's covered.
+ *
+ *  `heldQty` must be the EFFECTIVE holding, not a raw mirror read: see effectiveHeldQty() in
+ *  ./positions. On 2026-07-16 a CCO stop re-fired five times against a position mirror that had gone
+ *  stale behind the fills, selling 24 shares each time and leaving the paper account short 96 — the
+ *  sim engine has enforced this rule inline since day one, but the check was never ported to the IBKR
+ *  adapter the fund actually trades through. Both callers now share this function. */
+export function shortingShortfallQty(sellQty: number, heldQty: number): number {
+  return sellQty - heldQty;
+}
+
 /** Fee-aware edge gate: expected edge (cents) must clear feeEdgeMultiple × round-trip commissions. */
 export function breachesFeeEdge(edgeCents: number, commInCents: number, commOutCents: number, feeEdgeMultiple: number): boolean {
   return edgeCents < feeEdgeMultiple * (commInCents + commOutCents);
+}
+
+/** Monthly fee budget (§6, a hard stop): month-to-date commissions plus THIS order's must stay within
+ *  the budget. Returns true when it BREACHES (→ reject).
+ *
+ *  `orderCommissionCents` is a pre-trade ESTIMATE — on the IBKR path the true fill price isn't known
+ *  yet, so the estimate must err high (see ibkrFixedCommissionCents' absent-price branch). A gate fed
+ *  a flattering fee is a gate that never fires: until 2026-07-16 this check existed only in sim.ts,
+ *  and the fund had been trading through the IBKR adapter — where nothing read the budget at all —
+ *  while every MARKET order booked $0.01 against a real ~$1.00 (D118). */
+export function breachesFeeBudget(spentCents: number, orderCommissionCents: number, budgetCents: number): boolean {
+  return spentCents + orderCommissionCents > budgetCents;
 }
 
 /** Options premium-at-risk cap (D99 — buy-to-open only, so premium = MAX LOSS). The total premium

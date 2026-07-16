@@ -3151,3 +3151,124 @@ screenshot showed it.
 Shipped web + GRQ Go (which carried the identical `>=` bug). `printBps` is **additive** on
 `shared/contract.ts` per the wire-compat rule — older builds ignore it and keep rendering `dayBps`.
 `tsc` clean both projects, 148 tests pass.
+
+### D118 — No shorting must be enforced at the broker seam, not in the sim engine (Cam, 2026-07-16)
+
+**Symptom:** The kill switch engaged at 09:48 ET on a `system-drawdown` trip claiming NAV was **−17.6%**
+off its high-water mark. The fund was actually down **0.75%** on the day. Cam re-enabled trading at
+09:47:21; it re-killed 47 seconds later.
+
+**Cause — three failures stacked.** CCO fell 12% below its ACB and the deterministic stop fired
+correctly at 09:34:56, selling the full 24-share position. Then it fired **four more times**, 24 shares
+each, ~65s apart: 24 → 0 → −24 → −48 → −72 → **−96**.
+
+1. **The mirror went stale behind the fills.** The IBKR adapter defers position truth to `reconcile()`,
+   and IBKR's own positions ledger lags a fill by seconds. `Position.qty` kept reading the pre-sale 24
+   (the agent log shows `Holding CCO (24 sh, ACB $141.64)` on every tick), so `enforceExits` re-sold a
+   position it had already closed. `ibkr.ts` even breaks its post-fill reconcile retry loop early on a
+   SELL — the one case where waiting for the mirror mattered.
+2. **Nothing rejected the oversell.** `sim.ts` has enforced *"Insufficient shares … (no shorting —
+   guardrail)"* inline since day one. **That check was never ported to `ibkr.ts`.** The moment the fund
+   moved to `BROKER=ibkr-paper`, rule #3 stopped being enforced by code and became enforced by
+   assumption. `guardrails.ts` was, and had always been, entirely BUY-side. A paper account has margin,
+   so IBKR happily filled every one.
+3. **NAV double-counted, which is what actually tripped the kill.** Each sale's proceeds landed in cash
+   while the phantom 24 shares stayed marked in `positionsCents` (the deleted snapshots show cash
+   climbing $589,005 → $1,771,637 while positions sat flat at ~6.65M). NAV inflated ~$2,950 per sale —
+   $72,574 → **$84,236** — and *that* became the high-water mark. When reconcile finally caught up at
+   09:40:35 and NAV dropped to the true ~$69,374, the drawdown was measured against a peak that never
+   existed. `checkDrawdown` takes `_max` over **all** `NavSnapshot` history with no time filter, so the
+   phantom HWM was permanent — which is why re-enabling just re-killed.
+
+The two-tick persistence guard didn't help: it protects against a transient *current* reading, but the
+corruption was baked into the HWM.
+
+**Fix** (agent + web **v2.66-phase4**):
+- `guardrails.ts` gains `shortingShortfallQty(sellQty, heldQty)` — rule #3 as pure, tested math.
+  **Both** adapters now call it, so they can't drift apart again.
+- `lib/broker/positions.ts` `effectiveHeldQty()` — the mirrored position **minus filled sells the mirror
+  hasn't absorbed** (`Position.updatedAt` is the watermark; reconcile only writes on drift, so a stale
+  read that merely repeats the current value leaves it intact and the unabsorbed sells still count). A
+  gate that trusts the raw mirror reads the CCO re-fire as perfectly fundable — that case is locked in a
+  test.
+- `ibkr.placeOrder` refuses any SELL exceeding the effective holding; `enforceExits` nets the same way,
+  so a lagging mirror waits quietly for reconcile instead of earning a rejection alert every tick.
+
+**Remediation (all completed 2026-07-16, Cam authorised each step):**
+- The 8 phantom `NavSnapshot` rows (ids 2305–2312) were deleted; drawdown vs the honest HWM of
+  $73,872.79 reads **−5.72%**. Without this the switch could not be re-enabled at all — Cam tried at
+  09:47 and it re-killed in 47 seconds, because `_max` over all history kept finding the phantom peak.
+- **The guard was verified on the live IBKR path before covering**: an attempted `SELL 1 CCO` while
+  short 96 — the exact order shape that went unchallenged five times — came back
+  `ok=false, "Insufficient shares: selling 1 CCO, hold -96 (no shorting — guardrail)."`
+- The short was covered back to flat through the normal seam (order #56, BUY 96 @ $122.56). It cost
+  nothing: shorted at avg $123.19, covered at $122.56 as CCO kept falling, so the accident **made**
+  ~$60. Luck, not design — a rally would have run unbounded.
+- **The cover took ~2 minutes to appear in IBKR's positions ledger** (09:49 fill → 09:51 settle),
+  against code comments that assume "a few seconds". At a 65-second tick, that lag is wide enough for
+  two more stops to fire. The staleness isn't an edge case; it's the normal shape of this endpoint.
+- Realized P&L restated: #71–74 → 0, the short's real P&L booked on the cover (+$64.55). Fund realized
+  on CCO went **−$2,187.65 → −$355.94** vs broker truth −$361.96.
+
+### D118b — The same seam bug, twice: the fee budget (Cam, 2026-07-16)
+
+Found while reconciling D118's $6.02 commission residual. **Two independent defects, stacked, in the
+guardrail §6 calls a "hard stop":**
+
+1. **Nothing read the budget on the live path.** The check existed *only* in `sim.ts` — not `ibkr.ts`,
+   not `validator.ts`. Byte-for-byte the D118 failure: a §6 rule enforced in the engine the fund
+   **stopped trading through** at Phase 3. Discovering this hours after D118 is the point — one audit
+   of "which adapter is this rule actually in?" would have found both at once.
+2. **The number feeding it was 100× light.** `ibkr.placeOrder` called
+   `ibkrFixedCommissionCents(input.qty, input.limitPriceCents ?? 0)`. A MARKET order has no limit price
+   → `value = 0` → `cap = 0` → the function returned its `Math.max(1, …)` floor of **1 cent**. The
+   intended `|| 100` fallback never fired: `1` is truthy. `finalizePending()` had always done it right
+   (it passes the real fill price), so the two fill paths silently disagreed — the fast one wrong.
+
+Measured on July's ledger: **LIMIT** 8 trades @ avg $1.00 (correct); **MARKET** 9 trades @ avg $0.12
+where the schedule says $9.00 total. Every stop, take-profit and liquidation is MARKET.
+
+**And a third, found by auditing the rest of §6 the same way** — *which adapter is this rule actually
+in?* — **the funding / no-margin rule (guardrail #3) was also sim-only.** `ibkr.placeOrder` never checked
+cash at all. The agent is covered (`validator.ts` runs `fundingShortfallCents`), but **`/api/sim/order` —
+a member's manual order — calls `getBroker().placeOrder()` with no validator**, so on a margin-enabled
+IBKR account an underfunded manual BUY would simply fill on borrowed money. Now ported: `ibkr.placeOrder`
+funds a BUY against `limitPriceCents` (or a live quote for MARKET) and refuses when it can't price the
+order at all — an unprovable order is refused, not guessed at. Cash reads the `Account` mirror, the same
+source `sim.ts` and `validator.ts` use.
+
+The audit's actual finding is the pattern, not the three bugs: **`breachesPositionCap`, `breachesCashFloor`
+and `meetsConviction` are validator-only by design** (they gate the *agent's* proposals), which means a
+member's manual order is deliberately ungated by them — a human is the authority (rule 1). That's a
+defensible line, but it's only defensible if it's *chosen*. It wasn't written down anywhere.
+
+**Fix** (agent + web **v2.67-phase4**):
+- `guardrails.ts breachesFeeBudget(spent, orderCommission, budget)` — pure, tested; **both** adapters
+  call it. `feeSpendThisMonthCents()` exported from `sim.ts` so both read the same number.
+- `ibkr.placeOrder` now prices the commission off the **actual fill**, the way `finalizePending()`
+  already did, and enforces the budget pre-trade off a deliberately conservative estimate.
+- `ibkrFixedCommissionCents` treats a non-positive price as **absent, not free**: it returns the
+  uncapped `max($1.00, 1¢/share)` rather than falling through to the 1¢ floor. An absent price can only
+  produce a fee that flatters the fund, and a fee guardrail fed a flattering number never fires.
+
+**Live budget is $500** (`Settings.feeBudgetCentsMonth = 50000`), not the $20 in §6 — the doc had drifted
+from the DB; §6 now points at Settings. At $500 it cannot bind (rate limits cap ~210 orders/mo ≈ $210),
+so it ships as a dormant backstop. Cam's call, and the right one: the alternative was leaving §6
+advertising a stop that nothing enforced — which is precisely how this whole day started.
+
+**The rule this buys us, on top of D118's:** *guardrail parity is a property to be tested, not a habit to
+be trusted.* Three §6 rules had rotted onto the dead path, and each was found only by grepping for it in
+`ibkr.ts` rather than reading §6 and believing it. The three now share pure functions in `guardrails.ts`
+that both adapters call — but nothing yet *fails* when a fourth rule is added to one adapter and not the
+other. Worth a test that asserts the seam itself. Also worth noting `PROJECT_PLAN.md` §6 was wrong about
+the live value ($20 vs $500): **for any money rule, the DB is the truth and the doc is a rumour.**
+
+**The rule this buys us: a guardrail that lives in one adapter is not a guardrail.** §6 says the
+deterministic gate disposes, and for two years that gate lived in `sim.ts` — which the fund stopped
+trading through in Phase 3. Every money rule must sit where **every** broker path crosses it, and be
+locked by a test that fails when it doesn't. Ported the check, then wrote the test that would have
+caught its absence.
+
+**Soak impact:** the IBKR-paper soak clock (§9, ≥2 clean weeks) is Cam's call. This was a code defect
+that opened a forbidden position, not a bad trade — but "clean" has to mean something, and the fund held
+a naked short for ~75 minutes.

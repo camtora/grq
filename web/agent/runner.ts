@@ -8,6 +8,7 @@ import { prisma } from "../lib/db";
 import { refreshAllQuotes, refreshQuotesFor, getQuotes, reconcileListingCurrencies } from "../lib/broker/quotes";
 import { BENCHMARK } from "../lib/universe";
 import { writeNavSnapshot } from "../lib/broker/sim";
+import { effectiveHeldQty } from "../lib/broker/positions";
 import { getBroker } from "../lib/broker";
 import { IBKRBroker } from "../lib/broker/ibkr";
 import { getPortfolio } from "../lib/portfolio";
@@ -207,6 +208,13 @@ async function enforceExits() {
   for (const p of positions) {
     const q = quotes.get(p.symbol);
     if (!q) continue;
+    // Exit only what we can still sell. This loop reads the position mirror, which on IBKR lags the
+    // fills behind it — on 2026-07-16 a CCO stop re-fired every tick against a mirror stuck at 24
+    // shares and sold the same position five times, leaving the account short 96. The broker gate
+    // now refuses an oversell outright; netting off the unabsorbed fills here means a lagging mirror
+    // quietly waits for reconcile instead of earning a rejection alert every tick until it catches up.
+    const sellable = await effectiveHeldQty(p.symbol);
+    if (sellable <= 0) continue;
     const stopLevel = Math.round(p.avgCostCents * (1 - dial.stopPct / 100));
     const takeProfitLevel = Math.round(p.avgCostCents * (1 + dial.takeProfitPct / 100));
     if (q.midCents <= stopLevel) {
@@ -214,13 +222,13 @@ async function enforceExits() {
         symbol: p.symbol,
         side: "SELL",
         type: "MARKET",
-        qty: p.qty,
+        qty: sellable,
         placedBy: "system-stop",
         reason: `Deterministic stop: ${p.symbol} hit ${(q.midCents / 100).toFixed(2)}, ${dial.stopPct}% below ACB ${(p.avgCostCents / 100).toFixed(2)}. Protection is code, not vibes.`,
       });
       await alert(
         res.ok ? "warning" : "critical",
-        res.ok ? `Stop triggered: sold ${p.qty} ${p.symbol}` : `Stop FAILED for ${p.symbol}`,
+        res.ok ? `Stop triggered: sold ${sellable} ${p.symbol}` : `Stop FAILED for ${p.symbol}`,
         res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)} (${dial.stopPct}% stop).` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
         { category: "trades", symbol: p.symbol },
       );
@@ -229,13 +237,13 @@ async function enforceExits() {
         symbol: p.symbol,
         side: "SELL",
         type: "MARKET",
-        qty: p.qty,
+        qty: sellable,
         placedBy: "system-takeprofit",
         reason: `Take-profit: ${p.symbol} hit ${(q.midCents / 100).toFixed(2)}, +${dial.takeProfitPct}% over ACB ${(p.avgCostCents / 100).toFixed(2)}. Claiming the gain — discipline, not greed.`,
       });
       await alert(
         res.ok ? "info" : "warning",
-        res.ok ? `Take-profit: sold ${p.qty} ${p.symbol} (+${dial.takeProfitPct}%)` : `Take-profit FAILED for ${p.symbol}`,
+        res.ok ? `Take-profit: sold ${sellable} ${p.symbol} (+${dial.takeProfitPct}%)` : `Take-profit FAILED for ${p.symbol}`,
         res.ok ? `Filled at ~$${(q.bidCents / 100).toFixed(2)}.` : `Rejection: ${(res as { rejectReason?: string }).rejectReason}`,
         { category: "trades", symbol: p.symbol },
       );

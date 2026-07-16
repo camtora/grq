@@ -226,7 +226,7 @@ configurable in Settings, defaults below:
 | Same-day round trips | prohibited (v1) — sidesteps US PDT limits entirely |
 | Daily loss pause | −3% NAV realized+unrealized in a day → no new buys until tomorrow + alert |
 | Drawdown kill switch | −15% from high-water mark → ALL trading halts until a human re-enables |
-| Monthly fee budget | $20 (≈ 20 IBKR orders) — hard stop |
+| Monthly fee budget | member-set in Settings (**currently $500**; code default $20 if unset) — hard stop, enforced at the broker seam |
 | Order types | limit orders; native stop-loss resting at IBKR on every position; market only for kill-switch liquidation |
 | Rate limits | ≤ 10 orders/day, ≤ 4/hour |
 | Manual kill switch | UI button + DB flag checked before every order — instant |
@@ -235,6 +235,13 @@ configurable in Settings, defaults below:
 **Shorting is a config toggle, OFF for v1** (Cam, 2026-06-11) — a candidate to enable once
 the paper soak proves the model out. Keeping the margin account is what preserves this
 option: cash accounts can never short.
+
+Enforced at the **broker seam** — every `placeOrder` path refuses a SELL exceeding the shares held
+(`guardrails.ts shortingShortfallQty`, sized by `positions.ts effectiveHeldQty`). It used to live only
+inside `sim.ts`, so from the move to `BROKER=ibkr-paper` until 2026-07-16 the rule was enforced by
+assumption on the path the fund actually traded — a stop firing against a stale position mirror sold the
+same CCO position five times and opened a 96-share short (D118). A paper account has margin; the broker
+will not say no for us.
 
 ### Risk dial (UI Settings → maps to concrete numbers)
 

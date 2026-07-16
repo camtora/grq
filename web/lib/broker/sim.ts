@@ -3,13 +3,20 @@ import { getQuote, getQuotes, isHardStale } from "./quotes";
 import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
-import { isValidQty } from "./guardrails";
+import { isValidQty, shortingShortfallQty, breachesFeeBudget } from "./guardrails";
 import { markHeldContract, valueOptionPositionsCad } from "../options/order";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
  *  trade value (the cap may undercut the minimum on small orders — that's how
  *  IBKR's schedule works). All cents. */
 export function ibkrFixedCommissionCents(qty: number, priceCents: number): number {
+  // A non-positive price is not a cheap trade, it's an ABSENT price — and it can only yield nonsense:
+  // value 0 → cap 0 → the floor below returns 1 cent, which reads as a real, plausible fee. That is
+  // how every MARKET order booked $0.01 instead of ~$1.00 until 2026-07-16 (D118): the caller passed
+  // `limitPriceCents ?? 0`, which a market order never has. Callers must price off the fill; if one
+  // can't, hand back the uncapped estimate (we can't apply the 0.5% cap without a price) so the error
+  // is an OVER-statement. A fee guardrail must never be fed a number that flatters the fund.
+  if (!(priceCents > 0)) return Math.max(100, qty * 1);
   const value = qty * priceCents;
   const perShare = Math.max(100, qty * 1);
   const cap = Math.round(value * 0.005);
@@ -21,7 +28,10 @@ export function ibkrOptionCommissionCents(contracts: number): number {
   return Math.max(100, contracts * 65);
 }
 
-async function feeSpendThisMonthCents(): Promise<number> {
+/** Month-to-date commissions across every filled trade. Exported so the IBKR adapter enforces the §6
+ *  fee budget off the SAME number the sim engine does — the budget check used to live only in this
+ *  file, i.e. nowhere the fund actually traded (D118). */
+export async function feeSpendThisMonthCents(): Promise<number> {
   const start = new Date();
   start.setDate(1);
   start.setHours(0, 0, 0, 0);
@@ -214,13 +224,17 @@ export class SimBroker implements BrokerAdapter {
       const cost = input.qty * price + commissionCents;
       if (cost > cash) return reject(`Insufficient ${ccy} cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
     } else {
+      // Rule #3, no shorting. The sim's own ledger is decremented inside the fill transaction, so
+      // pos.qty is never stale here and needs no unmirrored-fill netting (cf. the IBKR adapter,
+      // which reads effectiveHeldQty). Same shared math either way — see guardrails.ts.
       const pos = await prisma.position.findUnique({ where: { symbol } });
-      if (!pos || pos.qty < input.qty) return reject(`Insufficient shares: selling ${input.qty} ${symbol}, hold ${pos?.qty ?? 0} (no shorting — guardrail).`);
+      const held = pos?.qty ?? 0;
+      if (shortingShortfallQty(input.qty, held) > 0) return reject(`Insufficient shares: selling ${input.qty} ${symbol}, hold ${held} (no shorting — guardrail).`);
     }
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     const budget = settings?.feeBudgetCentsMonth ?? 2000;
     const spent = await feeSpendThisMonthCents();
-    if (spent + commissionCents > budget) {
+    if (breachesFeeBudget(spent, commissionCents, budget)) {
       return reject(`Monthly fee budget exhausted: ${(spent / 100).toFixed(2)} spent of ${(budget / 100).toFixed(2)}, this order adds ${(commissionCents / 100).toFixed(2)}.`);
     }
 
