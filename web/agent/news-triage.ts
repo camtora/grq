@@ -1,7 +1,8 @@
 // News triage (D81, M2) — the cheap Haiku pass that turns raw captured articles into a
 // relevance-scored, summarized, entity-tagged digest. ONE batched single-shot Haiku call
-// per cycle over un-triaged rows (no tools, no PERSONA, maxTurns 1) — Opus never sees raw
-// news, so this stays off Cam's Max quota. An INPUT the agent weighs, never the gate.
+// per cycle over un-triaged rows (no tools, no PERSONA) — Opus never sees raw news, so the
+// expensive model is never spent on it. (It still draws on the same Max token, just at
+// Haiku rates.) An INPUT the agent weighs, never the gate.
 //
 // The optional news-driven WAKEUP (NEWS_WAKEUP_ENABLED, default OFF) lets a high-relevance
 // adverse headline on a HELD name fire a check-in — the agent reacts to price + the clock
@@ -62,14 +63,23 @@ export async function triageNews(maxBatch = 25): Promise<{ triaged: number }> {
     `[{"id": <id>, "relevance": 0-100, "sentiment": "POS|NEU|NEG", "category": "EARNINGS|GUIDANCE|MNA|MACRO|LEGAL|PRODUCT|RATING|OTHER", "summary": "<=140 chars", "symbols": ["TICKER", ...]}]\n` +
     `Output ONLY the JSON array.`;
 
-  // maxTurns 3 (was 1): a single-turn cap was tripping error_max_turns and returning null on an
-  // otherwise-fine Haiku pass. The extra turns are only ever used on a cut-off/continuation and
-  // cost nothing when the model finishes in one. Still tool-less — it can only ever emit text.
+  // maxTurns 8 (1 → 3 in D114 → 8 here). This cap has never been a token-saving measure — it was
+  // raised the first time for exactly the reason it's raised now: error_max_turns was killing an
+  // otherwise-fine Haiku pass and returning null. Extra turns are only consumed by a cut-off and
+  // cost nothing when the model finishes in one, so a generous cap is free; the failure it prevents
+  // is not (a null discards the pass and the batch waits a cycle).
+  //
+  // 8 is a band-aid, though, and worth remembering as one: this call is TOOL-LESS over <=25
+  // headlines, so it should finish in ONE turn and never see a second. It's been emitting 5k-11k
+  // output tokens for a JSON array that needs ~1.5k, and the 2026-07-16 failure hit the cap on a
+  // TWO-ROW batch — two headlines cannot need three turns. Something is generating far more than the
+  // task asks for (Haiku 4.5 thinking tokens are the obvious suspect: they'd explain the volume AND
+  // the continuations). Raising the ceiling hides that; it doesn't answer it.
   const out = await runSession({
     label: "news-triage",
     model: MODELS.triage,
     withTools: false,
-    maxTurns: 3,
+    maxTurns: 8,
     systemPrompt: TRIAGE_SYSTEM,
     prompt,
   });
