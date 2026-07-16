@@ -3,7 +3,7 @@ import { prisma } from "../db";
 import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
 import { activeSymbols, universeEntry } from "../universe";
 import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents } from "./sim";
-import { shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
+import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
 import { effectiveHeldQty } from "./positions";
 import { usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
@@ -217,7 +217,9 @@ export class IBKRBroker implements BrokerAdapter {
       }
       return this.recordReject(input, "Options execution is not yet wired for IBKR — pending options permission + OPRA market data on the account (D99).");
     }
-    if (!Number.isInteger(input.qty) || input.qty <= 0) return this.recordReject(input, "Quantity must be a positive whole number of shares.");
+    // Rule #4 via the shared predicate, not a hand-rolled copy — this adapter used to inline
+    // `!Number.isInteger(qty) || qty <= 0`, an identical rule expressed twice and free to drift.
+    if (!isValidQty(input.qty)) return this.recordReject(input, "Quantity must be a positive whole number of shares.");
 
     // Rule #3, no shorting: a SELL may never exceed the shares actually held. The sim engine has
     // enforced this inline since day one; it was never ported here, so once the fund moved to

@@ -3258,10 +3258,46 @@ advertising a stop that nothing enforced — which is precisely how this whole d
 
 **The rule this buys us, on top of D118's:** *guardrail parity is a property to be tested, not a habit to
 be trusted.* Three §6 rules had rotted onto the dead path, and each was found only by grepping for it in
-`ibkr.ts` rather than reading §6 and believing it. The three now share pure functions in `guardrails.ts`
-that both adapters call — but nothing yet *fails* when a fourth rule is added to one adapter and not the
-other. Worth a test that asserts the seam itself. Also worth noting `PROJECT_PLAN.md` §6 was wrong about
+`ibkr.ts` rather than reading §6 and believing it. Also worth noting `PROJECT_PLAN.md` §6 was wrong about
 the live value ($20 vs $500): **for any money rule, the DB is the truth and the doc is a rumour.**
+
+### D118c — The parity test: making the seam a build failure (Cam, 2026-07-16)
+
+D118 and D118b each fixed a rule. Neither fixed the *reason* — parity was a habit, and every instance was
+caught by a human grepping who only grepped because the first one blew up. `test/guardrail-parity.test.ts`
+makes the seam assert itself.
+
+**A manifest classifies every export of `guardrails.ts`** as `seam` (must be called by BOTH adapters),
+`validator` (gates the agent's proposals only), or `helper` (pure math). The load-bearing test is
+**completeness**: an export with no classification fails the build. You cannot add a money rule and leave
+where-it-binds unanswered — which is exactly what the codebase looked like for weeks before D118.
+
+It also pins the **validator-only tier as a decision rather than an oversight**: `meetsConviction`,
+`breachesPositionCap`, `breachesCashFloor`, `breachesFeeEdge`, `breachesOptionPremiumCap` bind the agent
+and deliberately *not* a member's manual order — a human is the authority (rule #1). True before today;
+written down nowhere.
+
+Source-level, not behavioural, and deliberately so: the suite is pure (no DB, no network), and mocking
+Prisma + the IBKR world buys realism at the price of a fixture that rots. Reading the source answers the
+exact question that went unasked for weeks — *is this rule referenced on both paths?* Comments are
+stripped first, or the files score themselves on their own prose (every D118 comment names the guardrails
+it describes). A test guards that stripping.
+
+**Validated by mutation, not by going green** — a test nobody has watched fail is a guess, the same way an
+unfired guardrail is:
+- Removing the `shortingShortfallQty` call from `ibkr.ts` (literally re-introducing D118) → red.
+- Adding an unclassified `breachesSomeNewRule` export → red.
+- Replacing the fee-budget call with `if (false)` and leaving the name in a comment → **red**, though the
+  file still contained the identifier twice. A naive grep passes that one.
+
+Two rules bind the seam without being `guardrails.ts` functions — the kill switch (#2) and `allowOptions`
+(#3) are Settings flags, not math — so they get their own both-adapters assertion.
+
+**Cleaned up while wiring it:** `ibkr.ts` hand-rolled `!Number.isInteger(qty) || qty <= 0` instead of
+calling `isValidQty`, and `sim.ts` hand-rolled the funding arithmetic instead of calling
+`fundingShortfallCents`. Same rules, second spellings, free to drift — the parity test refused to pass
+until both were single-sourced. Behaviour-identical (`shortfall > 0 ⟺ cost > cash`), so they ride the next
+agent redeploy rather than earning a restart mid-session.
 
 **The rule this buys us: a guardrail that lives in one adapter is not a guardrail.** §6 says the
 deterministic gate disposes, and for two years that gate lived in `sim.ts` — which the fund stopped

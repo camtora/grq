@@ -3,7 +3,7 @@ import { getQuote, getQuotes, isHardStale } from "./quotes";
 import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
-import { isValidQty, shortingShortfallQty, breachesFeeBudget } from "./guardrails";
+import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
 import { markHeldContract, valueOptionPositionsCad } from "../options/order";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
@@ -221,8 +221,13 @@ export class SimBroker implements BrokerAdapter {
     const account = await prisma.account.findUnique({ where: { id: 1 } });
     const cash = isUsd ? account?.usdCashCents ?? 0 : account?.cashCents ?? 0;
     if (input.side === "BUY") {
+      // Funding / no margin (#3) via the shared function — this engine used to inline the same
+      // arithmetic while ibkr.ts and validator.ts called fundingShortfallCents: one rule, three
+      // spellings, free to drift. Same math either way (shortfall > 0 ⟺ cost > cash).
       const cost = input.qty * price + commissionCents;
-      if (cost > cash) return reject(`Insufficient ${ccy} cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
+      if (fundingShortfallCents(input.qty, price, commissionCents, cash) > 0) {
+        return reject(`Insufficient ${ccy} cash: need ${(cost / 100).toFixed(2)}, have ${(cash / 100).toFixed(2)} (no margin borrowing — guardrail).`);
+      }
     } else {
       // Rule #3, no shorting. The sim's own ledger is decremented inside the fill transaction, so
       // pos.qty is never stale here and needs no unmirrored-fill netting (cf. the IBKR adapter,
