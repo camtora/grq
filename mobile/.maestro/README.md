@@ -40,7 +40,7 @@ Screenshots land in `/tmp/aud-*.png`; pull them with `macbridge pull`.
 `./demo.sh` — drives BOTH devices through the same tour AT THE SAME TIME, for a two-device video:
 
     home screen → launch → Today → Portfolio → Personal → The Wire → Watchlist → More → finale
-    iPhone finale: Options Desk        iPad finale: How GRQ works
+    iPhone finale: Learn (scrolls to it)   iPad finale: Options Desk
 
 It resets both to the **home screen** (terminate, not erase), waits for you to arrange the windows,
 then rolls both in parallel and ends on the finale screens **with the app open**.
@@ -50,4 +50,7 @@ back in (sim builds get no provisioning profile → no keychain-access-groups �
 "Reset" here always means terminate-to-home-screen.
 
 Row labels in More are COMPOSITE — `", Options Desk, Stock-only vs stock+options — …, "` — so match
-with `.*Options Desk.*`, never the bare string.
+with `.*Options Desk.*`, never the bare string. On the PHONE, More stacks the sections so LEARNING is
+below the fold and needs `scrollUntilVisible`; the iPad's landscape More shows all four columns at
+once and needs no scroll. Match `.*Learn, How the market actually works.*`, not a bare `.*Learn.*` —
+that also hits the "LEARNING  every number explainable" section header.

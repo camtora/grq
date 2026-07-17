@@ -34,8 +34,8 @@ appId: com.camerontora.grqgo
 - waitForAnimationToEnd:
     timeout: 6000
 
-# iPad's finale: the operating manual.
-- tapOn: ".*How GRQ works.*"
+# iPad's finale: the Options Desk (visible without scrolling — landscape shows all 4 columns).
+- tapOn: ".*Options Desk.*"
 - waitForAnimationToEnd:
     timeout: 8000
 

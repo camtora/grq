@@ -37,8 +37,15 @@ appId: com.camerontora.grqgo
 - waitForAnimationToEnd:
     timeout: 6000
 
-# iPhone's finale: the Options Desk.
-- tapOn: ".*Options Desk.*"
+# iPhone's finale: Learn. Unlike the iPad's 4-column landscape More, the phone stacks the sections,
+# so LEARNING is below the fold — scroll to it first. Match the row's composite label, not the
+# "LEARNING  every number explainable" section header that a bare .*Learn.* would also hit.
+- scrollUntilVisible:
+    element:
+      text: ".*Learn, How the market actually works.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn: ".*Learn, How the market actually works.*"
 - waitForAnimationToEnd:
     timeout: 8000
 
