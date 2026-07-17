@@ -153,8 +153,27 @@ metro.grq.camerontora.ca.
 22. ~~shared/contract.ts direct imports~~ ✅ 2026-07-03 (@shared alias; migrate types
     opportunistically). ~~retire ios/ + GRQNext~~ ✅ 2026-07-04 — deleted at parity (old
     push tokens pruned; APNS_BUNDLE_ID default → grqgo; the Google OAuth iOS client
-    stays — GRQ Go authenticates through it). Still open: TestFlight/EAS-Update
-    distribution.
+    stays — GRQ Go authenticates through it).
+23. **TestFlight pipeline — SHIPPED at ~80%, and the last 20% is a human ON PURPOSE (2026-07-17).**
+    Automated end-to-end over macbridge: sync → pods → compile → sim install →
+    **navigate every tab → screenshot** (`mobile/.maestro/`, both devices, in parallel) → upload
+    (`xcrun altool --apiKey LUZ9B7DQXU --apiIssuer 4428ca8a-…`, verified against the live account).
+    **Cam still does two things, and automating them isn't worth it:**
+    - **Archive** (Xcode → Product → Archive, ~30s). `codesign` cannot run over SSH —
+      `errSecInternalComponent`. TESTED AND RULED OUT: `set-key-partition-list` runs clean and changes
+      nothing, because there are two walls and it only clears the first (securityd won't release a
+      login-keychain private key to a non-GUI security session at all — `find-identity` still sees the
+      cert because that part is public). The only real fix is CI's dedicated-keychain dance, i.e.
+      fastlane `match`. Don't re-run the partition-list command; it's a known dead end.
+    - **Export compliance** — App Store Connect asks "does your app use encryption?" on EVERY upload
+      and the build won't reach Graham until it's answered. `ITSAppUsesNonExemptEncryption` is absent
+      from Info.plist/app.json. Declaring `<false/>` would remove the click, but it's a legal
+      statement and Cam's to make. Internal testers (Graham on the ASC team) need no Beta App Review;
+      external testers do (~24h, first build).
+    **Why 80% is the right stopping point:** solving codesign alone just trades a click in Xcode for a
+    click in App Store Connect — he's already standing in Organizer to archive, so Distribute is the
+    next button. Automating the upload without the archive saves nothing. Revisit only if the archive
+    gets automated too (`match`/EAS), and only if the release cadence ever makes it chafe.
 
 ## Learn (D111 L5 — full parity, 2026-07-04)
 
