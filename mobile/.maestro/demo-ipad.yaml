@@ -1,0 +1,42 @@
+# GRQ Go — the demo tour (iPad, LANDSCAPE). Mirrors demo-iphone.yaml step-for-step so the two
+# devices move together on camera; only the finale differs (How GRQ works vs the Options Desk).
+# Same waits as the iPhone flow — the point is that they stay in sync, not that this one is fastest.
+appId: com.camerontora.grqgo
+---
+- launchApp:
+    clearState: false          # keep the session — a fresh install lands on Google sign-in
+- waitForAnimationToEnd:
+    timeout: 6000
+- tapOn:
+    point: "50%,50%"
+- extendedWaitUntil:
+    visible: ".*Today.*"
+    timeout: 25000
+- waitForAnimationToEnd:
+    timeout: 4000
+
+- tapOn: ".*Portfolio, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+- tapOn: ".*Personal.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*The Wire, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*Watchlist, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*More, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+# iPad's finale: the operating manual.
+- tapOn: ".*How GRQ works.*"
+- waitForAnimationToEnd:
+    timeout: 8000
+
+# Ends on the finale screen with the app OPEN (Cam, for filming) — no stopApp.

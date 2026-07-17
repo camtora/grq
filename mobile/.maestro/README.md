@@ -34,3 +34,20 @@ Screenshots land in `/tmp/aud-*.png`; pull them with `macbridge pull`.
   precisely that keychain error, i.e. a fake bug that looks real. Let it ad-hoc sign.
 - **iPad in landscape**: taps report COMPLETED but don't land (coords are computed against the native
   portrait frame). Force portrait or solve the rotation before trusting an iPad run.
+
+## The side-by-side demo (for filming)
+
+`./demo.sh` — drives BOTH devices through the same tour AT THE SAME TIME, for a two-device video:
+
+    home screen → launch → Today → Portfolio → Personal → The Wire → Watchlist → More → finale
+    iPhone finale: Options Desk        iPad finale: How GRQ works
+
+It resets both to the **home screen** (terminate, not erase), waits for you to arrange the windows,
+then rolls both in parallel and ends on the finale screens **with the app open**.
+
+⚠️ **Never `simctl erase` these two sims.** It wipes the Google session, and only Cameron can sign
+back in (sim builds get no provisioning profile → no keychain-access-groups → GIDSignIn Code=-2).
+"Reset" here always means terminate-to-home-screen.
+
+Row labels in More are COMPOSITE — `", Options Desk, Stock-only vs stock+options — …, "` — so match
+with `.*Options Desk.*`, never the bare string.

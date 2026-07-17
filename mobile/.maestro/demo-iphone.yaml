@@ -1,0 +1,45 @@
+# GRQ Go — the demo tour (iPhone). Pairs with demo-ipad.yaml; run BOTH AT ONCE for the
+# side-by-side video. Starts from the home screen with the app closed.
+#
+# Selectors are regex matched against the WHOLE accessibilityText. Rows expose composite labels
+# (", Options Desk, Stock-only vs stock+options — …, ") so `.*Options Desk.*` is the way in.
+appId: com.camerontora.grqgo
+---
+- launchApp:
+    clearState: false          # keep the session — a fresh install lands on Google sign-in
+- waitForAnimationToEnd:
+    timeout: 6000
+# Splash gates on a tap anywhere.
+- tapOn:
+    point: "50%,50%"
+- extendedWaitUntil:
+    visible: ".*Today.*"
+    timeout: 25000
+- waitForAnimationToEnd:
+    timeout: 4000
+
+- tapOn: ".*Portfolio, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+- tapOn: ".*Personal.*"        # the Alfred | Personal segmented control
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*The Wire, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*Watchlist, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+- tapOn: ".*More, tab.*"
+- waitForAnimationToEnd:
+    timeout: 6000
+
+# iPhone's finale: the Options Desk.
+- tapOn: ".*Options Desk.*"
+- waitForAnimationToEnd:
+    timeout: 8000
+
+# Ends on the finale screen with the app OPEN (Cam, for filming) — no stopApp.
