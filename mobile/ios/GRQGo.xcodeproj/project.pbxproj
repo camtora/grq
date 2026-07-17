@@ -268,6 +268,8 @@
 				VERSIONING_SYSTEM = "apple-generic";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				CODE_SIGN_ENTITLEMENTS = GRQGo/GRQGo.entitlements;
+				DEVELOPMENT_TEAM = 3WR9SN94Q4;
+				CODE_SIGN_STYLE = Automatic;
 			};
 			name = Debug;
 		};
@@ -297,6 +299,8 @@
 				VERSIONING_SYSTEM = "apple-generic";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				CODE_SIGN_ENTITLEMENTS = GRQGo/GRQGo.entitlements;
+				DEVELOPMENT_TEAM = 3WR9SN94Q4;
+				CODE_SIGN_STYLE = Automatic;
 			};
 			name = Release;
 		};

@@ -1,0 +1,37 @@
+# GRQ Go — visual audit. Taps tabs by their VoiceOver label, so it survives layout changes and runs
+# identically on iPhone and iPad. Assumes the sim is already signed in.
+#
+# NB selectors are REGEX and must match the WHOLE string. RN exposes tab labels only as
+# accessibilityText, in the form "Portfolio, tab, 2 of 6" — a bare "Portfolio" matches nothing.
+appId: com.camerontora.grqgo
+---
+- launchApp:
+    clearState: false
+# The splash gates on a tap anywhere before the tabs mount.
+- tapOn:
+    point: "50%,50%"
+- extendedWaitUntil:
+    visible: ".*Today.*"
+    timeout: 20000
+- takeScreenshot: /tmp/aud-today
+
+- tapOn: ".*Portfolio, tab.*"
+- extendedWaitUntil:
+    visible: ".*NET ASSET VALUE.*"
+    timeout: 20000
+- takeScreenshot: /tmp/aud-portfolio
+
+- tapOn: ".*The Wire, tab.*"
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: /tmp/aud-wire
+
+- tapOn: ".*Watchlist, tab.*"
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: /tmp/aud-watchlist
+
+- tapOn: ".*More, tab.*"
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: /tmp/aud-more
