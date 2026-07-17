@@ -3,7 +3,17 @@
 # One-time install on the Mac:
 #   scp -P 2222 camerontora@camerontora.ca:/home/camerontora/grq/scripts/grqgo-mac-sync.sh ~/bin/grqgo-sync && chmod +x ~/bin/grqgo-sync
 # (or from the LAN: scp camerontora@192.168.2.34:/home/camerontora/grq/scripts/grqgo-mac-sync.sh ~/bin/grqgo-sync)
+#
+# ⚠ After editing THIS file, re-scp it to the Mac — ~/bin/grqgo-sync is a COPY, not a link.
 set -e
+
+# Homebrew's bin is on an interactive shell's PATH via ~/.zprofile, but NOT on a non-login shell's
+# (`ssh mac '<cmd>'` gets /usr/bin:/bin:/usr/sbin:/sbin). So this script worked when Cam ran it in a
+# terminal and died with "pod: command not found" the first time it was driven over macbridge — AFTER
+# the ios/ rsync had already stripped the Pods integration out of the Mac's pbxproj, leaving the
+# project unbuildable until pod install re-ran. Put brew on PATH ourselves so the script behaves the
+# same either way. (2026-07-16)
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 REMOTE_APP="/home/camerontora/grq/mobile"
 LOCAL="$HOME/Developer/Projects/personal/grqgo-build"
@@ -18,6 +28,20 @@ else
 fi
 
 mkdir -p "$LOCAL/ios"
+
+# PREFLIGHT — check the tools BEFORE touching anything. Step 4 rsyncs ios/, which strips the Pods
+# integration out of the Mac's pbxproj; step 5's pod install is what puts it back. So a missing tool
+# discovered at step 5 doesn't just fail the run, it leaves the project UNBUILDABLE ("sandbox is not
+# in sync with the Podfile.lock"). Bail while everything is still intact. (2026-07-16)
+for tool in pod rsync npm; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "✖ '$tool' not found on PATH (PATH=$PATH)"
+    echo "  Nothing has been synced — the build copy is untouched."
+    [ "$tool" = "pod" ] && echo "  CocoaPods lives in Homebrew; this script adds /opt/homebrew/bin itself, so if it's still"
+    [ "$tool" = "pod" ] && echo "  missing, install it: brew install cocoapods"
+    exit 1
+  }
+done
 
 echo ""
 echo "┌─────────────────────────────┐"
