@@ -63,23 +63,23 @@ export async function triageNews(maxBatch = 25): Promise<{ triaged: number }> {
     `[{"id": <id>, "relevance": 0-100, "sentiment": "POS|NEU|NEG", "category": "EARNINGS|GUIDANCE|MNA|MACRO|LEGAL|PRODUCT|RATING|OTHER", "summary": "<=140 chars", "symbols": ["TICKER", ...]}]\n` +
     `Output ONLY the JSON array.`;
 
-  // maxTurns 8 (1 → 3 in D114 → 8 here). This cap has never been a token-saving measure — it was
-  // raised the first time for exactly the reason it's raised now: error_max_turns was killing an
-  // otherwise-fine Haiku pass and returning null. Extra turns are only consumed by a cut-off and
-  // cost nothing when the model finishes in one, so a generous cap is free; the failure it prevents
-  // is not (a null discards the pass and the batch waits a cycle).
+  // ROOT CAUSE, fixed 2026-07-17: this was emitting 5k–17k output tokens for a JSON array that needs
+  // ~1.5k, because extended thinking was on. Measured on the same 2 headlines: 487 output tokens with
+  // thinking, 135 without — for a BETTER answer. Deliberating over a headline is not this call's job;
+  // it is a classifier. `noThinking` is therefore the actual fix, and it is about THROUGHPUT, not
+  // thrift: the Max quota is the hard wall, so tokens spent thinking about one headline are tokens
+  // not spent reading the next.
   //
-  // 8 is a band-aid, though, and worth remembering as one: this call is TOOL-LESS over <=25
-  // headlines, so it should finish in ONE turn and never see a second. It's been emitting 5k-11k
-  // output tokens for a JSON array that needs ~1.5k, and the 2026-07-16 failure hit the cap on a
-  // TWO-ROW batch — two headlines cannot need three turns. Something is generating far more than the
-  // task asks for (Haiku 4.5 thinking tokens are the obvious suspect: they'd explain the volume AND
-  // the continuations). Raising the ceiling hides that; it doesn't answer it.
+  // maxTurns 8 (1 → 3 in D114 → 8) is now belt-and-braces rather than load-bearing. All 350 logged
+  // successes used exactly ONE turn; the ~6 error_max_turns failures were long outputs spilling into
+  // a continuation, which short output no longer produces. Extra turns cost nothing unused, so the
+  // generous cap stays as a backstop — but it is no longer holding anything together.
   const out = await runSession({
     label: "news-triage",
     model: MODELS.triage,
     withTools: false,
     maxTurns: 8,
+    noThinking: true, // classify, don't deliberate — see SessionOpts.noThinking (measured 3.6x)
     systemPrompt: TRIAGE_SYSTEM,
     prompt,
   });

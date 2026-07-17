@@ -37,6 +37,15 @@ type SessionOpts = {
   // ~54M this way, D96 fallout). Set false for a BREADTH pass that should surface names from
   // WebSearch snippets + our own screen, not deep-read pages (that's the dossier's job). D112b.
   webFetch?: boolean; // default true
+  // Turn OFF extended thinking. For a CLASSIFY-shaped call — tool-less, structured output, no
+  // reasoning required (triage a headline, route a message, define a term) — thinking is pure
+  // overhead: measured 2026-07-17, the same 2-headline triage billed 487 output tokens with it and
+  // 135 without, for a BETTER answer. The Max quota is the hard wall, so a token spent deliberating
+  // over a headline is a token not spent reading the next one — this is throughput, not thrift.
+  // It also dissolves the maxTurns problem: short output never needs a continuation turn.
+  // Do NOT set this where the model thinks for a living — the council seats, the race/desk
+  // challengers, the decision sessions, the written reports. There the thinking IS the product.
+  noThinking?: boolean;
 };
 
 export type { SessionOpts };
@@ -54,6 +63,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
         maxTurns: opts.maxTurns,
         permissionMode: "bypassPermissions",
         settingSources: [],
+        ...(opts.noThinking ? { thinking: { type: "disabled" as const } } : {}),
         stderr: (data: string) => console.error(`[session:${opts.label}] ${data.slice(0, 400)}`),
         ...(opts.withTools
           ? {
@@ -887,7 +897,7 @@ Should the decision-making agent be woken to consider acting? Reply with ONLY a 
 {"action": "ignore" | "note" | "escalate", "reason": "<one sentence>"}
 
 "escalate" is for material, actionable developments on holdings/focus names. Routine volatility is "ignore". Newsworthy-but-not-actionable is "note".`;
-  const res = await runSession({ label: "triage", prompt, model: MODELS.triage, withTools: false, maxTurns: 1 });
+  const res = await runSession({ label: "triage", prompt, model: MODELS.triage, withTools: false, maxTurns: 1, noThinking: true });
   if (!res) return "ignore";
   try {
     const parsed = JSON.parse(res.slice(res.indexOf("{"), res.lastIndexOf("}") + 1));

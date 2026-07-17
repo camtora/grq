@@ -236,6 +236,9 @@ async function handleExplain(res: http.ServerResponse, body: { term?: string }) 
         // 4, not 1: 345 of 345 successful one-shots on record used exactly one turn, so the headroom
         // is free and only ever spent on the transient mode that tripped news-triage's cap (D118d).
         maxTurns: 4,
+        // Define a term in 2–3 sentences — no deliberation required, so thinking is pure overhead
+        // against the Max quota (see SessionOpts.noThinking, measured 3.6x on the same shape).
+        thinking: { type: "disabled" as const },
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],

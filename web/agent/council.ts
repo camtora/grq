@@ -92,7 +92,7 @@ export type CouncilResult = { question: string; advisors: CouncilAdvisor[]; verd
 // success-only branch below, returned null, and got filtered out of the panel without a word. Six
 // Opus passes per convene wrote no AgentUsage row either, so the council was invisible to
 // /admin/usage and to the 40M/day burn alarm. `label` is what makes a seat legible in both.
-async function oneShot(label: string, model: string, system: string, user: string): Promise<string | null> {
+async function oneShot(label: string, model: string, system: string, user: string, noThinking = false): Promise<string | null> {
   console.log(`[session] ${label} starting (model=${model})`);
   try {
     const q = query({
@@ -105,6 +105,10 @@ async function oneShot(label: string, model: string, system: string, user: strin
         // that still tripped news-triage's cap of 3 on 2026-07-16. At maxTurns 1 a seat had zero
         // headroom for that, and a seat that trips it is a wasted Opus pass AND a quieter room.
         maxTurns: 4,
+        // Per-call, NOT blanket: the SEATS and the chairman are Opus arguing a position — thinking is
+        // the product there and disabling it would gut the council. Only the ROUTER (Haiku deciding
+        // council-or-not) is classify-shaped. See SessionOpts.noThinking.
+        ...(noThinking ? { thinking: { type: "disabled" as const } } : {}),
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],
@@ -249,7 +253,7 @@ Respond with ONLY a compact JSON object, no prose, no code fence:
 {"council": <true|false>, "symbols": ["TICKER", ...]}
 symbols = the tickers or company names the judgment is about (UPPERCASE tickers when obvious; use the company name if you don't know the ticker; [] when it's portfolio-wide or none). When council is false, symbols must be [].`;
 
-  const raw = await oneShot("council:router", MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`);
+  const raw = await oneShot("council:router", MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`, true);
   if (!raw) return { council: false, symbols: [] };
   return parseRouteJson(raw, COUNCIL.maxSymbols);
 }
