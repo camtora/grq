@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MdText from '../components/MdText';
 import { usePalette, F } from '../constants/theme';
 import { api, streamChat } from '../services/api';
-import { useKeyboardHeight } from '../services/hooks';
+import { useKeyboardHeight, useStickyScroll } from '../services/hooks';
 import { useAuth } from '../store/auth';
 import { memberFor, otherMember } from '../lib/members';
 
@@ -42,6 +42,7 @@ export default function ChatScreen() {
   const [viewOther, setViewOther] = useState(false);
   const [aim, setAim] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMsg>>(null);
+  const { onScroll, onContentSizeChange, stick } = useStickyScroll(listRef);
 
   // A seeded prompt (?prompt=…) prefills the draft — the Learn hub's starter
   // questions arrive this way. Prefill only; the member still hits send.
@@ -72,6 +73,7 @@ export default function ChatScreen() {
             author: m.email,
           })),
         );
+        stick(); // open a freshly-loaded (or switched) thread at the newest message
       })
       .catch(() => {
         if (!dead) setStatus('Could not load the thread — pull down or retry later.');
@@ -79,7 +81,7 @@ export default function ChatScreen() {
     return () => {
       dead = true;
     };
-  }, [viewOther, other.email]);
+  }, [viewOther, other.email, stick]);
 
   const send = async () => {
     const message = draft.trim();
@@ -87,6 +89,7 @@ export default function ChatScreen() {
     setBusy(true);
     setDraft('');
     setMessages((m) => [...m, { id: `u-${m.length}-${message.length}`, role: 'user', content: message, author: me?.email }]);
+    stick(); // jump to the bottom so the streaming reply stays in view
     setPending('');
     await streamChat(
       {
@@ -160,7 +163,9 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={(m) => m.id}
           contentContainerStyle={s.thread}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onScroll={onScroll}
+          scrollEventThrottle={32}
+          onContentSizeChange={onContentSizeChange}
           renderItem={({ item, index }) => {
             const prev = index > 0 ? messages[index - 1] : null;
             const tight = !!prev && prev.role === item.role && prev.author === item.author;

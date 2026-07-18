@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import StockLogo from '../components/StockLogo';
 import { usePalette, F } from '../constants/theme';
 import { api } from '../services/api';
-import { useKeyboardHeight } from '../services/hooks';
+import { useKeyboardHeight, useStickyScroll } from '../services/hooks';
 import { useMessages } from '../store/messages';
 import type { DirectMessage, DirectThread } from '../services/types';
 
@@ -33,6 +33,7 @@ export default function MessagesScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<FlatList<DirectMessage>>(null);
+  const { onScroll, onContentSizeChange, stick } = useStickyScroll(listRef);
   const lastId = useRef(0);
 
   const applyRows = useCallback((rows: DirectMessage[]) => {
@@ -54,6 +55,7 @@ export default function MessagesScreen() {
         const t = await api<DirectThread & { otherName?: string }>('/api/messages');
         if (!alive) return;
         applyRows(t.messages);
+        stick(); // open the thread at the newest message
         if (t.otherName) setOtherName(t.otherName);
         await api('/api/messages/read', { method: 'POST', body: '{}' }).catch(() => null);
         setUnread(0);
@@ -78,7 +80,7 @@ export default function MessagesScreen() {
       alive = false;
       clearInterval(poll);
     };
-  }, [applyRows, setUnread]);
+  }, [applyRows, setUnread, stick]);
 
   const send = async () => {
     const text = draft.trim();
@@ -91,6 +93,7 @@ export default function MessagesScreen() {
       // Pull the row we just wrote (and anything else new) immediately.
       const t = await api<DirectThread>(`/api/messages?since=${lastId.current}`).catch(() => null);
       if (t?.messages.length) applyRows(t.messages);
+      stick(); // keep our just-sent message in view
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Send failed.');
     } finally {
@@ -115,7 +118,9 @@ export default function MessagesScreen() {
           data={messages}
           keyExtractor={(m) => String(m.id)}
           contentContainerStyle={s.thread}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onScroll={onScroll}
+          scrollEventThrottle={32}
+          onContentSizeChange={onContentSizeChange}
           renderItem={({ item, index }) => {
             const prev = index > 0 ? messages[index - 1] : null;
             const next = index < messages.length - 1 ? messages[index + 1] : null;

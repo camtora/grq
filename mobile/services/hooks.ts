@@ -1,7 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, Keyboard } from 'react-native';
+import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { api } from './api';
 import { useAuth } from '../store/auth';
+
+/** Keep a chat list pinned to the newest message WITHOUT fighting the reader.
+ *
+ * The old pattern — `onContentSizeChange={() => list.scrollToEnd()}` — force-scrolled
+ * to the bottom on EVERY content-size change, so any late re-measure (an avatar image
+ * decoding, a markdown fold, the keyboard opening) yanked the view back down mid-drag.
+ * You could never scroll up into history, and the list often settled a message short of
+ * the true bottom. It bit Graham's thread hardest because his messages render avatars
+ * (Cam's own don't), so his thread re-measured more and never sat still.
+ *
+ * Here we only auto-follow while the reader is ALREADY at the bottom; the moment they
+ * scroll up we leave them be. `stick()` forces a jump to the newest message and re-arms
+ * auto-follow — call it on load, thread switch, and send. */
+export function useStickyScroll<T>(ref: React.RefObject<FlatList<T> | null>) {
+  const atBottom = useRef(true);
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    // Within ~48px of the end counts as "at the bottom" — leaves slack for the
+    // last bubble's padding and sub-pixel rounding.
+    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 48;
+  }, []);
+  const onContentSizeChange = useCallback(() => {
+    if (atBottom.current) ref.current?.scrollToEnd({ animated: false });
+  }, [ref]);
+  const stick = useCallback(() => {
+    atBottom.current = true;
+    ref.current?.scrollToEnd({ animated: false });
+  }, [ref]);
+  return { onScroll, onContentSizeChange, stick };
+}
 
 /** The keyboard's overlap with the window, in px — reliable inside modal
  * sheets where KeyboardAvoidingView mis-measures (endCoordinates are window
