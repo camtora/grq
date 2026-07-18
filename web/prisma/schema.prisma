@@ -292,6 +292,12 @@ model JournalEntry {
   // for that listing (the identity record + display name). Null on legacy/unresolved.
   exchange        String?
   companyName     String?
+  // The agent's "constitution" flag (LESSON only): a durable, load-bearing rule it
+  // decided should ALWAYS be in front of it — not just while it rides the recent-10
+  // rolling window. Permanent lessons are injected into EVERY decision context with
+  // NO cap (agent/context.ts). The agent sets it at write_journal time and can re-flag
+  // an existing lesson via pin_lesson. Meant to stay small — a constitution, not a notebook.
+  permanent    Boolean     @default(false)
   agentVersion String      @default("v1.48-phase4")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])

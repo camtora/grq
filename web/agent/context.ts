@@ -23,11 +23,14 @@ function money(c: number): string {
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
   const MBL_ON = process.env.MARKET_BASE_RETRIEVAL !== "off"; // Slice-3 retrieval (docs/MARKET-BASE-LAYER.md); set "off" to disable
-  const [pf, settings, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds] =
+  const [pf, settings, permanentLessons, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
-      prisma.journalEntry.findMany({ where: { kind: "LESSON" }, orderBy: { at: "desc" }, take: 10 }),
+      // The "constitution": every lesson the agent flagged permanent, ALWAYS pushed, no cap.
+      prisma.journalEntry.findMany({ where: { kind: "LESSON", permanent: true }, orderBy: { at: "desc" } }),
+      // The rolling tactical window: the 10 most-recent NON-permanent lessons.
+      prisma.journalEntry.findMany({ where: { kind: "LESSON", permanent: false }, orderBy: { at: "desc" }, take: 10 }),
       prisma.journalEntry.findMany({ where: { kind: "RETRO" }, orderBy: { at: "desc" }, take: 5 }),
       prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } }),
       prisma.journalEntry.findMany({ where: { kind: "DECISION" }, orderBy: { at: "desc" }, take: 12 }),
@@ -306,7 +309,10 @@ Macro sweep each morning: ${MACRO_SWEEP.join(" · ")}
 ## Recent decisions (latest 12)
 ${openTheses.map((j) => `- [${j.at.toISOString().slice(0, 10)}] ${j.title}`).join("\n") || "  (none yet)"}
 
-## Lessons learned (read these before deciding)
+## Permanent lessons — your constitution (you flagged these ALWAYS-apply; they NEVER age out — obey them)
+${permanentLessons.map((l) => `- ${l.title}: ${l.body.slice(0, 200).replace(/\n/g, " ")}`).join("\n") || "  (none pinned yet — pin a load-bearing rule with write_journal permanent:true, or pin_lesson on an existing one)"}
+
+## Recent lessons (rolling — your last 10; older tactical ones age out unless you pin them permanent)
 ${lessons.map((l) => `- ${l.title}: ${l.body.slice(0, 200).replace(/\n/g, " ")}`).join("\n") || "  (none yet — earn some)"}
 
 ## Recent retros

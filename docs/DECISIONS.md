@@ -3397,3 +3397,27 @@ correctly at 13:07 ET. Top up at openrouter.ai/settings/credits — they auto-re
 `oneShot` was a reasonable 20-line workaround for an import cycle, and it silently opted the most
 expensive thing in the codebase out of every guard we'd built around model calls. Same shape as D118:
 the code that mattered lived on the path nobody was looking at.
+
+### D119 — Permanent lessons: an uncapped, always-pushed memory tier the agent curates (Cam, 2026-07-18)
+
+The lesson/retro loop was already *closed* — `buildContext` reads banked lessons back into all 7 session
+types under "Lessons learned (read these before deciding)", and retros grade sources into the scoreboard.
+But lessons were injected **recency-only** (`take: 10`). At the agent's ~4–5-lessons/week pace that's only
+~2½ weeks of memory, and it has no notion of importance: a situational one-off from last Tuesday stays in
+while foundational rules age out. When Cam asked whether the cycle was working, the tell was in the data —
+the newest lesson (CCO) explicitly "rhymes with LNR" two weeks earlier (the agent naming a repeat), while
+the load-bearing rules it would most want on — *"diversify — don't stack the book on one macro bet"*,
+*"verify web stats against the live DB"* — had already dropped out of the window (rows 11–19 of 19).
+
+**The fix:** a `permanent` boolean on `JournalEntry` (LESSON-only). `buildContext` now runs two queries —
+**all** permanent lessons (no cap, always pushed) under *"Permanent lessons — your constitution"*, **plus**
+the recent 10 **non-permanent** as a rolling tactical window. Pinning a lesson moves it out of the rolling
+query, so there's no duplication and the window slides down to surface a previously-aged-out lesson —
+net in-context coverage becomes `(# permanent) + 10`, and it grows as the agent curates.
+
+**The agent decides what's permanent** (Cam's call): it sets `permanent:true` at `write_journal` time, or
+promotes/retires an existing lesson with the new **`pin_lesson`** tool (meant for the weekly retro, so it
+can pin the durable lessons it banked before this tier existed). Uncapped by design — the only guardrail is
+the agent's own judgment, and the tool prompts hammer *"a constitution, not a notebook."* The tradeoff of
+"no cap" is that a bloated permanent set costs tokens on every session, so selectivity is on the agent.
+`agent/context.ts` + `agent/tools.ts` (`pin_lesson`, `write_journal permanent`) + schema; v2.74-phase4.

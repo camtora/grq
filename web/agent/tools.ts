@@ -95,7 +95,7 @@ const getJournalTool = tool(
 
 const writeJournalTool = tool(
   "write_journal",
-  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page. ALSO set stance: YOUR OWN call on the name — one of Strong Buy, Buy, Weak Buy, Hold, Weak Sell, Sell, Strong Sell (the SAME 7-point scale as the technical signal, so the two read uniformly side by side). This is your judgment as the fund's manager and may differ from the deterministic technical signal consensus; when it does, make the bottomLine say why. It surfaces as 'GRQ's call' on the stock page, next to the signal read. For a DOSSIER, ALSO set confidenceLevers: 2–4 SPECIFIC, FALSIFIABLE things that would most reframe this call — what is pinning your confidence below 100. Each is {gap, direction, magnitude, kind, trigger, retrievable}. gap = the unknown, concrete and checkable ('Q3 gross margin above 42%', 'read the latest 10-Q on debt maturities' — NOT vague like 'more macro clarity'). direction = where the BASE-CASE resolution would push the call: 'up' (toward buy), 'down' (toward sell), or 'tighten' (genuinely two-sided — resolving it just narrows the read). magnitude = 'small' | 'moderate' | 'large' (how much it would move confidence). kind = 'data-gap' (info that EXISTS but you don't have — you could go get it) or 'catalyst' (an EVENT that resolves it on a known horizon — earnings, an FDA date, a ruling). trigger = how/when you'd learn it (a date, a filing, a price level). retrievable = true if you could research it now (data-gaps), false if you must wait (catalysts). These power the 'What would change our mind' panel and a future re-rate-on-resolution loop, so be honest and specific. For a DISCOVERY-HUNT find (a 'Hunt dossier' entry), ALSO set obscurity 1–5: how under-the-radar / under-covered the name is — 5 = a deep cut almost nobody covers (no analysts, tiny float, no front-page coverage), 1 = a widely-followed name. This drives the obscurity badge + sort on The Hunt; the whole point of the hunt is the obscure end, so be honest about it. ALSO, for ANY new-symbol dossier (a hunt find OR a name not yet in our universe), set exchange: the EXACT exchange the ticker trades on — one of NYSE, NASDAQ, AMEX, TSX, TSXV, CSE, NEO. This is REQUIRED to show the right company: a bare ticker is ambiguous (AII is American Integrity Insurance on NYSE but Almonty Industries on TSX; LGN is Legence on NASDAQ but Logan Energy on TSXV) — without the exchange we'd attach a same-ticker DIFFERENT company's price, chart, and logo. Get it right; it's confirmed against FMP on save.",
+  "Write a journal entry. Use RESEARCH for findings/game plans, RETRO for post-mortems (grade your sources!), LESSON for durable patterns. Always include sources. For a stock DOSSIER, ALSO commit price targets: targetNearCents (a near-term/swing target, ~20–60 trading days out, with targetNearDays as the horizon) and targetFarCents (a 12-month target) — your honest expected price in cents. These become the fund's expected-return view that members see on 'On the Radar'. Only set targets you would defend; omit them if you genuinely have no view. ALSO set bottomLine: 3–5 short plain-English bullet points (markdown, '- ' each) a non-expert can read explaining why this stock is a buy/sell/hold for us right now — the REAL reasons (the business, whether it makes money, recent news/lawsuits/catalysts, the key risk), concrete and palatable (e.g. '- Spending more than it earns', '- Facing lawsuits over X', '- Growth is slowing'). This is the at-a-glance why on the stock page. ALSO set stance: YOUR OWN call on the name — one of Strong Buy, Buy, Weak Buy, Hold, Weak Sell, Sell, Strong Sell (the SAME 7-point scale as the technical signal, so the two read uniformly side by side). This is your judgment as the fund's manager and may differ from the deterministic technical signal consensus; when it does, make the bottomLine say why. It surfaces as 'GRQ's call' on the stock page, next to the signal read. For a DOSSIER, ALSO set confidenceLevers: 2–4 SPECIFIC, FALSIFIABLE things that would most reframe this call — what is pinning your confidence below 100. Each is {gap, direction, magnitude, kind, trigger, retrievable}. gap = the unknown, concrete and checkable ('Q3 gross margin above 42%', 'read the latest 10-Q on debt maturities' — NOT vague like 'more macro clarity'). direction = where the BASE-CASE resolution would push the call: 'up' (toward buy), 'down' (toward sell), or 'tighten' (genuinely two-sided — resolving it just narrows the read). magnitude = 'small' | 'moderate' | 'large' (how much it would move confidence). kind = 'data-gap' (info that EXISTS but you don't have — you could go get it) or 'catalyst' (an EVENT that resolves it on a known horizon — earnings, an FDA date, a ruling). trigger = how/when you'd learn it (a date, a filing, a price level). retrievable = true if you could research it now (data-gaps), false if you must wait (catalysts). These power the 'What would change our mind' panel and a future re-rate-on-resolution loop, so be honest and specific. For a DISCOVERY-HUNT find (a 'Hunt dossier' entry), ALSO set obscurity 1–5: how under-the-radar / under-covered the name is — 5 = a deep cut almost nobody covers (no analysts, tiny float, no front-page coverage), 1 = a widely-followed name. This drives the obscurity badge + sort on The Hunt; the whole point of the hunt is the obscure end, so be honest about it. ALSO, for ANY new-symbol dossier (a hunt find OR a name not yet in our universe), set exchange: the EXACT exchange the ticker trades on — one of NYSE, NASDAQ, AMEX, TSX, TSXV, CSE, NEO. This is REQUIRED to show the right company: a bare ticker is ambiguous (AII is American Integrity Insurance on NYSE but Almonty Industries on TSX; LGN is Legence on NASDAQ but Logan Energy on TSXV) — without the exchange we'd attach a same-ticker DIFFERENT company's price, chart, and logo. Get it right; it's confirmed against FMP on save. For a LESSON, set permanent:true ONLY for a foundational, always-apply rule you never want to fall out of context as newer lessons pile up (e.g. 'diversify — don't stack the book on one macro bet'; 'verify web stats against the live DB before trading on them'). Permanent lessons are pushed into EVERY decision, uncapped — so keep that set small and load-bearing (a constitution, not a notebook); ordinary tactical lessons stay false and ride the recent-10 rolling window. Only LESSON entries can be permanent; you can also promote/retire an existing one with pin_lesson.",
   {
     kind: z.enum(["RESEARCH", "RETRO", "LESSON"]),
     symbol: z.string().optional(),
@@ -123,6 +123,7 @@ const writeJournalTool = tool(
       .optional(),
     obscurity: z.number().int().min(1).max(5).optional(),
     exchange: z.enum(["NYSE", "NASDAQ", "AMEX", "TSX", "TSXV", "CSE", "NEO"]).optional(),
+    permanent: z.boolean().optional(),
   },
   async (args) => {
     // Confirm the (ticker, exchange) resolves to a real listing and record its
@@ -151,10 +152,28 @@ const writeJournalTool = tool(
         obscurity: args.obscurity,
         exchange: args.exchange,
         companyName,
+        // Only a LESSON can be permanent (the always-pushed constitution tier).
+        permanent: args.kind === "LESSON" ? args.permanent ?? false : false,
         agentVersion: AGENT_VERSION,
       },
     });
-    return text(`Journaled #${e.id} (${args.kind})${args.exchange ? ` · ${args.symbol?.toUpperCase()} on ${args.exchange}${companyName ? ` = ${companyName}` : " (FMP unconfirmed)"}` : ""}${args.targetFarCents || args.targetNearCents ? " with targets" : ""}.`);
+    return text(`Journaled #${e.id} (${args.kind})${args.kind === "LESSON" && args.permanent ? " · PERMANENT (always in context)" : ""}${args.exchange ? ` · ${args.symbol?.toUpperCase()} on ${args.exchange}${companyName ? ` = ${companyName}` : " (FMP unconfirmed)"}` : ""}${args.targetFarCents || args.targetNearCents ? " with targets" : ""}.`);
+  },
+);
+
+// Promote/retire a PERMANENT lesson — lets the agent curate its always-pushed set
+// (incl. pinning durable lessons banked before this tier existed). LESSON-only.
+const pinLessonTool = tool(
+  "pin_lesson",
+  "Promote or retire a PERMANENT lesson. permanent:true pins an existing LESSON into EVERY decision context forever (uncapped, always pushed) — use for foundational, always-apply rules that would otherwise age out of the recent-10 rolling window (e.g. 'diversify', 'verify web stats against the live DB'). permanent:false retires one that no longer earns its slot. Keep the permanent set small and load-bearing (a constitution, not a notebook) — review it in your weekly retro. Find lesson ids with read_journal (kind LESSON).",
+  { id: z.number().int().positive(), permanent: z.boolean() },
+  async (args) => {
+    const e = await prisma.journalEntry.findUnique({ where: { id: args.id } });
+    if (!e) return text(`No journal entry #${args.id}.`);
+    if (e.kind !== "LESSON") return text(`#${args.id} is a ${e.kind}, not a LESSON — only lessons can be permanent.`);
+    if (e.permanent === args.permanent) return text(`Lesson #${args.id} is already ${args.permanent ? "permanent" : "in the rolling window"}: ${e.title.slice(0, 70)}`);
+    await prisma.journalEntry.update({ where: { id: args.id }, data: { permanent: args.permanent } });
+    return text(`Lesson #${args.id} ${args.permanent ? "PINNED permanent (always in context)" : "unpinned (back to the recent-10 window)"}: ${e.title.slice(0, 70)}`);
   },
 );
 
@@ -658,6 +677,7 @@ export const grqServer = createSdkMcpServer({
     getQuotesTool,
     getJournalTool,
     writeJournalTool,
+    pinLessonTool,
     getFocusTool,
     setFocusTool,
     getSignalsTool,
