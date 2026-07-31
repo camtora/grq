@@ -3,6 +3,7 @@ import { sessionFromRequest } from "@/lib/session";
 import { getPortfolio, PAPER_INCEPTION } from "@/lib/portfolio";
 import { startOfEtDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
 import { prisma } from "@/lib/db";
+import { lastSettledSnapshotBefore, settledSnapshotsBetween } from "@/lib/nav-history";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,8 @@ export async function GET(req: Request) {
   const { open, close } = etSessionBounds();
   const [pf, dayOpenSnap, todaySnaps] = await Promise.all([
     getPortfolio(),
-    prisma.navSnapshot.findFirst({ where: { at: { lt: start, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
-    prisma.navSnapshot.findMany({ where: { at: { gte: start } }, orderBy: { at: "asc" } }),
+    lastSettledSnapshotBefore(start, PAPER_INCEPTION),
+    settledSnapshotsBetween(start),
   ]);
 
   const points = todaySnaps.map((s) => ({ t: s.at.getTime(), c: s.navCents }));

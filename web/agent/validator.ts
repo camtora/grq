@@ -11,6 +11,7 @@ import {
   isValidQty,
 } from "../lib/broker/guardrails";
 import { toCadCents } from "../lib/fx";
+import { lastSettledSnapshotBefore } from "../lib/nav-history";
 import { getBroker } from "../lib/broker";
 import { getQuote } from "../lib/broker/quotes";
 import type { OptionLeg } from "../lib/broker/types";
@@ -70,7 +71,7 @@ export function markBoot(): void {
 export async function dayPnlBps(): Promise<number> {
   const dayStart = startOfEtDay();
   const [openSnap, pf] = await Promise.all([
-    prisma.navSnapshot.findFirst({ where: { at: { lt: dayStart, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
+    lastSettledSnapshotBefore(dayStart, PAPER_INCEPTION),
     getPortfolio(),
   ]);
   // base = yesterday's close (paper-era only — never a pre-inception sim snapshot);

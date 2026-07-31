@@ -247,6 +247,13 @@ model NavSnapshot {
   // What the same contributions would be worth in XIC (null if unknowable).
   benchmarkCents Int?
   note           String?
+  // False when the broker mirror was still lagging a fill at write time: the proceeds of a sale are
+  // in cash while the sold shares are STILL marked in positionsCents (NAV double-counted), or a
+  // bought position hasn't mirrored yet (NAV understated). Such a row is a transient, not a mark —
+  // it is excluded from the drawdown high-water mark, day-open baselines and the NAV tape by
+  // lib/nav-history.ts. D120: one unsettled row became a permanent phantom HWM and halted the fund
+  // twice (2026-07-16, 2026-07-29).
+  settled        Boolean  @default(true)
 
   @@index([at])
 }

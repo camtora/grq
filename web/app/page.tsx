@@ -20,6 +20,7 @@ import { LiveMoverPrice } from "@/components/LiveTableCells";
 import { funFactOfDay } from "@/lib/funfacts";
 import { dailyQuote } from "@/lib/dailyquote";
 import { getMacro, macroLine } from "@/lib/macro";
+import { lastSettledSnapshotBefore } from "@/lib/nav-history";
 
 function signedPct(bps: number): string {
   return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
@@ -210,7 +211,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     await Promise.all([
       getPortfolio(),
       prisma.report.findFirst({ where: { kind: "WEEKLY", date: { gte: start, lt: end } } }),
-      prisma.navSnapshot.findFirst({ where: { at: { lt: start, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
+      lastSettledSnapshotBefore(start, PAPER_INCEPTION),
       prisma.quote.findMany(),
       allUniverse(),
       prisma.agentFocus.findMany({ orderBy: { addedAt: "desc" } }),

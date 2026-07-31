@@ -4,6 +4,7 @@ import { sessionFromRequest } from "@/lib/session";
 import { PAPER_INCEPTION } from "@/lib/portfolio";
 import { HARD, DIALS, SELF_INVEST } from "@/agent/policy";
 import { money, signedMoney } from "@/lib/money";
+import { settledSnapshotsBetween, latestSettledSnapshot } from "@/lib/nav-history";
 
 // The Learn portal's "receipts" for GRQ Go (components/learn/Receipts.tsx serialized) —
 // each block pulls the fund's OWN live numbers so lesson claims can't drift from reality.
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
 
   // drawdown
   try {
-    const snaps = await prisma.navSnapshot.findMany({ where: { at: { gte: PAPER_INCEPTION } }, orderBy: { at: "asc" }, select: { navCents: true } });
+    const snaps = await settledSnapshotsBetween(PAPER_INCEPTION);
     if (snaps.length < 2) {
       blocks["drawdown"] = { title: "the fund's drawdown", empty: "Not enough NAV history yet this soak to chart a drawdown — check back after a few sessions." };
     } else {
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
   // vs-xic
   try {
     const [snap, contrib] = await Promise.all([
-      prisma.navSnapshot.findFirst({ orderBy: { at: "desc" } }),
+      latestSettledSnapshot(),
       prisma.contribution.aggregate({ _sum: { amountCents: true } }),
     ]);
     const put = contrib._sum.amountCents ?? 0;
@@ -160,7 +161,7 @@ export async function GET(req: Request) {
   try {
     const [settings, snaps] = await Promise.all([
       prisma.settings.findUnique({ where: { id: 1 } }),
-      prisma.navSnapshot.findMany({ where: { at: { gte: PAPER_INCEPTION } }, orderBy: { at: "asc" }, select: { at: true } }),
+      settledSnapshotsBetween(PAPER_INCEPTION),
     ]);
     const days = new Set(snaps.map((s) => ET_DAY.format(s.at))).size;
     blocks["soak"] = {

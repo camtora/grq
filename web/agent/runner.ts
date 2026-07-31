@@ -8,6 +8,7 @@ import { prisma } from "../lib/db";
 import { refreshAllQuotes, refreshQuotesFor, getQuotes, reconcileListingCurrencies } from "../lib/broker/quotes";
 import { BENCHMARK } from "../lib/universe";
 import { writeNavSnapshot } from "../lib/broker/sim";
+import { highWaterMarkCents } from "../lib/nav-history";
 import { effectiveHeldQty } from "../lib/broker/positions";
 import { getBroker } from "../lib/broker";
 import { IBKRBroker } from "../lib/broker/ibkr";
@@ -297,8 +298,12 @@ async function checkPriceAlerts() {
 // direction: errs toward not-halting).
 let drawdownBreaches = 0;
 async function checkDrawdown() {
-  const hwmRow = await prisma.navSnapshot.aggregate({ _max: { navCents: true } });
-  const hwm = hwmRow._max.navCents ?? 0;
+  // The mark is the highest SETTLED NAV — never a reading taken while the broker mirror was still
+  // absorbing a fill. Before D120 this was a raw `_max` over all history, so one mid-settlement row
+  // (a sale's proceeds counted on top of the shares it sold) was a permanent phantom peak that
+  // halted the fund on 2026-07-16 and again 2026-07-29. The 2-tick confirm below cannot help with
+  // that: it guards the CURRENT reading, and both ticks were honest — it was the mark that lied.
+  const hwm = await highWaterMarkCents();
   if (hwm <= 0) return;
   const pf = await getPortfolio();
   const ddBps = Math.round(((pf.navCents - hwm) / hwm) * 10_000);

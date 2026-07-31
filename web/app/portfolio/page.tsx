@@ -35,6 +35,7 @@ import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents
 import { personByEmail } from "@/lib/people";
 import { etDateStr, startOfEtDay, isMarketDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
 import LiveTape from "@/components/LiveTape";
+import { lastSettledSnapshotBefore, settledSnapshotsBetween } from "@/lib/nav-history";
 
 function signedPct(bps: number): string {
   return `${bps > 0 ? "+" : ""}${pct(bps / 10_000, 2)}`;
@@ -120,8 +121,8 @@ export default async function Portfolio() {
   const tapeStart = startOfEtDay(new Date());
   const tapeEnd = new Date(tapeStart.getTime() + 24 * 60 * 60 * 1000);
   const [tapeDayOpen, tapeSnaps] = await Promise.all([
-    prisma.navSnapshot.findFirst({ where: { at: { lt: tapeStart, gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
-    prisma.navSnapshot.findMany({ where: { at: { gte: tapeStart, lt: tapeEnd } }, orderBy: { at: "asc" } }),
+    lastSettledSnapshotBefore(tapeStart, PAPER_INCEPTION),
+    settledSnapshotsBetween(tapeStart, tapeEnd),
   ]);
   const tapeDayOpenNav = tapeDayOpen?.navCents ?? pf.contributionsCents;
   const tapePts = tapeSnaps.map((s) => ({ t: s.at.getTime(), c: s.navCents }));

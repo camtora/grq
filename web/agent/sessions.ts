@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
+import { lastSettledSnapshotBefore } from "../lib/nav-history";
 import { getQuote } from "../lib/broker/quotes";
 import { universeEntry, allUniverse, isTradeable, currencyForSymbol } from "../lib/universe";
 import { exchangeLine } from "../lib/exchange";
@@ -914,7 +915,7 @@ async function computeDayStats() {
     getPortfolio(),
     prisma.trade.findMany({ where: { at: { gte: dayStart } }, orderBy: { at: "asc" } }),
     prisma.order.findMany({ where: { createdAt: { gte: dayStart }, status: "REJECTED" } }),
-    prisma.navSnapshot.findFirst({ where: { at: { lt: dayStart } }, orderBy: { at: "desc" } }),
+    lastSettledSnapshotBefore(dayStart),
   ]);
   const dayOpenNav = history?.navCents ?? pf.contributionsCents;
   return { pf, trades, rejections, dayOpenNav, dayPnlCents: pf.navCents - dayOpenNav };

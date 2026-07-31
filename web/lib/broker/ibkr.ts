@@ -4,7 +4,7 @@ import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
 import { activeSymbols, universeEntry } from "../universe";
 import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents } from "./sim";
 import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
-import { effectiveHeldQty } from "./positions";
+import { effectiveHeldQty, mirrorLag, isSettled } from "./positions";
 import { usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
@@ -373,18 +373,19 @@ export class IBKRBroker implements BrokerAdapter {
       }
 
       const orderRow = await this.recordFill(input, filledPriceCents, commissionCents);
-      // IBKR's positions ledger lags the fill by a few seconds, so a single
-      // immediate reconcile can miss the just-filled position — leaving it
-      // unmirrored: NAV understated, a false cash-only dip in the NAV tape, and the
-      // Universe tab showing no position. Reconcile in a short retry loop until the
-      // new BUY actually appears in the mirror, THEN snapshot, so the ledger and the
-      // tape reflect the trade rather than a transient understated state (2026-06-18).
+      // IBKR's positions ledger lags the fill (minutes, not the "few seconds" this comment used to
+      // claim — D118 measured 09:49 → 09:51), so a single immediate reconcile can miss it and the
+      // NAV written here would be a mid-settlement transient. Reconcile in a short retry loop until
+      // the mirror has actually absorbed THIS fill, then snapshot (2026-06-18, made symmetric D120).
+      //
+      // This loop was BUY-only until 2026-07-31, on the reasoning that "sells reduce/close a
+      // position — never understate NAV". True, and beside the point: a sell doesn't understate NAV,
+      // it OVERSTATES it — the proceeds are in cash while the sold shares are still marked. That
+      // opt-out wrote the $86,795 phantom peak that halted the fund on 2026-07-29. Both sides wait.
       const sym = input.symbol.toUpperCase();
       for (let i = 0; i < 5; i++) {
         await this.reconcile().catch(() => {});
-        if (input.side === "SELL") break; // sells reduce/close a position — never understate NAV
-        const pos = await prisma.position.findUnique({ where: { symbol: sym } });
-        if (pos && pos.qty > 0) break;
+        if (isSettled(await mirrorLag(), sym)) break;
         await sleep(2000);
       }
       await writeNavSnapshot(`IBKR fill order #${orderRow}`).catch(() => {});

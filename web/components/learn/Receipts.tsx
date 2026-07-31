@@ -3,6 +3,7 @@ import { PAPER_INCEPTION } from "@/lib/portfolio";
 import { HARD, DIALS, SELF_INVEST } from "@/agent/policy";
 import { money, signedMoney, pnlClass } from "@/lib/money";
 import type { LearnReceiptKey } from "@/lib/learn/content";
+import { settledSnapshotsBetween, latestSettledSnapshot } from "@/lib/nav-history";
 
 // "Receipts" — live-fund example blocks inside Learn lessons (docs/LEARN-PORTAL.md, D110
 // Phase 3). Each pulls the fund's OWN numbers from the same sources the app trades with
@@ -81,11 +82,7 @@ async function RealFills() {
 }
 
 async function Drawdown() {
-  const snaps = await prisma.navSnapshot.findMany({
-    where: { at: { gte: PAPER_INCEPTION } },
-    orderBy: { at: "asc" },
-    select: { navCents: true },
-  });
+  const snaps = await settledSnapshotsBetween(PAPER_INCEPTION);
   if (snaps.length < 2) return <Empty title="the fund's drawdown" note="Not enough NAV history yet this soak to chart a drawdown — check back after a few sessions." />;
   let hwm = 0;
   let worstBps = 0;
@@ -117,7 +114,7 @@ async function Drawdown() {
 
 async function VsXic() {
   const [snap, contrib] = await Promise.all([
-    prisma.navSnapshot.findFirst({ orderBy: { at: "desc" } }),
+    latestSettledSnapshot(),
     prisma.contribution.aggregate({ _sum: { amountCents: true } }),
   ]);
   const put = contrib._sum.amountCents ?? 0;
@@ -221,7 +218,7 @@ async function Guardrails() {
 async function Soak() {
   const [settings, snaps] = await Promise.all([
     prisma.settings.findUnique({ where: { id: 1 } }),
-    prisma.navSnapshot.findMany({ where: { at: { gte: PAPER_INCEPTION } }, orderBy: { at: "asc" }, select: { at: true, navCents: true } }),
+    settledSnapshotsBetween(PAPER_INCEPTION),
   ]);
   const days = new Set(snaps.map((s) => ET_DAY.format(s.at))).size;
   const broker = process.env.BROKER ?? "sim";

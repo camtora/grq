@@ -3421,3 +3421,69 @@ can pin the durable lessons it banked before this tier existed). Uncapped by des
 the agent's own judgment, and the tool prompts hammer *"a constitution, not a notebook."* The tradeoff of
 "no cap" is that a bloated permanent set costs tokens on every session, so selectivity is on the agent.
 `agent/context.ts` + `agent/tools.ts` (`pin_lesson`, `write_journal permanent`) + schema; v2.74-phase4.
+
+### D120 — A NAV snapshot taken mid-settlement is not a mark (Cam, 2026-07-31)
+
+**Symptom:** the kill switch was engaged by `system-drawdown` and would not stay off. Cam re-enabled
+trading at 13:47 ET on 07-30; it re-killed at 13:51 — 3m43s, two ticks. The alert claimed NAV was
+**−22.9%** off its high-water mark. The fund was **−8.0%**.
+
+**What actually happened.** At 10:43 ET on 07-29 two deterministic stops fired — TSM 25sh @ US$377.80
+(`#65`), ETN 11sh @ US$364.46 (`#66`). Both correct: real triggers, real fills, no oversell, no short.
+`settleFill` credits the proceeds to cash synchronously, but positions are mirrored from the broker by
+`reconcile()`, which lags a fill by minutes. The fill path snapshots NAV in between, so both rows
+counted the ~$18,970 of proceeds AND the shares that produced them:
+
+```
+14:43:06  nav 81,143.28  cash 16,671.42  pos 64,471.86   IBKR fill order #65
+14:43:09  nav 86,795.34  cash 22,323.48  pos 64,471.86   IBKR fill order #66   ← phantom peak
+14:49:11  nav 67,787.93  cash 22,323.48  pos 45,464.45   intraday (mirror caught up)
+```
+
+`checkDrawdown` took `_max` over **all** `NavSnapshot` history, so a six-minute transient became a
+**permanent** high-water mark. Every re-enable re-killed within two ticks. The 2-tick confirm (D33
+follow-up) cannot help: it guards the *current* reading, and both readings were honest — the mark lied.
+
+**Why it happened twice.** This is D118 item 3, verbatim. That commit's own message named it —
+*"checkDrawdown takes _max over ALL NavSnapshot history, so that peak was permanent"* — and then fixed
+the shorting/fee/funding seam instead; the repair was to delete 8 rows by hand. D118 removed one
+*source* of double-counted snapshots (oversells against a stale mirror). It left the generator that
+needs no bug at all: an ordinary, single, legal sell.
+
+That generator was written deliberately. `c622e01` (D39, 06-18) added the post-fill wait-for-mirror
+loop to cure the BUY symptom — an unmirrored buy *understating* NAV into a false daily-loss pause —
+and opted the other side out in the same hunk: `if (input.side === "SELL") break; // sells reduce/close
+a position — never understate NAV`. The premise is true and the conclusion doesn't follow. A sell
+doesn't understate NAV, it **overstates** it. Six weeks of sells wrote phantom peaks through that line:
+07-03 (`#45`, +$2,406), 07-17 (`#59`, +$2,784), 07-23 (`#63`, +$2,336), 07-29 (+$18,970). Only the last
+was big enough to breach −15% — the others had been quietly setting the high-water mark all along, which
+is why the "honest" peak looked like $73,872 until every fill-path row was checked. It is $72,789.33
+(06-30), an ordinary intraday tick.
+
+**The fix — three layers, so neither half of the failure can recur alone:**
+
+1. **A double-counted NAV can't be written.** `writeNavSnapshot` values positions net of filled sells
+   the mirror hasn't absorbed (`mirrorLag()` / `classifyMirrorLag()` in `lib/broker/positions.ts`,
+   sharing the `Position.updatedAt` watermark rule with `effectiveHeldQty`). Deliberately *unlike* that
+   §6 gate, valuation bounds the window to 15 minutes: a fill the mirror has ignored for longer is a
+   broken mirror, and netting it off forever would be its own standing lie.
+2. **A mid-settlement row can never be a mark.** Every snapshot records `settled`, and every read comes
+   back through **`lib/nav-history.ts`** (`highWaterMarkCents`, `lastSettledSnapshotBefore`,
+   `settledSnapshotsBetween`, `latestSettledSnapshot`, `recentSettledSnapshots`), where the filter is
+   structural rather than remembered at nine call sites. The drawdown mark, both day-open baselines and
+   every NAV chart now read settled rows only.
+3. **The fill path waits on both sides.** The reconcile loop now polls `isSettled(await mirrorLag(),
+   sym)` instead of breaking early on SELL.
+
+**Enforced by `web/test/nav-integrity.test.ts`**, in the D118c spirit: the lag arithmetic is unit-tested
+pure, and two source-level seams fail the build — a raw `prisma.navSnapshot` read anywhere outside
+`lib/nav-history.ts`, or a side-conditional `break` returning to the post-fill loop. Validated by
+mutation: restoring the SELL opt-out and adding one unfiltered read both go red.
+
+**Data repair:** the 8 phantom rows (1085, 1086, 2465, 2466, 3122, 3586, 3587, 3588) were marked
+`settled = false`, not deleted — they are an honest record of what the system computed, and what they
+must never be is a mark. Backed up to CSV first. HWM → **$72,789.33**, drawdown → **−8.0%**.
+
+**The lesson worth keeping:** a bug you diagnose in a commit message and don't fix is not documented,
+it is scheduled. Also — a guardrail is only as honest as the number it reads, and NAV was never on
+anyone's list of guardrail surfaces. Shipped web + agent v2.75-phase4.

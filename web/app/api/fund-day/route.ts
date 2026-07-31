@@ -3,6 +3,7 @@ import { sessionFromRequest } from "@/lib/session";
 import { getPortfolio, PAPER_INCEPTION } from "@/lib/portfolio";
 import { startOfEtDay, isMarketDay } from "@/agent/calendar";
 import { prisma } from "@/lib/db";
+import { lastSettledSnapshotBefore } from "@/lib/nav-history";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
   const marketDay = isMarketDay();
   const [pf, dayOpenSnap] = await Promise.all([
     getPortfolio(),
-    prisma.navSnapshot.findFirst({ where: { at: { lt: startOfEtDay(), gte: PAPER_INCEPTION } }, orderBy: { at: "desc" } }),
+    lastSettledSnapshotBefore(startOfEtDay(), PAPER_INCEPTION),
   ]);
   const dayOpenNav = dayOpenSnap?.navCents ?? pf.contributionsCents;
   const dayPnlPct = marketDay && dayOpenNav > 0 ? (pf.navCents - dayOpenNav) / dayOpenNav : 0;

@@ -50,6 +50,7 @@ import {
   getSmartMoneyForSymbol,
 } from "./smart-money/queries";
 import { fmtUsd } from "./smart-money/types";
+import { lastSettledSnapshotBefore, settledSnapshotsBetween } from "./nav-history";
 
 // Builders that produce the exact shared/contract.ts shapes for the mobile app
 // (docs/IOS-PLAN.md). Same Prisma source the web server components read, so the
@@ -528,8 +529,8 @@ export async function todayResponse() {
 
   const [pf, dayOpenSnap, todaySnaps, premorning, latestPlan, midday, checkin, latestEod, weekly, xicQuote, all] = await Promise.all([
     getPortfolio(),
-    prisma.navSnapshot.findFirst({ where: { at: { lt: start } }, orderBy: { at: "desc" } }),
-    prisma.navSnapshot.findMany({ where: { at: { gte: start, lt: end } }, orderBy: { at: "asc" } }),
+    lastSettledSnapshotBefore(start),
+    settledSnapshotsBetween(start, end),
     // The evolving "latest briefing" slot — same sources the web Portfolio page reads
     // (web/app/portfolio/page.tsx): newest-of-its-kind for each brief type, then pick
     // whichever timestamp is freshest (below). NOT date-scoped, so a weekend shows the

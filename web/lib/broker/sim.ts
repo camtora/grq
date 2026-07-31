@@ -4,6 +4,7 @@ import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
 import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
+import { mirrorLag, isSettled } from "./positions";
 import { markHeldContract, valueOptionPositionsCad } from "../options/order";
 
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
@@ -69,10 +70,17 @@ export async function writeNavSnapshot(
   ]);
   const fx = await usdCadRate();
   const quotes = await getQuotes(positions.map((p) => p.symbol));
+  // Value what we ACTUALLY still hold, not what the mirror hasn't caught up on. A sale's proceeds
+  // land in cash the moment it fills, so counting the sold shares too would double-count them —
+  // which is exactly the phantom NAV that became a permanent high-water mark and halted the fund on
+  // 2026-07-16 and again on 2026-07-29 (D120). `settled` records whether this row was taken
+  // mid-settlement at all; lib/nav-history.ts keeps unsettled rows out of every mark and chart.
+  const lag = await mirrorLag();
   let positionsCents = 0; // valued in CAD (USD positions × fx)
   for (const p of positions) {
     const q = quotes.get(p.symbol);
-    positionsCents += toCadCents(p.qty * (q?.midCents ?? p.avgCostCents), p.currency, fx);
+    const held = Math.max(0, p.qty - (lag.unabsorbedSells.get(p.symbol) ?? 0));
+    positionsCents += toCadCents(held * (q?.midCents ?? p.avgCostCents), p.currency, fx);
   }
   // Held option positions (D99) — premium value in CAD. No-op fetch when the fund holds none, so the
   // equities NAV path is unchanged. Premium left cash on open and must reappear here or NAV would lie.
@@ -81,7 +89,7 @@ export async function writeNavSnapshot(
   const navCents = cashCents + positionsCents;
   const benchmarkCents = await benchmarkValueCents().catch(() => null);
   await prisma.navSnapshot.create({
-    data: { navCents, cashCents, positionsCents, benchmarkCents, note },
+    data: { navCents, cashCents, positionsCents, benchmarkCents, note, settled: isSettled(lag) },
   });
   return { navCents, cashCents, positionsCents };
 }

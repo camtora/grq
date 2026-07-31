@@ -3,6 +3,7 @@ import { getQuotes } from "./broker/quotes";
 import { benchmarkValueCents } from "./broker/sim";
 import { toCadCents, usdCadRate } from "./fx";
 import { valueOptionPositionsCad } from "./options/order";
+import { recentSettledSnapshots } from "./nav-history";
 
 // The fund's real track record begins at the IBKR-paper inception. The original
 // paper soak opened 2026-06-17, but on 2026-06-26 a member balance-reset the paper
@@ -120,10 +121,5 @@ export async function getPortfolio(): Promise<PortfolioView> {
 }
 
 export async function getNavHistory(limit = 60) {
-  const rows = await prisma.navSnapshot.findMany({
-    where: { at: { gte: PAPER_INCEPTION } },
-    orderBy: { at: "desc" },
-    take: limit,
-  });
-  return rows.reverse();
+  return recentSettledSnapshots(limit, PAPER_INCEPTION);
 }
