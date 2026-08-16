@@ -67,31 +67,49 @@ export default function WatchButton({
       : "Watch — adds your face and the agent dossiers it");
 
   if (iconOnly) {
+    // The star has no room for the reason, so the tooltip carries it — but a bare "↻"
+    // reads as a transient glitch worth re-clicking, which is wrong when the server has
+    // refused for a standing reason (a full candidate pool, say). Tint it red so it's
+    // visibly a refusal, not a hiccup.
     return (
       <button
         onClick={toggle}
         disabled={busy}
         title={title}
+        aria-label={err ? `Couldn't watch ${symbol}: ${err}` : undefined}
         className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border text-sm transition-colors disabled:opacity-40 ${
-          watching ? "border-teal-400/45 bg-teal-400/15 text-teal-200" : "border-teal-400/20 text-teal-300/70 hover:bg-teal-400/10"
+          err
+            ? "border-rose-400/45 bg-rose-400/10 text-rose-300"
+            : watching
+              ? "border-teal-400/45 bg-teal-400/15 text-teal-200"
+              : "border-teal-400/20 text-teal-300/70 hover:bg-teal-400/10"
         }`}
       >
-        {busy ? "…" : err ? "↻" : watching ? "★" : "☆"}
+        {busy ? "…" : err ? "!" : watching ? "★" : "☆"}
       </button>
     );
   }
+  // Show the server's reason INLINE (Cam 2026-08-15). It used to live only in the `title`
+  // tooltip with the label flipped to "retry", so a refusal with a real, actionable reason
+  // ("Candidate cap reached (300) — retire something first.") looked exactly like the star
+  // being broken. A guardrail that won't say its name reads as a bug.
   return (
-    <button
-      onClick={toggle}
-      disabled={busy}
-      title={title}
-      className={`rounded-lg border px-2 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
-        watching
-          ? "border-teal-400/50 bg-teal-400/15 text-teal-200"
-          : "border-teal-400/25 text-teal-300/70 hover:bg-teal-400/10"
-      }`}
-    >
-      {busy ? "…" : err ? "retry" : watching ? "★ watching" : "☆ watch"}
-    </button>
+    <span className="inline-flex flex-col items-start gap-1">
+      <button
+        onClick={toggle}
+        disabled={busy}
+        title={title}
+        className={`rounded-lg border px-2 py-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+          err
+            ? "border-rose-400/45 text-rose-300 hover:bg-rose-400/10"
+            : watching
+              ? "border-teal-400/50 bg-teal-400/15 text-teal-200"
+              : "border-teal-400/25 text-teal-300/70 hover:bg-teal-400/10"
+        }`}
+      >
+        {busy ? "…" : err ? "retry" : watching ? "★ watching" : "☆ watch"}
+      </button>
+      {err && <span className="max-w-[16rem] text-[11px] leading-tight text-rose-300/90">{err}</span>}
+    </span>
   );
 }

@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.75-phase4";
+export const AGENT_VERSION = "v2.76-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -93,7 +93,16 @@ export const REFRESH = {
   // ── pool curation (the prune) ──
   // A CANDIDATE whose dossier is older than this — unwatched, un-pinned, not buy-rated —
   // gets RETIRED (reversible: the hunt can resurface it; opening its page re-adds it).
-  demoteStaleDays: 45,
+  //
+  // ⚠️ INVARIANT: this MUST stay BELOW staleMaxDays, or the prune is dead code. The sweep
+  // prunes before it gates (curation.ts: "a retired candidate never reaches the gate"), so
+  // a floor above staleMaxDays can never be reached — the refresh re-dossiers the name at
+  // 28d and resets its age, forever. Shipped 45 (2026-07-05, D112) and NEVER retired a
+  // single name: the pool filled to the 200 cap and blocked new watches (Cam couldn't add
+  // TSLA, 2026-08-15) while 88 candidates sat permanently un-prunable at an average dossier
+  // age of 10 days. 45 → 21 puts it a clear week under the floor. Locked by a test in
+  // test/curation.test.ts so the pair can't silently invert again.
+  demoteStaleDays: 21,
   // A CANDIDATE that was NEVER dossiered and has sat unopened this long gets retired too
   // (a stale hunt lead nobody looked at — D46 says the dossier waits for a human anyway).
   demoteUnopenedDays: 21,

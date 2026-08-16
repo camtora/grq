@@ -31,7 +31,13 @@ export type UniverseRow = {
 export const BENCHMARK = "XIC";
 // Watching a stock ≈ adding a CANDIDATE now (2.8 — the two were unified), so this
 // is a high anti-runaway guard, not a budget. Cam lifted the research caps 2026-06-15.
-export const CANDIDATE_CAP = 200;
+// 200 → 300 (Cam 2026-08-15): the pool hit 200 dead-on and started REJECTING new watches
+// ("Candidate cap reached"). Two things changed since 200 was set — the D112 gate now does
+// the real budget work (the weekly sweep is 7.4M tokens, not 73.8M), so the cap no longer
+// has to stand in for a cost bound; and the prune that was meant to drain the pool had an
+// unreachable floor (REFRESH.demoteStaleDays, fixed in the same change). The prune is the
+// fix; this is headroom so a full pool can't silently eat a member's watch again.
+export const CANDIDATE_CAP = 300;
 // (ON_DEMAND_RESEARCH_PER_DAY removed 2026-06-15 — Cam lifted the on-demand cap;
 // research is unlimited. The weekly-refresh size is the only remaining bound.)
 // Full-universe dossier refresh runs weekly to keep the whole research library fresh

@@ -3487,3 +3487,45 @@ must never be is a mark. Backed up to CSV first. HWM → **$72,789.33**, drawdow
 **The lesson worth keeping:** a bug you diagnose in a commit message and don't fix is not documented,
 it is scheduled. Also — a guardrail is only as honest as the number it reads, and NAV was never on
 anyone's list of guardrail surfaces. Shipped web + agent v2.75-phase4.
+
+### D121 — A prune whose floor sits above the refresh floor is dead code (Cam, 2026-08-15)
+
+**Symptom:** Cam couldn't add TSLA to his watchlist. The star silently refused.
+
+**Immediate cause:** watching a name ≈ adding a CANDIDATE (unified in 2.8), and the candidate pool
+sat at exactly 200 against `CANDIDATE_CAP = 200`, so `POST /api/universe` returned
+`Candidate cap reached (200) — retire something first.`
+
+**Root cause — the D112 prune had never retired a single name in six weeks.** Not misconfigured;
+*unreachable by construction*. The weekly sweep prunes before it gates (`curation.ts`: "a retired
+candidate never reaches the gate"), and the two floors were ordered so the prune could never fire:
+
+| dial | value | effect |
+|---|---|---|
+| `REFRESH.staleMaxDays` | 28 | a quiet candidate is **re-dossiered** at 28d — age resets |
+| `REFRESH.demoteStaleDays` | 45 | the prune only retires at 45d — **never reached** |
+
+Every candidate that had a dossier was rescued by the refresh a full 17 days before it could be
+pruned, forever. The live pool proved it exactly: **200/200 candidates, all dossiered, average age
+8 days, maximum 32** — nothing had ever aged past the sweep's reset. `refresh-dryrun.ts` reported
+`retire (prune) 0`, and the journal's last retirement was a *manual* one from June. The pool
+breakdown was 59 watched · 53 buy-rated · **88 permanently un-prunable**.
+
+So the cap did the only thing left to it: it stopped being an anti-runaway guard and became a wall
+that ate a member's watch, with the reason visible only in a tooltip.
+
+**The fix — order the dials, then lock the ordering:**
+1. `demoteStaleDays` **45 → 21**, a clear week under the refresh floor. Prune now frees 8 names and
+   the sweep drops 7.4M → **6.5M** tokens (91% off blind).
+2. `CANDIDATE_CAP` **200 → 300**. Headroom, *not* the fix — and worth noting the cap was set when the
+   sweep was blind and had to stand in for a cost bound; the D112 gate does that job now.
+3. **`test/curation.test.ts` asserts the ORDERING, not the numbers** — either dial may move freely,
+   but not invert. Validated by mutation: restoring 45 turns both new tests red.
+4. `WatchButton` shows the server's reason **inline**. It previously lived only in the `title`
+   tooltip with the label flipped to "retry", so a guardrail refusing for a real, actionable reason
+   was indistinguishable from a broken button.
+
+**The lesson worth keeping:** two independently sensible thresholds can compose into dead code, and
+dead code in a *janitor* is invisible — nothing errors, nothing alerts, the pool just quietly fills
+until it takes a user-facing feature down with it. D118c's rule generalizes: when correctness lives in
+the *relationship* between two constants, test the relationship. Shipped web + agent v2.76-phase4.
