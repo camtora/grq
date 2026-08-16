@@ -2948,6 +2948,12 @@ Sunday sweep is now SELECTIVE. Two pure, unit-tested decisions run over the trac
 - **The prune (`decidePrune`)** — a CANDIDATE that's unwatched, un-pinned, not buy-rated, and
   stale (>45d) — or a never-opened lead >21d old — is RETIRED to keep the pool lean. Reversible:
   the hunt resurfaces a name; opening its stock page re-adds it.
+  > ⚠️ **Superseded by [D121](#d121--a-prune-whose-floor-sits-above-the-refresh-floor-is-dead-code-cam-2026-08-15) — this prune never fired once.** At **>45d** it sat ABOVE the gate's
+  > 28d staleness floor, and the sweep prunes *before* it gates, so the refresh re-dossiered every
+  > quiet candidate at 28d and reset its age before the prune could ever reach it. The closing
+  > claim below — "the pool shrinks as skipped candidates age past the prune floor" — was the
+  > false assumption: nothing ever aged past it. The pool instead grew to `CANDIDATE_CAP` and
+  > started rejecting members' watches. Floor corrected to **21d** on 2026-08-15.
 
 It governs whether we SPEND TOKENS re-researching — never the §6 order gate, a dossier's
 content, or any trade. Worst case a quiet name waits a few extra days (the floor is the
