@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { fmtWhen } from "@/lib/money";
 import { PageHeader, Card, Chip } from "@/components/ui";
 import CollapsibleMd from "@/components/CollapsibleMd";
@@ -29,7 +29,7 @@ const tidy = (s: string) => s.replace(/\b(INC|CORP|CO|LTD|PLC|LP|LLC|N V|S A|GRO
 
 export default async function SmartMoney() {
   const session = await getSession();
-  void session?.role; // members vs viewers read the same page; writes live elsewhere
+  const book = seesBook(session); // Alfred's read is book-aware prose — members' and viewers' only (D122)
 
   const [universe, portfolios, congress, funds, insiders, clusters, members, fresh, narrative] = await Promise.all([
     allUniverse(),
@@ -184,7 +184,7 @@ export default async function SmartMoney() {
       )}
 
       {/* The agent's read — narrative grounded in the tables above. */}
-      {narrative && (
+      {book && narrative && (
         <Card className="mb-6 p-5">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <Chip tone="dim">GRQ&apos;s read</Chip>

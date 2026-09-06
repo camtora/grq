@@ -11,6 +11,7 @@ import HeatMeter from "@/components/hunt/HeatMeter";
 import AvatarStack from "@/components/AvatarStack";
 import { previewText } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
+import { MEMBERS_ONLY_THESIS } from "./shared";
 
 // Direction B grid tile — the non-#1 finds below the hero. Logo+ticker+name, price/change,
 // a full-width sparkline, gauge + heat meter, a 2-line thesis, then dossier + icon-watch.
@@ -60,7 +61,7 @@ export default function HuntGridCard({ find, isMember, toName }: { find: HuntFin
       </div>
 
       <p className="mb-3.5 flex-1 overflow-hidden text-[12.5px] leading-relaxed text-teal-100/70 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-        {previewText(find.body)}
+        {find.body ? previewText(find.body) : MEMBERS_ONLY_THESIS}
       </p>
 
       <div className="flex items-center gap-2">

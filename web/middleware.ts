@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { roleForEmail } from "./lib/users";
+import { userTierAllows } from "./lib/access";
 
 // nginx + oauth2-proxy authenticate the Google account upstream and pass the
 // identity in X-Forwarded-Email. oauth2-proxy already rejects anyone not in the
-// infra allowlist at login, so a valid header == an allowlisted user. This door
-// therefore admits everyone allowlisted: members act, everyone else reads
-// (role enforced per-route + in the UI). A header-less hit (direct LAN, no SSO)
-// has no identity → 403.
+// infra allowlist at login, so a valid header == an allowlisted user. GRQ then
+// keeps a CLOSED list of its own (lib/users.ts roleForEmail): members act, viewers
+// read, USERS (D122) read the research/education surface only — deny-by-default
+// through lib/access.ts — and everyone else (even SSO-authed) is refused here. A
+// header-less hit (direct LAN, no SSO) has no identity → 403.
 const DENIED_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GRQ</title></head>
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#060d0c;color:#e7f5f2;font-family:system-ui,sans-serif">
@@ -14,6 +16,18 @@ const DENIED_HTML = `<!doctype html>
 <div style="font-size:2.75rem;font-weight:900;background:linear-gradient(90deg,#5eead4,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">GRQ</div>
 <p style="margin-top:1.5rem;font-size:1.1rem">Sign in to view this fund.</p>
 <p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">No identity on this request — reach GRQ through the front door.</p>
+</div></body></html>`;
+
+// A GRQ user (D122) asking for a members-only page — the book. Same voice as the door
+// above; says what's off-limits and why, and points back at what's theirs.
+const MEMBERS_ONLY_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GRQ</title></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#060d0c;color:#e7f5f2;font-family:system-ui,sans-serif">
+<div style="text-align:center;max-width:28rem;padding:2rem">
+<div style="font-size:2.75rem;font-weight:900;background:linear-gradient(90deg,#5eead4,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">GRQ</div>
+<p style="margin-top:1.5rem;font-size:1.1rem">This part of GRQ is for fund members.</p>
+<p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">The book — positions, reports, the desk — stays with the people whose money it is. The research, the market, and Learn are all yours.</p>
+<p style="margin-top:1.25rem"><a href="/" style="color:#5eead4;text-decoration:none;font-weight:600">← back to Today</a></p>
 </div></body></html>`;
 
 // Mobile-app API surface (docs/IOS-PLAN.md + IOS-REBUILD-PLAN.md). The native app
@@ -85,7 +99,8 @@ export function middleware(req: NextRequest) {
     req.headers.get("x-forwarded-email") ??
     (process.env.NODE_ENV !== "production" ? (process.env.GRQ_DEV_EMAIL ?? null) : null);
 
-  if (!roleForEmail(email)) {
+  const role = roleForEmail(email);
+  if (!role) {
     const path = req.nextUrl.pathname;
     // Auth routes (login + me) are public at the edge and self-guard. Other mobile
     // read routes need a Bearer present (the route verifies it); without one, the
@@ -95,6 +110,21 @@ export function middleware(req: NextRequest) {
       return NextResponse.next();
     }
     return new NextResponse(DENIED_HTML, {
+      status: 403,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  // The USER tier (D122) is deny-by-default: a user reaches only the paths lib/access.ts
+  // lists — the research/education surface — never the book. This edge check IS the lock
+  // for browser traffic (not cosmetic): the pages it admits gate their own book fragments,
+  // and a user can't hold a GRQ-JWT (auth/google + auth/dev are members-only), so there is
+  // no Bearer path around it.
+  if (role === "user" && !userTierAllows(req.nextUrl.pathname)) {
+    if (req.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Members only." }, { status: 403 });
+    }
+    return new NextResponse(MEMBERS_ONLY_HTML, {
       status: 403,
       headers: { "content-type": "text/html; charset=utf-8" },
     });

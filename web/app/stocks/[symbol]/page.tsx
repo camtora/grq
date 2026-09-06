@@ -10,7 +10,7 @@ import { computeSignals, overallSignal, signalsOneLine } from "@/agent/signals";
 import { isMarketOpen } from "@/agent/calendar";
 import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
-import { getSession, displayName } from "@/lib/session";
+import { getSession, displayName, seesBook } from "@/lib/session";
 import { otherMemberEmail, userForEmail } from "@/lib/users";
 import UniverseActions from "@/components/UniverseActions";
 import AddNote from "@/components/AddNote";
@@ -139,6 +139,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const session = await getSession();
   const me = displayName(session);
   const isMember = session?.role === "member";
+  // The book on this name — position, fills, the decision trail, directives, AND Alfred's
+  // prose (he writes every dossier knowing the position: "we own it, 1.5% underwater") — is
+  // members' and viewers' only (D122). A GRQ user gets Alfred's numbers (call, confidence,
+  // targets, signals) and every data tier, never his write-ups.
+  const book = seesBook(session);
   const otherEmail = session ? otherMemberEmail(session.email) : null;
   const otherName = otherEmail ? (userForEmail(otherEmail)?.name ?? null) : null;
   const realEntry = await universeEntry(symbol);
@@ -211,13 +216,15 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       where: { symbol, status: { in: ["QUEUED", "RUNNING"] } },
     })) > 0;
 
-  const [quote, position, watch, trades, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings, chessRefs, optionsData, socialData, watchersMap, iWatch, screenRead] =
+  const [quote, positionRow, watch, tradeRows, journal, closes, signals, directive, symbolScores, analyst, peers, earnings, news, grades, gradeActions, gradesTrend, targetTrend, institutional, holders, smartMoney, settings, chessRefs, optionsData, socialData, watchersMap, iWatch, screenRead] =
     await Promise.all([
       getQuote(symbol),
       prisma.position.findUnique({ where: { symbol } }),
       prisma.agentFocus.findUnique({ where: { symbol } }),
       prisma.trade.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
-      prisma.journalEntry.findMany({ where: { symbol }, orderBy: { at: "desc" }, take: 50 }),
+      // A user (D122) reads the RESEARCH entries only — decisions, fills, retros, lessons and
+      // the members' notes all narrate the book.
+      prisma.journalEntry.findMany({ where: book ? { symbol } : { symbol, kind: "RESEARCH" }, orderBy: { at: "desc" }, take: 50 }),
       // Self-heal the price tape for untracked names (dossier'd hunt finds, candidates):
       // bars only get nightly-refreshed for tracked symbols, so an untracked page would
       // otherwise have no closes → no tape/sparkline. Mirror the market/feed self-heal —
@@ -258,6 +265,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       // has SOME GRQ read on its page even before a full dossier. Shown only sans dossier.
       screenReadFor(entry.yahoo).catch(() => null),
     ]);
+  // Hand the position + fills only to a session that may see the book (D122).
+  const position = book ? positionRow : null;
+  const trades = book ? tradeRows : [];
 
   // Knowledge graph — names this stock is connected to (peers · shared 13F holders ·
   // news co-mentions · sector floor). On-the-fly, no agent, no LLM (docs/KNOWLEDGE-GRAPH.md).
@@ -452,11 +462,13 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                 />
               )}
               {isMember && <WatchButton symbol={symbol} watching={iWatch} />}
-              <DirectiveButtons
-                symbol={symbol}
-                current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
-                canEdit={isMember}
-              />
+              {book && (
+                <DirectiveButtons
+                  symbol={symbol}
+                  current={directive ? { directive: directive.directive, by: directive.by, note: directive.note } : null}
+                  canEdit={isMember}
+                />
+              )}
               {isMember && otherName && <ShareStockButton symbol={symbol} toName={otherName} />}
               {isMember && <AskGrq symbol={symbol} />}
             </div>
@@ -602,9 +614,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   and half — so the plain-English thesis sits beside what would move
                   it (Cam 2026-06-28). Falls back to full width when there are no
                   levers/gaps on file yet. */}
-              <div className={`grid gap-6 ${hasConfidenceLevers ? "lg:grid-cols-2" : ""}`}>
+              <div className={`grid gap-6 ${book && hasConfidenceLevers ? "lg:grid-cols-2" : ""}`}>
                 <div>
-                  {bottomLineEntry?.bottomLine ? (
+                  {book && bottomLineEntry?.bottomLine ? (
                     <>
                       {/* Rendered to mirror "What would change our mind" (ConfidenceLevers):
                           an eyebrow + intro + a divide-y row list, so the two read as
@@ -630,12 +642,14 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                     </>
                   ) : (
                     <p className="text-sm text-teal-100/80">
-                      The agent&apos;s plain-English &ldquo;why&rdquo; appears here once it files a dossier on this name.
+                      {book
+                        ? "The agent\u2019s plain-English \u201cwhy\u201d appears here once it files a dossier on this name."
+                        : "Alfred\u2019s plain-English case is for fund members \u2014 his call, targets, and every data panel on this page are yours."}
                       {signals ? ` For now, the technical read: ${signalsOneLine(signals)}.` : ""}
                     </p>
                   )}
                 </div>
-                {hasConfidenceLevers && (
+                {book && hasConfidenceLevers && (
                   <ConfidenceLevers embedded levers={confidenceLevers} structuralGaps={structuralGaps} />
                 )}
               </div>
@@ -653,7 +667,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           beside the Why (above). When there's no call yet (no bottom-line card), it falls
           back to its own standalone card so un-rated names still surface the data gaps.
           Pure display; never gates a trade. */}
-      {!(stance || rec) && (
+      {book && !(stance || rec) && (
         <ConfidenceLevers levers={confidenceLevers} structuralGaps={structuralGaps} />
       )}
 
@@ -739,7 +753,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           the agents never see it either, D97). */}
       {isMember && <StockPersonalPositions quoteSymbol={entry.yahoo} />}
 
-      {watch?.note && (
+      {/* The agent's working note carries order numbers and NAV shares — the book (D122). */}
+      {book && watch?.note && (
         <Card className="mb-6 p-4">
           <div className="flex items-baseline gap-3">
             <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-teal-200/50">
@@ -1198,6 +1213,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       <section className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
 
+      {/* The record is Alfred's prose on this name — dossiers, decisions, notes: the book (D122). */}
+      {book ? (
       <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-200/50">
@@ -1208,8 +1225,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           </div>
           {journal.length === 0 ? (
             <Card className="p-6 text-sm text-teal-200/40">
-              Nothing on the record yet — the agent&rsquo;s research, decisions, and trades on {symbol} land here,
-              alongside any notes you add.
+              {book ? (
+                <>Nothing on the record yet — the agent&rsquo;s research, decisions, and trades on {symbol} land here, alongside any notes you add.</>
+              ) : (
+                <>Nothing on the record yet — the agent&rsquo;s research on {symbol} lands here once it&rsquo;s written.</>
+              )}
             </Card>
           ) : (
             <RecordFilter
@@ -1237,9 +1257,18 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             />
           )}
         </div>
+      ) : (
+        <Card className="p-6 text-sm text-teal-200/50">
+          Alfred&apos;s write-ups on {symbol} — the dossier, his notes, the decision trail — are for fund members. His call, targets,
+          and every data panel on this page are yours.
+        </Card>
+      )}
       </div>
 
         <div className="space-y-4">
+          {/* Fills are the book — members' and viewers' only (D122). */}
+          {book && (
+            <>
           <PanelHeader fresh="history">Trades</PanelHeader>
           <Card className="p-4">
             {trades.length === 0 ? (
@@ -1259,6 +1288,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </ul>
             )}
           </Card>
+            </>
+          )}
 
           <PanelHeader fresh="from retros">Scoreboard</PanelHeader>
           <Scoreboard

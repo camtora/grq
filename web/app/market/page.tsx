@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { allUniverse, yahooForListing } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { otherMemberEmail, userForEmail } from "@/lib/users";
 import { computeHeat } from "@/lib/heat";
 import { watchersFor } from "@/lib/watch";
@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function Market() {
   const session = await getSession();
   const isMember = session?.role === "member";
+  const book = seesBook(session); // Alfred's theses are book-aware prose — members'/viewers' only (D122)
   const otherEmail = session ? otherMemberEmail(session.email) : null;
   const otherName = otherEmail ? (userForEmail(otherEmail)?.name ?? null) : null;
   const state = await prisma.agentState.findUnique({ where: { id: 1 } });
@@ -103,7 +104,7 @@ export default async function Market() {
       rank: 0,
       watch: watchOf(sym),
       watchers: watchersMap.get(sym) ?? [],
-      body: d.body,
+      body: book ? d.body : "", // "" → the cards show the members-only line instead of a thesis
     };
   });
 

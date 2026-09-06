@@ -52,6 +52,22 @@ export function isMember(s: Session | null): boolean {
   return s?.role === "member";
 }
 
+/** Whether a session may see the fund's BOOK — positions, NAV, P&L, fills, the decision
+ *  trail, reports, the members' accounts, Alfred's chat. Members and viewers: yes. A USER
+ *  (D122 — an outside learner on GRQ_USER_EMAILS): never. A page the door admits a user to
+ *  gates every book fragment on this; the door itself (middleware + lib/access.ts) keeps
+ *  users off the pages and routes that are nothing BUT the book. */
+export function seesBook(s: Session | null): boolean {
+  return !!s && s.role !== "user";
+}
+
+/** sessionFromRequest, minus users — for a route that hands the book to anyone signed in
+ *  (chat: Alfred's read-only tools include the portfolio). null → 403 it. */
+export function bookSessionFromRequest(req: Request): Session | null {
+  const s = sessionFromRequest(req);
+  return s && s.role !== "user" ? s : null;
+}
+
 export function displayName(s: Session | null): string {
   return s?.user?.name ?? s?.email ?? "unknown";
 }

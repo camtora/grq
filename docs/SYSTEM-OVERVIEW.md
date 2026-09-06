@@ -68,9 +68,11 @@ nginx (SSL, HTTP/2)
 host.docker.internal:3012  (grq-web)
   │
   ├── web/middleware.ts
-  │     reads X-Forwarded-Email
-  │     checks lib/users.ts ∪ GRQ_ALLOWED_EMAILS
-  │     non-members → inline teal 403 (even if SSO-authed)
+  │     reads X-Forwarded-Email → tier (lib/users.ts roleForEmail)
+  │       member (USERS ∪ GRQ_ALLOWED_EMAILS) · viewer (GRQ_VIEWER_EMAILS, read-only)
+  │       · user (GRQ_USER_EMAILS, D122: research/education only, never the book —
+  │         admitted only to lib/access.ts paths, else a members-only 403)
+  │     anyone else → inline teal 403 (even if SSO-authed)
   │     /api/health → exempt
   │
   ├── server components → Prisma → grq-db (reads, no internal HTTP)

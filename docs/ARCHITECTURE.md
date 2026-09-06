@@ -44,9 +44,12 @@ Last updated: 2026-06-11 (Phase 1).
    Unauthenticated → 302 Google sign-in. Authenticated-but-not-on-the-global-allowlist →
    blocked at oauth2-proxy.
 2. nginx proxies to `host.docker.internal:3012` with `X-Forwarded-Email` set.
-3. `web/middleware.ts` checks the email against the **fund member list**
-   (`lib/users.ts` ∪ `GRQ_ALLOWED_EMAILS`). Non-members get an inline teal 403 page.
-   This matters because the global SSO list has ~7 people; the fund admits 2.
+3. `web/middleware.ts` resolves the email to a GRQ tier (`lib/users.ts` `roleForEmail`):
+   **member** (`USERS` ∪ `GRQ_ALLOWED_EMAILS`, acts on the fund) · **viewer**
+   (`GRQ_VIEWER_EMAILS`, read-only) · **user** (`GRQ_USER_EMAILS`, D122 — the research and
+   education surface only, never the book; admitted solely to the paths in `lib/access.ts`,
+   else a members-only 403) · anyone else → an inline teal 403 page, SSO or not.
+   This matters because the global SSO list has ~14 people; the fund admits 2.
 4. Server components call Prisma directly (no internal HTTP). Mutations go through the three
    API routes, which re-derive identity from the header (`lib/session.ts`).
 

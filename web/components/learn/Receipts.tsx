@@ -4,6 +4,7 @@ import { HARD, DIALS, SELF_INVEST } from "@/agent/policy";
 import { money, signedMoney, pnlClass } from "@/lib/money";
 import type { LearnReceiptKey } from "@/lib/learn/content";
 import { settledSnapshotsBetween, latestSettledSnapshot } from "@/lib/nav-history";
+import { getSession, seesBook } from "@/lib/session";
 
 // "Receipts" — live-fund example blocks inside Learn lessons (docs/LEARN-PORTAL.md, D110
 // Phase 3). Each pulls the fund's OWN numbers from the same sources the app trades with
@@ -250,6 +251,12 @@ async function Soak() {
 /* ---------- dispatcher ---------- */
 
 export default async function ReceiptBlock({ k }: { k: LearnReceiptKey }) {
+  // The fund's own numbers ARE the book — members' and viewers' only (D122). A user gets the
+  // lesson without the receipt and an honest line about why, never a silent gap. One check
+  // here covers every receipt kind, present and future.
+  if (!seesBook(await getSession())) {
+    return <Empty title="members only" note="This receipt is the fund's own live numbers, and the book stays with its members. The lesson stands on its own." />;
+  }
   try {
     switch (k) {
       case "real-fills":

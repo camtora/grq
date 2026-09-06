@@ -6,7 +6,7 @@ import { money, fmtWhen } from "@/lib/money";
 import { Card, PageHeader, Chip } from "@/components/ui";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
-import { getSession, displayName } from "@/lib/session";
+import { getSession, displayName, seesBook } from "@/lib/session";
 import StockFilters from "@/components/StockFilters";
 import UniverseActions from "@/components/UniverseActions";
 import UniverseTabs from "@/components/UniverseTabs";
@@ -19,6 +19,8 @@ import { watchersFor } from "@/lib/watch";
 export const dynamic = "force-dynamic";
 
 const COLUMNS: StockColumn[] = ["tier", "last", "day", "call", "conf", "position", "unrealized", "researched", "watcher"];
+// A GRQ user (D122) never sees the book: the same table minus the position columns.
+const USER_COLUMNS: StockColumn[] = COLUMNS.filter((c) => c !== "position" && c !== "unrealized");
 // Researched tab is a lean catalogue — call + the dossier's confidence + when it was
 // last researched (no per-name quote/signal fetches).
 const RESEARCHED_COLUMNS: StockColumn[] = ["tier", "call", "conf", "researched"];
@@ -42,6 +44,7 @@ export default async function Universe() {
   ]);
   const me = displayName(session);
   const isMember = session?.role === "member";
+  const book = seesBook(session); // positions + the "you hold" line are the book (D122)
 
   // Demoted shelf — CANDIDATEs that were pulled out of the universe (they carry a
   // demote journal). Shown below the active table for reference; they're back on
@@ -102,7 +105,7 @@ export default async function Universe() {
 
   const toRow = (u: UniverseRow): StockRow => {
     const q = quotes.get(u.symbol);
-    const p = posBy.get(u.symbol);
+    const p = book ? posBy.get(u.symbol) : undefined; // no position for a user (D122)
     const d = dirBy.get(u.symbol);
     const sig = sigBy.get(u.symbol) ?? null;
     const doss = dossierBy.get(u.symbol);
@@ -112,7 +115,7 @@ export default async function Universe() {
       name: u.name,
       logoUrl: u.logoUrl,
       currency: u.currency,
-      note: u.note,
+      note: book ? u.note : null, // Alfred's promotion note — prose, book-aware (D122)
       tier: u.tier,
       country: u.country,
       exchange: u.exchange,
@@ -131,7 +134,7 @@ export default async function Universe() {
       nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
       nearDays: doss?.targetNearDays ?? null,
       confidence: doss?.confidence ?? null,
-      bottomLine: doss?.bottomLine ?? null,
+      bottomLine: book ? (doss?.bottomLine ?? null) : null,
       held: p ? { qty: p.qty } : null,
       mvCents: p && q ? p.qty * q.midCents : 0,
       upnlCents: p && q ? p.qty * (q.midCents - p.avgCostCents) : 0,
@@ -199,7 +202,7 @@ export default async function Universe() {
         nearPct: null,
         nearDays: doss.targetNearDays ?? null,
         confidence: doss.confidence ?? null,
-        bottomLine: doss.bottomLine ?? null,
+        bottomLine: book ? (doss.bottomLine ?? null) : null,
         held: null,
         mvCents: 0,
         upnlCents: 0,
@@ -252,11 +255,11 @@ export default async function Universe() {
             <Term k="universe">The universe</Term> — {active.length} investable
           </PanelHeader>
           <p className="text-xs text-teal-200/40">
-            What the agent is allowed to buy. {heldCount > 0 ? `You hold ${heldCount} · ${money(investedCents)} invested.` : "No positions yet."}
+            What the agent is allowed to buy.{book ? (heldCount > 0 ? ` You hold ${heldCount} · ${money(investedCents)} invested.` : " No positions yet.") : null}
           </p>
         </div>
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />
-        <StockTable rows={activeRows} columns={COLUMNS} isMember={isMember} currentUser={me} />
+        <StockTable rows={activeRows} columns={book ? COLUMNS : USER_COLUMNS} isMember={isMember} currentUser={me} />
       </section>
 
       {demoted.length > 0 && (

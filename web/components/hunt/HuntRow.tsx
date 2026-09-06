@@ -13,6 +13,7 @@ import HeatMeter from "@/components/hunt/HeatMeter";
 import AvatarStack from "@/components/AvatarStack";
 import { type WatcherView } from "@/lib/watch";
 import { OBSCURITY_LABEL, previewText, wordCount } from "@/components/hunt/shared";
+import { MEMBERS_ONLY_THESIS } from "./shared";
 
 // One Hunt find as a Direction-A "Heat Board" row (design handoff). Leads-not-verdicts:
 // we surface heat + confidence + 30-day trend, never a Buy/Hold/Sell call (a hunt find
@@ -95,6 +96,7 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
 
       {/* thesis */}
       <div className="min-w-[180px] flex-1 basis-64">
+        {find.body ? (
         <details className="group">
           <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
             <span className="overflow-hidden text-[13.5px] leading-relaxed text-teal-100/70 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] group-open:hidden">
@@ -109,6 +111,9 @@ export default function HuntRow({ find, isMember, toName }: { find: HuntFind; is
             <Md text={find.body} />
           </div>
         </details>
+        ) : (
+          <p className="text-[13px] leading-relaxed text-teal-200/45">{MEMBERS_ONLY_THESIS}</p>
+        )}
         {obs && (
           <span
             className="mt-2 inline-block rounded-full border border-amber-400/20 bg-amber-400/5 px-2 py-0.5 text-[10px] font-semibold text-amber-200/70"

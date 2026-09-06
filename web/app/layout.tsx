@@ -5,7 +5,7 @@ import NavBar from "@/components/NavBar";
 import MessagesDrawer from "@/components/MessagesDrawer";
 import GrqChat from "@/components/GrqChat";
 import Tracker from "@/components/Tracker";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { USERS, isOwner } from "@/lib/users";
 import { personByName } from "@/lib/people";
 import { prisma } from "@/lib/db";
@@ -24,11 +24,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const [session, cookieStore] = await Promise.all([getSession(), cookies()]);
   const settings = await prisma.settings.findUnique({ where: { id: 1 } }).catch(() => null);
 
-  // Viewers are always light (no override). Members: cookie wins, else their
-  // stored default (Cam light, Graham dark) — dark if unknown.
+  // Viewers and users are always light (no override). Members: cookie wins, else
+  // their stored default (Cam light, Graham dark) — dark if unknown.
   const cookieTheme = cookieStore.get("grq-theme")?.value;
   const theme: "light" | "dark" =
-    session?.role === "viewer"
+    session && session.role !== "member"
       ? "light"
       : cookieTheme === "light" || cookieTheme === "dark"
         ? cookieTheme
@@ -51,19 +51,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           theme={theme}
           isMember={session?.role === "member"}
           isOwner={isOwner(session?.email)}
+          seesBook={seesBook(session)}
         />
         <div className="mx-auto max-w-[1700px] px-6 py-10">{children}</div>
         {/* Usage beacon — only for an authenticated session (everyone behind SSO). */}
         {session && <Tracker />}
         {/* Member↔member messages (header bubble) — members only. */}
         {session?.role === "member" && <MessagesDrawer />}
-        {/* The floating bull = jump-search + Ask Alfred, for EVERYONE. Members can
-            toggle into each other's agent threads; a viewer gets search + their OWN
-            isolated thread (members=[] → no toggle, owner = themselves). */}
+        {/* The floating bull = jump-search + Ask Alfred. Members can toggle into each
+            other's agent threads; a viewer gets search + their OWN isolated thread
+            (members=[] → no toggle, owner = themselves); a USER (D122) gets the
+            jump-search dock only — Alfred's read-only tools include the book. */}
         {session && (
           <GrqChat
             meEmail={session.email}
             members={session.role === "member" ? CHAT_MEMBERS : []}
+            chat={seesBook(session)}
           />
         )}
         <footer className="mx-auto max-w-[1700px] px-6 pb-10 text-xs text-teal-200/30">

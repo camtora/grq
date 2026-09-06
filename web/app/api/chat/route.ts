@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { sessionFromRequest } from "@/lib/session";
+import { bookSessionFromRequest } from "@/lib/session";
 import { isMember } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,9 @@ const CHAT_URL = process.env.CHAT_URL ?? "http://chat:3014";
 // either member's thread (toggle into each other's); authorship is always the
 // caller. VIEWERS (read-only allowlisted users) get their OWN isolated thread and
 // can NEVER address a member's — so for them the owner is always themselves.
+// USERS (D122) never get here at all: bookSessionFromRequest 403s them, because
+// Alfred's read-only tools include the portfolio and a user never sees the book.
+// (The door already keeps /api/chat off their map; this is the route-level lock.)
 function resolveOwner(requested: string | null | undefined, selfEmail: string, callerIsMember: boolean): string {
   if (!callerIsMember) return selfEmail;
   const o = requested?.trim().toLowerCase();
@@ -18,8 +21,8 @@ function resolveOwner(requested: string | null | undefined, selfEmail: string, c
 }
 
 export async function GET(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Sign in to use the chat." }, { status: 403 });
+  const session = bookSessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Chat is for fund members and viewers." }, { status: 403 });
   const callerIsMember = session.role === "member";
   const owner = resolveOwner(new URL(req.url).searchParams.get("owner"), session.email, callerIsMember);
   const messages = await prisma.chatMessage.findMany({ where: { owner }, orderBy: { at: "desc" }, take: 50 });
@@ -27,8 +30,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = sessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Sign in to use the chat." }, { status: 403 });
+  const session = bookSessionFromRequest(req);
+  if (!session) return NextResponse.json({ error: "Chat is for fund members and viewers." }, { status: 403 });
   const callerIsMember = session.role === "member";
 
   let body: { message?: unknown; symbol?: unknown; owner?: unknown };

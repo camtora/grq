@@ -36,10 +36,16 @@ export const isAllowed = isMember;
 // Access tiers. The shared oauth2-proxy allowlist gates login to ~20 household
 // apps, but GRQ is a CLOSED list of its own (Cam 2026-06-30): it NO LONGER admits
 // "any allowlisted email" as a viewer. Members (USERS + GRQ_ALLOWED_EMAILS) act on
-// the fund; the VIEWERS below get read-only; EVERYONE ELSE — even with a valid SSO
-// header for the other apps — is DENIED at the GRQ door (middleware 403s a null
-// role). This restricts GRQ without touching the shared SSO allowlist.
-export type Role = "member" | "viewer";
+// the fund; the VIEWERS below get read-only; USERS (D122) get the research/education
+// surface and never the book; EVERYONE ELSE — even with a valid SSO header for the
+// other apps — is DENIED at the GRQ door (middleware 403s a null role). This
+// restricts GRQ without touching the shared SSO allowlist.
+//
+//   member  acts on the fund (writes, kill switch, chat, accounts)
+//   viewer  reads everything, writes nothing (Cam's & Graham's alternate addresses)
+//   user    reads the research + education surface only — no positions, NAV, P&L,
+//           fills, reports, journal, chat, accounts. Non-trading by construction.
+export type Role = "member" | "viewer" | "user";
 
 // Read-only GRQ viewers — Cam's & Graham's alternate addresses (Cam 2026-06-30).
 // GRQ_VIEWER_EMAILS env replaces this default without a rebuild.
@@ -51,11 +57,29 @@ function viewerEmails(): string[] {
   return env.length ? env : ["cameron@camerontora.ca", "graham.j.appleby@gmail.com"];
 }
 
+// GRQ USERS (D122, Cam 2026-09-06 — Jose & Dave): the tier BELOW viewer. A user gets GRQ
+// as a research + market-education tool — the Hunt, Browse, Smart Money, the stock pages,
+// Learn, the labs — and NEVER the fund's book: no positions, NAV, P&L, fills, reports,
+// journal, Alfred's chat (his tools read the book), the members' accounts — and none of
+// Alfred's WRITE-UPS about names (dossier text, theses, notes, takes), because he writes
+// them with the book in hand. His numbers (call, confidence, targets, heat, signals) stay.
+// Non-trading falls out of the existing write-lock (memberFromRequest). The door is
+// DENY-BY-DEFAULT: middleware admits a user only to the paths in lib/access.ts, and the
+// pages on that list gate their book fragments on session.seesBook(). GRQ_USER_EMAILS env,
+// comma-separated, no rebuild; empty = no users.
+function userEmails(): string[] {
+  return (process.env.GRQ_USER_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function roleForEmail(email: string | null | undefined): Role | null {
   if (!email || !email.trim()) return null;
   const normalized = email.trim().toLowerCase();
   if (isMember(normalized)) return "member";
   if (viewerEmails().includes(normalized)) return "viewer";
+  if (userEmails().includes(normalized)) return "user";
   return null; // not on the GRQ allowlist → blocked (was: any allowlisted email got "viewer")
 }
 

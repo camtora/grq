@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, Card, EmptyState } from "@/components/ui";
 import { money } from "@/lib/money";
 import { etDateStr } from "@/agent/calendar";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { loadDesk, listDesks, ARM_COLORS } from "@/lib/options-desk/desk";
 import BullChart from "@/components/bulls/BullChart";
 import PanelHeader from "@/components/PanelHeader";
@@ -101,7 +101,8 @@ export default async function OptionsDeskPage({ searchParams }: { searchParams: 
             </div>
           </div>
 
-          {data.realFund ? (
+          {/* The real fund's return + NAV is the book — not for a GRQ user (D122). */}
+          {seesBook(session) && data.realFund ? (
             <Card className="mt-4 p-3 text-xs text-teal-200/50">
               <span className="font-semibold text-teal-50">Reference — the real fund (Opus, live + tooled):</span>{" "}
               <span className={`tabular-nums ${data.realFund.returnPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>

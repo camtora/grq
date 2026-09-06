@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getPortfolio, PAPER_INCEPTION, type PositionView } from "@/lib/portfolio";
+import { getSession, seesBook } from "@/lib/session";
 import { allUniverse } from "@/lib/universe";
 import { startOfEtDay, etDateStr, etParts, isMarketDay, isMarketOpen } from "@/agent/calendar";
 import { money, signedMoney, pct } from "@/lib/money";
@@ -206,6 +207,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
     month: "long",
     day: "numeric",
   });
+
+  // Who's reading (D122): members and viewers get the fund's day + holdings; a GRQ USER gets
+  // the newspaper without the book — the market, the names we track, the research.
+  const book = seesBook(await getSession());
 
   const [pf, weekly, dayOpenSnap, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, marketCadUsd, macro, earnCal] =
     await Promise.all([
@@ -474,7 +479,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                 </span>
               </div>
             )}
-            {marketDay ? (
+            {book && (marketDay ? (
               <>
                 <Pnl cents={dayPnl} />{" "}
                 <span className="text-teal-200/50">
@@ -485,7 +490,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               <span className="text-teal-200/60">
                 Flat · <span className="uppercase tracking-wide text-teal-300/70">markets closed</span>
               </span>
-            )}
+            ))}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4 border-t border-teal-400/10 pt-3">
@@ -524,7 +529,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       {/* Market indices ("GRQ today") + Macro run FULL page width above the grid (Cam 2026-07-04),
           so the rail's "Our market" starts level with Headlines. Live data, today only —
           archived days hide the stale ticker (Cam 2026-06-16). */}
-      {isToday && <MarketIndices initial={marketIndices} fundDayPct={marketDay ? dayPnlPct : null} />}
+      {isToday && <MarketIndices initial={marketIndices} fundDayPct={book && marketDay ? dayPnlPct : null} pollFund={book} />}
 
       {/* The Tape moved to the Portfolio page (Cam 2026-07-02) — above Alfred's positions. */}
 
@@ -612,7 +617,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
       {/* Market pulse now renders at the BOTTOM of the page, under the movers (Cam 2026-07-02). */}
 
-      {weekly && (
+      {/* Alfred's weekly review is the fund's week — positions, fills, the lot. Not for a user (D122). */}
+      {book && weekly && (
         <Card className="mb-6 border-teal-400/30 p-5">
           <div className="mb-2 flex items-center gap-3">
             <Chip tone="teal">weekly review</Chip>
@@ -732,11 +738,16 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         {/* The rail: Our market + The whole market, one above the other, each its own
             scroll panel (Cam 2026-07-03 — replaced The Wire on web). */}
         <aside className="space-y-8 lg:col-span-1">
+          {/* Top hitters are the holdings — the book. A GRQ user (D122) gets only the movers
+              column, and on an archived day (no live movers) no panel at all. */}
+          {(book || isToday) && (
           <section>
-            <SectionHeader size="lg" sub={<>· your holdings{isToday ? <> &amp; the names we track</> : null}</>}>
+            <SectionHeader size="lg" sub={book ? <>· your holdings{isToday ? <> &amp; the names we track</> : null}</> : <>· the names we track</>}>
               Our market
             </SectionHeader>
             <Card className="overflow-hidden p-1">
+              {book && (
+                <>
               <div className="px-1.5 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">Top hitters</div>
               {hitters.length > 0 ? (
                 <ul className="divide-y divide-teal-400/10">
@@ -750,9 +761,11 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                 </p>
               )}
               <p className="px-1.5 py-1.5 text-[10px] text-teal-200/40">the biggest moves in what the fund holds</p>
+                </>
+              )}
               {isToday && (
                 <>
-                  <div className="border-t border-teal-400/10 px-1.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50">
+                  <div className={`${book ? "border-t border-teal-400/10 pt-2" : "pt-1.5"} px-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-teal-200/50`}>
                     Market movers
                   </div>
                   {topMovers.length > 0 ? (
@@ -771,6 +784,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
               )}
             </Card>
           </section>
+          )}
 
           {isToday && (marketGainers.length > 0 || sectors.length > 0) && (
             <section>

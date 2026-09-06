@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { fmtWhen } from "@/lib/money";
 import { PageHeader, Card, Chip } from "@/components/ui";
 import ChessBar from "@/components/chess/ChessBar";
@@ -21,6 +21,7 @@ const firstLine = (s: string | null): string | null =>
 export default async function ChessPage() {
   const session = await getSession();
   const isMember = session?.role === "member";
+  const book = seesBook(session); // Alfred's takes + members' briefs are prose — members'/viewers' only (D122)
 
   const themes = await prisma.chessTheme.findMany({
     where: { status: { not: "RETIRED" } },
@@ -74,7 +75,7 @@ export default async function ChessPage() {
               const ready = t.status === "READY";
               const winners = t.plays.filter((p) => p.direction === "BENEFICIARY");
               const losers = t.plays.filter((p) => p.direction === "VICTIM");
-              const take = firstLine(t.bottomLine) ?? firstLine(t.thesis);
+              const take = book ? (firstLine(t.bottomLine) ?? firstLine(t.thesis)) : null;
               const dirClass = (d: string) =>
                 d === "BENEFICIARY" ? "bg-emerald-400/10 text-emerald-300/90" : d === "VICTIM" ? "bg-red-400/10 text-red-300/90" : "bg-teal-400/10 text-teal-200/70";
 
@@ -124,7 +125,7 @@ export default async function ChessPage() {
                   {/* The prompt that produced it + the open CTA. */}
                   <div className="mt-3.5 flex items-center justify-between border-t border-teal-400/10 pt-2.5 text-[11px] text-teal-200/40">
                     <span className="min-w-0 truncate">
-                      {t.brief ? <>briefed: <span className="italic text-teal-200/55">“{t.brief}”</span></> : "Alfred’s weekly self-pick"}
+                      {t.brief ? (book ? <>briefed: <span className="italic text-teal-200/55">“{t.brief}”</span></> : "a member’s brief") : "Alfred’s weekly self-pick"}
                     </span>
                     {ready ? (
                       <span className="shrink-0 font-semibold text-teal-300">Open board →</span>

@@ -68,7 +68,7 @@ export default function PlayCard({ play, isMember }: { play: ChessPlayView; isMe
 
       {/* the one-line thesis (agent markdown → Md) */}
       <div className="min-w-[12rem] flex-[2] text-sm">
-        <Md text={play.thesis} />
+        {play.thesis ? <Md text={play.thesis} /> : <p className="text-teal-200/45">Alfred&apos;s read on this play is for fund members.</p>}
       </div>
 
       {/* price + 30-day */}

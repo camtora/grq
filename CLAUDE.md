@@ -212,11 +212,20 @@ Full verification suite + troubleshooting: `docs/OPERATIONS.md`.
 nginx + oauth2-proxy (infra repo) authenticate the Google account and pass
 `X-Forwarded-Email`. oauth2-proxy already rejects anyone not in the infra
 allowlist (`~/infrastructure/oauth2-proxy/authenticated_emails.txt`) at login, so
-a valid header == an allowlisted user. **Two tiers** (`web/lib/users.ts` →
-`roleForEmail`): **members** = `lib/users.ts` (Cam, Graham — admins, both hold the
-kill switch) ∪ `GRQ_ALLOWED_EMAILS` env → full access; **viewers** = any other
-allowlisted email → **read-only** (full read, no writes). A header-less hit (direct
-LAN, no SSO) has no identity → 403. `/api/health` is exempt (LAN monitoring).
+a valid header == an allowlisted user. GRQ then keeps a **closed list of its own** —
+**three tiers** (`web/lib/users.ts` → `roleForEmail`, member > viewer > user > refused):
+**members** = `lib/users.ts` (Cam, Graham — admins, both hold the kill switch) ∪
+`GRQ_ALLOWED_EMAILS` env → full access; **viewers** = `GRQ_VIEWER_EMAILS` (default: Cam's &
+Graham's alternate addresses) → **read-only** (full read, no writes); **users** =
+`GRQ_USER_EMAILS` (D122 — Jose, Dave) → the research + education surface and **never the
+book** (no positions, NAV, P&L, fills, reports, journal, chat, accounts, Second Opinions — and
+none of Alfred's write-ups about names, since he writes them knowing the position; his numbers
+stay). The user tier is
+**deny-by-default**: `web/lib/access.ts` is the only map of what a user may reach (a new
+page/route stays behind the door until listed there; `test/access-tiers.test.ts` pins it),
+and the admitted pages gate their book fragments on `seesBook(session)`. Any other
+allowlisted email is refused at GRQ's door (403) even though SSO let it in. A header-less
+hit (direct LAN, no SSO) has no identity → 403. `/api/health` is exempt (LAN monitoring).
 
 The read-only enforcement is **server-side, not cosmetic**: every mutating route
 guards with `memberFromRequest()` (`web/lib/session.ts`) → viewers get 403 on
@@ -225,6 +234,8 @@ guards with `memberFromRequest()` (`web/lib/session.ts`) → viewers get 403 on
 hides/disables member-only controls and shows a "read-only" badge, but that's
 defense-in-depth — the route guards are the lock. Promote a viewer to member:
 edit `lib/users.ts` (named) or `GRQ_ALLOWED_EMAILS` (anonymous), rebuild web.
+Add/remove a **user**: `GRQ_USER_EMAILS` in `.env`, then `docker-compose up -d
+--force-recreate web` (env-only, no rebuild).
 
 **Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
 cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**

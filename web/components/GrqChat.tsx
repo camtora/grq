@@ -13,9 +13,12 @@ import StockSearch from "./StockSearch";
 export default function GrqChat({
   meEmail,
   members,
+  chat = true,
 }: {
   meEmail: string;
   members: { email: string; name: string }[];
+  /** false for a GRQ user (D122): the dock keeps jump-search, loses Alfred (his tools read the book). */
+  chat?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
@@ -50,6 +53,17 @@ export default function GrqChat({
   function toggle() {
     setEverOpened(true);
     setOpen((o) => !o);
+  }
+
+  // A GRQ user gets the same bottom-right dock with only the jump-to-stock search in it —
+  // no bull, no chat panel, nothing that could open one (the grq:chat event has no listener
+  // worth firing: /api/chat 403s users anyway, this just keeps the UI honest).
+  if (!chat) {
+    return (
+      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
+        <StockSearch />
+      </div>
+    );
   }
 
   return (

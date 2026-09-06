@@ -1,7 +1,7 @@
 import { PageHeader, Card, StatCard, EmptyState, Pnl } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
 import { money } from "@/lib/money";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { loadShortLab } from "@/lib/short/lab";
 import { loadShortDesk } from "@/lib/short/desk";
 import { loadShadow } from "@/lib/short/shadow";
@@ -24,6 +24,7 @@ const retClass = (p: number) => (p > 0 ? "text-emerald-300" : p < 0 ? "text-red-
 export default async function ShortLabPage() {
   const [session, view, deskView, shadowView] = await Promise.all([getSession(), loadShortLab(), loadShortDesk(), loadShadow()]);
   const isMember = session?.role === "member";
+  const book = seesBook(session); // the shadow shorts ARE the fund's sells — the book (D122)
   const h = view.health;
 
   return (
@@ -117,7 +118,7 @@ export default async function ShortLabPage() {
       </div>
 
       <div className="mt-6">
-        <ShadowPanel view={shadowView} />
+        {book && <ShadowPanel view={shadowView} />}
       </div>
 
       <div className="mt-6">

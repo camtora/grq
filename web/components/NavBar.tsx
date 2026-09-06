@@ -12,6 +12,8 @@ import MessageButton from "./MessageButton";
 // (Cam 2026-06-16). `exact` pins The Hunt to exactly /market so it doesn't light
 // up on /market/watchlist or /market/browse.
 // Reports + Settings sit on the right of the nav with the status cluster.
+// A GRQ user (D122, seesBook=false) never sees Portfolio, Reports, or the kill switch —
+// the link is cosmetic; the door (middleware + lib/access.ts) is the lock.
 type NavLink = { href: string; label: string; match?: string[]; exact?: boolean };
 const PRIMARY: NavLink[] = [
   { href: "/", label: "Today" },
@@ -48,6 +50,7 @@ export default function NavBar({
   theme,
   isMember = true,
   isOwner = false,
+  seesBook = true,
 }: {
   name: string;
   photo?: string | null;
@@ -57,6 +60,7 @@ export default function NavBar({
   theme: "light" | "dark";
   isMember?: boolean;
   isOwner?: boolean;
+  seesBook?: boolean;
 }) {
   const pathname = usePathname();
   const [expOpen, setExpOpen] = useState(false);
@@ -89,10 +93,10 @@ export default function NavBar({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={theme === "light" ? "/grq-logo-light.png" : "/grq-logo.png"} alt="GRQ — Get Rich Quick" className="h-7 w-auto" />
         </Link>
-        <div className="flex flex-wrap items-center gap-1">{PRIMARY.map(renderLink)}</div>
+        <div className="flex flex-wrap items-center gap-1">{PRIMARY.filter((l) => seesBook || l.href !== "/portfolio").map(renderLink)}</div>
         <div className="ml-auto flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1">
-            {SECONDARY.map(renderLink)}
+            {SECONDARY.filter((l) => seesBook || l.href !== "/reports").map(renderLink)}
             {/* Experiments dropdown — the model bake-offs / sandboxes (Race · Bulls · Options Desk). */}
             <div className="relative">
               <button
@@ -133,13 +137,14 @@ export default function NavBar({
           {!isMember && (
             <span
               className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-amber-300/80"
-              title="You have read-only access to this fund"
+              title={seesBook ? "You have read-only access to this fund" : "GRQ user — read-only, and the fund's book is for members"}
             >
               read-only
             </span>
           )}
-          {/* Halt-trading control sits before the broker badge (Cam 2026-06-18). */}
-          <KillSwitch compact engaged={killSwitch} engagedBy={killSwitchBy} canToggle={isMember} />
+          {/* Halt-trading control sits before the broker badge (Cam 2026-06-18). Its state is
+              the fund's — not shown to a user (D122). */}
+          {seesBook && <KillSwitch compact engaged={killSwitch} engagedBy={killSwitchBy} canToggle={isMember} />}
           <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-2 py-0.5 font-bold uppercase tracking-wider text-teal-300">
             {broker}
           </span>

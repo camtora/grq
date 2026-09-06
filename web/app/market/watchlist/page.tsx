@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
-import { getSession, displayName } from "@/lib/session";
+import { getSession, displayName, seesBook } from "@/lib/session";
 import { Card, PageHeader, EmptyState } from "@/components/ui";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import AddTicker from "@/components/AddTicker";
@@ -34,6 +34,7 @@ export default async function Watchlist() {
   ]);
   const me = displayName(session);
   const isMember = session?.role === "member";
+  const book = seesBook(session); // Alfred's notes + bottom lines are book-aware prose (D122)
   // The watchlist is WATCH-driven (D-watch): the names a member personally watches —
   // candidates being researched AND names already in the Universe (promotion no longer
   // un-watches a name). Tabs filter to each member's own watches. Agent-tracked names
@@ -83,7 +84,7 @@ export default async function Watchlist() {
         name: c.name,
         logoUrl: c.logoUrl,
         currency: c.currency,
-        note: c.note,
+        note: book ? c.note : null,
         tier: c.tier,
         country: c.country,
         exchange: c.exchange,
@@ -102,7 +103,7 @@ export default async function Watchlist() {
         nearPct: cur && doss?.targetNearCents != null ? (doss.targetNearCents - cur) / cur : null,
         nearDays: doss?.targetNearDays ?? null,
         confidence: doss?.confidence ?? null,
-        bottomLine: doss?.bottomLine ?? null,
+        bottomLine: book ? (doss?.bottomLine ?? null) : null,
         held: null,
         mvCents: 0,
         upnlCents: 0,

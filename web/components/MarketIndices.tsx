@@ -26,9 +26,11 @@ function isMarketOpenET(): boolean {
 export default function MarketIndices({
   initial,
   fundDayPct = null,
+  pollFund = true,
 }: {
   initial: IndexQuote[];
   fundDayPct?: number | null; // fund's day return as a FRACTION (0.0082 = +0.82%), null off a trading day
+  pollFund?: boolean; // false for a GRQ user (D122): the fund's day is the book — don't even ask for it
 }) {
   const [data, setData] = useState<IndexQuote[]>(initial);
   const [fundPct, setFundPct] = useState<number | null>(fundDayPct);
@@ -40,12 +42,14 @@ export default function MarketIndices({
       try {
         const [ri, rf] = await Promise.all([
           fetch("/api/indices", { cache: "no-store" }),
-          fetch("/api/fund-day", { cache: "no-store" }),
+          pollFund ? fetch("/api/fund-day", { cache: "no-store" }) : Promise.resolve(null),
         ]);
         const d = await ri.json();
         if (active && Array.isArray(d.indices) && d.indices.length > 0) setData(d.indices);
-        const f = await rf.json();
-        if (active && typeof f.dayPnlPct === "number" && f.marketDay) setFundPct(f.dayPnlPct);
+        if (rf) {
+          const f = await rf.json();
+          if (active && typeof f.dayPnlPct === "number" && f.marketDay) setFundPct(f.dayPnlPct);
+        }
       } catch {
         /* keep the last good values */
       }
@@ -56,7 +60,7 @@ export default function MarketIndices({
       active = false;
       clearInterval(id);
     };
-  }, []);
+  }, [pollFund]);
 
   if (data.length === 0) return null;
 

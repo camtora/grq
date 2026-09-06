@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, seesBook } from "@/lib/session";
 import { fmtWhen } from "@/lib/money";
 import { Card, Chip, PageHeader } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
@@ -29,6 +29,10 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
 
   const session = await getSession();
   const isMember = session?.role === "member";
+  // Alfred maps every board with the book in hand, so his prose here — the take, the thesis,
+  // the levers, the per-piece notes, each play's one-liner, and the member's brief — is
+  // members'/viewers' only (D122). A user keeps the map itself and every play's numbers.
+  const book = seesBook(session);
 
   const backLink = (
     <Link href="/chess" className="text-xs text-teal-300 hover:underline">
@@ -58,8 +62,12 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
     );
   }
 
-  const plays = await buildPlayViews(theme.plays);
-  const board = parseBoard(theme.boardJson);
+  const playsFull = await buildPlayViews(theme.plays);
+  const plays = book ? playsFull : playsFull.map((p) => ({ ...p, thesis: "" }));
+  const boardFull = parseBoard(theme.boardJson);
+  const board = book
+    ? boardFull
+    : { ...boardFull, stages: boardFull.stages.map((s) => ({ ...s, items: s.items.map((it) => ({ symbol: it.symbol, name: it.name })) })) };
   const trendBySym = await buildBoardTrends(board);
   const hrefBySym = new Map(plays.map((p) => [bareChainKey(p.sym), p.href]));
   const levers = parseConfidenceLevers(theme.confidenceLeversJson);
@@ -87,16 +95,18 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
         </div>
         <div className="mt-2">
           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-300/70">The prompt</div>
-          {theme.brief ? (
+          {theme.brief && book ? (
             <p className="mt-1 text-sm italic text-teal-100/80">&ldquo;{theme.brief}&rdquo;</p>
           ) : (
-            <p className="mt-1 text-sm text-teal-200/50">No brief — Alfred self-picked this board (the weekly board of the week).</p>
+            <p className="mt-1 text-sm text-teal-200/50">
+              {theme.brief ? "A member\u2019s brief \u2014 for members." : "No brief \u2014 Alfred self-picked this board (the weekly board of the week)."}
+            </p>
           )}
         </div>
       </Card>
 
       {/* Bottom line — the plain-English take (agent markdown → Md) */}
-      {theme.bottomLine && (
+      {book && theme.bottomLine && (
         <Card className="mt-5 border-teal-400/20 bg-teal-400/[0.05] p-5">
           <div className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-teal-300/70">The take</div>
           <Md text={theme.bottomLine} />
@@ -104,7 +114,7 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
       )}
 
       {/* The thesis — the force in motion */}
-      {theme.thesis && (
+      {book && theme.thesis && (
         <div className="mt-6">
           <PanelHeader>The position</PanelHeader>
           <Card className="mt-2 p-5">
@@ -114,7 +124,7 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
       )}
 
       {/* What would change our mind */}
-      {levers.length > 0 && (
+      {book && levers.length > 0 && (
         <div className="mt-6">
           <ConfidenceLevers levers={levers} structuralGaps={[]} />
         </div>

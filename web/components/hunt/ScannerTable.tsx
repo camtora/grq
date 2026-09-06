@@ -10,6 +10,7 @@ import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import AvatarStack from "@/components/AvatarStack";
 import { previewText } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
+import { MEMBERS_ONLY_THESIS } from "./shared";
 
 // Direction C — the Scanner/terminal: a dense one-row-per-name table for power users.
 // Columns: HEAT · TICKER · LAST · CHG · 30-DAY · CONF · THESIS · actions.
@@ -107,7 +108,7 @@ function ScannerRow({ find, isMember, toName }: { find: HuntFind; isMember: bool
       </div>
       {/* thesis */}
       <p className="overflow-hidden text-[12px] leading-snug text-teal-100/65 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-        {previewText(find.body)}
+        {find.body ? previewText(find.body) : MEMBERS_ONLY_THESIS}
       </p>
       {/* actions */}
       <div className="flex items-center justify-end gap-2">

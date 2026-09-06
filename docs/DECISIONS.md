@@ -3535,3 +3535,71 @@ that ate a member's watch, with the reason visible only in a tooltip.
 dead code in a *janitor* is invisible — nothing errors, nothing alerts, the pool just quietly fills
 until it takes a user-facing feature down with it. D118c's rule generalizes: when correctness lives in
 the *relationship* between two constants, test the relationship. Shipped web + agent v2.76-phase4.
+
+### D122 — A third tier: GRQ users, who never see the book (Cam, 2026-09-06)
+
+**Ask, verbatim:** *"jose and dave should be allowed to access grq again — non trading, cannot view our
+holdings, just users."* Jose (`jshor96@aol.com`) had been a GRQ viewer before the 2026-06-30 lockdown
+closed the door to Cam & Graham's addresses, and earlier the same night he had been dropped from the
+shared SSO allowlist during the Haymaker cleanup — Cam chose to reopen SSO knowing that readmits him to
+Haymaker too (Haymaker has no admission list of its own; the SSO list is its policy). Dave = David
+Touchette (`david@ten3.it`, the Chess Moves pitch, D94): on SSO, 403'd at GRQ's door.
+
+**Why not the viewer tier:** a viewer sees the whole book — Portfolio, Top hitters, the per-name position
+and fills, Reports, and Alfred with his portfolio tools. "Cannot view our holdings" is a tier *below*
+viewer, and it didn't exist.
+
+**Decision — a `user` role, deny-by-default, plus "Alfred's prose is the book":**
+- `lib/users.ts`: `Role = member | viewer | user`; `GRQ_USER_EMAILS` env (no rebuild); precedence
+  member > viewer > user > refused. Non-trading is free — `memberFromRequest` is unchanged and a user
+  is not a member. Mobile can't carry a user either: `auth/google` + `auth/dev` mint JWTs for members
+  only, so there is no Bearer path around the edge check.
+- **The door (`lib/access.ts`) is deny-by-default.** `USER_PAGES` + `USER_APIS` are the only map of what
+  a user may reach; `middleware.ts` 403s everything else (an HTML members-only page, JSON for `/api/`).
+  Segment match, and the static-asset rule is never applied to `/api/`. The point is the CLASS: a page
+  or route added later is invisible to users until someone lists it on purpose, so "new page forgot to
+  gate the book" can't happen. `test/access-tiers.test.ts` pins tier precedence, an ALLOWED list, a BOOK
+  list, and a "no book route on the API map" guard.
+- **Per-page book gating** via `seesBook(session)` (`lib/session.ts`) on the pages the door admits:
+  Today (the fund's day P&L in the masthead, the GRQ-vs-market line and its `/api/fund-day` poll, Top
+  hitters, the weekly review) · stock page (position stats, fills, directives) · Universe (position +
+  unrealized columns, the "you hold" line) · Bull Race + Options Desk (the real-fund reference line) ·
+  Short Lab (the shadow-shorts panel — it lists the fund's sells) · Learn receipts (one honest stub for
+  every receipt kind) · NavBar (Portfolio/Reports links, kill switch) · the chat dock (search only;
+  `/api/chat` also 403s users at the route via `bookSessionFromRequest`). Second Opinions is off the map
+  entirely: "the champion's call is the order it actually places."
+- **Alfred's free text about names is the book too.** The first build gated the widgets and the
+  screenshot still read *"We own it (~C$56.57 avg, ~1.5% underwater)"* in BN's dossier and the agent's
+  note carried order numbers and NAV shares. Measured before deciding: 14 of the 18 held names' latest
+  dossier bottom lines narrate the position; 72 of ~600 universe notes reference the book ("the axis the
+  book lacks"); 9% of non-held dossier bodies in 30 days state a holding. He writes with the book in hand,
+  so a user gets his NUMBERS (call, confidence, targets, heat, signals, every data tier) and never his
+  WRITE-UPS: the bottom-line "why" + "what would change our mind", the agent's note, the record, the
+  universe/watchlist notes and expandable bottom lines, the Hunt theses (cards show a members-only line
+  in the thesis slot), the smart-money read, and the Chess take/thesis/levers/piece notes/play one-liners
+  + the member's brief. Alfred's market brief stays: its prompt forbids fund talk and 59/59 briefs in the
+  last 30 days named no holding and used no first-person fund language (checked at build).
+- **What a user CAN see, on purpose:** the Hunt (names, heat, conviction, upside), Browse, Smart Money's
+  tables, the Watchlist (who watches what — interest, not ownership), the Universe roster + Alfred's
+  call/confidence/targets (what he MAY buy, not what he holds), every stock page's data tiers + chart +
+  scoreboard, Learn (minus receipts), the labs and bake-offs (modeled sandboxes), Chess boards (the map
+  + each play's numbers), the Report Card (graded calls). A curious user could still infer *which* names
+  are held from where prose is absent vs present? No — prose is absent for users on every name alike,
+  by design; that uniformity is what removes the tell.
+
+**Ops:** `.env` → `GRQ_USER_EMAILS=jshor96@aol.com,david@ten3.it`; env-only changes are `up -d
+--force-recreate web`. Infra: `~/infrastructure` 10ce870 restored Jose on SSO (oauth2-proxy restarted).
+
+**Verified (live, 2026-09-06, as Jose/Dave/Cam/a viewer/a stranger via `X-Forwarded-Email` on :3012, plus
+headless-Chrome screenshots):** Jose and Dave → Today 200 with movers and no Top hitters, day P&L, weekly
+review, kill switch, Portfolio/Reports links, or Ask Alfred; `/portfolio /reports /journal /accounts /settings
+/how-it-works /admin /race` → the members-only 403 page; `/api/portfolio /api/chat /api/fund-day /api/nav-tape
+/api/dossier/BN /api/wire /api/race` → 403 JSON; BN's page → 200 with Alfred's call/targets and every data
+panel, and no position stats, fills, directives, agent note, record, "why" bullets, or levers ("We own it"
+gone); Universe/Watchlist → no position columns, notes, or bottom lines; the Hunt → cards with the
+members-only line and no "read all"; Smart Money → no "GRQ's read" card; Short Lab → no shadow shorts; Chess
+→ no takes/briefs on the list, and the board page keeps the map + play numbers with no take/thesis/levers/
+piece notes and the play notice; a receipt lesson → the members-only stub, no fills. Cam unchanged (Held,
+Trades, record, "why", theses, GRQ's read, chess take, `/race` 200, Portfolio 200); the viewer address still
+sees the Position column and Portfolio; a stranger still gets the sign-in 403. 226/226 tests, `tsc` clean,
+two web-only rebuilds (db untouched), no errors in the web log.

@@ -12,6 +12,7 @@ import ConfidenceGauge from "@/components/hunt/ConfidenceGauge";
 import AvatarStack from "@/components/AvatarStack";
 import { wordCount } from "@/components/hunt/shared";
 import type { HuntFind } from "@/components/hunt/HuntRow";
+import { MEMBERS_ONLY_THESIS } from "./shared";
 
 // Direction B — the "hottest pick" hero: the #1 find blown up with a big 30-day chart,
 // the 92px confidence gauge, a large heat score + meter, and the full (unclamped) thesis.
@@ -56,7 +57,7 @@ export default function HuntHero({ find, isMember, toName }: { find: HuntFind; i
             )}
           </div>
           <div className="min-w-0 flex-1 text-sm leading-relaxed text-teal-100/80">
-            <Md text={find.body} />
+            {find.body ? <Md text={find.body} /> : <p className="text-teal-200/45">{MEMBERS_ONLY_THESIS}</p>}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link
