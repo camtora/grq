@@ -6,6 +6,7 @@ import { ibkrFixedCommissionCents } from "../../lib/broker/sim";
 import { fetchOptionChain, type OptChain } from "../../lib/options/cboe";
 import { pickContract, markContractCents, findContract, intrinsicCents, daysToExpiry } from "../../lib/options/price";
 import { DESK, DIALS, RACE, AGENT_VERSION } from "../policy";
+import { attemptGate } from "../retry";
 import { runSession } from "../sessions";
 import { chatComplete, isOpenRouterModel } from "../openrouter";
 import { PERSONA } from "../persona";
@@ -348,6 +349,8 @@ async function meteredDeskSpentTodayUsd(): Promise<number> {
 }
 
 let deskRunning = false;
+// Attempt throttle (D123) — same storm shape as the race: all-arms-fail ⇒ no DeskCall ⇒ due every tick.
+const deskAttempts = new Map<number, number>();
 
 /** Fire any RUNNING Options Desk that's due this tick (one desk per tick). Market-hours only; daily
  *  cadence = once per ET day, hourly = once per ~hour. Background — must NOT block the 60s tick. */
@@ -370,6 +373,7 @@ export async function runDeskTick(): Promise<void> {
         due = (await prisma.deskCall.count({ where: { sessionAt: { gte: dayStart }, entrant: { deskId: desk.id } } })) === 0;
       }
       if (!due) continue;
+      if (!attemptGate(deskAttempts, desk.id, now.getTime())) continue; // tried within the gap — wait, don't storm
 
       const fx = await usdCadRate().catch(() => null);
       const allowMetered = (await meteredDeskSpentTodayUsd()) < RACE.maxUsdPerDay;

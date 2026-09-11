@@ -17,6 +17,7 @@ import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
 import { parseProposal, SHADOW_DECISION_SUFFIX, SHADOW_NARRATIVE_SUFFIX } from "./race/shadow";
 import { PERSONA } from "./persona";
 import { alert, heartbeat, sendDiscord } from "./alerts";
+import { limitQuietUntil, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 import { recordAgentUsage } from "./usage";
 import { getPortfolios, getCongressLeaderboard, getFundsPilingIn, getInsiderTopBuys, getSmartMoneyForSymbol, smartMoneySummaryLine } from "../lib/smart-money/queries";
 import { fmtUsd } from "../lib/smart-money/types";
@@ -52,6 +53,13 @@ type SessionOpts = {
 export type { SessionOpts };
 
 export async function runSession(opts: SessionOpts): Promise<string | null> {
+  // Limit-quiet (D123): the shared Claude token is walled — make no call, raise no alert. Callers
+  // already treat null as "no output". Lifts on its own at the window reset.
+  const quietUntil = await limitQuietUntil();
+  if (quietUntil) {
+    console.log(`[session] ${opts.label} skipped — Claude limit quiet until ${fmtEt(quietUntil)}`);
+    return null;
+  }
   console.log(`[session] ${opts.label} starting (model=${opts.model})${opts.webFetch === false ? " [webfetch:off]" : ""}`);
   try {
     let result: string | null = null;
@@ -83,7 +91,10 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
         resultMsg = message;
         result = message.subtype === "success" ? message.result : null;
         if (message.subtype !== "success") {
-          await alert("warning", `Agent session "${opts.label}" ended: ${message.subtype}`, "", { category: "system" });
+          const detail = resultErrorText(message);
+          // A limit death is ONE quiet window, not one alert per session (D123).
+          if (isClaudeLimitError(detail)) await tripLimitQuiet(opts.label, detail);
+          else await alert("warning", `Agent session "${opts.label}" ended: ${message.subtype}`, "", { category: "system" });
         }
       }
     }
@@ -91,9 +102,19 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
     await recordAgentUsage(opts.label, opts.model, resultMsg, result);
     return result;
   } catch (e) {
-    await alert("warning", `Agent session "${opts.label}" failed`, e instanceof Error ? e.message : String(e), { category: "system" });
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isClaudeLimitError(msg)) await tripLimitQuiet(opts.label, msg);
+    else await alert("warning", `Agent session "${opts.label}" failed`, msg, { category: "system" });
     return null;
   }
+}
+
+/** The SDK's non-success result, flattened to one string for the limit classifier — subtype plus
+ *  whatever `errors` the result carries (shape varies by SDK build; treated loosely on purpose). */
+export function resultErrorText(message: { subtype?: string; errors?: unknown }): string {
+  const errs = message.errors;
+  const list = Array.isArray(errs) ? errs.map(String) : errs && typeof errs === "object" ? Object.values(errs as Record<string, unknown>).map(String) : [];
+  return [message.subtype ?? "", ...list].join(" ").trim();
 }
 
 // ----- The Race (D68): shadow-run the challenger model(s) on the SAME frozen prompt -----

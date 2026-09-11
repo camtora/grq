@@ -32,6 +32,7 @@ import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
+import { limitQuietActive } from "./limit-quiet";
 import { runPremorningRead, runMorningResearch, runPositionCheck, runTriage, runEodReport, runWeeklyReview, runStockDossier, runDiscoveryHunt, runMiddayReport, runSmartMoneyScan, runStartupUniverseReview, runScheduledCheckin, runDailyChangeReport, runChessMoves, runMarketBrief } from "./sessions";
 import { runRaceTick } from "./race/engine";
 import { runDeskTick } from "./options-desk/engine";
@@ -480,7 +481,10 @@ async function maybeScheduledSessions() {
       prisma.journalEntry.count({ where: { title: { startsWith: "Startup universe review" }, at: { gte: dayStart } } }),
       prisma.universeMember.count({ where: { status: "CANDIDATE" } }),
     ]);
-    if (!quiet && todayReviews === 0 && candidates > 0) {
+    // …and not while the Claude token is walled (limit-quiet, D123): the scan's session would be skipped,
+    // and narrating a skipped scan as "completed" is exactly the kind of story the code must not tell.
+    // A skipped boot reuses today's universe (it persists) — same as the bridge-quiet path above.
+    if (!quiet && !(await limitQuietActive()) && todayReviews === 0 && candidates > 0) {
       // Mark STARTED before running — this is the durable per-day guard against re-runs.
       await prisma.journalEntry.create({
         data: { kind: "SYSTEM", title: "Startup universe review — started", body: "Boot review of the watchlist began; re-runs are guarded for the rest of the ET day.", agentVersion: AGENT_VERSION },
@@ -1035,7 +1039,9 @@ async function tick() {
   // Research-queue drain = the per-dossier Opus spend. Skipped in reads-only quiet mode
   // (GRQ_QUIET_UNTIL): the enqueues above still fill the queue, but nothing generates a
   // dossier until quiet lifts, at which point the backlog drains.
-  if (!quietModeOn(p.dateStr)) await processResearchQueue();
+  // …and likewise while the shared Claude token is walled (limit-quiet, D123): draining then would
+  // only mark every queued dossier FAILED without a call being made.
+  if (!quietModeOn(p.dateStr) && !(await limitQuietActive())) await processResearchQueue();
 
   // Bull Races (background — ~8 model calls; self-guarded against overlap, must NOT block the tick).
   runRaceTick().catch((e) => console.error("[bullrace] tick error", e instanceof Error ? e.message : e));

@@ -15,6 +15,7 @@ import { makeReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
 import { MODELS, HARD, COUNCIL } from "./policy";
 import { routeChatToCouncil, conveneCouncil, councilMarkdown, councilEnabled } from "./council";
 import { recordAgentUsage } from "./usage";
+import { limitQuietUntil, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 
 const PORT = Number(process.env.CHAT_PORT ?? 3014);
 
@@ -124,6 +125,18 @@ async function handleChat(res: http.ServerResponse, body: ChatBody) {
 
   await prisma.chatMessage.create({ data: { owner, email, role: "user", content: message } });
 
+  // Limit-quiet (D123): the shared Claude token is walled. Say so in the thread instead of burning a
+  // call that will die with the same error — and don't touch the council router either.
+  const quietUntil = await limitQuietUntil();
+  if (quietUntil) {
+    const md = `I'm out of Claude quota until **${fmtEt(quietUntil)}** — the shared Max window is walled, so I can't think right now. The book, the guardrails and the data feeds are unaffected; ask me again after the reset.`;
+    await prisma.chatMessage.create({ data: { owner, email: "agent", role: "assistant", content: md } });
+    sse(res, { type: "text", text: md });
+    sse(res, { type: "done" });
+    res.end();
+    return;
+  }
+
   const [ctx, history, roster] = await Promise.all([
     buildContext(),
     prisma.chatMessage.findMany({ where: { owner }, orderBy: { at: "desc" }, take: 20 }),
@@ -198,7 +211,11 @@ ${convo}`;
       }
       if (m.type === "result") {
         resultMsg = m;
-        if (m.subtype !== "success") sse(res, { type: "error", text: `session ended: ${m.subtype}` });
+        if (m.subtype !== "success") {
+          const detail = [m.subtype, ...(Array.isArray((m as any).errors) ? (m as any).errors.map(String) : [])].join(" ");
+          if (isClaudeLimitError(detail)) await tripLimitQuiet("chat", detail); // arms quiet for the agent too (shared DB)
+          sse(res, { type: "error", text: `session ended: ${m.subtype}` });
+        }
       }
     }
     // Every Ask Alfred turn is Opus with tools (incl. WebFetch, which compounds — see sessions.ts).
@@ -207,7 +224,9 @@ ${convo}`;
     // that scales with how much Cam and Graham actually use the product (D118d).
     await recordAgentUsage("chat", MODELS.decision, resultMsg, finalText || null);
   } catch (e) {
-    sse(res, { type: "error", text: e instanceof Error ? e.message : String(e) });
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isClaudeLimitError(msg)) await tripLimitQuiet("chat", msg); // arms quiet for the agent too (shared DB)
+    sse(res, { type: "error", text: msg });
   }
 
   if (finalText) {
@@ -226,6 +245,11 @@ async function handleExplain(res: http.ServerResponse, body: { term?: string }) 
     return;
   }
   let text = "";
+  const quietUntil = await limitQuietUntil(); // D123
+  if (quietUntil) {
+    res.writeHead(503, { "content-type": "application/json" }).end(JSON.stringify({ error: `Claude quota exhausted until ${fmtEt(quietUntil)}` }));
+    return;
+  }
   try {
     const q = query({
       prompt: `Explain this to a smart non-expert investor in 2–3 plain, concrete sentences: "${term}". If it's a tactic (e.g. a shell company), say plainly why someone would use one. No fluff, no boilerplate disclaimers. If it isn't really a finance/investing concept, say so in one line.`,
@@ -253,7 +277,9 @@ async function handleExplain(res: http.ServerResponse, body: { term?: string }) 
       }
     }
     await recordAgentUsage("explain", MODELS.triage, resultMsg, text || null);
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isClaudeLimitError(msg)) await tripLimitQuiet("explain", msg);
     res.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({ error: "explain failed" }));
     return;
   }

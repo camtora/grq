@@ -3603,3 +3603,52 @@ piece notes and the play notice; a receipt lesson → the members-only stub, no 
 Trades, record, "why", theses, GRQ's read, chess take, `/race` 200, Portfolio 200); the viewer address still
 sees the Position column and Portfolio; a stranger still gets the sign-in 403. 226/226 tests, `tsc` clean,
 two web-only rebuilds (db untouched), no errors in the web log.
+
+### D123 — A Claude limit error is one quiet window, not a push per failure (Cam, 2026-09-11)
+
+**What happened.** Cam's shared Claude Max token hit the org's monthly spend limit mid-afternoon. Every
+Claude session died instantly with the same SDK error (*"You've hit your org's monthly spend limit · ask your
+admin to raise it"*), and `runSession` alerted on every death. The Bull Race and the Options Desk turned that
+into a storm: both judge "due" from their OUTPUT (a `RaceCall`/`DeskCall` row this hour / today), so a run
+whose entrants all failed wrote nothing, stayed due, and was retried on the very next 60-second tick — four
+Claude sessions a minute, four warnings a minute. **92 `system` pushes to Cam's phone in six hours**, at a
+moment his personal account was already walled. Ask, verbatim: *"Suppress all the notifications until 3pm — or
+pause whatever is sending me a million notifications"*, then *"going forward, whenever we hit that claude
+token limit error — on anything — we need to suppress until the next window, which we have."*
+
+**Immediate (no deploy):** both races + the House Desk set `PAUSED` in the DB (the UI's own pause), Cam's
+togglable push categories flipped off with a 15:00 ET restore, and the /tokens 5-hour anchor
+(`Settings.maxWindowResetAt`) re-set to today 15:00 ET — it dated from July, and a 5h grid drifts (it said
+16:00; Cam's app said 3pm).
+
+**The class fix — `agent/limit-quiet.ts` + `agent/retry.ts`:**
+- **One classifier** (`isClaudeLimitError`) for the whole message family — monthly/weekly/5h limit, "out of
+  extra usage", `rate_limit_error`, the older `…|<epoch>` form. Real captures are listed in the file; add to
+  them, don't loosen the regex.
+- **One durable state** — `AgentState.limitQuietUntil/limitQuietReason`. A limit death anywhere (`runSession`,
+  the council's `oneShot`, chat, explain) calls `tripLimitQuiet`, which arms quiet until **(1)** the reset the
+  error names (`parseResetHint`: "resets 3pm", "resets Sep 15 at 3pm", the epoch suffix), else **(2)** the next
+  5-hour reset rolled from the /tokens anchor via `currentWindow` — *"the next window, which we have"* — else
+  **(3)** a 60-minute fallback (and the ping says to set the anchor). A named horizon is capped at a week.
+- **One gate** at every Claude call site: while quiet, `runSession`/`oneShot` return `null` with a log line and
+  NO alert (callers already treat null as "no output"); `conveneCouncil` returns null before seating anyone
+  (no "collapsed" alert); chat answers in-thread that Alfred is out of quota until *T*; explain returns 503;
+  the research drain is skipped (draining would only mark every queued dossier FAILED). The boot-time universe
+  scan goes through `runSession`, so a redeploy while walled costs nothing.
+- **One ping per ET day** — `announceOncePerDay`: an in-process day flag set BEFORE the first `await` (four
+  parallel failures can't all pass it) plus a `SYSTEM` day-marker (the metered-down / token-milestone pattern)
+  for cross-process and cross-restart. At the boundary the first session probes; still walled → quiet
+  re-arms to the next window silently.
+- **The retry storm is fixed on its own axis** — `attemptGate` in both engines: a race/desk is attempted at most
+  once per 55 minutes *regardless of outcome*. In-memory on purpose; a restart resets it, which is bounded.
+
+**What it is NOT.** Not the §6 gate, not the kill switch, not reconcile, not the data feeds — those never
+touch it. Not the metered OpenRouter challengers (their wallet is separate; they run or 402 as before). Not the
+old `GRQ_QUIET_UNTIL` metered-bridge mode, which is a manual, env-driven cadence switch and stays as it is.
+Lift early after raising the limit: `update "AgentState" set "limitQuietUntil"=null where id=1`.
+
+**Verification.** `test/limit-quiet.test.ts` pins the classifier (six real positives, six ordinary failures
+that must still alert), the reset parser (clock → today, passed clock → tomorrow, month-day walk, epoch,
+none), the until-rule (message > window > fallback; a stale July anchor rolls forward, never into the past;
+the week cap), and the attempt gate (the 60s-tick retry is refused, the 55-min one admitted; races
+independent). Agent `v2.77-phase4`.

@@ -791,6 +791,12 @@ model AgentState {
   // surfaces to external monitoring, not just to the critical push it also fires.
   brokerReachable Boolean?
   brokerCheckedAt DateTime?
+  // Claude-limit quiet (D123, 2026-09-11): when ANY Claude call on the shared Max token dies with a
+  // usage/spend limit, every Claude session is skipped (no call, no per-session alert) until this
+  // instant — the reset the error names, else the next 5h-window reset from Settings.maxWindowResetAt.
+  // Durable so a restart can't forget it and re-storm. `limitQuietReason` = "<label>: <error text>".
+  limitQuietUntil  DateTime?
+  limitQuietReason String?
   updatedAt     DateTime  @updatedAt
 }
 

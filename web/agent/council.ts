@@ -19,6 +19,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { MODELS, COUNCIL } from "./policy";
 import { alert } from "./alerts";
+import { limitQuietUntil, limitQuietActive, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 import { recordAgentUsage } from "./usage";
 
 export type CouncilSeat = { key: string; label: string; emoji: string; brief: string };
@@ -93,6 +94,11 @@ export type CouncilResult = { question: string; advisors: CouncilAdvisor[]; verd
 // Opus passes per convene wrote no AgentUsage row either, so the council was invisible to
 // /admin/usage and to the 40M/day burn alarm. `label` is what makes a seat legible in both.
 async function oneShot(label: string, model: string, system: string, user: string, noThinking = false): Promise<string | null> {
+  const quietUntil = await limitQuietUntil(); // limit-quiet (D123): walled token ⇒ no call, no alert
+  if (quietUntil) {
+    console.log(`[session] ${label} skipped — Claude limit quiet until ${fmtEt(quietUntil)}`);
+    return null;
+  }
   console.log(`[session] ${label} starting (model=${model})`);
   try {
     const q = query({
@@ -123,14 +129,20 @@ async function oneShot(label: string, model: string, system: string, user: strin
         if (m.subtype === "success") out = m.result;
         // A non-success seat used to vanish here. It is a wasted Opus pass AND a quieter room —
         // say so, the same way runSession does.
-        else await alert("warning", `Council seat "${label}" ended: ${m.subtype}`, "", { category: "system" });
+        else {
+          const detail = [m.subtype, ...(Array.isArray((m as any).errors) ? (m as any).errors.map(String) : [])].join(" ");
+          if (isClaudeLimitError(detail)) await tripLimitQuiet(label, detail);
+          else await alert("warning", `Council seat "${label}" ended: ${m.subtype}`, "", { category: "system" });
+        }
       }
     }
     await recordAgentUsage(label, model, resultMsg, out || null);
     return out.trim() || null;
   } catch (e) {
-    await alert("warning", `Council seat "${label}" failed`, e instanceof Error ? e.message : String(e), { category: "system" });
-    console.error("[council] oneShot failed:", e instanceof Error ? e.message : e);
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isClaudeLimitError(msg)) await tripLimitQuiet(label, msg);
+    else await alert("warning", `Council seat "${label}" failed`, msg, { category: "system" });
+    console.error("[council] oneShot failed:", msg);
     return null;
   }
 }
@@ -152,6 +164,7 @@ export async function conveneCouncil(opts: {
   onSeat?: (label: string, landed: number, total: number) => void;
 }): Promise<CouncilResult | null> {
   if (!COUNCIL.enabled) return null;
+  if (await limitQuietActive()) return null; // D123: no room to convene — and no "collapsed" alert for it
   const { question, context } = opts;
 
   const userFor = (s: CouncilSeat) =>

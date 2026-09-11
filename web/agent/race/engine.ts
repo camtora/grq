@@ -9,6 +9,7 @@ import { chatComplete, isOpenRouterModel } from "../openrouter";
 import { PERSONA } from "../persona";
 import { startOfEtDay, isMarketOpen } from "../calendar";
 import { parseProposal } from "./shadow";
+import { attemptGate } from "../retry";
 import { buildBullContext, type EntrantLite } from "./context";
 
 // The Bull-Race engine — each session, every bull builds a prompt from ITS OWN book, decides one
@@ -219,6 +220,9 @@ async function meteredRaceSpentTodayUsd(): Promise<number> {
 // Re-entrancy guard: the runner fires this in the BACKGROUND (a race session is ~8 model calls and
 // must not block the 60s tick / heartbeat), so we must not let two overlap.
 let raceRunning = false;
+// Attempt throttle (D123): "due" is judged from OUTPUT (a RaceCall this hour/today), so a race whose bulls
+// all fail stays due and used to re-fire every 60s tick — the 2026-09-11 push storm. Once per gap, win or lose.
+const raceAttempts = new Map<number, number>();
 
 /** Fire any RUNNING race that's due this tick (one race per tick). Each bull runs its own session
  *  concurrently. Market-hours only; daily cadence = once per ET day, hourly = once per ~hour. */
@@ -241,6 +245,7 @@ export async function runRaceTick(): Promise<void> {
       due = (await prisma.raceCall.count({ where: { sessionAt: { gte: dayStart }, entrant: { raceId: race.id } } })) === 0;
     }
     if (!due) continue;
+    if (!attemptGate(raceAttempts, race.id, now.getTime())) continue; // tried within the gap — wait, don't storm
 
     const fx = await usdCadRate().catch(() => null);
     const allowMetered = (await meteredRaceSpentTodayUsd()) < RACE.maxUsdPerDay;
