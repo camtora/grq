@@ -3652,3 +3652,34 @@ that must still alert), the reset parser (clock → today, passed clock → tomo
 none), the until-rule (message > window > fallback; a stale July anchor rolls forward, never into the past;
 the week cap), and the attempt gate (the 60s-tick retry is refused, the 55-min one admitted; races
 independent). Agent `v2.77-phase4`.
+
+### D124 — A verbatim-repeat alert is a loop, not news (Cam, 2026-09-12)
+
+**What happened.** The morning after D123, the agent's token was refused with a NEW message: *"Your organization
+has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin
+to enable access."* Not a quota — an org-admin setting on the account behind `CLAUDE_CODE_OAUTH_TOKEN` (rotated
+2026-09-06). D123's classifier matched only the limit family, so the Saturday weekly review — retried on every
+tick while no WEEKLY report exists — pushed **23 identical "weekly-review failed" warnings in two hours**, plus
+two from news triage. Cam: *"im getting a million notifications again."*
+
+**Immediate:** quiet armed by hand for 24h (`AgentState.limitQuietUntil`) — every Claude call is dead until a
+human acts, so skipping them costs nothing. Storm stopped at the next tick.
+
+**Two fixes, two classes:**
+1. **`ACCESS_RE` joins the classifier** (`agent/limit-quiet.ts`): "disabled Claude subscription access", "Use an
+   Anthropic API key instead", `authentication_error`, invalid/expired/revoked token, "not logged in". Same
+   property as a limit — no Claude call can succeed until a human acts — so quiet is the right response. The
+   once-a-day ping now says which family it is: a limit lifts itself, an access refusal **never does** and
+   names the fix (flip the org setting, or a new token → force-recreate agent+chat).
+2. **The chokepoint dedupes** (`agent/alerts.ts`): a warning/critical whose title AND body already went out
+   within **30 minutes** is held — journal row still written (the record stays honest), Discord + push skipped,
+   one log line. This is the class fix for every "scheduled thing fails instantly and is retried every tick"
+   shape (the race/desk in D123, the weekly review today, the next one nobody has met yet) without gating each
+   scheduler by hand. `notifyOut` (member actions, no journal) and `info` alerts are untouched.
+
+**Open (human):** which account minted the 2026-09-06 token — the wording ("ask your admin") is an org seat,
+not a personal Max. Until it's re-enabled or replaced, Alfred is paused and re-probes once per window.
+
+**Verification.** `test/limit-quiet.test.ts` pins the access family (the real capture, an API
+`authentication_error`, an expired-token line) and that limit wording still classifies as `limit`; 242/242,
+`tsc` clean. Agent `v2.78-phase4`.

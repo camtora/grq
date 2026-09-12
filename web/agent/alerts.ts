@@ -14,20 +14,34 @@ export type AlertOpts = { category?: NotifCategory; actorEmail?: string; symbol?
 // Single alerting chokepoint (AGENT-SPEC "Alerting"). Discord if configured + iOS
 // push to each member's eligible devices; warning+ always lands in the journal;
 // failures never take the agent down.
+// Verbatim-repeat window (D124, 2026-09-12). A warning/critical whose title AND body already
+// went out within this window is a retry loop reporting the same failure again — not news. The
+// journal row is still written (the record stays honest); only Discord + push are held. This is
+// the CLASS fix for every "scheduled thing fails instantly and is retried every tick" shape —
+// the race/desk storm (D123, 92 pushes), then the Saturday weekly review (23 pushes in 2h) the
+// morning after — without having to find and gate each scheduler individually.
+const REPEAT_WINDOW_MS = 30 * 60_000;
+
 export async function alert(severity: Severity, title: string, body = "", opts: AlertOpts = {}): Promise<void> {
+  let repeat = false;
   try {
     if (severity !== "info") {
+      const journalTitle = `[${severity.toUpperCase()}] ${title}`;
+      const journalBody = body || title;
+      repeat =
+        (await prisma.journalEntry.count({
+          where: { kind: "SYSTEM", title: journalTitle, body: journalBody, at: { gte: new Date(Date.now() - REPEAT_WINDOW_MS) } },
+        })) > 0;
       await prisma.journalEntry.create({
-        data: {
-          kind: "SYSTEM",
-          title: `[${severity.toUpperCase()}] ${title}`,
-          body: body || title,
-          agentVersion: AGENT_VERSION,
-        },
+        data: { kind: "SYSTEM", title: journalTitle, body: journalBody, agentVersion: AGENT_VERSION },
       });
     }
   } catch (e) {
     console.error("alert: journal write failed", e);
+  }
+  if (repeat) {
+    console.warn(`[alert] held — verbatim repeat within ${REPEAT_WINDOW_MS / 60_000} min: ${title}`);
+    return;
   }
 
   await sendDiscord(severity, title, body);

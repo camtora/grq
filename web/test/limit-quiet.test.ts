@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isClaudeLimitError, parseResetHint, quietUntilFor } from "@/agent/limit-quiet";
+import { isClaudeLimitError, claudeErrorFamily, parseResetHint, quietUntilFor } from "@/agent/limit-quiet";
 import { attemptGate } from "@/agent/retry";
 
 // Claude-limit quiet (D123, 2026-09-11). The 4-pushes-a-minute storm had two parts: every limit death
@@ -22,6 +22,14 @@ describe("isClaudeLimitError — the message family", () => {
     ]) {
       assert.equal(isClaudeLimitError(msg), true, msg);
     }
+  });
+  it("recognises the ACCESS family — refused outright, never lifts on its own (2026-09-12)", () => {
+    const refused = "Claude Code returned an error result: Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access";
+    assert.equal(isClaudeLimitError(refused), true);
+    assert.equal(claudeErrorFamily(refused), "access");
+    assert.equal(isClaudeLimitError('{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}'), true);
+    assert.equal(isClaudeLimitError("OAuth token has expired. Please run /login"), true);
+    assert.equal(claudeErrorFamily("You've hit your limit · resets 3pm"), "limit");
   });
   it("leaves ordinary failures alone — those still deserve their own alert", () => {
     for (const msg of [

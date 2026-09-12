@@ -43,9 +43,26 @@ const CACHE_TTL_MS = 30_000;
 const LIMIT_RE =
   /hit your (?:org(?:'s|anization's)? )?(?:monthly |weekly |daily )?(?:spend |usage |rate )?limit|usage limit reached|spend limit|rate[ _-]?limit|out of (?:extra )?usage|quota (?:exceeded|exhausted)/i;
 
-/** Is this error text the shared Claude token hitting a usage/spend/rate limit? Pure. */
+// The ACCESS family (2026-09-12): the token is refused outright, not metered. Same property that
+// makes quiet the right response — every Claude call will fail identically until a HUMAN acts
+// (flip the org setting, mint a new token) — so retrying is waste and alerting per retry is a storm
+// (23 "weekly-review failed" pushes in 2h on the first morning). Real captures:
+//  - "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic
+//    API key instead, or ask your admin to enable access"                         (2026-09-12)
+//  - API-level: {"type":"authentication_error", …} / "invalid x-api-key" / "OAuth token has expired"
+const ACCESS_RE =
+  /disabled Claude subscription access|Use an Anthropic API key instead|authentication_error|invalid (?:x-api-key|api key|bearer token)|OAuth token (?:has )?(?:expired|been revoked)|token (?:has )?(?:expired|been revoked)|not logged in|please run \/login/i;
+
+/** Is this error text the shared Claude token hitting a usage/spend/rate limit — OR being refused
+ *  outright (org disabled subscription access, dead/expired token)? Both mean "no Claude call can
+ *  succeed until a human acts", which is what quiet exists for. Pure. */
 export function isClaudeLimitError(text: string | null | undefined): boolean {
-  return !!text && LIMIT_RE.test(text);
+  return !!text && (LIMIT_RE.test(text) || ACCESS_RE.test(text));
+}
+
+/** Which family — drives the ping's wording: a limit lifts itself, an access refusal never does. */
+export function claudeErrorFamily(text: string): "limit" | "access" {
+  return ACCESS_RE.test(text) ? "access" : "limit";
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -177,10 +194,13 @@ async function announceOncePerDay(label: string, errorText: string, until: Date,
         agentVersion: AGENT_VERSION,
       },
     });
+    const family = claudeErrorFamily(errorText);
     await alert(
       "warning",
-      `Claude quota hit — Alfred paused until ${fmtEt(until)}`,
-      `"${label}" hit the shared Claude Max limit: ${errorText.slice(0, 200)}\n\nEvery Claude session (check-ins, dossiers, race, desk, chat) is skipped until ${fmtEt(until)} — ${how}. One ping, not one per failure; if it's still walled at the reset, the pause rolls to the next window without another ping today. The book, the guardrails and the data feeds are unaffected.`,
+      family === "access" ? `Claude access refused — Alfred paused (needs a human)` : `Claude quota hit — Alfred paused until ${fmtEt(until)}`,
+      family === "access"
+        ? `"${label}" was refused by Anthropic: ${errorText.slice(0, 220)}\n\nThis is NOT a quota — it will not lift on its own. Every Claude session is skipped and re-probed once per window (next ${fmtEt(until)}) until the org setting is flipped or a new token lands in .env (CLAUDE_CODE_OAUTH_TOKEN → force-recreate agent+chat). One ping per day. The book, the guardrails and the data feeds are unaffected.`
+        : `"${label}" hit the shared Claude Max limit: ${errorText.slice(0, 200)}\n\nEvery Claude session (check-ins, dossiers, race, desk, chat) is skipped until ${fmtEt(until)} — ${how}. One ping, not one per failure; if it's still walled at the reset, the pause rolls to the next window without another ping today. The book, the guardrails and the data feeds are unaffected.`,
       { category: "system" },
     );
   } catch (e) {
