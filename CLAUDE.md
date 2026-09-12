@@ -242,7 +242,7 @@ cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer*
 (`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at
 `POST /api/auth/google` for that JWT; `middleware.ts` admits `/api/auth/*` + the
 listed mobile read routes (Bearer present) while keeping chat/explain/quotes
-cookie-only. Members-only on mobile. The GRQ-iOS OAuth client + an nginx
+cookie-only. Members-only on mobile. **Sliding session (D125, 2026-09-12):** the 30-day GRQ-JWT is re-minted by `/api/auth/me` once it is a day old (`refreshGrqToken`; `MeResponse.token`, additive) and the app stores it — a phone that gets opened stays signed in; 1-year ceiling from the original sign-in (`orig` claim). The GRQ-iOS OAuth client + an nginx
 bypass-location are the remaining human steps before a phone can fetch live.
 
 ## File map

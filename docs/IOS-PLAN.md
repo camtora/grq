@@ -58,7 +58,7 @@ verified in production (curl over both the Bearer and X-Forwarded-Email paths; t
 existing dashboard + no-auth-403 door are unchanged). What landed:
 
 - **`web/lib/auth-jwt.ts`** *(new)* — mint/verify the GRQ-JWT (HS256, `GRQ_JWT_SECRET`,
-  `jsonwebtoken`). 30-day TTL for internal TestFlight; add a refresh token before public.
+  `jsonwebtoken`). 30-day TTL, **sliding since D125 (2026-09-12)**: `/api/auth/me` re-mints a day-old token for another 30 days (1-year absolute ceiling from the original sign-in via the `orig` claim); a phone that gets opened never expires.
 - **`web/lib/session.ts`** — `X-Forwarded-Email` still wins; else resolve email from a
   verified `Authorization: Bearer` GRQ-JWT, else `GRQ_DEV_EMAIL`. `roleForEmail` /
   `memberFromRequest` untouched. ✅

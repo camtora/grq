@@ -36,6 +36,9 @@ export const MeResponse = z.object({
   // for the splash's wealth-aware greeting (shared/content/daily.json bands):
   totalPnlCents: z.number().int(),
   contributionsCents: z.number().int(),
+  // D125 sliding session: present when the server re-minted the caller's day-old GRQ-JWT —
+  // the app stores it. Optional = additive; older builds ignore it. Never sent to a browser.
+  token: z.string().optional(),
 });
 export const GoogleLoginRequest = z.object({ idToken: z.string() });
 export const AuthResponse = z.object({ token: z.string(), me: MeResponse });

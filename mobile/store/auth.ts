@@ -14,6 +14,8 @@ export type Me = {
   theme: string;
   totalPnlCents: number;
   contributionsCents: number;
+  // D125 sliding session: the server re-mints a day-old token on /api/auth/me and sends it here.
+  token?: string;
 };
 
 type AuthState = {
@@ -41,7 +43,11 @@ export const useAuth = create<AuthState>((set) => ({
         return;
       }
       const me = await api<Me>('/api/auth/me');
-      set({ status: 'signedIn', me });
+      // Sliding session (D125): a day-old token comes back re-minted for another 30 days. Storing
+      // it is what keeps a phone that gets USED signed in; without this the 30-day hard expiry
+      // signed Graham out on 2026-08-27. Stored before state flips so a crash mid-boot can't lose it.
+      if (me.token) await setToken(me.token);
+      set({ status: 'signedIn', me: { ...me, token: undefined } });
     } catch (e) {
       // 401 = expired/revoked JWT; anything else (offline) also lands on the
       // sign-in screen rather than wedging the app on the splash.

@@ -3685,3 +3685,30 @@ the Saturday weekly review ran on the next tick. Next time this wording appears,
 **Verification.** `test/limit-quiet.test.ts` pins the access family (the real capture, an API
 `authentication_error`, an expired-token line) and that limit wording still classifies as `limit`; 242/242,
 `tsc` clean. Agent `v2.78-phase4`.
+
+### D125 — The mobile session slides: a phone that gets used stays signed in (Cam, 2026-09-12)
+
+**Why.** Graham: *"kicked from the mobile app weeks ago."* His build-7 traffic stopped dead on 2026-08-27 — the
+shape of the 30-day GRQ-JWT expiring with nothing to renew it: `hydrate()` gets a 401 from `/api/auth/me`,
+clears the keychain, and the app drops to the sign-in screen. Cam's own token (signed in 2026-08-20, again on
+build 8 on 2026-09-11) was on the same clock. `lib/auth-jwt.ts` said "add a refresh token before public" and
+never got one; for a two-person app the recurring re-login is exactly the manual step the seamless-for-Graham
+rule says leads to abandonment. Ask, verbatim: *"Fix."*
+
+**Decision — sliding, bounded, additive:**
+- Every token now carries `orig` = the epoch of the ORIGINAL Google sign-in. `refreshGrqToken(bearer)` re-mints
+  a valid token for another 30 days once it is **a day old** (`REFRESH_AFTER_SECONDS` — not on every launch),
+  carrying `orig` forward, and **never past `MAX_SESSION_SECONDS` = 1 year** from `orig`. Past the ceiling the
+  token simply runs out on its own and the member signs in again — a refreshed token cannot roll forever.
+- `/api/auth/me` (called on every cold start) returns the fresh token as `MeResponse.token` — **optional, so
+  additive on the wire**: builds 7/8 ignore it and keep working; the browser (cookie, no Bearer) never gets one.
+- The app's `hydrate()` stores `me.token` BEFORE flipping state (a crash mid-boot can't lose it). No other
+  mobile code path changes; sign-in / sign-out are untouched.
+- Pre-D125 tokens carry no `orig`; their `iat` stands in, so they refresh like any other on first contact.
+- Not a refresh-token pair (a second long-lived credential + rotation): more moving parts than a two-person
+  internal app needs, and the ceiling gives the property that matters. Revisit before any public release.
+
+**Ships in two halves.** Server: web rebuild (live). App: rides the next archive (2.0 build 9) — until then
+builds 7/8 keep the old 30-day hard expiry. **Verification:** `test/auth-jwt.test.ts` (round trip, the sliding
+rule, the ceiling, a legacy no-`orig` token, the carried-forward `orig`), `tsc` clean web + mobile, and a live
+probe against the deployed route with a backdated token returning `token`.
