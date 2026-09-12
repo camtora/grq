@@ -49,6 +49,8 @@ const LIMIT_RE =
 // (23 "weekly-review failed" pushes in 2h on the first morning). Real captures:
 //  - "Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic
 //    API key instead, or ask your admin to enable access"                         (2026-09-12)
+//    ⚠ Despite the wording, this was a LAPSED personal Max subscription (Cam forgot to pay the
+//    bill), not an org-admin toggle. Paying restored the same token — check the bill first.
 //  - API-level: {"type":"authentication_error", …} / "invalid x-api-key" / "OAuth token has expired"
 const ACCESS_RE =
   /disabled Claude subscription access|Use an Anthropic API key instead|authentication_error|invalid (?:x-api-key|api key|bearer token)|OAuth token (?:has )?(?:expired|been revoked)|token (?:has )?(?:expired|been revoked)|not logged in|please run \/login/i;

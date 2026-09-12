@@ -3677,8 +3677,10 @@ human acts, so skipping them costs nothing. Storm stopped at the next tick.
    shape (the race/desk in D123, the weekly review today, the next one nobody has met yet) without gating each
    scheduler by hand. `notifyOut` (member actions, no journal) and `info` alerts are untouched.
 
-**Open (human):** which account minted the 2026-09-06 token — the wording ("ask your admin") is an org seat,
-not a personal Max. Until it's re-enabled or replaced, Alfred is paused and re-probes once per window.
+**Resolved (Cam, ~11:00 ET):** *"I just forgot to pay my Claude bill."* The token is the personal Max after all —
+**a lapsed subscription produces the "your organization has disabled Claude subscription access" wording**, not
+just an org-admin toggle. Paid → a one-word Haiku probe on the token came back `alive` → quiet lifted by hand,
+the Saturday weekly review ran on the next tick. Next time this wording appears, check the bill first.
 
 **Verification.** `test/limit-quiet.test.ts` pins the access family (the real capture, an API
 `authentication_error`, an expired-token line) and that limit wording still classifies as `limit`; 242/242,
