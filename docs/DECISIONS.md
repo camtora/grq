@@ -3646,6 +3646,12 @@ togglable push categories flipped off with a 15:00 ET restore, and the /tokens 5
 touch it. Not the metered OpenRouter challengers (their wallet is separate; they run or 402 as before). Not the
 old `GRQ_QUIET_UNTIL` metered-bridge mode, which is a manual, env-driven cadence switch and stays as it is.
 Lift early after raising the limit: `update "AgentState" set "limitQuietUntil"=null where id=1`.
+**And write it forward when a human knows a reset the error does not name** (2026-09-16): a monthly wall says
+*"ask your admin to raise it"* with no time in it, so rule (2) takes the 5-hour grid and quiet expires every
+window — four dead probe calls across a two-day wall, and the first probe of a new ET day pings again at
+whatever hour the grid lands on (1:00 AM that night). Setting the instant directly — `"limitQuietUntil"=
+'2026-09-17 20:00:00'` (naive UTC) — costs no deploy, is live inside the 30s cache, and re-probes once, on
+time. It stays self-healing: still walled at that instant, the probe re-arms to the grid and pings once.
 
 **Verification.** `test/limit-quiet.test.ts` pins the classifier (six real positives, six ordinary failures
 that must still alert), the reset parser (clock → today, passed clock → tomorrow, month-day walk, epoch,

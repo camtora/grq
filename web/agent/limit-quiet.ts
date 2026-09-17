@@ -26,6 +26,15 @@ import { alert } from "./alerts";
  * Scope: the agent's THINKING. OpenRouter challengers are metered and unaffected; the §6 gate, the kill
  * switch, reconcile and the data feeds never touch this. Lift it early (Cam raised the limit):
  *   docker exec grq-db psql -U grq grq -c 'update "AgentState" set "limitQuietUntil"=null where id=1'
+ *
+ * The same field is the override in BOTH directions, and the forward one matters when a human knows a
+ * reset the error does not name. A monthly/weekly wall arrives worded "ask your admin to raise it" with
+ * no time in it, so rule (2) picks the 5-hour grid and quiet expires every window: each boundary spends
+ * one dead call re-probing, and the first probe of a new ET day pings again — at whatever hour the grid
+ * happens to land on (1:00 AM, 2026-09-16). When Cam says when the quota returns, write that instant in
+ * (naive UTC, no deploy, live inside the 30s cache) and it re-probes exactly once, on time:
+ *   update "AgentState" set "limitQuietUntil"='2026-09-17 20:00:00' where id=1   -- Thu 4pm ET
+ * Still self-healing: if it is STILL walled at that instant, the probe re-arms to the grid and pings once.
  */
 
 const FALLBACK_MS = 60 * 60_000;
