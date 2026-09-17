@@ -15,3 +15,7 @@ AuthKey_*.p8
 # Xcode build output — TestFlight .xcarchive exports live here (large, regenerated)
 archives/
 *.xcarchive/
+
+# /brag output — rendered video, hyperframes project, node_modules, snapshots (all regenerable)
+brag-output/
+brag-output-*/
