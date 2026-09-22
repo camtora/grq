@@ -74,7 +74,7 @@ stock search does **name + multi-listing** (ANET→NYSE). **Phase 3 — IBKR pap
 XIC market order placed→**filled @ CAD 56.98**→reconciled (the old "No trading permissions" block cleared
 on the overnight perm-sync). **The ≥2-wk IBKR-paper soak clock started 2026-06-17 = day 1.** D33 also
 fixed a slow-fill ledger gap (`finalizePending()` — see below). Gateway needs a **daily ~midnight-ET IB
-Key re-approval**. **NB SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq underlying.**
+Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22).** It used to read "SPCX = the SpaceX *CDR* (`SPCX.TO`, CAD-hedged ~$36), not the Nasdaq underlying". The feed no longer agrees: bare **`SPCX` is the NASDAQ listing in USD** (~$154, 69 bars, ~89M ADV — i.e. it started trading ~June 2026) and **that is the one we track and trade**; `SPCX.TO` is the CAD CDR, RETIRED, 3 bars, and would fail the liquidity screen. Two live listings for one name is still the trap the original note was warning about — just resolved the other way.
 
 ---
 
