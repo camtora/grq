@@ -3809,3 +3809,48 @@ SHOP, ATD, …"*. `tsc` clean, `test/demote.test.ts` 20/20. Agent `v2.80-phase4`
 **The lesson worth keeping:** the tool was right and the guards were right; the *story the system told about
 itself* was wrong, and it reached the members as a request for action they didn't need to take. A refusal
 that doesn't say how far from passing it is will be narrated into a wall.
+
+### D126b — Stop paying for research on names we already said no to (Cam, 2026-09-22)
+
+**Why.** Cam: *"because it researches them all every day - that's just more and more tokens."* He was right,
+and the cause was not the universe. Today's burn: **43.97M tokens / 175 sessions, 67% of it dossiers**
+(89 runs × ~331k). `runner.ts runDailyRefresh` iterates `trackedUniverse()` — **CANDIDATE + ACTIVE = 280
+names**, not the 62 ACTIVE — and queues a full dossier for every held name plus anything that moved **≥4%**
+and hasn't been dossiered in ~18h. Today that was 52 CANDIDATE movers, 15 held, 8 ACTIVE movers.
+
+**The waste, measured:** 556 dossiers in 30 days re-researching candidates the agent does **not** rate Buy
+(~184M tokens/month). 294 of those (39 names) are ones Cam or Graham watch — deliberate, see below. The other
+**262 (65 names) were unwatched**, and the D112 prune could never reach them: it retires a candidate at
+**21 days stale**, while daily-refresh re-dossiers a mover every **~18h**, so a volatile junk name resets its
+own staleness clock forever. **85 unwatched non-buy candidates sat under the floor; 3 above it.** The prune
+was dead code against exactly the names it exists to remove — the same bug class as the D121 invariant, which
+was written against the *weekly* sweep (21 < 28) and never accounted for the 28×-faster daily path.
+
+**The sharpest statement of it:** daily-refresh spent a 331k dossier on a **4%** move, while the weekly
+materiality gate calls a candidate's move immaterial below **8%**. It was re-researching names on moves the
+system itself had already defined as not worth researching.
+
+**Decision — gate the refresh, retire nothing.** `decideDailyRefresh()` (pure, in `agent/curation.ts`, wired
+at `runner.ts`): an **unwatched CANDIDATE already called below Buy does not earn a daily dossier**. It is NOT
+retired and NOT demoted — it stays tracked and visible, and still re-rates through the weekly sweep, which
+guarantees a look every **28 days** and sooner on any catalyst (earnings, ≥8% drift, relevant news, an
+insider cluster, a crowd spike). The Hold→Buy path stays open; it re-rates on a catalyst instead of on noise.
+**88 of 280 tracked names are gated; 192 keep the daily path.**
+
+**Considered and rejected:** an evidence-based prune (retire after N straight below-Buy dossiers, age-
+independent, to break the circularity). Built and dry-run — it would have retired **60** names, but the list
+was BMO, ENB, CRM, PEP, CVX, KO, XOM, ORCL, AMGN… quality large caps merely rated Hold, not the "super bad or
+hard marked as sell" Cam described. Reverted: retiring good companies to stop an over-eager refresh treats the
+symptom. The prune is back to baseline (3 stale retires).
+
+**The member constraint, verbatim (Cam):** *"anything in Graham or I's watch list is there intentionally -
+regardless of its rating - we're interested in the stock and want Alfred's analysis (ie dossier on it) on a
+daily basis."* Both paths honour it — `decideDailyRefresh` returns early on `watched`, and `decidePrune`
+already did. Pinned by its own test suite so a future reorder fails the build.
+
+**Also found:** `tsconfig.json` **excludes `test`**, so test files are never typechecked — adding a required
+field to a decision type does not fail the build from the test side, and the existing prune tests silently ran
+with `nonBuyStreak: undefined`. Worth fixing separately.
+
+**Verified:** `tsc` clean; `test/curation.test.ts` 21/21; suite 278/279 (the one failure is the pre-existing
+D125 `auth-jwt` time-bomb). Agent `v2.81-phase4`. `maxUniverseSize` **unchanged at 60**.

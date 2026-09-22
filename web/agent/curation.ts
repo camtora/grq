@@ -82,6 +82,39 @@ export type PruneSignals = {
   stanceIsBuy: boolean; // latest dossier's call is a genuine buy — keep, it deserves a look
 };
 
+export type DailyRefreshSignals = {
+  status: "CANDIDATE" | "ACTIVE" | "RETIRED";
+  held: boolean; // an open position — money at stake, always keep fresh
+  watched: boolean; // a member watches it — they want Alfred's read daily, whatever he rates it
+  hasStance: boolean; // we have an actual call on it
+  stanceIsBuy: boolean; // ...and that call is a genuine buy
+};
+
+/** Should runner.ts's pre-market daily-refresh spend a full dossier on this name? Pure.
+ *
+ *  D126b (Cam, 2026-09-22). daily-refresh queued a ~331k dossier for ANY tracked name that
+ *  moved ≥4% and was >18h stale. But the weekly materiality gate treats a candidate's move
+ *  as immaterial until 8% — so the daily job was re-researching names the system itself had
+ *  defined as not worth researching, on names it had ALREADY rated no-buy. Measured: 262
+ *  such dossiers in 30 days (~87M tokens) across 65 unwatched names.
+ *
+ *  So: an unwatched CANDIDATE we have already called below Buy does not earn a daily
+ *  dossier. It is NOT retired and NOT demoted — it stays tracked and still re-rates through
+ *  the weekly sweep, which guarantees a look every ${REFRESH.staleMaxDays} days and sooner on any
+ *  catalyst (earnings, ≥8% drift, relevant news, an insider cluster, a crowd spike). The
+ *  Hold→Buy path stays open; it just re-rates on a catalyst instead of on noise.
+ *
+ *  Never gates: held names, ACTIVE names, anything a member watches, anything rated Buy, and
+ *  anything we have no call on yet. */
+export function decideDailyRefresh(s: DailyRefreshSignals): { refresh: boolean; reason: string } {
+  if (s.held) return { refresh: true, reason: "held — money at stake" };
+  if (s.watched) return { refresh: true, reason: "a member watches it" };
+  if (s.status !== "CANDIDATE") return { refresh: true, reason: "ACTIVE — tradeable" };
+  if (!s.hasStance) return { refresh: true, reason: "no call on it yet" };
+  if (s.stanceIsBuy) return { refresh: true, reason: "buy-rated — a live idea" };
+  return { refresh: false, reason: "unwatched candidate already called below Buy — the weekly sweep re-rates it" };
+}
+
 /** Should this CANDIDATE be retired from the pool? Pure. Only ever touches CANDIDATEs. */
 export function decidePrune(p: PruneSignals, R = REFRESH): { retire: boolean; reason: string } {
   if (p.status !== "CANDIDATE") return { retire: false, reason: "not a candidate" };

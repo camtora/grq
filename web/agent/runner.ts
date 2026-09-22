@@ -15,7 +15,7 @@ import { IBKRBroker } from "../lib/broker/ibkr";
 import { getPortfolio } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { runLearnExamplesRefresh } from "../lib/learn/examples";
-import { planWeeklyCuration, applyCuration } from "./curation";
+import { planWeeklyCuration, applyCuration, decideDailyRefresh } from "./curation";
 import { backfillLogos } from "../lib/logos";
 import { backfillFundamentals } from "../lib/fundamentals";
 import { runMarketScreenNightly } from "../lib/market-screen/nightly";
@@ -27,7 +27,7 @@ import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
 import { trackedSymbols, trackedUniverse, WEEKLY_REFRESH_WEEKDAY, WEEKLY_REFRESH_START_MIN } from "../lib/universe";
 import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
-import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS, REFRESH } from "./policy";
+import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS, REFRESH, SELF_INVEST } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
 import { pushNotify } from "../lib/push/notify";
@@ -1177,19 +1177,33 @@ async function maybeDailyRefreshEnqueue() {
     .then((r) => console.log(`[market-screen] ${r.kept} screened · ${r.tagged} newly tagged`))
     .catch((e) => console.error("[market-screen] nightly failed", e));
 
-  const [tracked, positions, inFlightRows, quotes] = await Promise.all([
+  const [tracked, positions, inFlightRows, quotes, watchRows, stanceRows] = await Promise.all([
     trackedUniverse(),
     prisma.position.findMany({ select: { symbol: true } }),
     prisma.researchRequest.findMany({ where: { status: { in: ["QUEUED", "RUNNING"] } }, select: { symbol: true } }),
     prisma.quote.findMany({ select: { symbol: true, dayChangeBps: true } }),
+    prisma.stockWatch.findMany({ select: { symbol: true } }),
+    // Latest call per name, for the D126b gate below (newest-first; first hit per symbol wins).
+    prisma.journalEntry.findMany({
+      where: { stance: { not: null }, symbol: { not: null } },
+      orderBy: { at: "desc" },
+      select: { symbol: true, stance: true },
+    }),
   ]);
   const held = new Set(positions.map((x) => x.symbol.toUpperCase()));
+  const watchedSet = new Set(watchRows.map((w) => w.symbol.toUpperCase()));
+  const latestStance = new Map<string, string>();
+  for (const r of stanceRows) {
+    const k = (r.symbol ?? "").toUpperCase();
+    if (k && r.stance && !latestStance.has(k)) latestStance.set(k, r.stance);
+  }
   const inFlight = new Set(inFlightRows.map((r) => r.symbol));
   const moveBps = new Map(quotes.map((q) => [q.symbol.toUpperCase(), Math.abs(q.dayChangeBps)]));
   const staleBefore = new Date(Date.now() - DAILY_REFRESH_STALE_MS);
 
   let queued = 0;
   let heldCount = 0;
+  let skipped = 0;
   for (const row of tracked) {
     const sym = row.symbol;
     if (inFlight.has(sym)) continue;
@@ -1202,11 +1216,30 @@ async function maybeDailyRefreshEnqueue() {
     const isHeld = held.has(sym.toUpperCase());
     const moved = (moveBps.get(sym.toUpperCase()) ?? 0) >= DAILY_REFRESH_MOVE_BPS;
     if (!isHeld && !moved) continue; // non-held names only refresh when they actually moved
+    // D126b: don't spend a dossier re-reading a name we've already called below Buy and
+    // nobody is watching. It stays tracked; the weekly sweep re-rates it on its own floor
+    // and on any catalyst. Pure decision + tests in agent/curation.ts.
+    const U = sym.toUpperCase();
+    const st = latestStance.get(U);
+    const gate = decideDailyRefresh({
+      status: row.status,
+      held: isHeld,
+      watched: watchedSet.has(U),
+      hasStance: !!st,
+      stanceIsBuy: !!st && (SELF_INVEST.allowedStances as readonly string[]).includes(st),
+    });
+    if (!gate.refresh) {
+      skipped++;
+      continue;
+    }
     await prisma.researchRequest.create({ data: { symbol: sym, requestedBy: "daily-refresh" } });
     queued++;
     if (isHeld) heldCount++;
   }
-  if (queued > 0) console.log(`[daily-refresh] queued ${queued} dossiers (${heldCount} held + ${queued - heldCount} movers, pre-market)`);
+  if (queued > 0 || skipped > 0)
+    console.log(
+      `[daily-refresh] queued ${queued} dossiers (${heldCount} held + ${queued - heldCount} movers, pre-market) · skipped ${skipped} unwatched no-buy candidate(s) — D126b`,
+    );
 }
 
 // Pre-earnings dossier pass (Cam 2026-07-03): any name we track or watch that REPORTS

@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { decideRefresh, decidePrune, type RefreshSignals, type PruneSignals } from "@/agent/curation";
+import {
+  decideRefresh,
+  decidePrune,
+  decideDailyRefresh,
+  type RefreshSignals,
+  type PruneSignals,
+  type DailyRefreshSignals,
+} from "@/agent/curation";
 import { REFRESH } from "@/agent/policy";
 
 // The research-refresh materiality gate + pool prune (policy REFRESH, Cam 2026-07-05).
@@ -132,5 +139,72 @@ describe("decidePrune — the pool prune", () => {
     }
     assert.ok(retiredAt !== null, "a quiet unwatched candidate never retires — the prune is unreachable");
     assert.ok(retiredAt < REFRESH.staleMaxDays, `prunes at ${retiredAt}d, after the ${REFRESH.staleMaxDays}d refresh reset`);
+  });
+});
+
+
+describe("decideDailyRefresh — the daily dossier gate (D126b)", () => {
+  // Why: daily-refresh queued a ~331k dossier for any tracked name that moved ≥4%, while
+  // the weekly gate calls a candidate's move immaterial below 8% — so it re-researched
+  // names it had already rated no-buy. 262 such dossiers in 30 days (~87M tokens).
+  const cand: DailyRefreshSignals = {
+    status: "CANDIDATE",
+    held: false,
+    watched: false,
+    hasStance: true,
+    stanceIsBuy: false,
+  };
+
+  it("skips an unwatched candidate we have already called below Buy", () => {
+    const d = decideDailyRefresh(cand);
+    assert.equal(d.refresh, false);
+    assert.match(d.reason, /already called below Buy/);
+  });
+
+  it("still refreshes it once Alfred rates it a Buy", () => {
+    assert.equal(decideDailyRefresh({ ...cand, stanceIsBuy: true }).refresh, true);
+  });
+
+  it("never gates a name we have no call on yet", () => {
+    assert.equal(decideDailyRefresh({ ...cand, hasStance: false, stanceIsBuy: false }).refresh, true);
+  });
+
+  it("never gates an ACTIVE (tradeable) name", () => {
+    assert.equal(decideDailyRefresh({ ...cand, status: "ACTIVE" }).refresh, true);
+  });
+
+  it("never gates a held name — money at stake outranks the rating", () => {
+    const d = decideDailyRefresh({ ...cand, held: true });
+    assert.equal(d.refresh, true);
+    assert.match(d.reason, /money at stake/);
+  });
+});
+
+describe("a member's watchlist gets its daily dossier, whatever the rating (Cam, 2026-09-22)", () => {
+  // Cam, verbatim: "anything in Graham or I's watch list is there intentionally - regardless
+  // of its rating - we're interested in the stock and want Alfred's analysis (ie dossier on
+  // it) on a daily basis." Both paths must honour that, so both are pinned here.
+  it("daily-refresh never skips a watched name, however badly rated", () => {
+    const d = decideDailyRefresh({
+      status: "CANDIDATE",
+      held: false,
+      watched: true,
+      hasStance: true,
+      stanceIsBuy: false,
+    });
+    assert.equal(d.refresh, true);
+    assert.match(d.reason, /a member watches it/);
+  });
+
+  it("the pool prune never retires a watched name either", () => {
+    const d = decidePrune({ ...pbase, watched: true, dossierAgeDays: 999, stanceIsBuy: false });
+    assert.equal(d.retire, false);
+    assert.match(d.reason, /watched by a member/);
+  });
+
+  it("nor a watched name that was never opened", () => {
+    const d = decidePrune({ ...pbase, watched: true, hasDossier: false, addedAgeDays: 999 });
+    assert.equal(d.retire, false);
+    assert.match(d.reason, /watched by a member/);
   });
 });
