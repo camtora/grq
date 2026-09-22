@@ -3768,3 +3768,44 @@ member's name is theirs to drop, so make the case in the note instead.
 **Verification:** `tsc --noEmit` clean; `test/demote.test.ts` 15/15; full suite otherwise unchanged (the one
 pre-existing `auth-jwt` failure is a D125 time-bomb — a fixed `NOW` constant drifting past `jwt.verify`'s real
 clock — and fails identically on a clean tree). Agent `v2.79-phase4`.
+
+#### D126a — Same day: the rejection has to carry its own arithmetic (2026-09-22, evening)
+
+**What happened.** D126 shipped at 14:36 ET and the tool worked on its first live outing: at the 15:00
+check-in the agent demoted **ICE** (Weak Buy/64, redundant with our financials) and **NA** (Hold/61,
+redundant with TD) — both correctly screened as unheld, unwatched, not member-added. Then it stopped, and
+wrote to the members: *"the tradeable universe is 62 names against a 60 cap — it's already over the cap (held
++ member-added names I can't demote), so clearing dead bench names can't get it under 60. **This is
+member-gated.**"* Every clause of that is false. **35 names were still reclaimable** and it had **23 of its
+25 weekly demotions left**; it needed 3 more and had the budget for ten times that. It then declined to
+deploy ~$1.6k of idle USD into CCJ (Buy/73) and asked Cam and Graham to open a door it could have opened
+itself.
+
+**Why.** Two information gaps, not a capability gap:
+1. **The promote rejection didn't carry its arithmetic.** It said `the universe is at its 60-name cap —
+   demote something before adding more`. The agent demoted "something" (twice), was still refused, and had no
+   way to see that 62 against a 60 cap needs **3** freed, not 1 — so it inferred a reason for the refusal
+   and inferred the wrong one. A rejection that states a rule but not the distance to clearing it invites
+   the model to invent the distance.
+2. **`buildContext` never mentioned demotability at all** (`grep -c demot agent/context.ts` → 0). Nothing
+   told it how many spare slots existed, so "the rest must be protected" was a guess dressed as a finding.
+
+**Contributing:** Cam promoted AAPL/ANET/ASML/SPCX that afternoon, taking the universe 60 → 64 (the human
+promote path has no `maxUniverseSize` check — only the agent's does). That is correct and intended, but it
+put the universe *over* cap, which is exactly the state the old message described worst.
+
+**Fix (the class, not the instance).** `capRejectionReason()` in `agent/demote.ts` is now a **pure, unit-tested**
+function that always states active/cap, the number of slots needed, the count and the actual symbols of what
+the agent can free, and the weekly budget — and says *"Do NOT conclude this is member-gated"* whenever the
+spare list can cover the gap. It only calls a wall member-gated when the spare list is genuinely empty, and
+distinguishes "not eligible" from "out of weekly budget". `buildContext` gained a **Universe slots** line
+carrying the same arithmetic, so the agent reads the truth before it ever hits a rejection. Five tests pin it,
+including one asserting the message must NOT claim self-clearance when the budget can't cover the gap.
+
+**Verified live:** the real rejection now reads *"the universe is 62/60 — you must free 3 slots before a
+promote fits. You can clear this yourself RIGHT NOW: demote_from_universe 3 of these 35 spare names — CP,
+SHOP, ATD, …"*. `tsc` clean, `test/demote.test.ts` 20/20. Agent `v2.80-phase4`.
+
+**The lesson worth keeping:** the tool was right and the guards were right; the *story the system told about
+itself* was wrong, and it reached the members as a request for action they didn't need to take. A refusal
+that doesn't say how far from passing it is will be narrated into a wall.

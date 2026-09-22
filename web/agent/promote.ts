@@ -13,6 +13,7 @@ import { refreshQuotesFor } from "../lib/broker/quotes";
 import { refreshBars } from "../lib/bars";
 import { stanceMeta } from "../lib/stance";
 import { personByName } from "../lib/people";
+import { demotableSlots, capRejectionReason } from "./demote";
 import { SELF_INVEST, AGENT_VERSION } from "./policy";
 import { notifyOut } from "./alerts";
 
@@ -226,7 +227,13 @@ export async function agentSelfPromote(symbol: string, tier: "large" | "mid" | u
   }
   const activeCount = (await activeUniverse()).length;
   if (activeCount >= SELF_INVEST.maxUniverseSize) {
-    return { ok: false, reason: `the universe is at its ${SELF_INVEST.maxUniverseSize}-name cap — demote something before adding more.` };
+    // Say exactly how many slots short this is and whether they're reachable. The old
+    // message ("at its cap — demote something") sent the agent into a false wall on
+    // 2026-09-22: it demoted two names, was STILL over cap, assumed the remaining 35 were
+    // protected, stopped, and told the members only they could open it. A rejection that
+    // doesn't carry its own arithmetic invites the model to invent the arithmetic.
+    const spare = await demotableSlots();
+    return { ok: false, reason: capRejectionReason(activeCount, spare.count, spare.symbols, spare.demotesLeft) };
   }
 
   // All rules clear — promote.

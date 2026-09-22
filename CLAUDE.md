@@ -92,7 +92,10 @@ Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22
    drained at 0/wk and jammed for a month. It can only reclaim a *spare* slot: unheld, unwatched,
    not member-added, not PINNED, not the benchmark, ≤25/rolling week. It **never RETIRES** (that
    stays humans-only), and the §6 gate is untouched. Pure guards + tests: `agent/demote.ts`,
-   `test/demote.test.ts`.
+   `test/demote.test.ts`. **D126a (same day):** a cap rejection now states its ARITHMETIC
+   (`capRejectionReason` — active/cap, slots needed, the spare symbols, the weekly budget) and
+   `buildContext` carries a **Universe slots** line — the first live run demoted 2, was still over
+   cap, and wrongly told the members it was member-gated while 35 slots were reclaimable.
    **D78 (2026-06-25):** human promotion is now **single-actor** too — any member (or the agent)
    can promote a researched candidate, gated only by the liquidity screen (the old two-person
    approval is gone). The §6 order gate (ACTIVE-required-to-BUY) is **unchanged** — that's still

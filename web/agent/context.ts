@@ -13,7 +13,8 @@ import { screenFinds, findLine } from "../lib/market-screen/retrieval";
 import { getOptions, optionsLine } from "../lib/options/store";
 import { shortLessonLine } from "../lib/short/shadow";
 import { getSocial, socialLine } from "../lib/social/store";
-import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH } from "./policy";
+import { demotableSlots } from "./demote";
+import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH, SELF_INVEST } from "./policy";
 
 function money(c: number): string {
   return `$${(c / 100).toFixed(2)}`;
@@ -23,6 +24,15 @@ function money(c: number): string {
  *  Keep the ordering stable — it prompt-caches. */
 export async function buildContext(): Promise<string> {
   const MBL_ON = process.env.MARKET_BASE_RETRIEVAL !== "off"; // Slice-3 retrieval (docs/MARKET-BASE-LAYER.md); set "off" to disable
+  // Universe-slot arithmetic, stated rather than inferred (D126 follow-up). Without it the
+  // agent has to GUESS whether the cap is movable — and on 2026-09-22 it guessed wrong,
+  // wrote off 35 reclaimable slots as protected, and told the members the wall was theirs.
+  const slots = await demotableSlots();
+  const activeNow = slots.activeCount;
+  const slotLine =
+    activeNow >= SELF_INVEST.maxUniverseSize
+      ? `${activeNow}/${SELF_INVEST.maxUniverseSize} ACTIVE — OVER CAP, so a promote needs ${activeNow - SELF_INVEST.maxUniverseSize + 1} slot(s) freed first. You can free ${slots.count} yourself (${slots.demotesLeft} demotions left this week): ${slots.symbols.slice(0, 15).join(", ") || "none"}. Use demote_from_universe — this is NOT member-gated while that list is non-empty.`
+      : `${activeNow}/${SELF_INVEST.maxUniverseSize} ACTIVE — ${SELF_INVEST.maxUniverseSize - activeNow} free. ${slots.count} more are reclaimable via demote_from_universe if you need room.`;
   const [pf, settings, permanentLessons, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds] =
     await Promise.all([
       getPortfolio(),
@@ -279,6 +289,7 @@ ${
 ${shortLesson ? `## Shorting lesson (Short Lab sandbox — you NEVER short; rule #3)\n  ${shortLesson}\n` : ""}
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
+Universe slots: ${slotLine}
 Hard limits: ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no cap on # of holdings (breadth is your call — size, the cash floor, and the weekly BUY cap still bind) · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.
 
 ## Member directives (binding — set by Cam & Graham on the stock pages)

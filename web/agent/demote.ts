@@ -19,7 +19,7 @@
 // can't drift silently; agentSelfDemote gathers the signals and does the write.
 
 import { prisma } from "../lib/db";
-import { universeEntry, invalidateUniverseCache, BENCHMARK } from "../lib/universe";
+import { universeEntry, activeUniverse, invalidateUniverseCache, BENCHMARK } from "../lib/universe";
 import { personByName } from "../lib/people";
 import { SELF_INVEST, AGENT_VERSION } from "./policy";
 import { notifyOut } from "./alerts";
@@ -81,6 +81,71 @@ export function decideDemote(s: DemoteSignals, P = SELF_INVEST): { demote: boole
     };
   }
   return { demote: true, reason: "unheld, unwatched, agent-added — a dead slot." };
+}
+
+/** How many ACTIVE names the agent could hand back RIGHT NOW, and which ones.
+ *  Used by the promote rejection and the decision context so the agent never has to
+ *  GUESS whether the cap is movable — on 2026-09-22 it demoted two names, was still
+ *  over the cap, assumed the rest were protected (35 were not), and told the members
+ *  the wall was theirs to open. An uninformative rejection produced a false story. */
+export async function demotableSlots(): Promise<{ count: number; symbols: string[]; demotesLeft: number; activeCount: number }> {
+  const [active, watches, positions, directives, recentDemotes] = await Promise.all([
+    activeUniverse(),
+    prisma.stockWatch.findMany({ select: { symbol: true } }),
+    prisma.position.findMany({ select: { symbol: true, qty: true } }),
+    prisma.symbolDirective.findMany({ select: { symbol: true, directive: true } }),
+    prisma.journalEntry.count({
+      where: { title: { startsWith: "Self-demoted —" }, at: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+    }),
+  ]);
+  const watched = new Set(watches.map((w) => w.symbol));
+  const qty = new Map(positions.map((p) => [p.symbol, p.qty]));
+  const pinned = new Set(directives.filter((d) => d.directive === "PINNED").map((d) => d.symbol));
+
+  const symbols = active
+    .filter(
+      (r) =>
+        decideDemote({
+          status: r.status,
+          isBenchmark: r.symbol === BENCHMARK,
+          humanAdded: personByName(r.addedBy) != null,
+          watchers: watched.has(r.symbol) ? 1 : 0,
+          pinned: pinned.has(r.symbol),
+          heldQty: qty.get(r.symbol) ?? 0,
+          recentDemotes: 0, // the weekly budget is reported separately, not an eligibility fact
+        }).demote,
+    )
+    .map((r) => r.symbol);
+
+  return {
+    count: symbols.length,
+    symbols,
+    demotesLeft: Math.max(0, SELF_INVEST.maxDemotesPerRollingWeek - recentDemotes),
+    activeCount: active.length,
+  };
+}
+
+/** PURE: the message a promote gets when the universe is at/over its cap. It MUST state
+ *  how many slots are needed and whether the agent can free them itself — the 2026-09-22
+ *  failure was a rejection that said only "at its cap — demote something", after which the
+ *  agent freed two, was still over, and invented the conclusion that the rest were
+ *  protected and the wall was member-gated. 35 were reclaimable. Unit-tested. */
+export function capRejectionReason(
+  activeCount: number,
+  spareCount: number,
+  spareSymbols: string[],
+  demotesLeft: number,
+  P = SELF_INVEST,
+): string {
+  const need = activeCount - P.maxUniverseSize + 1;
+  const budget = Math.min(spareCount, demotesLeft);
+  const tail =
+    budget >= need
+      ? `You can clear this yourself RIGHT NOW: demote_from_universe ${need} of these ${spareCount} spare name${spareCount === 1 ? "" : "s"} — ${spareSymbols.slice(0, 12).join(", ")}${spareSymbols.length > 12 ? ", …" : ""} — then promote again. Do NOT conclude this is member-gated; it is not while that list can cover it.`
+      : spareCount === 0
+        ? "Every remaining ACTIVE name is held, watched, member-added or pinned, so you genuinely cannot clear this one — make the case to the members in your check-in."
+        : `You can only free ${budget} right now (${spareCount} spare, ${demotesLeft} demotions left of ${P.maxDemotesPerRollingWeek}) and need ${need} — free what you can, then make the case to the members for the rest.`;
+  return `the universe is ${activeCount}/${P.maxUniverseSize} — you must free ${need} slot${need === 1 ? "" : "s"} before a promote fits. ${tail}`;
 }
 
 /** Demote an ACTIVE name back to CANDIDATE if (and only if) every rule passes. Returns a
