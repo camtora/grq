@@ -7,6 +7,7 @@ import { loadDesk } from "../lib/options-desk/desk";
 import { universeEntry, activeSymbols, yahooForListing, bareTicker } from "../lib/universe";
 import { validateAndPlace } from "./validator";
 import { agentSelfPromote, addCandidate } from "./promote";
+import { agentSelfDemote } from "./demote";
 import { createFxRequest } from "../lib/fx-requests";
 import { usdCadRate } from "../lib/fx";
 import { notifyOut } from "./alerts";
@@ -15,7 +16,7 @@ import { conveneCouncil, councilToolText, councilEnabled } from "./council";
 import { fmpProfile } from "../lib/fmp";
 import { upsertChainEdges } from "../lib/graph/edges";
 import { bareChainKey } from "../lib/chess";
-import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA, HARD } from "./policy";
+import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA, HARD, SELF_INVEST } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
 import type { JournalKind } from "@prisma/client";
 
@@ -382,6 +383,20 @@ const promoteToUniverseTool = tool(
   },
 );
 
+const demoteFromUniverseTool = tool(
+  "demote_from_universe",
+  "Hand a slot back: demote an ACTIVE name you no longer want to buy out of the tradeable universe, back to CANDIDATE. This is the counterpart to promote_to_universe and the way you make room when the " + SELF_INVEST.maxUniverseSize + "-name cap blocks a promote — the universe is a bench, not a trophy case, so a name you'd no longer open a position in is a slot you should give back. It stays fully researched and either member can put it back in one click, so this is reversible and low-stakes. LIMITS, all enforced and rejections explain which fired: the name must be ACTIVE, UNHELD (exit the position first — an existing holding is never trapped, but a held name isn't a spare slot), NOT watched by a member, NOT added by a member, NOT pinned, and not the benchmark; you also can't exceed the weekly demotion cap. You CANNOT retire a name (that stops research entirely) — that stays a members-only call. Pass a short reason: it's journaled and Discord-alerted to the members.",
+  { symbol: z.string(), reason: z.string().min(20).max(1000) },
+  async (args) => {
+    const r = await agentSelfDemote(args.symbol, args.reason);
+    return text(
+      r.ok
+        ? `DEMOTED ${args.symbol.toUpperCase()} back to CANDIDATE — a universe slot is free. It stays researched; the members were alerted and can restore it any time.`
+        : `REJECTED: ${r.reason}`,
+    );
+  },
+);
+
 const requestFxTool = tool(
   "request_fx",
   "Ask a member to convert currency — EITHER direction — so the fund can buy a name it can't currently fund. The fund holds CAD and USD as SEPARATE cash, mirroring the broker; a buy must be covered by that listing's OWN currency (no auto-FX, no margin): US-listed buys need USD, Canadian buys need CAD. You CANNOT convert currency yourself — this raises a request a member approves (or rejects) on the Settings page, and money only moves on their OK. Use it when a buy is blocked for insufficient currency AND the OTHER sleeve has cash to spare: direction='CAD_TO_USD' funds a US name from the CAD sleeve; direction='USD_TO_CAD' funds a Canadian name from the USD sleeve (bringing money home). amountToCents is how much of the DESTINATION currency you want to end up with — USD cents for CAD_TO_USD, CAD cents for USD_TO_CAD. Add a one-line reason and the symbol you're funding. Treat the funded name like any other — request whatever you'd genuinely deploy; the member is the gate. One pending request per symbol; you can't buy the name until a member approves and the cash lands.",
@@ -685,6 +700,7 @@ export const grqServer = createSdkMcpServer({
     addCandidateTool,
     requestResearchTool,
     promoteToUniverseTool,
+    demoteFromUniverseTool,
     conveneCouncilTool,
     proposeOrderTool,
     requestFxTool,
@@ -709,6 +725,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__add_candidate",
   "mcp__grq__request_research",
   "mcp__grq__promote_to_universe",
+  "mcp__grq__demote_from_universe",
   "mcp__grq__convene_council",
   "mcp__grq__propose_order",
   "mcp__grq__request_fx",

@@ -3718,3 +3718,53 @@ rule says leads to abandonment. Ask, verbatim: *"Fix."*
 builds 7/8 keep the old 30-day hard expiry. **Verification:** `test/auth-jwt.test.ts` (round trip, the sliding
 rule, the ceiling, a legacy no-`orig` token, the carried-forward `orig`), `tsc` clean web + mobile, and a live
 probe against the deployed route with a backdated token returning `token`.
+
+### D126 — The agent can hand back a universe slot: demote, never retire (Cam, 2026-09-22)
+
+**Why.** The agent could promote (CANDIDATE → ACTIVE) at up to 25/rolling week and had **no way to give a slot
+back**. ACTIVE → CANDIDATE was humans-only (the Demote button), and the D112 prune only ever touches CANDIDATEs
+— `decidePrune` returns early on anything else. So the universe filled at 25/wk and drained at **0/wk**. It hit
+the 60-name cap around **2026-08-24** and stayed jammed for a month: at diagnosis it was 60/60 ACTIVE with only
+**15 names actually held**, i.e. 45 slots occupied by names the fund didn't own. Selling never helped, because
+selling out of a name leaves it ACTIVE — on 2026-09-22 the agent sold its 25 GEHC shares to fund a GEHC→AMZN
+rotation, the cash landed, the door stayed shut, and three consecutive check-ins logged "jammed at the 60-cap".
+It had even banked a LESSON about the wall on 2026-08-24. Cam: *"The agent needs to be able to demote. I don't
+think retiring makes sense... i dont want alfred to demote a stock that a human added."*
+
+**The cap itself was never sized for this.** `maxUniverseSize: 60` landed 2026-06-17 in the same commit as the
+self-promote tool (`297b67b`), as one of a bundle of anti-runaway bounds — at the then-**2 promotes/week** it was
+~30 weeks of headroom, a backstop chosen so it would never bind. D39 took the inflow **2 → 5 → 25**/week the next
+day without revisiting it, and D52 then leaned on it as the replacement for the removed holdings-count cap
+("≤60 eligible names, so ≤60 distinct holdings"). A never-binding number quietly became load-bearing. **60 is
+left UNCHANGED here** — raising it buys ~3 weeks at 25/wk and jams again; the missing drain was the actual bug.
+
+**Decision — a demote tool with human-claim guards, and no retire.**
+- New `demote_from_universe` (agent/demote.ts, `agentSelfDemote`): ACTIVE → CANDIDATE only. The name stays fully
+  researched and either member restores it with one Promote click, so it is cheap and reversible.
+- **The agent never RETIRES.** CANDIDATE → RETIRED stops research entirely and stays a members-only call.
+- `decideDemote` is **pure and unit-tested** (`test/demote.test.ts`, 15 cases). It refuses unless the name is
+  ACTIVE, **unheld** (a held name isn't a spare slot — exit first; an existing position is never trapped),
+  **unwatched** (StockWatch is humans-only, D78), **not member-added**, **not PINNED**, not the benchmark, and
+  within the weekly cap. Each guard is pinned by its own test, so letting the agent reach a human's name fails
+  the build.
+- `maxDemotesPerRollingWeek: 25` — symmetric with the promote cap, so slots can't churn down faster than they
+  fill; a test asserts the two stay in that order. Counted off `Self-demoted —` journal titles, like promote's.
+- **"Human-added" = `personByName(addedBy)` resolves to a member.** The 14 `seed-2026-06-12` rows do NOT: Cam's
+  call — the seed library was a bootstrap list, not a standing endorsement, and it's where most of the stale
+  blue-chip ballast lives. Under these guards the agent can reclaim **26** of the 60 slots today (11 more seed);
+  held (15), watched (8) and member-added (0) are untouchable.
+- Gated by the same `GRQ_AGENT_SELF_PROMOTE` switch, so one flag freezes the roster in both directions. Every
+  demotion journals a DECISION + fires an `agentMoves` Discord. The §6 order gate is **untouched**.
+
+**A provenance hole fixed in the same change.** `agent/promote.ts` re-tracked a RETIRED name with
+`addedBy: "agent"`, so a name Cam added → retired → agent revived would silently lose its human-added protection
+one revive at a time. The agent's write now preserves an existing member's name. Guarding on a field the agent
+could overwrite was the guard eroding itself; a test pins that Cam and Graham resolve and `agent` doesn't.
+
+**Prompts.** The morning plan, the startup universe review and check-in stage (c) now say that a cap rejection is
+a prompt to prune, not a dead end — the universe is a bench of names you'd buy, not a trophy case — and that a
+member's name is theirs to drop, so make the case in the note instead.
+
+**Verification:** `tsc --noEmit` clean; `test/demote.test.ts` 15/15; full suite otherwise unchanged (the one
+pre-existing `auth-jwt` failure is a D125 time-bomb — a fixed `NOW` constant drifting past `jwt.verify`'s real
+clock — and fails identically on a clean tree). Agent `v2.79-phase4`.

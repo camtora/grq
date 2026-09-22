@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.78-phase4";
+export const AGENT_VERSION = "v2.79-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -60,6 +60,12 @@ export const SELF_INVEST = {
   maxPerRollingWeek: 25, // anti-runaway: ≤25 self-promotions / rolling 7 days (2→5→25 on 2026-06-18 — under the active-deployment mandate the agent's wider hunt is surfacing more real ≥75 ideas than 5/wk allowed; AC/COST/DAL got blocked. Still bounded by maxUniverseSize and the dial's maxNewTradesPerWeek BUY cap)
   maxUniverseSize: 60, // anti-runaway: total ACTIVE cap
   promotableTiers: ["large", "mid"] as const, // ETFs stay human-curated; default "mid"
+  // D126 (Cam, 2026-09-22): the agent may DEMOTE (ACTIVE → CANDIDATE) to free its own
+  // slots — promote had no counterpart, so the universe filled at up to 25/wk and drained
+  // at 0/wk until a human clicked Demote. Symmetric cap so slots can't churn faster than
+  // they fill. The agent NEVER retires (CANDIDATE → RETIRED stays humans-only), and the
+  // eligibility guards in agent/demote.ts keep it off anything a human staked a claim to.
+  maxDemotesPerRollingWeek: 25,
 };
 
 // Research-refresh materiality + pool curation (Cam 2026-07-05). The weekly Sunday

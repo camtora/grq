@@ -12,6 +12,7 @@ import { probeYahooSymbol } from "../lib/broker/yahoo";
 import { refreshQuotesFor } from "../lib/broker/quotes";
 import { refreshBars } from "../lib/bars";
 import { stanceMeta } from "../lib/stance";
+import { personByName } from "../lib/people";
 import { SELF_INVEST, AGENT_VERSION } from "./policy";
 import { notifyOut } from "./alerts";
 
@@ -128,7 +129,15 @@ export async function addCandidate(symbol: string, reason: string, name?: string
   const currency: "CAD" | "USD" = resolved.currency;
 
   if (existing) {
-    await prisma.universeMember.update({ where: { symbol: key }, data: { status: "CANDIDATE", addedBy: "agent" } });
+    // Preserve HUMAN provenance (D126). addedBy is what keeps the agent's own demote off a
+    // name Cam or Graham put here, so re-tracking a retired name must NOT relabel it
+    // "agent" — that would silently erase the protection one revive at a time. Only stamp
+    // a row no member owns.
+    const humanOwned = personByName(existing.addedBy) != null;
+    await prisma.universeMember.update({
+      where: { symbol: key },
+      data: { status: "CANDIDATE", ...(humanOwned ? {} : { addedBy: "agent" }) },
+    });
   } else {
     await prisma.universeMember.create({
       data: { symbol: key, yahoo: resolved.yahoo, name: name ?? resolved.name ?? key, status: "CANDIDATE", addedBy: "agent", currency, note: reason.slice(0, 200) },
