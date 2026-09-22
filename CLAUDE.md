@@ -96,6 +96,11 @@ Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22
    (`capRejectionReason` — active/cap, slots needed, the spare symbols, the weekly budget) and
    `buildContext` carries a **Universe slots** line — the first live run demoted 2, was still over
    cap, and wrongly told the members it was member-gated while 35 slots were reclaimable.
+   **D126b (same day):** `daily-refresh` no longer spends a ~331k dossier on an unwatched
+   CANDIDATE already called below Buy (`decideDailyRefresh`, pure + tested) — it was re-researching
+   on a 4% move while the weekly gate calls a candidate immaterial below 8%. 88/280 gated; nothing
+   is retired or demoted, the weekly sweep still re-rates every 28d + on any catalyst, and a name on
+   a member's watchlist ALWAYS keeps its daily dossier whatever Alfred rates it (Cam's rule, pinned).
    **D78 (2026-06-25):** human promotion is now **single-actor** too — any member (or the agent)
    can promote a researched candidate, gated only by the liquidity screen (the old two-person
    approval is gone). The §6 order gate (ACTIVE-required-to-BUY) is **unchanged** — that's still
