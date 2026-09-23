@@ -50,6 +50,12 @@ export type FxConvertResult =
   | { ok: true; rate: number; fromDebitedCents: number; toCreditedCents: number; commissionCents: number }
   | { ok: false; error: string };
 
+// Cancelling a resting order (2026-09-23). GRQ could PLACE orders and never cancel
+// one — no adapter method, no tool, no UI — so a stale GTC limit could only be killed
+// by logging into IBKR directly. Found via a TD BUY 6 @ $165 GTC that had rested a week
+// at 4.3% out of the money. Takes OUR Order.id; the adapter resolves the broker id.
+export type CancelOrderResult = { ok: true } | { ok: false; error: string };
+
 /** The seam everything trades through. Implementations:
  *  - SimBroker (Phase 1+) — paper engine, synthetic then real delayed quotes
  *  - IBKRBroker (Phase 3) — IBeam/Client Portal Gateway, paper then live
@@ -67,4 +73,8 @@ export interface BrokerAdapter {
   /** Convert cash between CAD and USD (D62). Money-moving — only the member-approved
    *  FX path calls this, never the agent. */
   convertCurrency(input: FxConvertInput): Promise<FxConvertResult>;
+  /** Cancel a PENDING order by OUR Order.id. Idempotent-ish: an order the broker has
+   *  already filled or dropped resolves to the truthful terminal state rather than
+   *  erroring. Never touches a FILLED order. */
+  cancelOrder(orderId: number): Promise<CancelOrderResult>;
 }

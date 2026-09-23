@@ -2,7 +2,7 @@ import { prisma } from "../db";
 import { getQuote, getQuotes, isHardStale } from "./quotes";
 import { activeSymbols, universeEntry, BENCHMARK } from "../universe";
 import { toCadCents, usdCadRate } from "../fx";
-import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
+import type { BrokerAdapter, CancelOrderResult, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
 import { mirrorLag, isSettled } from "./positions";
 import { markHeldContract, valueOptionPositionsCad } from "../options/order";
@@ -447,6 +447,18 @@ export class SimBroker implements BrokerAdapter {
   }
 
   /** Sweep resting limit orders against fresh quotes. Called by the agent tick. */
+  /** Cancel a resting sim order. The sim never debits cash at placement (a PENDING row
+   *  is just an intent that sweepPendingOrders may later fill), so there is nothing to
+   *  refund — the row simply becomes CANCELLED and stops being swept. */
+  async cancelOrder(orderId: number): Promise<CancelOrderResult> {
+    const o = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!o) return { ok: false, error: `Order #${orderId} not found.` };
+    if (o.status === "CANCELLED") return { ok: true };
+    if (o.status !== "PENDING") return { ok: false, error: `Order #${orderId} is ${o.status} — only a PENDING order can be cancelled.` };
+    await prisma.order.update({ where: { id: orderId }, data: { status: "CANCELLED" } });
+    return { ok: true };
+  }
+
   async sweepPendingOrders(): Promise<number> {
     const pending = await prisma.order.findMany({ where: { status: "PENDING" } });
     let filled = 0;

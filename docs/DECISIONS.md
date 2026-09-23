@@ -3854,3 +3854,44 @@ with `nonBuyStreak: undefined`. Worth fixing separately.
 
 **Verified:** `tsc` clean; `test/curation.test.ts` 21/21; suite 278/279 (the one failure is the pre-existing
 D125 `auth-jwt` time-bomb). Agent `v2.81-phase4`. `maxUniverseSize` **unchanged at 60**.
+
+### D127 — GRQ can cancel an order, and the gate counts money it has already promised (Cam, 2026-09-23)
+
+**Why.** A TD BUY 6 @ $165 GTC limit had been resting at IBKR since 2026-09-16 — a week, 4.3% out of the
+money, its "complete the TD bank-axis position" thesis stale. Cam: *"how do we deal with the stuck pending
+order?"* The answer was that we couldn't. **`BrokerAdapter` had no `cancelOrder` at all** — no adapter method,
+no agent tool, no UI control — so any resting order could only be killed by logging into IBKR directly. The
+order wasn't stuck; the app simply had no way to speak to it.
+
+**Two corrections made while diagnosing, both worth recording** (each was an assertion that outran the check):
+1. *"IBKR has zero live orders, so it's a ghost."* Wrong — `/iserver/account/orders` returned `[]`, but the
+   per-order endpoint showed `order_status: "Submitted"`, `tif: "GTC"`. That list does not reliably include
+   resting GTC orders. The order was real. (Also: the gateway **403s any request without a `User-Agent`** —
+   `cp()` sends `grq/1.0`; a raw curl without it looks exactly like an auth failure.)
+2. *"It's reserving ~$990 CAD, and a second buy would overdraw the account by ~$870."* Wrong twice. GRQ's cash
+   accounting never subtracted resting orders, so the CAD was never reserved — and the **cash floor already
+   prevented the overdraw**: NAV $65,318 with a 2% floor left $1,306 untouchable, capping any new buy at
+   $125.07, so even both filling landed at **+$316**. The unit test caught this, not me: the "live case"
+   assertion failed because I had reasoned from the raw cash balance and forgotten the floor.
+
+**Decision — two changes.**
+- **`cancelOrder(orderId)` on the seam** (`lib/broker/types.ts`, implemented in `ibkr.ts` + `sim.ts`), a
+  members-only route (`POST /api/orders/cancel`), and a `Cancel` control on PENDING rows in `ActivityFeed`.
+  Broker truth wins: the IBKR path re-checks order status first and **refuses to cancel an order that already
+  FILLED**, leaving it for `finalizePending()` — a cancel can never erase a real fill from the ledger. Sim
+  never debits cash at placement, so its cancel is just the row. **No agent tool** — cancelling is a
+  money-adjacent judgement about an order a human can see resting; the agent keeps the disciplined path.
+- **`committedCashCents()`** (pure, in `guardrails.ts`): the validator now nets cash promised to resting BUY
+  limits off both the CAD cash floor and the USD funding check, per currency, and the refusal names how much
+  is committed and to how many orders. Honest framing, recorded in the code: the floor already blocks an
+  overdraw *while it exceeds total commitments*; this is defence in depth for when it doesn't (several resting
+  orders, a looser dial, a smaller NAV) — not a live hole.
+
+**The parity tripwire did its job.** Adding an export to `guardrails.ts` failed `test/guardrail-parity.test.ts`
+("add one → classify it, or this fails") until `committedCashCents` was classified. Filed **helper**, not
+`seam`, deliberately: a member's manual order is not bound by the agent's cash floor (rule #1 — the human is
+the authority), so it must not silently start gating one.
+
+**Verified:** TD order cancelled through the new route; IBKR confirms `order_status: Cancelled, cum_fill: 0.0`.
+`tsc` clean, suite 284/285 (the one failure is the pre-existing D125 `auth-jwt` time-bomb). Web + agent
+`v2.82-phase4`.

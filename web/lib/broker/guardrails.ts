@@ -79,3 +79,30 @@ export function breachesOptionPremiumCap(premiumCadCents: number, navCents: numb
 export function optionPremiumCents(contracts: number, multiplier: number, perSharePremiumCents: number): number {
   return contracts * multiplier * perSharePremiumCents;
 }
+
+/** Cash already committed to RESTING BUY limit orders — the money the fund has promised
+ *  but not yet spent. Pure; currency-agnostic (callers sum per currency).
+ *
+ *  Why this exists (2026-09-23): the cash floor computed `cashAfter = cash - cost` and
+ *  ignored open orders entirely, so cash already promised to a resting GTC buy counted as
+ *  spendable. NOTE the honest bound: the cash floor ALREADY prevents an overdraw whenever
+ *  the floor amount exceeds total commitments — on the day this was written, NAV $65.3k
+ *  and a 2% floor left $1,306 untouchable against a $990 resting TD bid, so both filling
+ *  still landed at +$316. The exposure is real but CONDITIONAL: it bites when committed
+ *  cash exceeds the floor headroom (several resting orders, a looser dial, or a smaller
+ *  NAV), which is exactly when nobody is watching. This is defence in depth and honest
+ *  accounting — a commitment already made is not spendable cash — not a live incident.
+ *
+ *  MARKET orders never rest (they fill or reject), so only priced limits count. */
+export function committedCashCents(
+  resting: { qty: number; limitPriceCents: number | null }[],
+  commissionFor: (qty: number, priceCents: number) => number,
+): number {
+  let total = 0;
+  for (const o of resting) {
+    const px = o.limitPriceCents ?? 0;
+    if (px <= 0 || o.qty <= 0) continue;
+    total += o.qty * px + commissionFor(o.qty, px);
+  }
+  return total;
+}

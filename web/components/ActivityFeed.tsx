@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { money, fmtWhen } from "@/lib/money";
 import { Card, Chip, Pnl, EmptyState } from "@/components/ui";
 import Md from "@/components/Md";
+import CancelOrderButton from "@/components/CancelOrderButton";
+import { getSession } from "@/lib/session";
 
 const STATUS_TONE: Record<string, "green" | "teal" | "red" | "dim"> = {
   FILLED: "green",
@@ -20,6 +22,11 @@ export default async function ActivityFeed({
   limit?: number;
   compact?: boolean;
 }) {
+  // Members may cancel a resting order (2026-09-23); the route is the lock, this is the
+  // convenience. Viewers see the order but no control.
+  const session = await getSession();
+  const canCancel = session?.role === "member";
+
   const orders = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },
     include: { trades: true },
@@ -111,6 +118,12 @@ export default async function ActivityFeed({
               <span className="ml-auto text-xs text-teal-200/40">
                 #{o.id} · {fmtWhen(o.createdAt)} · {o.placedBy}
               </span>
+              {o.status === "PENDING" && canCancel && (
+                <CancelOrderButton
+                  orderId={o.id}
+                  label={`${o.side} ${o.qty} ${o.symbol}${o.limitPriceCents ? ` @ ${money(o.limitPriceCents)}` : ""}`}
+                />
+              )}
             </div>
 
             {o.status === "FILLED" && (

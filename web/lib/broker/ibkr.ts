@@ -6,7 +6,7 @@ import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents } fr
 import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
 import { effectiveHeldQty, mirrorLag, isSettled } from "./positions";
 import { usdCadRate } from "../fx";
-import type { BrokerAdapter, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
+import type { BrokerAdapter, CancelOrderResult, FxConvertInput, FxConvertResult, PlaceOrderInput, PlaceOrderResult, Quote } from "./types";
 
 // IBKRBroker — Phase 3 paper (then Phase 4 live) behind the same BrokerAdapter
 // seam. Orders, positions and cash go to IBKR via the Client Portal Web API (the
@@ -473,6 +473,46 @@ export class IBKRBroker implements BrokerAdapter {
    *  newly-filled orders (the runner pings Discord per fill + reconciles positions/
    *  cash after). Called on the tick BEFORE reconcile so a sell's realized P&L reads
    *  the pre-fill ACB. */
+  /** Cancel a resting order at the broker, then mirror the outcome into our ledger.
+   *
+   *  The gap this closes (2026-09-23): GRQ could place orders and never cancel one, so a
+   *  stale GTC limit could only be killed by logging into IBKR directly. Found via a TD
+   *  BUY 6 @ $165 GTC resting a week at 4.3% out of the money.
+   *
+   *  Broker truth wins over our optimism: if IBKR says the order already FILLED, we do NOT
+   *  mark it cancelled — we leave it PENDING for finalizePending() to settle properly on
+   *  the next tick, so a cancel can never erase a real fill from the ledger. */
+  async cancelOrder(orderId: number): Promise<CancelOrderResult> {
+    const o = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!o) return { ok: false, error: `Order #${orderId} not found.` };
+    if (o.status === "CANCELLED") return { ok: true };
+    if (o.status !== "PENDING") return { ok: false, error: `Order #${orderId} is ${o.status} — only a PENDING order can be cancelled.` };
+    if (!ACCOUNT_ID) return { ok: false, error: "IBKR_ACCOUNT_ID not configured." };
+    if (!o.brokerOrderId) {
+      // Legacy/never-acknowledged row: nothing rests at the broker, so the ledger is what's wrong.
+      await prisma.order.update({ where: { id: orderId }, data: { status: "CANCELLED", rejectReason: "Cancelled locally — no broker order id." } });
+      return { ok: true };
+    }
+
+    // Check broker truth FIRST — a fill that landed between the member's click and this
+    // call must not be papered over as a cancellation.
+    const pre = await cp<OrderStatus>(`/iserver/account/order/status/${o.brokerOrderId}`).catch(() => ({}) as OrderStatus);
+    if ((pre.order_status ?? "").toLowerCase() === "filled") {
+      return { ok: false, error: `Order #${orderId} already FILLED at the broker — leaving it for the ledger to settle on the next tick.` };
+    }
+
+    try {
+      await cp(`/iserver/account/${ACCOUNT_ID}/order/${o.brokerOrderId}`, "DELETE");
+    } catch (e) {
+      return { ok: false, error: `IBKR refused the cancel: ${(e as Error).message.slice(0, 200)}` };
+    }
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status: "CANCELLED", rejectReason: `Cancelled at IBKR (broker order ${o.brokerOrderId}).` },
+    });
+    return { ok: true };
+  }
+
   async finalizePending(): Promise<FinalizedFill[]> {
     await this.backfillMissingTrades().catch(() => {}); // self-heal FILLED orders missing their Trade row (the XIC #32 / D33 gap)
     const pending = await prisma.order.findMany({ where: { status: "PENDING", broker: "ibkr" } });

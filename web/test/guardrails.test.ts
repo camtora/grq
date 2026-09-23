@@ -11,7 +11,9 @@ import {
   breachesFeeEdge,
   breachesOptionPremiumCap,
   optionPremiumCents,
+  committedCashCents,
 } from "@/lib/broker/guardrails";
+import { ibkrFixedCommissionCents } from "@/lib/broker/sim";
 import { ibkrFixedCommissionCents, ibkrOptionCommissionCents } from "@/lib/broker/sim";
 
 describe("isValidQty — rule #4: whole, positive shares", () => {
@@ -210,5 +212,70 @@ describe("ibkrOptionCommissionCents — $0.65/contract, $1.00 min (D99)", () => 
   it("charges $0.65/contract once above the minimum", () => {
     assert.equal(ibkrOptionCommissionCents(10), 650);
     assert.equal(ibkrOptionCommissionCents(100), 6500);
+  });
+});
+
+describe("committedCashCents — a promise is not spendable cash (2026-09-23)", () => {
+  // The gap: the cash floor computed `cash - cost` and ignored resting orders entirely.
+  // Live case — TD BUY 6 @ $165 GTC resting a week against ~$1,120 CAD. A second ~$1,000
+  // CAD buy passed the floor; a TD dip would have filled both and overdrawn ~$870.
+  const comm = (qty: number, px: number) => ibkrFixedCommissionCents(qty, px);
+
+  it("counts a resting limit buy at qty x limit + commission", () => {
+    const c = committedCashCents([{ qty: 6, limitPriceCents: 16_500 }], comm);
+    assert.ok(c >= 6 * 16_500, "must cover at least the notional");
+    assert.ok(c < 6 * 16_500 + 1_000, "commission should be a realistic add-on, not a second order");
+  });
+
+  it("sums several resting orders", () => {
+    const one = committedCashCents([{ qty: 6, limitPriceCents: 16_500 }], comm);
+    const two = committedCashCents(
+      [
+        { qty: 6, limitPriceCents: 16_500 },
+        { qty: 6, limitPriceCents: 16_500 },
+      ],
+      comm,
+    );
+    assert.equal(two, one * 2);
+  });
+
+  it("ignores MARKET orders — they never rest", () => {
+    assert.equal(committedCashCents([{ qty: 10, limitPriceCents: null }], comm), 0);
+  });
+
+  it("ignores nonsense rows rather than inventing a commitment", () => {
+    assert.equal(committedCashCents([{ qty: 0, limitPriceCents: 16_500 }], comm), 0);
+    assert.equal(committedCashCents([{ qty: 5, limitPriceCents: 0 }], comm), 0);
+    assert.equal(committedCashCents([], comm), 0);
+  });
+
+  it("nets committed cash off the floor check, shrinking what a buy may spend", () => {
+    // Real figures from 2026-09-23: NAV $65,318, CAD cash $1,431, 2% floor = $1,306, and a
+    // TD BUY 6 @ $165 resting. The floor alone already allowed only ~$125, so there was no
+    // overdraw — but the gate was measuring against cash it had already promised away.
+    const nav = 6_531_801;
+    const cash = 143_143;
+    const floorPct = 2;
+    const committed = committedCashCents([{ qty: 6, limitPriceCents: 16_500 }], comm);
+    const buy = 12_000; // $120 — inside the floor's headroom on raw cash
+
+    assert.equal(breachesCashFloor(cash - buy, nav, floorPct), false, "raw-cash view lets it through");
+    assert.equal(
+      breachesCashFloor(cash - committed - buy, nav, floorPct),
+      true,
+      "netting off the resting bid refuses it — the fund cannot spend money it has already promised",
+    );
+  });
+
+  it("is honest that the floor, not this helper, is what prevents an overdraw today", () => {
+    // Both filling: cash - (max the gate allows) - commitment. Positive => no overdraw.
+    const nav = 6_531_801;
+    const cash = 143_143;
+    const floorAmount = (nav * 2) / 100;
+    const maxBuy = cash - floorAmount;
+    const committed = committedCashCents([{ qty: 6, limitPriceCents: 16_500 }], comm);
+    assert.ok(cash - maxBuy - committed > 0, "with the floor above total commitments there is no overdraw");
+    // ...and the condition under which it WOULD bite:
+    assert.ok(committedCashCents([{ qty: 60, limitPriceCents: 16_500 }], comm) > floorAmount, "bigger commitments outrun the floor");
   });
 });

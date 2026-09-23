@@ -4,6 +4,7 @@ import {
   meetsConviction,
   breachesPositionCap,
   breachesCashFloor,
+  committedCashCents,
   fundingShortfallCents,
   breachesFeeEdge,
   breachesOptionPremiumCap,
@@ -226,9 +227,30 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     if (breachesPositionCap(newPosValueCad, pf.navCents, dial.maxPositionPct)) {
       return refuse(`Position would exceed ${dial.maxPositionPct}% of NAV (${settings?.riskLevel} dial).`);
     }
-    const cashAfter = pf.cashCents - costCad;
+    // Cash already promised to RESTING BUY limits is not spendable (2026-09-23). The gate
+    // saw only `cash - cost`, so a GTC dip-bid was invisible to it. The cash floor already
+    // blocks an overdraw while the floor exceeds total commitments (the day this shipped:
+    // a $1,306 floor vs a $990 resting TD bid), so this is defence in depth, not a live
+    // hole — it bites when commitments exceed the floor headroom.
+    const resting = await prisma.order.findMany({
+      where: { status: "PENDING", side: "BUY" },
+      select: { symbol: true, qty: true, limitPriceCents: true },
+    });
+    let committedCadCents = 0;
+    let committedUsdCents = 0;
+    for (const r of resting) {
+      const rCcy = pf.positions.find((p) => p.symbol === r.symbol)?.currency ?? (await universeEntry(r.symbol))?.currency ?? "CAD";
+      const nativeCents = committedCashCents([r], ibkrFixedCommissionCents);
+      if (rCcy === "USD") committedUsdCents += nativeCents;
+      committedCadCents += toCadCents(nativeCents, rCcy, pf.fxUsdCad);
+    }
+    const cashAfter = pf.cashCents - committedCadCents - costCad;
     if (breachesCashFloor(cashAfter, pf.navCents, dial.cashFloorPct)) {
-      return refuse(`Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial).`);
+      return refuse(
+        committedCadCents > 0
+          ? `Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial) — $${(committedCadCents / 100).toFixed(2)} CAD of your cash is already committed to ${resting.length} resting buy order(s). Cancel one to free it.`
+          : `Buy would breach the ${dial.cashFloorPct}% cash floor (${settings?.riskLevel} dial).`,
+      );
     }
     // USD funding: a USD buy must be covered by actual USD cash — never CAD on margin
     // (guardrail #3). The combined CAD-equiv cash floor above can't catch this. The agent
@@ -236,7 +258,7 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     // (request_fx) for a member to approve (D62).
     if (posCcy === "USD") {
       const usdCost = order.qty * estPrice + commIn; // native USD cents
-      const shortUsd = fundingShortfallCents(order.qty, estPrice, commIn, pf.usdCashCents);
+      const shortUsd = fundingShortfallCents(order.qty, estPrice, commIn, pf.usdCashCents - committedUsdCents);
       if (shortUsd > 0) {
         return refuse(
           `Insufficient USD: ${symbol} needs US$${(usdCost / 100).toFixed(2)}, the fund holds US$${(pf.usdCashCents / 100).toFixed(2)}. ` +

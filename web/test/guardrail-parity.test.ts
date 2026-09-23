@@ -61,6 +61,11 @@ const RULES: Record<string, "seam" | "validator" | "helper"> = {
   breachesFeeEdge: "validator",
   breachesOptionPremiumCap: "validator",
   optionPremiumCents: "helper",
+  // Pure arithmetic with no enforcement site of its own: it only feeds breachesCashFloor
+  // and the USD funding check in the validator (2026-09-23). Deliberately NOT a seam rule —
+  // a member's manual order is not bound by the agent's cash floor (rule #1, the human is
+  // the authority), so it must not silently start gating one.
+  committedCashCents: "helper",
 };
 
 const exported = [...GUARDRAILS.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
