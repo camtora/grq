@@ -5,9 +5,17 @@
 /** Pretty model name; falls back to a cleaned-up slug for anything unmapped. */
 export function modelLabel(id: string): string {
   const s = id.toLowerCase();
-  if (s.includes("opus")) return "Opus 4.8";
-  if (s.includes("sonnet")) return "Sonnet 4.6";
-  if (s.includes("haiku")) return "Haiku 4.5";
+  // Claude ids carry their own version (claude-opus-5-5, claude-haiku-4-5-20251001, or via
+  // OpenRouter anthropic/claude-fable-5) — read it, never hard-code it: this used to map ANY
+  // opus id to "Opus 4.8", which mislabelled the champion the day it moved to Opus 5.5 (D128).
+  const claude = s.match(/claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2}))?(?!\d)/);
+  if (claude) {
+    const [, family, major, minor] = claude;
+    return `${family[0].toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ""}`;
+  }
+  if (s.includes("opus")) return "Opus";
+  if (s.includes("sonnet")) return "Sonnet";
+  if (s.includes("haiku")) return "Haiku";
   if (s.includes("gpt-5.1")) return "GPT-5.1";
   if (s.includes("gpt-5")) return "GPT-5";
   if (s.includes("gpt")) return "GPT";

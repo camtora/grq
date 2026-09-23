@@ -3895,3 +3895,38 @@ the authority), so it must not silently start gating one.
 **Verified:** TD order cancelled through the new route; IBKR confirms `order_status: Cancelled, cum_fill: 0.0`.
 `tsc` clean, suite 284/285 (the one failure is the pre-existing D125 `auth-jwt` time-bomb). Web + agent
 `v2.82-phase4`.
+
+---
+
+### D128 — The decision tier moves to Opus 5.5, with effort pinned so the swap can't quietly lower it (Cam, 2026-09-23)
+**Context:** Cam asked to move the agent off Opus 4.8. There is no "Opus 5.1"; the candidates are Opus 5, Opus 5.5
+and Fable 5.1. A one-line ping per model on the agent's own Max token, from inside `grq-agent`: `claude-opus-4-8` ✅,
+`claude-opus-5` ✅, **`claude-opus-5-5` and `claude-fable-5-1` both 400'd with "Claude Code 2.1.220 does not support
+this model; 2.1.280 / 2.1.251 or newer is required"**. So the wall was the Agent SDK's bundled CLI, not access.
+
+**Decision.**
+- **`@anthropic-ai/claude-agent-sdk` 0.3.174 → 0.3.281** (bundles Claude Code 2.1.281). `tsc` clean, no API changes bit.
+- **`MODELS.decision` default → `claude-opus-5-5`** (`GRQ_MODEL_DECISION` still overrides). This single constant moves
+  every Opus session: check-ins, research/dossiers, the hunt, reports, chat, the Council's six passes, the Race champion,
+  and both arms of the Options Desk and the Short Lab. Triage stays on Haiku 4.5.
+- **Effort pinned: `DECISION_EFFORT` = `high` (`GRQ_EFFORT_DECISION`), applied via `effortFor(model)`** in `runSession`,
+  the Council's `oneShot`, and chat. We never set effort before, so every session ran at the model's default. Measured
+  with `$CLAUDE_EFFORT`: **Opus 4.8 ran at `high`, Opus 5.5 defaults to `medium`.** Left implicit, the model upgrade would
+  have silently downgraded every decision a level. This is the class fix: effort is now stated, not inherited. Only the
+  decision model gets it; Haiku takes no effort and Race challengers keep their own.
+- **Latent trap, documented at `MODELS`:** Opus 5.5 / Fable 5.1 return a 400 on `thinking: {type: "disabled"}`, which every
+  triage-tier call sends (`noThinking`). Safe today because those all run on Haiku, but triage must never be pointed at them.
+- **`modelLabel()` read the version from the id, not a constant.** It mapped *any* Opus id to "Opus 4.8", so the Race
+  would have labelled the new champion 4.8. Now `claude-<family>-<major>[-<minor>]` → "Opus 5.5". Old records keep
+  saying 4.8, and new ones say 5.5. Pinned by `test/race-models.test.ts`. The glossary's `opus` term went version-free.
+
+**Not changed:** no prompt text. A Fable-run audit of the prompts against current best practice for Opus 5.5 is being
+reviewed with Cam separately before anything is touched.
+
+**Open for Cam:** whether a brain swap mid IBKR-paper soak restarts the §9 soak clock. Continuity note: the Race,
+Options Desk and Short Lab histories now span two models.
+
+**Verified:** boot logged `v2.83-phase4 up`; the container runs Claude Code 2.1.281. A real SDK `query()` with
+`MODELS.decision` + `effortFor` reported `init model: claude-opus-5-5` and `EFFORT=high`. Startup scan skipped (the
+day's marker was pre-written). Suite 286/287 (the one failure is the pre-existing D125 `auth-jwt` time-bomb). Agent +
+chat + web `v2.83-phase4`.

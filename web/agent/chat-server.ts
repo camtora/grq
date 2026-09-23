@@ -12,7 +12,7 @@ import { prisma } from "../lib/db";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { makeReadOnlyServer, GRQ_READONLY_TOOL_NAMES } from "./tools";
-import { MODELS, HARD, COUNCIL } from "./policy";
+import { MODELS, HARD, COUNCIL, effortFor } from "./policy";
 import { routeChatToCouncil, conveneCouncil, councilMarkdown, councilEnabled } from "./council";
 import { recordAgentUsage } from "./usage";
 import { limitQuietUntil, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
@@ -185,6 +185,7 @@ ${convo}`;
       prompt,
       options: {
         model: MODELS.decision,
+        ...effortFor(MODELS.decision),
         systemPrompt: CHAT_PERSONA,
         maxTurns: 12,
         permissionMode: "bypassPermissions",

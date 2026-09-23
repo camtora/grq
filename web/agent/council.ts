@@ -17,7 +17,7 @@
  * as sessions.ts/persona.ts). Kill without a deploy: GRQ_COUNCIL_ENABLED=false (see policy.ts COUNCIL).
  */
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { MODELS, COUNCIL } from "./policy";
+import { MODELS, COUNCIL, effortFor } from "./policy";
 import { alert } from "./alerts";
 import { limitQuietUntil, limitQuietActive, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 import { recordAgentUsage } from "./usage";
@@ -105,6 +105,7 @@ async function oneShot(label: string, model: string, system: string, user: strin
       prompt: user,
       options: {
         model,
+        ...effortFor(model),
         systemPrompt: system,
         // 4, not 1. Every one of 345 successful one-shot passes on record used exactly ONE turn, so
         // the extra turns here are provably free — they are only ever consumed by the transient mode

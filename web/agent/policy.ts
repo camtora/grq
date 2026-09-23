@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.82-phase4";
+export const AGENT_VERSION = "v2.83-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -180,12 +180,22 @@ export const TAX_CONTEXT: Record<string, string> = {
 export const taxContext = (): string => TAX_CONTEXT[ACCOUNT_TYPE] ?? TAX_CONTEXT.UNREGISTERED;
 
 export const MODELS = {
-  // Decision tier: Opus 4.8 (2026-06-13 — Fable 5 access broke overnight, the
-  // Max token returns "model may not exist or you may not have access"; Opus is
-  // the flagship the token can reach). Override per-env with GRQ_MODEL_DECISION.
-  decision: process.env.GRQ_MODEL_DECISION ?? "claude-opus-4-8",
+  // Decision tier: Opus 5.5 (D128, 2026-09-23; was Opus 4.8 since D17). Needs the Agent SDK's
+  // bundled Claude Code >= 2.1.280 — an older one rejects the id with a 400. Override per-env with
+  // GRQ_MODEL_DECISION. NEVER point triage at Opus 5.5 / Fable 5.1: those models 400 on
+  // `thinking: {type: "disabled"}`, which every triage-tier call sends (SessionOpts.noThinking).
+  decision: process.env.GRQ_MODEL_DECISION ?? "claude-opus-5-5",
   triage: process.env.GRQ_MODEL_TRIAGE ?? "claude-haiku-4-5-20251001",
 };
+
+// Reasoning effort for the decision tier, pinned explicitly (D128). We never set it before, so every
+// session ran at the MODEL's default — measured `high` on Opus 4.8, but Opus 5.5 defaults to
+// `medium`. Left implicit, the model swap would have silently lowered effort on every decision.
+// Only the decision model gets it: Haiku doesn't take effort, and Race challengers keep their own.
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export const DECISION_EFFORT = (process.env.GRQ_EFFORT_DECISION ?? "high") as Effort;
+export const effortFor = (model: string): { effort?: Effort } =>
+  model === MODELS.decision ? { effort: DECISION_EFFORT } : {};
 
 // The Race (D68) — the model bake-off. The CHAMPION (MODELS.decision = Opus) is the only model
 // that ever trades. CHALLENGERS run shadow-only on the exact same frozen prompt, one-shot, NO

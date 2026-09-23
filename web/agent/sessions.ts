@@ -12,7 +12,7 @@ import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, makeResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
-import { MODELS, RACE, AGENT_VERSION, SELF_INVEST } from "./policy";
+import { MODELS, RACE, AGENT_VERSION, SELF_INVEST, effortFor } from "./policy";
 import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
 import { parseProposal, SHADOW_DECISION_SUFFIX, SHADOW_NARRATIVE_SUFFIX } from "./race/shadow";
 import { PERSONA } from "./persona";
@@ -68,6 +68,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
       prompt: opts.prompt,
       options: {
         model: opts.model,
+        ...effortFor(opts.model),
         systemPrompt: opts.systemPrompt ?? PERSONA,
         maxTurns: opts.maxTurns,
         permissionMode: "bypassPermissions",

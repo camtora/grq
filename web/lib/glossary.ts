@@ -373,7 +373,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     related: ["llm", "opus", "vs-xic"],
   },
   opus: {
-    term: "Claude Opus 4.8 — the champion",
+    term: "Claude Opus — the champion",
     def: "Anthropic's most capable model, and the ONLY one in The Race that places real trades. Every other model is shadow-only.",
     example: "When GRQ actually buys something, it was Opus's call that cleared the gate.",
     related: ["the-race", "sonnet", "llm"],
