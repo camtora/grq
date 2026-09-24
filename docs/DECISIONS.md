@@ -3930,3 +3930,32 @@ Options Desk and Short Lab histories now span two models.
 `MODELS.decision` + `effortFor` reported `init model: claude-opus-5-5` and `EFFORT=high`. Startup scan skipped (the
 day's marker was pre-written). Suite 286/287 (the one failure is the pre-existing D125 `auth-jwt` time-bomb). Agent +
 chat + web `v2.83-phase4`.
+
+**Day 1 on Opus 5.5 — Thu 2026-09-24 (the baseline stage 1 of the prompt audit is measured against).** No prompt
+changes yet, so this is the model alone. All figures from the DB and the container transcripts after the close.
+- **It traded ~5× more.** 10 orders (5 BUY / 5 SELL, 9 filled, ADI #114 still resting), ~US/C$13.6k gross ≈ **21% of
+  NAV turned over in one day**; the prior month ran 1–2 orders a day (busiest: 5 on 9/16). 12 proposals, avg trade
+  confidence 72 (unchanged from its 70–80 range). Commissions $9.00. NAV closed $64,804 (+$168 on the day — one day,
+  not attributable). Mostly council-cleared *rotations*: GD→NVDA, SPGI→ADI, BNY→MSFT, a TDY starter, VRTX, BNY trims.
+- **It hit BOTH §6 burst caps — the first time either has bitten.** MSFT BUY rejected at the hourly cap (4) at 12:03 ET;
+  CASY BUY at the daily cap (10) at 13:03. The gate did its job. **But the MSFT rejection landed *after* its funding leg
+  (BNY SELL 9, #116) had filled**, so the book sold a position to pay for a buy that never happened. Root cause: context
+  states the caps (`context.ts` "Hard limits") but not how many are *used*, so a two-leg rotation can't be sequenced
+  against them — the D126a shape (a limit must carry its arithmetic). Fix queued: context shows orders used/left this
+  hour and today.
+- **It convened the Council 7 times** (36 council passes, 0.8M tokens) — the D115 prompt is being followed.
+- **Tokens: flat overall** (48.3M vs 44.4M on 9/22, Opus 4.8). The mix moved: check-ins **14.2M vs 8.9M** (+60%, ~30
+  turns each), dossiers **27.0M over 67 vs 29.5M over 89**. Research/reports still on `high` effort — stage 2 (C2) is
+  the lever there.
+- **It did not delegate.** Zero `Agent` tool calls — the worry that 5.x would fan out subagents didn't show. It made
+  **9 `Bash` calls, all to page through an oversized `get_journal` result** (230 KB and 63 KB) that the SDK spilled to a
+  file. **This blocks stage 1 as coded:** C1 leaves decision sessions only WebSearch/WebFetch, so that spill file would
+  become unreadable. Class fix before C1 ships: `get_journal` returns a bounded result (headers + trimmed bodies, full
+  text by id) rather than restoring Bash.
+- **Stated-but-unenforced expiry.** ADI #114 is a GTC dip-entry limit ($367 vs $383 at the close) whose reason says it
+  "lapses ~Oct 8" — nothing enforces that (bare GTC, no sweeper, no agent cancel). Same shape as the D127 TD order.
+  Fix queued for tonight: an enforced expiry on agent BUY limits. Also found: D127's Cancel control was only on the
+  unmounted full-card feed (`/activity` 307s to `/journal`); fixed on the compact feed Portfolio renders (`abacc57`).
+- **Not concluded:** whether 10 orders is Opus 5.5's disposition or a one-day burst of rotations its first fresh
+  look at the book queued up. Re-measure after a few days before calling it; 21% daily turnover sustained would matter
+  for the soak and for tax.
