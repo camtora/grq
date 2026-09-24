@@ -83,7 +83,26 @@ export default async function ActivityFeed({
                   {o.status === "REJECTED" && o.rejectReason && (
                     <span className="text-red-300/80">⛔ {o.rejectReason}</span>
                   )}
+                  {o.status === "PENDING" && (
+                    <>
+                      {o.type}
+                      {o.limitPriceCents ? (
+                        <>
+                          {" @ "}
+                          <span className="tabular-nums">{money(o.limitPriceCents)}</span>
+                        </>
+                      ) : null}
+                    </>
+                  )}
                 </span>
+                {/* Compact is the only mounted variant (/activity redirects to /journal), so the
+                    Cancel control must live here too — D127 shipped it on the full card only. */}
+                {o.status === "PENDING" && canCancel && (
+                  <CancelOrderButton
+                    orderId={o.id}
+                    label={`${o.side} ${o.qty} ${o.symbol}${o.limitPriceCents ? ` @ ${money(o.limitPriceCents)}` : ""}`}
+                  />
+                )}
                 <Chip tone={STATUS_TONE[o.status] ?? "dim"}>{o.status}</Chip>
               </div>
             </li>
