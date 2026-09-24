@@ -3962,3 +3962,42 @@ changes yet, so this is the model alone. All figures from the DB and the contain
 - **Not concluded:** whether 10 orders is Opus 5.5's disposition or a one-day burst of rotations its first fresh
   look at the book queued up. Re-measure after a few days before calling it; 21% daily turnover sustained would matter
   for the soak and for tax.
+
+### D129 — Prompt-audit stage 1, plus the agent can see its order budget and its limits really expire (Cam, 2026-09-24)
+**Context.** Opus 5.5's first day (D128 addendum) hit both §6 order-rate caps and surfaced three gaps with one shape: a
+limit the agent was *told* about but couldn't *see*. Shipped in one agent build with stage 1 of the Opus 5.5 prompt audit,
+after the 9/24 close, as **v2.84-phase4**.
+
+**Stage 1 of the prompt audit** (Cam-approved C1, C3–C5, P1, P3–P6; review doc "GRQ Prompt Audit — Opus 5.5"):
+- **C1** — every SDK `query()` sets `tools`. `allowedTools` only auto-approves; without `tools` each call carried Claude
+  Code's full built-in catalogue (Agent, Bash, Write…) — a tool-less Haiku call measured 14,181 → 243 input tokens.
+  `test/sdk-tools.test.ts` fails the build on a `query()` without it. Decision sessions keep WebSearch/WebFetch only.
+- **C3** structured outputs on news-triage, market-tag, wake-up triage and the council router; **C4** wake-up triage gets
+  its own system prompt; **C5** market-tag runs noThinking, maxTurns 4; **P1/P3–P6** fact fixes (Race bar reads
+  `HARD.minBuyConfidence`, persona drops the stale $25k, the hunt stops promising an auto-dossier, write_journal field
+  semantics moved onto the fields).
+
+**Order budget in context** (`agent/order-budget.ts` `orderBudgetBlock`, pure + tested). Context stated "10 orders/day ·
+4/hour" but never how many were used, so the MSFT leg of a BNY→MSFT rotation was refused at the hourly cap five seconds
+after its SELL filled. A new "Orders so far today" section gives used/left today and in the rolling hour — counted
+exactly as `validator.ts` counts (agent orders, REJECTED excluded) — when the next hourly slot frees, every order today
+line by line with its outcome, and resting orders (any placer) with their expiry. Cam: telling the agent clearly what it
+has already done is the important part.
+
+**A real expiry on agent LIMIT orders** (`HARD.limitOrderExpiryTradingDays = 5`, Cam). `limitExpiry()` = the 16:00 ET
+close of the 5th trading day after placement (either exchange open counts — the Order row has no exchange; a one-sided
+holiday shifts it by at most a day). The runner sweeps every tick, open or closed, and cancels via `broker.cancelOrder`,
+which re-checks broker truth and refuses to erase a fill. Agent LIMITs on either side; system stops/take-profits and
+member orders are untouched. `propose_order` returns the real date and the context tells the agent to quote it — before
+this, ADI #114's "lapses ~Oct 8" was a story (bare GTC, no sweeper, no agent cancel). ADI #114 now expires Thu Oct 1.
+
+**Bounded `get_journal`** (`formatJournal`: 1,200-char bodies with `#id`, ~40k total) + **`get_journal_entry(id)`** for
+full text. On 9/24 a read returned 230 KB, the SDK spilled it to a file, and the agent paged it with Bash nine times.
+C1 removes Bash, which would have stranded that file — so this had to ship with C1 rather than restoring Bash.
+
+**Verified:** boot logged `v2.84-phase4 up`, startup scan skipped (marker pre-written). The live container's
+`buildContext()` renders the new section with all 10 of 9/24's orders and ADI's Oct 1 expiry. Both images grepped for
+the new code before `up -d`. Suite 295/296 (pre-existing D125 `auth-jwt` failure).
+**Still to verify on the next live sessions:** the init `tools` list in a real session, a news-triage and a market-tag
+run under structured outputs, `get_journal` staying inline, and per-label token drops vs the D128 baseline. Stage 2 (C2)
+waits 1–2 trading days after this.
