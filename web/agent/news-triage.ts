@@ -8,6 +8,7 @@
 // adverse headline on a HELD name fire a check-in — the agent reacts to price + the clock
 // today, but is blind to news between sessions. Kept behind a flag for the soak.
 import { prisma } from "../lib/db";
+import type { JsonSchemaOutputFormat } from "@anthropic-ai/claude-agent-sdk";
 import { runSession } from "./sessions";
 import { MODELS } from "./policy";
 import { newsTargets, bareTicker } from "../lib/news/ingest";
@@ -16,8 +17,36 @@ const TRIAGE_SYSTEM =
   "You are a financial-news triage classifier for a small Canadian investment fund. For each " +
   "article, judge how MATERIAL it is to the fund's tracked names or its macro thesis, summarize " +
   "it in one short sentence, and tag sentiment, category, and any tickers it concerns. Be strict: " +
-  "most headlines are noise (relevance < 40); reserve 80+ for news that could move a position. " +
-  "Output ONLY a valid JSON array, no prose, no markdown fences.";
+  "most headlines are noise (relevance < 40); reserve 80+ for news that could move a position.";
+
+// Structured output (C3): the reply is constrained to this schema, so no "ONLY JSON" plea and no
+// fence-slicing. The array sits under `items` because a structured-output root must be an object.
+const TRIAGE_SCHEMA: JsonSchemaOutputFormat = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            relevance: { type: "integer", minimum: 0, maximum: 100 },
+            sentiment: { enum: ["POS", "NEU", "NEG"] },
+            category: { enum: ["EARNINGS", "GUIDANCE", "MNA", "MACRO", "LEGAL", "PRODUCT", "RATING", "OTHER"] },
+            summary: { type: "string" },
+            symbols: { type: "array", items: { type: "string" } },
+          },
+          required: ["id", "relevance", "sentiment", "category", "summary", "symbols"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["items"],
+    additionalProperties: false,
+  },
+};
 
 const SENTIMENTS = new Set(["POS", "NEU", "NEG"]);
 const CATEGORIES = new Set(["EARNINGS", "GUIDANCE", "MNA", "MACRO", "LEGAL", "PRODUCT", "RATING", "OTHER"]);
@@ -28,8 +57,15 @@ function clampInt(v: unknown, lo: number, hi: number): number | null {
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
-function parseJsonArray(text: string | null): Array<Record<string, unknown>> {
+export function parseJsonArray(text: string | null): Array<Record<string, unknown>> {
   if (!text) return [];
+  // The structured-output shape: {"items": [...]}.
+  try {
+    const obj = JSON.parse(text);
+    if (obj && Array.isArray(obj.items)) return obj.items as Array<Record<string, unknown>>;
+  } catch {
+    /* not clean JSON — fall through to the tolerant slice */
+  }
   const a = text.indexOf("[");
   const b = text.lastIndexOf("]");
   if (a < 0 || b <= a) return [];
@@ -59,9 +95,7 @@ export async function triageNews(maxBatch = 25): Promise<{ triaged: number }> {
     `Tracked names (relevance is materiality to these or the fund's macro thesis): ${tracked.join(", ") || "(none)"}\n\n` +
     `Classify each article by id:\n` +
     rows.map((r) => `${r.id}. "${r.title}" — ${r.publisher}${r.symbol ? ` [${r.symbol}]` : ""}`).join("\n") +
-    `\n\nReturn a JSON array, one object per id:\n` +
-    `[{"id": <id>, "relevance": 0-100, "sentiment": "POS|NEU|NEG", "category": "EARNINGS|GUIDANCE|MNA|MACRO|LEGAL|PRODUCT|RATING|OTHER", "summary": "<=140 chars", "symbols": ["TICKER", ...]}]\n` +
-    `Output ONLY the JSON array.`;
+    `\n\nReturn one item per id: its relevance 0–100, sentiment, category, a summary of at most 140 characters, and the tickers it concerns.`;
 
   // ROOT CAUSE, fixed 2026-07-17: this was emitting 5k–17k output tokens for a JSON array that needs
   // ~1.5k, because extended thinking was on. Measured on the same 2 headlines: 487 output tokens with
@@ -81,6 +115,7 @@ export async function triageNews(maxBatch = 25): Promise<{ triaged: number }> {
     maxTurns: 8,
     noThinking: true, // classify, don't deliberate — see SessionOpts.noThinking (measured 3.6x)
     systemPrompt: TRIAGE_SYSTEM,
+    outputFormat: TRIAGE_SCHEMA,
     prompt,
   });
 

@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import type { JsonSchemaOutputFormat } from "@anthropic-ai/claude-agent-sdk";
 import { runSession } from "../../agent/sessions";
 import { MODELS } from "../../agent/policy";
 
@@ -13,7 +14,39 @@ const TAG_SYSTEM = `You are a fast equity screener for a small CAD/USD fund that
 
 type RawTag = { n?: number; tag?: string; take?: string; obscurity?: number };
 
+// Structured output (C3); the array sits under `items` because the schema root must be an object.
+const TAG_SCHEMA: JsonSchemaOutputFormat = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            n: { type: "integer" },
+            tag: { enum: ["INTERESTING", "WATCH", "PASS"] },
+            take: { type: "string" },
+            obscurity: { type: "integer", minimum: 1, maximum: 5 },
+          },
+          required: ["n", "tag", "take", "obscurity"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["items"],
+    additionalProperties: false,
+  },
+};
+
 function parseJsonArray(s: string): RawTag[] {
+  try {
+    const obj = JSON.parse(s);
+    if (obj && Array.isArray(obj.items)) return obj.items;
+  } catch {
+    /* not clean JSON — fall through to the tolerant slice */
+  }
   try {
     const a = s.indexOf("[");
     const b = s.lastIndexOf("]");
@@ -57,10 +90,21 @@ You only have the line below per name — that's fine, it's a fast triage. Judge
 
 ${list}
 
-Return ONLY a JSON array, one object per stock IN ORDER, no prose:
-[{"n":1,"tag":"PASS","take":"...","obscurity":3}]`;
+Return one item per stock, in order, with n = its number above.`;
 
-  const out = await runSession({ label: "market-tag", prompt, model: MODELS.triage, withTools: false, maxTurns: 1, systemPrompt: TAG_SYSTEM });
+  // noThinking + maxTurns 4 (C5): this classify-shaped call never got the 2026-07-17 news-triage fix —
+  // it averaged ~11k output tokens a 40-row batch (news-triage: ~900), and maxTurns 1 is the shape
+  // that lost whole batches to a continuation turn (D114). Structured output also needs 2 turns.
+  const out = await runSession({
+    label: "market-tag",
+    prompt,
+    model: MODELS.triage,
+    withTools: false,
+    maxTurns: 4,
+    noThinking: true,
+    systemPrompt: TAG_SYSTEM,
+    outputFormat: TAG_SCHEMA,
+  });
   if (!out) return { tagged: 0 };
 
   let tagged = 0;

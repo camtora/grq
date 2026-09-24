@@ -3,6 +3,8 @@
 // block; we pull the structured call out of it. Pure, no I/O. (Extracted from sessions.ts so the
 // two consumers can't drift.)
 
+import { HARD } from "../policy";
+
 export type Proposal = {
   action: string; // BUY | SELL | HOLD | NONE
   symbol: string | null;
@@ -51,7 +53,7 @@ SHADOW MODE — you are a CHALLENGER in GRQ's model bake-off ("The Race"). You h
 \`\`\`json
 {"action":"BUY|SELL|HOLD|NONE","symbol":"TICKER or null","qty":<whole shares or null>,"confidence":<0-100 or null>,"thesis":"one or two sentences on why"}
 \`\`\`
-If you'd place several orders, put your single highest-conviction one in the JSON and describe the rest in your reasoning. action: BUY/SELL = a trade you'd place now · HOLD = stay in current positions, no change · NONE = nothing actionable / stay in cash. Use the SAME ≥75% conviction discipline the champion is held to.`;
+If you'd place several orders, put your single highest-conviction one in the JSON and describe the rest in your reasoning. action: BUY/SELL = a trade you'd place now · HOLD = stay in current positions, no change · NONE = nothing actionable / stay in cash. Use the same ≥${HARD.minBuyConfidence}% conviction discipline the champion is held to.`;
 
 export const SHADOW_NARRATIVE_SUFFIX = `
 

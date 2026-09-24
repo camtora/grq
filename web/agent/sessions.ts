@@ -1,4 +1,4 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, type JsonSchemaOutputFormat } from "@anthropic-ai/claude-agent-sdk";
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
 import { lastSettledSnapshotBefore } from "../lib/nav-history";
@@ -48,6 +48,11 @@ type SessionOpts = {
   // Do NOT set this where the model thinks for a living — the council seats, the race/desk
   // challengers, the decision sessions, the written reports. There the thinking IS the product.
   noThinking?: boolean;
+  // Structured output (stage 1 of the Opus 5.5 prompt audit, C3): the API constrains the reply to
+  // this JSON schema, so a classifier no longer has to be begged for "ONLY JSON" and sliced out of
+  // prose. `result` comes back as the JSON string. Probed 2026-09-23 on Haiku 4.5 via SDK 0.3.281:
+  // it takes 2 turns (the schema rides a synthetic tool call), so give it maxTurns >= 2.
+  outputFormat?: JsonSchemaOutputFormat;
 };
 
 export type { SessionOpts };
@@ -74,6 +79,12 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
         permissionMode: "bypassPermissions",
         settingSources: [],
         ...(opts.noThinking ? { thinking: { type: "disabled" as const } } : {}),
+        ...(opts.outputFormat ? { outputFormat: opts.outputFormat } : {}),
+        // The AVAILABLE built-ins (C1). `allowedTools` below only auto-approves; without `tools`
+        // every session also carried Claude Code's own catalogue (Agent, Bash, Write, Skill…) —
+        // measured 2026-09-23: a tool-less Haiku call went 14,181 → 243 input tokens with this set.
+        // MCP tools are unaffected (probed). Pinned for every query() by test/sdk-tools.test.ts.
+        tools: opts.withTools ? ["WebSearch", ...(opts.webFetch === false ? [] : ["WebFetch"])] : [],
         stderr: (data: string) => console.error(`[session:${opts.label}] ${data.slice(0, 400)}`),
         ...(opts.withTools
           ? {
@@ -582,7 +593,7 @@ REACH: the fund holds CAD + USD and trades both Canadian listings (TSX · TSX-V 
 
 We already track these — do NOT re-suggest them: ${have || "(none)"}.${avoidLine}
 ${screenBlock}
-This is a BREADTH pass, and it is deliberately bounded: **use WebSearch only — do NOT deep-read full pages.** Start from the Screen shortlist above, then WebSearch outward for ${b ? "as many genuine fits to the brief as you can (aim for 6–12)" : "8–12 genuinely interesting candidates"}: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on. Search *snippets* are enough to write a LEAD; you do NOT need to read the whole article. The deep read happens later — every find is queued for a full dossier on demand — so don't spend this pass reading pages, spend it finding names. Work efficiently: batch your searches, and once you have your set, write them up. Aim to finish well inside your turn budget.
+This is a breadth pass: search snippets are enough to write a LEAD — the deep read happens later, in the dossier. Start from the Screen shortlist above, then search outward for ${b ? "as many genuine fits to the brief as you can (aim for 6–12)" : "8–12 genuinely interesting candidates"}: small/micro-cap, high-growth, special situations, recent breakouts, sector tailwinds, clustered insider buying — the kind of name a retail investor wouldn't stumble on. Batch your searches; once you have your set, write them up.
 
 For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journal:
 - symbol = the bare ticker (e.g. "PRL")
@@ -597,7 +608,7 @@ For EACH name you choose, write a SEPARATE symbol-tagged dossier via write_journ
 - obscurity = how under-the-radar it is, 1–5 (5 = a deep cut almost nobody covers — no analysts, tiny float; 1 = a widely-followed name). Be honest; the hunt is meant to live at the obscure end.
 - sources = every source you used
 
-Lead with WHY it matters, not just what the company is. Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. You can't add anything to the TRADEABLE universe; each name you surface is automatically queued for a FULL dossier, and Cam & Graham decide which to promote to tradeable.`;
+Lead with WHY it matters, not just what the company is. Be honest: smaller names are higher-risk — flag the lottery tickets vs. the ones with real businesses. You can't add anything to the tradeable universe. A find gets its full dossier when a member opens it or clicks Research — so the lead has to earn that click on its own.`;
   // Bounded breadth pass (D112b, Cam 2026-07-05): WebFetch OFF (its full-page pulls were the
   // ~54M accumulation driver — the hunt finds names, the dossier reads deep) + a tighter turn
   // cap. Ample for 8–12 leads via WebSearch + the screen seed; can't spiral into a fetch loop.
@@ -911,16 +922,39 @@ Research only — no trades, no focus changes (you don't have those tools here).
   });
 }
 
+const TRIGGER_TRIAGE_SYSTEM =
+  "You triage price-move events for a swing-trading fund's agent. Decide whether a move on a held name is material enough to wake the decision model now; routine volatility is not.";
+const TRIGGER_TRIAGE_SCHEMA: JsonSchemaOutputFormat = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    properties: { action: { enum: ["ignore", "note", "escalate"] }, reason: { type: "string" } },
+    required: ["action", "reason"],
+    additionalProperties: false,
+  },
+};
+
 export async function runTriage(event: string): Promise<"ignore" | "note" | "escalate"> {
   const prompt = `You are the triage filter for a swing-trading fund's agent. Event:
 
 ${event}
 
-Should the decision-making agent be woken to consider acting? Reply with ONLY a JSON object, no other text:
-{"action": "ignore" | "note" | "escalate", "reason": "<one sentence>"}
+Should the decision-making agent be woken to consider acting? Answer with an action and a one-sentence reason.
 
 "escalate" is for material, actionable developments on holdings/focus names. Routine volatility is "ignore". Newsworthy-but-not-actionable is "note".`;
-  const res = await runSession({ label: "triage", prompt, model: MODELS.triage, withTools: false, maxTurns: 1, noThinking: true });
+  const res = await runSession({
+    label: "triage",
+    prompt,
+    model: MODELS.triage,
+    withTools: false,
+    maxTurns: 4,
+    noThinking: true,
+    // Its own brief (C4): with no systemPrompt this classifier inherited Alfred's full PERSONA —
+    // ~2.3k tokens of "put the fund to work", a thumb on the scale toward escalating a binary call
+    // where every escalation is an Opus session.
+    systemPrompt: TRIGGER_TRIAGE_SYSTEM,
+    outputFormat: TRIGGER_TRIAGE_SCHEMA,
+  });
   if (!res) return "ignore";
   try {
     const parsed = JSON.parse(res.slice(res.indexOf("{"), res.lastIndexOf("}") + 1));

@@ -192,6 +192,7 @@ ${convo}`;
         settingSources: [],
         mcpServers: { grq: makeReadOnlyServer() },
         allowedTools: ["WebSearch", "WebFetch", ...GRQ_READONLY_TOOL_NAMES],
+        tools: ["WebSearch", "WebFetch"], // built-ins available (C1); the read-only MCP tools ride mcpServers
         stderr: (d: string) => console.error(`[chat] ${d.slice(0, 300)}`),
       },
     });
@@ -267,6 +268,7 @@ async function handleExplain(res: http.ServerResponse, body: { term?: string }) 
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],
+        tools: [], // no built-ins (C1)
         stderr: () => {},
       },
     });

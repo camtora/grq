@@ -16,7 +16,7 @@
  * agent+chat images (this file imports the SDK; the alpine web image must never import it — same rule
  * as sessions.ts/persona.ts). Kill without a deploy: GRQ_COUNCIL_ENABLED=false (see policy.ts COUNCIL).
  */
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, type JsonSchemaOutputFormat } from "@anthropic-ai/claude-agent-sdk";
 import { MODELS, COUNCIL, effortFor } from "./policy";
 import { alert } from "./alerts";
 import { limitQuietUntil, limitQuietActive, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
@@ -93,7 +93,14 @@ export type CouncilResult = { question: string; advisors: CouncilAdvisor[]; verd
 // success-only branch below, returned null, and got filtered out of the panel without a word. Six
 // Opus passes per convene wrote no AgentUsage row either, so the council was invisible to
 // /admin/usage and to the 40M/day burn alarm. `label` is what makes a seat legible in both.
-async function oneShot(label: string, model: string, system: string, user: string, noThinking = false): Promise<string | null> {
+async function oneShot(
+  label: string,
+  model: string,
+  system: string,
+  user: string,
+  noThinking = false,
+  outputFormat?: JsonSchemaOutputFormat,
+): Promise<string | null> {
   const quietUntil = await limitQuietUntil(); // limit-quiet (D123): walled token ⇒ no call, no alert
   if (quietUntil) {
     console.log(`[session] ${label} skipped — Claude limit quiet until ${fmtEt(quietUntil)}`);
@@ -116,9 +123,11 @@ async function oneShot(label: string, model: string, system: string, user: strin
         // the product there and disabling it would gut the council. Only the ROUTER (Haiku deciding
         // council-or-not) is classify-shaped. See SessionOpts.noThinking.
         ...(noThinking ? { thinking: { type: "disabled" as const } } : {}),
+        ...(outputFormat ? { outputFormat } : {}),
         permissionMode: "bypassPermissions",
         settingSources: [],
         allowedTools: [],
+        tools: [], // no built-ins (C1) — seats, chairman and router are tool-less one-shots
         stderr: (data: string) => console.error(`[session:${label}] ${data.slice(0, 400)}`),
       },
     });
@@ -263,14 +272,23 @@ export async function routeChatToCouncil(message: string, focusSymbol?: string):
 
 Everything else does NOT: greetings and chit-chat; "how does X work" / teach-me / definition questions; factual lookups ("what's our cash?", "what do we hold?", "what happened today?"); options-education questions; anything not asking for a call on a name.
 
-Respond with ONLY a compact JSON object, no prose, no code fence:
-{"council": <true|false>, "symbols": ["TICKER", ...]}
+Answer with council (true/false) and symbols:
 symbols = the tickers or company names the judgment is about (UPPERCASE tickers when obvious; use the company name if you don't know the ticker; [] when it's portfolio-wide or none). When council is false, symbols must be [].`;
 
-  const raw = await oneShot("council:router", MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`, true);
+  const raw = await oneShot("council:router", MODELS.triage, system, `MESSAGE:\n${message}${focusHint}`, true, ROUTE_SCHEMA);
   if (!raw) return { council: false, symbols: [] };
   return parseRouteJson(raw, COUNCIL.maxSymbols);
 }
+
+const ROUTE_SCHEMA: JsonSchemaOutputFormat = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    properties: { council: { type: "boolean" }, symbols: { type: "array", items: { type: "string" } } },
+    required: ["council", "symbols"],
+    additionalProperties: false,
+  },
+};
 
 /**
  * Parse the router model's reply into a ChatRoute. Tolerant of the ways a model wraps JSON — a
