@@ -17,6 +17,12 @@ export const HARD = {
   // maxNewTradesPerWeek + cashFloorPct, the fee-edge floor, and the order-rate caps below.
   maxOrdersPerDay: 10,
   maxOrdersPerHour: 4,
+  // An agent LIMIT order rests until the close of the Nth trading day after it was placed, then the
+  // runner cancels it (agent/order-budget.ts limitExpiry). Before this, IBKR limits went in as bare GTC
+  // with no sweeper and no agent cancel, so a "lapses ~Oct 8" in a reason was a story (ADI #114,
+  // 2026-09-24; the TD order D127 found had rested a week). 5 = a dip entry is a bet on THIS week's
+  // tape; after that the thesis behind the price is stale — re-place it fresh if it still holds (Cam).
+  limitOrderExpiryTradingDays: 5,
   dailyLossPauseBps: -300, // day P&L ≤ −3% NAV → no new buys today
   drawdownKillBps: -1500, // NAV ≤ −15% from high-water mark → kill switch
   feeEdgeMultiple: 3, // thesis target must clear ≥ 3× round-trip commissions

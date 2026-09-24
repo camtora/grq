@@ -3936,13 +3936,16 @@ changes yet, so this is the model alone. All figures from the DB and the contain
 - **It traded ~5× more.** 10 orders (5 BUY / 5 SELL, 9 filled, ADI #114 still resting), ~US/C$13.6k gross ≈ **21% of
   NAV turned over in one day**; the prior month ran 1–2 orders a day (busiest: 5 on 9/16). 12 proposals, avg trade
   confidence 72 (unchanged from its 70–80 range). Commissions $9.00. NAV closed $64,804 (+$168 on the day — one day,
-  not attributable). Mostly council-cleared *rotations*: GD→NVDA, SPGI→ADI, BNY→MSFT, a TDY starter, VRTX, BNY trims.
+  not attributable). Mostly council-cleared *rotations*: GD→NVDA, SPGI→ADI, BNY→MSFT, an RSG trim, a TDY starter, VRTX.
 - **It hit BOTH §6 burst caps — the first time either has bitten.** MSFT BUY rejected at the hourly cap (4) at 12:03 ET;
-  CASY BUY at the daily cap (10) at 13:03. The gate did its job. **But the MSFT rejection landed *after* its funding leg
-  (BNY SELL 9, #116) had filled**, so the book sold a position to pay for a buy that never happened. Root cause: context
-  states the caps (`context.ts` "Hard limits") but not how many are *used*, so a two-leg rotation can't be sequenced
-  against them — the D126a shape (a limit must carry its arithmetic). Fix queued: context shows orders used/left this
-  hour and today.
+  CASY BUY at the daily cap (10) at 13:03. The gate did its job. The MSFT refusal landed *after* its funding leg (BNY
+  SELL 9, #116) had filled — by five seconds: the oldest order in the rolling hour aged out at 12:03:40, the proposal
+  came at 12:03:35. MSFT was bought an hour later (#117, 13:00), so the cost was a delayed leg with the proceeds idle, not
+  a lost trade — and that retry spent the day's last slots. *Correction: the first draft of this entry said the MSFT buy
+  "never happened"; that came from a query run at 12:56 ET and not re-run after the close.* Root cause: context states
+  the caps (`context.ts` "Hard limits") but not how many are *used*, so a two-leg rotation can't be sequenced against
+  them — the D126a shape (a limit must carry its arithmetic). Fix: context shows orders used/left, today's orders line
+  by line, and when the next hourly slot frees (D129).
 - **It convened the Council 7 times** (36 council passes, 0.8M tokens) — the D115 prompt is being followed.
 - **Tokens: flat overall** (48.3M vs 44.4M on 9/22, Opus 4.8). The mix moved: check-ins **14.2M vs 8.9M** (+60%, ~30
   turns each), dossiers **27.0M over 67 vs 29.5M over 89**. Research/reports still on `high` effort — stage 2 (C2) is

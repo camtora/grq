@@ -30,6 +30,7 @@ import { etDateStr, etParts, isMarketDay, isMarketOpen } from "./calendar";
 import { HARD, DIALS, AGENT_VERSION, CHECKIN_TIMES_ET, CHESS, REFRESH, SELF_INVEST } from "./policy";
 import { markBoot, dayPnlBps, setDailyLossPauseConfirmed } from "./validator";
 import { alert, heartbeat } from "./alerts";
+import { isExpiredAgentLimit } from "./order-budget";
 import { pushNotify } from "../lib/push/notify";
 import { apnsConfigured } from "../lib/push/apns";
 import { limitQuietActive } from "./limit-quiet";
@@ -824,12 +825,36 @@ async function monitorBrokerHealth(broker: ReturnType<typeof getBroker>) {
   brokerDownStreak = 0;
 }
 
+/** Cancel agent LIMIT orders past their expiry (HARD.limitOrderExpiryTradingDays — see
+ *  order-budget.ts). Runs every tick, open or closed, so an order that expired at 16:00 is gone
+ *  before the next open's auction rather than racing it. cancelOrder re-checks broker truth and
+ *  refuses to cancel a fill, so the ledger can't lose one; a refusal just retries next tick. */
+async function expireStaleLimits(): Promise<void> {
+  const now = new Date();
+  const pending = await prisma.order.findMany({ where: { status: "PENDING", placedBy: "agent", type: "LIMIT" } });
+  for (const o of pending.filter((x) => isExpiredAgentLimit(x, now))) {
+    const r = await broker.cancelOrder(o.id).catch((e) => ({ ok: false as const, error: String(e) }));
+    const what = `${o.side} ${o.qty} ${o.symbol} @ $${((o.limitPriceCents ?? 0) / 100).toFixed(2)} (#${o.id})`;
+    if (r.ok) {
+      await alert(
+        "info",
+        `Expired unfilled: ${what}`,
+        `Rested ${HARD.limitOrderExpiryTradingDays} trading days without filling, so it was cancelled at the broker. Alfred can place a fresh one if the idea still holds.`,
+        { category: "trades", symbol: o.symbol },
+      );
+    } else {
+      console.warn(`[expire] #${o.id} not cancelled: ${r.error}`);
+    }
+  }
+}
+
 async function tick() {
   const open = isMarketOpen();
 
   await refreshQuotes(open);
   await heartbeat({ lastTickAt: new Date(), note: open ? "market open" : "market closed" });
   await monitorBrokerHealth(broker);
+  await expireStaleLimits().catch((e) => console.error("[expire] sweep failed:", e));
 
   if (open) {
     if (broker.kind === "ibkr") {

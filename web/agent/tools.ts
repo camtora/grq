@@ -18,6 +18,7 @@ import { upsertChainEdges } from "../lib/graph/edges";
 import { bareChainKey } from "../lib/chess";
 import { AGENT_VERSION, MAX_PENDING_WAKEUPS, MAX_OPEN_AGENDA, HARD, SELF_INVEST } from "./policy";
 import { startOfEtDay, etParts } from "./calendar";
+import { formatJournal, limitExpiry } from "./order-budget";
 import type { JournalKind } from "@prisma/client";
 
 const OPEN_MIN = 9 * 60 + 30;
@@ -71,7 +72,7 @@ const getQuotesTool = tool(
 
 const getJournalTool = tool(
   "get_journal",
-  "Read the fund journal. Kinds: SYSTEM, RESEARCH, DECISION, TRADE, RETRO, LESSON.",
+  "Read the fund journal, newest first. Kinds: SYSTEM, RESEARCH, DECISION, TRADE, RETRO, LESSON. Long entries come back trimmed, with their #id — read one in full with get_journal_entry. Narrow by kind/symbol rather than raising limit.",
   {
     kind: z.enum(["SYSTEM", "RESEARCH", "DECISION", "TRADE", "RETRO", "LESSON"]).optional(),
     symbol: z.string().optional(),
@@ -86,11 +87,20 @@ const getJournalTool = tool(
       orderBy: { at: "desc" },
       take: args.limit,
     });
-    return text(
-      entries
-        .map((j) => `[${j.at.toISOString()}] ${j.kind}${j.symbol ? ` ${j.symbol}` : ""} — ${j.title}\n${j.body}`)
-        .join("\n\n---\n\n") || "(no entries)",
-    );
+    // Bounded (order-budget.ts formatJournal): an unbounded 50-entry read came back 230 KB on 2026-09-24,
+    // spilled to a file the agent could only page with Bash — which C1 removes.
+    return text(formatJournal(entries));
+  },
+);
+
+const getJournalEntryTool = tool(
+  "get_journal_entry",
+  "Read ONE journal entry in full by its #id (from get_journal, where long entries are trimmed).",
+  { id: z.number().int().positive() },
+  async (args) => {
+    const j = await prisma.journalEntry.findUnique({ where: { id: args.id } });
+    if (!j) return text(`(no journal entry #${args.id})`);
+    return text(`[${j.at.toISOString()}] #${j.id} ${j.kind}${j.symbol ? ` ${j.symbol}` : ""} — ${j.title}\n${j.body.slice(0, 30_000)}`);
   },
 );
 
@@ -382,7 +392,10 @@ const proposeOrderTool = tool(
     }
 
     if (!verdict.ok) return text(`REJECTED: ${verdict.rejectReason}`);
-    if (verdict.status === "PENDING") return text(`PENDING: resting limit order #${verdict.orderId}.`);
+    if (verdict.status === "PENDING")
+      return text(
+        `PENDING: resting limit order #${verdict.orderId}. It auto-cancels at the close ${limitExpiry(new Date()).toLocaleDateString("en-CA", { timeZone: "America/Toronto", weekday: "short", month: "short", day: "numeric" })} (${HARD.limitOrderExpiryTradingDays} trading days) if unfilled — that is its real expiry.`,
+      );
     return text(
       `FILLED: order #${verdict.orderId} @ $${((verdict.fillPriceCents ?? 0) / 100).toFixed(2)}, commission $${((verdict.commissionCents ?? 0) / 100).toFixed(2)}.`,
     );
@@ -740,6 +753,7 @@ export const grqServer = createSdkMcpServer({
     getPortfolioTool,
     getQuotesTool,
     getJournalTool,
+    getJournalEntryTool,
     writeJournalTool,
     pinLessonTool,
     getFocusTool,
@@ -766,6 +780,7 @@ export const GRQ_TOOL_NAMES = [
   "mcp__grq__get_portfolio",
   "mcp__grq__get_quotes",
   "mcp__grq__get_journal",
+  "mcp__grq__get_journal_entry",
   "mcp__grq__write_journal",
   "mcp__grq__get_focus",
   "mcp__grq__set_focus",
@@ -824,13 +839,14 @@ export const makeReadOnlyServer = () =>
   createSdkMcpServer({
     name: "grq",
     version: "1.0.0",
-    tools: [getPortfolioTool, getQuotesTool, getJournalTool, getFocusTool, getSignalsTool, getOptionsDeskTool],
+    tools: [getPortfolioTool, getQuotesTool, getJournalTool, getJournalEntryTool, getFocusTool, getSignalsTool, getOptionsDeskTool],
   });
 
 export const GRQ_READONLY_TOOL_NAMES = [
   "mcp__grq__get_portfolio",
   "mcp__grq__get_quotes",
   "mcp__grq__get_journal",
+  "mcp__grq__get_journal_entry",
   "mcp__grq__get_focus",
   "mcp__grq__get_signals",
   "mcp__grq__get_options_desk",
@@ -844,12 +860,13 @@ export const makeResearchServer = () =>
   createSdkMcpServer({
     name: "grq",
     version: "1.0.0",
-    tools: [getQuotesTool, getJournalTool, getSignalsTool, writeJournalTool, saveChessBoardTool],
+    tools: [getQuotesTool, getJournalTool, getJournalEntryTool, getSignalsTool, writeJournalTool, saveChessBoardTool],
   });
 
 export const GRQ_RESEARCH_TOOL_NAMES = [
   "mcp__grq__get_quotes",
   "mcp__grq__get_journal",
+  "mcp__grq__get_journal_entry",
   "mcp__grq__get_signals",
   "mcp__grq__write_journal",
   "mcp__grq__save_chess_board",

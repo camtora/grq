@@ -1,6 +1,7 @@
 import { prisma } from "../lib/db";
 import { getPortfolio } from "../lib/portfolio";
-import { etParts, isMarketOpen, minutesToClose, openExchanges } from "./calendar";
+import { etParts, isMarketOpen, minutesToClose, openExchanges, startOfEtDay } from "./calendar";
+import { orderBudgetBlock } from "./order-budget";
 import { dayPnlBps, superficialLossWindows } from "./validator";
 import { computeSignals, signalsOneLine } from "./signals";
 import { getScoreboard, scoreboardText, MIN_GRADES_TO_RANK } from "../lib/scoreboard";
@@ -60,6 +61,13 @@ export async function buildContext(): Promise<string> {
   const dial = DIALS[dialName];
   const p = etParts();
   const dayBps = await dayPnlBps().catch(() => 0);
+  // Orders so far + resting orders, with the budget arithmetic (order-budget.ts). The caps alone were
+  // stated before; the USED count wasn't — which is how a rotation's SELL filled and its BUY hit the cap.
+  const [ordersToday, ordersResting] = await Promise.all([
+    prisma.order.findMany({ where: { createdAt: { gte: startOfEtDay() } }, orderBy: { createdAt: "asc" } }),
+    prisma.order.findMany({ where: { status: "PENDING" }, orderBy: { createdAt: "asc" } }),
+  ]);
+  const budget = orderBudgetBlock(ordersToday, ordersResting);
 
   // Current dossier verdict per HOLDING and focus name — the AUTHORITATIVE live call
   // (latest "Dossier —" RESEARCH entry). Surfaced next to each position AND focus note
@@ -291,6 +299,9 @@ ${shortLesson ? `## Shorting lesson (Short Lab sandbox — you NEVER short; rule
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
 Universe slots: ${slotLine}
 Hard limits: ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no cap on # of holdings (breadth is your call — size, the cash floor, and the weekly BUY cap still bind) · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.
+
+## Orders so far today — your order budget (counted exactly as the gate counts it)
+${budget}
 
 ## Member directives (binding — set by Cam & Graham on the stock pages)
 ${
