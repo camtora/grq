@@ -13,7 +13,8 @@ import { HARD } from "@/agent/policy";
 
 // Reports is a hub over every kind of report the fund files: the Daily (morning
 // game plan beside the EOD close), the Saturday Weekly review, Smart-money
-// roundups, Retros (source post-mortems), and Lessons. URL-param tabs keep it SSR.
+// roundups, Retros (source post-mortems), Lessons, and Changes — the 3am build diary of what
+// shipped to the app (D82; also browsable day-by-day on How it works). URL-param tabs keep it SSR.
 const TABS = [
   { key: "daily", label: "Daily" },
   { key: "weekly", label: "Weekly" },
@@ -21,6 +22,7 @@ const TABS = [
   { key: "retros", label: "Retros" },
   { key: "lessons", label: "Lessons" },
   { key: "conviction", label: "Conviction" },
+  { key: "changes", label: "Changes" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -31,6 +33,25 @@ function dayLabel(d: Date): string {
     month: "long",
     day: "numeric",
   });
+}
+
+// Build diaries for days that shipped something. A quiet day is stored as statsJson {"commits":0}
+// (runDailyChangeReport) with a one-line stub body, and they come in long runs — so the filter has
+// to happen in the query, before the page limit, or a quiet stretch pushes real days off the page.
+// (A bare NOT would also drop null statsJson — SQL NOT(NULL = x) is NULL — hence the explicit OR.)
+const SHIPPED_DIARY: Prisma.ReportWhereInput = {
+  kind: "CHANGE",
+  OR: [{ statsJson: null }, { statsJson: { not: '{"commits":0}' } }],
+};
+
+// A build diary's commit count (statsJson.commits); null when absent or unreadable.
+function diaryCommits(statsJson: string | null): number | null {
+  try {
+    const n = statsJson ? JSON.parse(statsJson).commits : null;
+    return typeof n === "number" ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 // One-line plain-text preview of a markdown body, for the compact Daily cards.
@@ -73,13 +94,14 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === sp.tab) ? (sp.tab as TabKey) : "daily";
 
-  const [eodCount, weeklyCount, smartCount, retroCount, lessonCount, convictionCount] = await Promise.all([
+  const [eodCount, weeklyCount, smartCount, retroCount, lessonCount, convictionCount, changesCount] = await Promise.all([
     prisma.report.count({ where: { kind: "EOD" } }),
     prisma.report.count({ where: { kind: "WEEKLY" } }),
     prisma.journalEntry.count({ where: { kind: "RESEARCH", title: { startsWith: "Smart money" } } }),
     prisma.journalEntry.count({ where: { kind: "RETRO" } }),
     prisma.journalEntry.count({ where: { kind: "LESSON" } }),
     prisma.tradeProposal.count({ where: { side: "BUY" } }),
+    prisma.report.count({ where: SHIPPED_DIARY }),
   ]);
   const countByTab: Record<TabKey, number> = {
     daily: eodCount,
@@ -88,6 +110,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
     retros: retroCount,
     lessons: lessonCount,
     conviction: convictionCount,
+    changes: changesCount,
   };
 
   let content: React.ReactNode;
@@ -218,6 +241,43 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
           ))}
         </div>
       );
+  } else if (tab === "changes") {
+    const diaries = (await prisma.report.findMany({ where: SHIPPED_DIARY, orderBy: { date: "desc" }, take: 30 })).map((r) => ({
+      ...r,
+      commits: diaryCommits(r.statsJson),
+    }));
+    content =
+      diaries.length === 0 ? (
+        <EmptyState
+          title="No changes logged yet"
+          body="Every night at 3am ET Alfred writes a plain-English rundown of what changed in the app that day. Days that shipped something land here."
+        />
+      ) : (
+        <div className="space-y-4">
+          <p className="text-xs text-teal-200/40">
+            What changed in the app, one day per card, written for Graham at 3am ET. Quiet days (nothing shipped) are left out.
+          </p>
+          {diaries.map((r) => {
+            const k = etDateStr(r.date);
+            return (
+              <Card key={r.id} className="p-5">
+                <div className="mb-3 flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-semibold text-teal-50">{dayLabel(r.date)}</span>
+                  {r.commits != null && (
+                    <Chip tone="dim">
+                      {r.commits} change{r.commits === 1 ? "" : "s"}
+                    </Chip>
+                  )}
+                  <Link href={`/how-it-works?tab=daily-report&d=${k}`} className="ml-auto text-xs text-teal-300 hover:underline">
+                    open day →
+                  </Link>
+                </div>
+                <CollapsibleMd text={r.body} threshold={800} />
+              </Card>
+            );
+          })}
+        </div>
+      );
   } else if (tab === "conviction") {
     // The REAL gate from policy (D95 lowered it 75→70) — this page hardcoded 75
     // and mislabeled its own tally until 2026-07-04.
@@ -344,7 +404,7 @@ export default async function Reports({ searchParams }: { searchParams: Promise<
     <main>
       <PageHeader
         title="Reports"
-        sub="Every report the fund files — the daily plan & close, the Saturday review, smart-money roundups, post-mortems, and lessons."
+        sub="Every report the fund files — the daily plan & close, the Saturday review, smart-money roundups, post-mortems, lessons, and what changed in the app."
         right={
           <PeopleBadges
             people={PEOPLE.map((p) => ({
