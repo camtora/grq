@@ -5,7 +5,7 @@ import { usdCadRate, toCadCents } from "../../lib/fx";
 import { ibkrFixedCommissionCents } from "../../lib/broker/sim";
 import { fetchOptionChain, type OptChain } from "../../lib/options/cboe";
 import { pickContract, markContractCents, findContract, intrinsicCents, daysToExpiry } from "../../lib/options/price";
-import { DESK, DIALS, RACE, AGENT_VERSION } from "../policy";
+import { DESK, DIALS, RACE, AGENT_VERSION, EFFORT } from "../policy";
 import { attemptGate } from "../retry";
 import { runSession } from "../sessions";
 import { chatComplete, isOpenRouterModel } from "../openrouter";
@@ -293,7 +293,7 @@ async function runDeskModel(model: string, prompt: string, label: string): Promi
     if (r) await prisma.agentUsage.create({ data: { label, model, status: "success", inputTokens: r.inTokens, outputTokens: r.outTokens, costMicroUsd: Math.round((r.costUsd || 0) * 1e6), agentVersion: AGENT_VERSION } }).catch(() => {});
     return r?.text ?? null;
   }
-  return runSession({ label, prompt, model, withTools: false, maxTurns: 3 });
+  return runSession({ label, prompt, model, withTools: false, maxTurns: 3, effort: EFFORT.sandbox });
 }
 
 type EntrantRow = { id: number; model: string; arm: string; dial: string; label: string; cashCents: number };

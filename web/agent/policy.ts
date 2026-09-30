@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.84-phase4";
+export const AGENT_VERSION = "v2.85-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -198,10 +198,31 @@ export const MODELS = {
 // session ran at the MODEL's default — measured `high` on Opus 4.8, but Opus 5.5 defaults to
 // `medium`. Left implicit, the model swap would have silently lowered effort on every decision.
 // Only the decision model gets it: Haiku doesn't take effort, and Race challengers keep their own.
+//
+// Per-route since stage 2 of the Opus 5.5 prompt audit (C2, 2026-09-30). Anthropic's Opus 5.5 guidance
+// is to set effort explicitly AND re-test it: 5.5 at `medium` beats Opus 5 at `high` on their evals, and
+// 5.5 thinks more per level. So only the sessions that can move money stay `high`; research and writing
+// drop to `medium`. Each tier has its own env override, so any one can go back to `high` without a deploy.
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
-export const DECISION_EFFORT = (process.env.GRQ_EFFORT_DECISION ?? "high") as Effort;
-export const effortFor = (model: string): { effort?: Effort } =>
-  model === MODELS.decision ? { effort: DECISION_EFFORT } : {};
+const envEffort = (name: string, fallback: Effort): Effort => (process.env[name] ?? fallback) as Effort;
+export const EFFORT = {
+  // Can place or change orders, or set the day's plan: check-ins, position checks, the 9:00 game
+  // plan, the startup universe review, and the council CHAIRMAN (the synthesis is the judgment).
+  decision: envEffort("GRQ_EFFORT_DECISION", "high"),
+  // Research that informs a decision but places nothing: dossiers, the hunt, chess moves, smart money,
+  // the market brief, and the five council SEATS (parallel one-shots arguing a lens).
+  research: envEffort("GRQ_EFFORT_RESEARCH", "medium"),
+  // Prose over facts already gathered: pre-morning read, midday/EOD/weekly reports, the build diary.
+  report: envEffort("GRQ_EFFORT_REPORT", "medium"),
+  // Ask Alfred (read-only; a member is waiting for the answer).
+  chat: envEffort("GRQ_EFFORT_CHAT", "medium"),
+  // Advisory sandboxes (Race champion entrant, Options Desk, Short Lab) when they run the decision model.
+  sandbox: envEffort("GRQ_EFFORT_SANDBOX", "medium"),
+} as const;
+export const DECISION_EFFORT = EFFORT.decision; // back-compat name (D128)
+/** Effort for a session: only the decision model takes it (Haiku has none; challengers keep their own). */
+export const effortFor = (model: string, level: Effort = EFFORT.decision): { effort?: Effort } =>
+  model === MODELS.decision ? { effort: level } : {};
 
 // The Race (D68) — the model bake-off. The CHAMPION (MODELS.decision = Opus) is the only model
 // that ever trades. CHALLENGERS run shadow-only on the exact same frozen prompt, one-shot, NO

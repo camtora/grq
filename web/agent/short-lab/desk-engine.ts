@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/db";
 import { getQuotes } from "../../lib/broker/quotes";
-import { SHORTDESK, DIALS } from "../policy";
+import { SHORTDESK, DIALS, EFFORT } from "../policy";
 import { runSession } from "../sessions";
 import { isMarketOpen, startOfEtDay } from "../calendar";
 import { buildShortDeskContext, type ShortArmLite } from "./desk-context";
@@ -169,7 +169,7 @@ async function runShortDeskSession(arm: { id: number; model: string; arm: string
     const cashCents = fresh?.cashCents ?? arm.cashCents;
     const lite: ShortArmLite = { id: arm.id, model: arm.model, arm: arm.arm, dial: arm.dial, label: arm.label, cashCents };
     const prompt = await buildShortDeskContext(lite, desk.startingStakeCents, desk.maintMarginPct);
-    const text = await runSession({ label: `shortdesk:${arm.arm}`, prompt, model: arm.model, withTools: false, maxTurns: 3 });
+    const text = await runSession({ label: `shortdesk:${arm.arm}`, prompt, model: arm.model, withTools: false, maxTurns: 3, effort: EFFORT.sandbox });
     if (text == null) return;
     const call = parseShortDeskCall(text);
     let res: FillResult = { filled: false, rejectReason: null };

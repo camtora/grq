@@ -3,7 +3,7 @@ import { getQuote, getQuotes } from "../../lib/broker/quotes";
 import { currencyForSymbol } from "../../lib/universe";
 import { usdCadRate, toCadCents } from "../../lib/fx";
 import { ibkrFixedCommissionCents } from "../../lib/broker/sim";
-import { DIALS, RACE, AGENT_VERSION } from "../policy";
+import { DIALS, RACE, AGENT_VERSION, EFFORT } from "../policy";
 import { runSession } from "../sessions";
 import { chatComplete, isOpenRouterModel } from "../openrouter";
 import { PERSONA } from "../persona";
@@ -165,7 +165,7 @@ async function runBullModel(model: string, prompt: string, label: string): Promi
     }
     return r?.text ?? null;
   }
-  return runSession({ label, prompt, model, withTools: false, maxTurns: 3 });
+  return runSession({ label, prompt, model, withTools: false, maxTurns: 3, effort: EFFORT.sandbox });
 }
 
 /** One bull's race session: decide → record → fill → snapshot. Never throws into the tick. */

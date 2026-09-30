@@ -17,7 +17,7 @@
  * as sessions.ts/persona.ts). Kill without a deploy: GRQ_COUNCIL_ENABLED=false (see policy.ts COUNCIL).
  */
 import { query, type JsonSchemaOutputFormat } from "@anthropic-ai/claude-agent-sdk";
-import { MODELS, COUNCIL, effortFor } from "./policy";
+import { MODELS, COUNCIL, EFFORT, effortFor, type Effort } from "./policy";
 import { alert } from "./alerts";
 import { limitQuietUntil, limitQuietActive, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 import { recordAgentUsage } from "./usage";
@@ -100,6 +100,7 @@ async function oneShot(
   user: string,
   noThinking = false,
   outputFormat?: JsonSchemaOutputFormat,
+  effort: Effort = EFFORT.decision,
 ): Promise<string | null> {
   const quietUntil = await limitQuietUntil(); // limit-quiet (D123): walled token ⇒ no call, no alert
   if (quietUntil) {
@@ -112,7 +113,7 @@ async function oneShot(
       prompt: user,
       options: {
         model,
-        ...effortFor(model),
+        ...effortFor(model, effort),
         systemPrompt: system,
         // 4, not 1. Every one of 345 successful one-shot passes on record used exactly ONE turn, so
         // the extra turns here are provably free — they are only ever consumed by the transient mode
@@ -183,7 +184,7 @@ export async function conveneCouncil(opts: {
   let landed = 0;
   const takes = await Promise.all(
     SEATS.map(async (s) => {
-      const take = await oneShot(`council:${s.key}`, MODELS.decision, SEAT_SYSTEM(s), userFor(s));
+      const take = await oneShot(`council:${s.key}`, MODELS.decision, SEAT_SYSTEM(s), userFor(s), false, undefined, EFFORT.research);
       landed += 1;
       try {
         opts.onSeat?.(s.label, landed, SEATS.length);

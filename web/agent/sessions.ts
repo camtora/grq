@@ -12,7 +12,7 @@ import { startOfEtDay, etDateStr } from "./calendar";
 import { buildContext } from "./context";
 import { computeSignals, signalsOneLine } from "./signals";
 import { grqServer, GRQ_TOOL_NAMES, makeResearchServer, GRQ_RESEARCH_TOOL_NAMES } from "./tools";
-import { MODELS, RACE, AGENT_VERSION, SELF_INVEST, effortFor } from "./policy";
+import { MODELS, RACE, AGENT_VERSION, SELF_INVEST, EFFORT, effortFor, type Effort } from "./policy";
 import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
 import { parseProposal, SHADOW_DECISION_SUFFIX, SHADOW_NARRATIVE_SUFFIX } from "./race/shadow";
 import { PERSONA } from "./persona";
@@ -53,6 +53,9 @@ type SessionOpts = {
   // prose. `result` comes back as the JSON string. Probed 2026-09-23 on Haiku 4.5 via SDK 0.3.281:
   // it takes 2 turns (the schema rides a synthetic tool call), so give it maxTurns >= 2.
   outputFormat?: JsonSchemaOutputFormat;
+  // Reasoning effort when this runs on the decision model (C2). Default EFFORT.decision (high) — a
+  // route that places nothing passes EFFORT.research / EFFORT.report. Ignored on any other model.
+  effort?: Effort;
 };
 
 export type { SessionOpts };
@@ -73,7 +76,7 @@ export async function runSession(opts: SessionOpts): Promise<string | null> {
       prompt: opts.prompt,
       options: {
         model: opts.model,
-        ...effortFor(opts.model),
+        ...effortFor(opts.model, opts.effort),
         systemPrompt: opts.systemPrompt ?? PERSONA,
         maxTurns: opts.maxTurns,
         permissionMode: "bypassPermissions",
@@ -268,6 +271,7 @@ async function runShadow(opts: {
             model,
             withTools: false, // shadow = frozen seed only; a tool call would diverge from what the champion saw
             maxTurns: 3,
+            effort: EFFORT.sandbox,
           });
           if (text != null) await writeChallengerRow({ ...opts, model, text, isDecision, resolveEntry });
         } catch (e) {
@@ -457,7 +461,7 @@ ${diaryBlock}
 2. REFRESH research only where something genuinely changed. For any name whose overnight news could change your call, request_research it so a fresh dossier lands before 9:00. Do NOT refresh the whole book — only names with a real overnight catalyst. If nothing changed, queue nothing.
 
 Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Structure it as **What changed yesterday** (your 1–2 sentence recap of the build diary + the LINK) then **The day ahead** (the overnight read + shape of the day). Keep it BRIEF — a few tight sentences or bullets per part. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: what shipped yesterday (with the link), the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
-  await runSession({ label: "premorning-read", prompt, model: MODELS.decision, withTools: true, maxTurns: 18 });
+  await runSession({ label: "premorning-read", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: true, maxTurns: 18 });
   const body = await latestNoteBody("Pre-morning read", new Date(Date.now() - 30 * 60_000));
   if (body) await sendDiscord("info", `Pre-morning read — ${etDateStr()}`, body.slice(0, 1500));
 }
@@ -482,7 +486,7 @@ Cover, in order of importance (only what's genuinely true/notable today — don'
 - The overall tone — risk-on / risk-off, and what the major indices and yields are doing.
 
 Rules: ONE paragraph of plain prose. No title, no headers, no bullet points, no markdown. Be specific and concrete (name the number, the company, the country); never vague filler like "markets are mixed." Honest and readable; never glib about losses. This is market-wide context, NOT about our fund or our holdings. Your ENTIRE final response is that single paragraph — nothing before or after it, and do not write a journal entry.`;
-  const body = await runSession({ label: `market-brief-${edition.toLowerCase()}`, prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 12 });
+  const body = await runSession({ label: `market-brief-${edition.toLowerCase()}`, prompt, model: MODELS.decision, effort: EFFORT.research, withTools: true, toolset: "research", maxTurns: 12 });
   const clean = (body ?? "").trim();
   if (!clean) return;
   await prisma.marketBrief.upsert({
@@ -612,7 +616,7 @@ Lead with WHY it matters, not just what the company is. Be honest: smaller names
   // Bounded breadth pass (D112b, Cam 2026-07-05): WebFetch OFF (its full-page pulls were the
   // ~54M accumulation driver — the hunt finds names, the dossier reads deep) + a tighter turn
   // cap. Ample for 8–12 leads via WebSearch + the screen seed; can't spiral into a fetch loop.
-  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 22, webFetch: false });
+  await runSession({ label: "discovery-hunt", prompt, model: MODELS.decision, effort: EFFORT.research, withTools: true, toolset: "research", maxTurns: 22, webFetch: false });
 
   // D (Cam 2026-06-19): the hunt writes only LEADS ("Hunt dossier — TICKER") — all in this
   // one pass. The full dossier is NO LONGER auto-queued for every find; it's kicked ON
@@ -646,7 +650,7 @@ Use WebSearch (and WebFetch on the best leads) to:
 3. CALL THE PLAYS — 8–12 ripple-effect names, each tagged BENEFICIARY / VICTIM / NEUTRAL and by effect order (1 = directly hit, 2/3 = downstream consequence). Favour under-the-radar names (higher obscurity) — the obvious mega-cap is the least interesting play.
 
 Then call **save_chess_board** EXACTLY ONCE with themeId=${theme.id}: the title, anchor, thesis, bottomLine, the board (stages + directed links between the plays' TICKERS), the plays (each with its EXACT exchange — required to resolve the right company), and 2–4 falsifiable levers. The links connect tickers that move together (a supplier → its customer). Don't call any other write tool — the board is the deliverable.`;
-  await runSession({ label: `chess:${theme.id}`, prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 44 });
+  await runSession({ label: `chess:${theme.id}`, prompt, model: MODELS.decision, effort: EFFORT.research, withTools: true, toolset: "research", maxTurns: 44 });
 
   // Quiet-fail guard (mirror the dossier queue): if the session didn't flip the theme to
   // READY, mark it FAILED so the page shows an honest state and the runner moves on.
@@ -702,7 +706,7 @@ ${portLines}
 Names marked (OURS) overlap GRQ's universe.
 
 Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we now trade CAD + USD) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
-  await runSession({ label: "smart-money", prompt, model: MODELS.decision, withTools: true, toolset: "research", maxTurns: 16 });
+  await runSession({ label: "smart-money", prompt, model: MODELS.decision, effort: EFFORT.research, withTools: true, toolset: "research", maxTurns: 16 });
 
   // Once the report is published, queue a FULL dossier for every name it surfaces so
   // each ticker links to researched (not a 404). Idempotent — skips names already
@@ -916,6 +920,7 @@ Research only — no trades, no focus changes (you don't have those tools here).
     label: `dossier:${sym}`,
     prompt,
     model: MODELS.decision,
+    effort: EFFORT.research,
     withTools: true,
     toolset: "research",
     maxTurns: 24,
@@ -999,7 +1004,7 @@ Today's fills: ${trades.map((t) => `${t.side} ${t.qty} ${t.symbol} @ $${(t.price
 Today's rejections: ${rejections.map((r) => `${r.side} ${r.qty} ${r.symbol}: ${r.rejectReason}`).join("; ") || "none"}
 
 Write the EOD report body in markdown (no top-level title — the dashboard adds it): what happened, why (with the thesis behind each trade), guardrail events, where we stand — lead with the return RATE and the compounding arc (vs XIC is the floor, not the headline; don't dress small dollars up as a win) — and tomorrow's watch items. Honest, brief, lightly funny where the numbers allow it. Your ENTIRE final response must be just the report body.`;
-  const body = await runSession({ label: "eod-report", prompt, model: MODELS.decision, withTools: false, maxTurns: 4 });
+  const body = await runSession({ label: "eod-report", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: false, maxTurns: 4 });
   if (!body) return;
   await prisma.report.upsert({
     where: { date_kind: { date: startOfEtDay(), kind: "EOD" } },
@@ -1083,6 +1088,7 @@ Write the report for Graham in markdown: a one-line **TL;DR** first, then 2–5 
       model: MODELS.decision,
       withTools: false,
       maxTurns: 4,
+      effort: EFFORT.report,
       systemPrompt: BUILD_DIARY_PERSONA,
     });
     if (!out) return;
@@ -1106,7 +1112,7 @@ export async function runMiddayReport(): Promise<void> {
 # TASK: Midday brief — ${etDateStr()}
 
 Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or your focus names, and what would make you act (or sit on your hands) before the close. 3–5 tight sentences, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
-  const body = await runSession({ label: "midday-report", prompt, model: MODELS.decision, withTools: false, maxTurns: 3 });
+  const body = await runSession({ label: "midday-report", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: false, maxTurns: 3 });
   if (!body) return;
   await prisma.journalEntry.create({
     data: { kind: "RESEARCH", title: `Midday brief — ${etDateStr()}`, body, agentVersion: AGENT_VERSION },
@@ -1143,7 +1149,7 @@ Do the full review, using tools:
 3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades (re-read each name's CURRENT dossier before grading — never carry forward a data error a later refresh already corrected, and don't flag a name for "refresh" without confirming the issue still exists), lessons added, proposed strategy adjustments (these need Cam & Graham's approval — say so), source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
 
 Your ENTIRE final response must be just the report body.`;
-  const body = await runSession({ label: "weekly-review", prompt, model: MODELS.decision, withTools: true, maxTurns: 30 });
+  const body = await runSession({ label: "weekly-review", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: true, maxTurns: 30 });
   if (!body) return;
   await prisma.report.upsert({
     where: { date_kind: { date: startOfEtDay(), kind: "WEEKLY" } },
