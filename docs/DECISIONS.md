@@ -4001,3 +4001,36 @@ the new code before `up -d`. Suite 295/296 (pre-existing D125 `auth-jwt` failure
 **Still to verify on the next live sessions:** the init `tools` list in a real session, a news-triage and a market-tag
 run under structured outputs, `get_journal` staying inline, and per-label token drops vs the D128 baseline. Stage 2 (C2)
 waits 1–2 trading days after this.
+
+---
+
+### D130 — Reasoning effort per route: money sessions stay high, research and writing drop to medium (Cam, 2026-09-30)
+**Context:** Stage 2 of the Fable prompt audit for Opus 5.5 (finding C2; the review doc and staging are recorded under D128/D129).
+D128 pinned `effort: high` on every Opus 5.5 route, because Opus 4.8 had run at `high` and 5.5 silently defaults
+to `medium`. That was a continuity pin, not a tuning. Anthropic's Opus 5.5 guidance is to set effort explicitly
+*and re-test it*: 5.5 at `medium` beats Opus 5 at `high` on their evals, and 5.5 thinks more per level.
+
+**Decision:** `EFFORT` tiers in `agent/policy.ts`, each with its own env override so a route can go back to `high`
+without a rebuild (`docker-compose up -d --force-recreate --no-deps agent chat` after editing `.env`):
+- `decision` = **high** (`GRQ_EFFORT_DECISION`): check-ins, position checks, the 9:00 game plan, the startup
+  review, the council chairman. These can place or change orders, or set the day's plan.
+- `research` = **medium** (`GRQ_EFFORT_RESEARCH`): dossiers, the hunt, chess moves, smart money, the market brief,
+  the five council seats.
+- `report` = **medium** (`GRQ_EFFORT_REPORT`): pre-morning read, midday/EOD/weekly reports, the build diary.
+- `chat` = **medium** (`GRQ_EFFORT_CHAT`); `sandbox` = **medium** (`GRQ_EFFORT_SANDBOX`: Race/Options Desk/Short
+  Lab, only when they run the decision model. The Desk and Bull-Race entrants store `claude-opus-4-8` in the DB
+  and keep that model's own default, so they are untouched.)
+`effortFor(model, level)` still sends effort only to the decision model; `test/effort-tiers.test.ts` pins both.
+
+**Stage 1 before it (v2.84, 2026-09-24):** check-ins ran 11.0–12.0M tokens/day on 9/25, 9/28 and 9/29, against
+14.2M on 9/24. Dossiers averaged ~300–325k each, against ~403k. There were 0 failed sessions and 0
+structured-output parse fallbacks. Those three days are stage 2's baseline.
+
+**Watch (3–5 trading days, including Sat 10/3's weekly review):** per-label `outputTokens` on the medium routes
+against that baseline, and the quality of dossiers and reports read by eye. A route that reads worse goes back
+to `high` via its env var. Check-ins are untouched, so any change in trading behaviour isn't this stage's.
+
+**Verified:** the deploy waited for the EOD report (16:16) and its Race shadow (16:18) to finish, then booted
+`v2.85-phase4` at 16:22 ET with the startup scan skipped (marker pre-written). The image contains the new code. A
+live SDK `query()` in the container reports `EFFORT=medium` for the research tier and `EFFORT=high` for the
+decision tier. Suite 297/298 (the one failure is the pre-existing D125 auth-jwt date bug).
