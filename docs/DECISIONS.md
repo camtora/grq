@@ -4034,3 +4034,49 @@ to `high` via its env var. Check-ins are untouched, so any change in trading beh
 `v2.85-phase4` at 16:22 ET with the startup scan skipped (marker pre-written). The image contains the new code. A
 live SDK `query()` in the container reports `EFFORT=medium` for the research tier and `EFFORT=high` for the
 decision tier. Suite 297/298 (the one failure is the pre-existing D125 auth-jwt date bug).
+
+---
+
+### D131 — Incentives, not caps: the agent is rewarded for holding and shown whether its trades paid (Cam, 2026-09-30)
+**Context:** On Opus 5.5 (D128) the fund went from ~1.2 orders a day to ~3.8: 8 new starters in 5 days at
+Buy/70–72, daily "funding" rotations (BNY trimmed 3× in 5 days, OKE held one week), 17 council convenes against 8,
+and 20 positions. Cam: "the goal is to make more money than we put in each month… it feels like it has to trade."
+I first proposed hard caps (max positions, minimum hold, new names a week). Cam rejected them: "the goal is proper
+agent incentivisation — that's just changing the max it's always going to hold." Caps would become numbers to fill.
+
+**The cause was the incentives, in five places:** a mandate that called cash "failing at the job" and said
+"refusing to trade teaches the fund nothing"; a check-in, 11×/day, with "MANDATORY", a 12–18-new-names quota and
+"a check-in that bought nothing AND vetted no new names is a failed check-in"; a hold rule that was the buy bar ("a
+position you would NOT open today … is a source of funds"), so every dossier re-rate below 70 became a sell; the
+agent's own pinned lessons leaning the same way; and no feedback on whether a rotation beat holding. It had been
+written in June (D39, D96) to push a cash-hoarding Opus 4.8; Opus 5.5 reaches further on its own. The model swap
+exposed the incentives; it didn't create them.
+
+**Decision (stage 3 of the prompt audit, R1–R7; review doc "GRQ Prompt Audit — Opus 5.5", all approved by Cam):**
+- **R1 mandate** (`persona.ts`): grow the fund, meaning make more than was put in, month over month, after costs and
+  tax, by owning a concentrated set of good businesses. Holding is the job; most check-ins end with no trade.
+- **R2 hold ≠ buy:** a new position needs Buy/70; a holding is kept until its thesis breaks (invalidation, business
+  change, stop). A score dip is a reason to re-read, not to sell. Rotate only on a large, clear step up (15+
+  conviction points) AND a weakened outgoing thesis, never to fund a starter. Idle cash tops up existing winners first.
+- **R3 check-in** is monitoring: holdings first, act only on a broken thesis/level; new ideas only with a reason.
+  "30-MINUTE REBUILD", "MANDATORY", the quota and "failed check-in" are gone. Note title and blank symbol kept.
+- **R4 morning plan:** "WIDEN IF THIN … under-deployment, which is the failure mode" and "NOT timid on ideas" are gone.
+- **R5 reporting voice** calls out churn as bluntly as idle cash.
+- **R6 track record** (`agent/track-record.ts`, new): a block in every decision context showing month-to-date P&L
+  after contributions (settled snapshots only, D120), activity, holding period, realized gains/losses and
+  commissions, and each rotation scored against holding (bought basket's move − sold basket's move − commissions).
+  Holding episodes replay BACKWARDS from the broker's current quantities: a forward replay was wrong because the
+  2026-06-26 paper reset cleared positions without a SELL. It had IFC still open and MRU/ATD/NVDA held for months.
+  Pure functions, `test/track-record.test.ts` (including the reset case). Information only; gates nothing.
+- **R7 weekly review** grades the track record.
+- **R8** (three pinned lessons that lean "below the bar means sell": #4645, #11170, #3092) is Cam's call and untouched.
+- Not changed: the §6 gate, the conviction bar, every guardrail statement. The held-position trigger prompt
+  (`runPositionCheck`, "you're free to … scrap the plan and act") wasn't in R1–R7 and is flagged for review.
+
+**First reading of the track record (live data, 2026-09-30):** −$2,568 (−3.8%) month-to-date after contributions;
+33 orders, 11 new names and 9 full exits in 30 days; 3 of 6 rotations beat holding (+0.8% average). The agent now
+sees this every session.
+
+**Watch (~2 weeks):** orders, new names and round trips a week, holding period and position count, against Opus 5.5's
+first week (19 orders, 8 new names, 20 positions); cash per currency against its ceiling (not swinging back to D39's
+~87% cash); month-to-date P&L vs contributions and the rotation scorecard; check-in tokens (the quota is gone).

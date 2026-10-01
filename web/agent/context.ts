@@ -15,6 +15,7 @@ import { getOptions, optionsLine } from "../lib/options/store";
 import { shortLessonLine } from "../lib/short/shadow";
 import { getSocial, socialLine } from "../lib/social/store";
 import { demotableSlots } from "./demote";
+import { trackRecordBlock } from "./track-record";
 import { HARD, DIALS, SOURCES, MACRO_SWEEP, CHECKIN_TIMES_ET, OPERATING_COST_USD_CENTS_PER_MONTH, SELF_INVEST } from "./policy";
 
 function money(c: number): string {
@@ -34,7 +35,7 @@ export async function buildContext(): Promise<string> {
     activeNow >= SELF_INVEST.maxUniverseSize
       ? `${activeNow}/${SELF_INVEST.maxUniverseSize} ACTIVE — OVER CAP, so a promote needs ${activeNow - SELF_INVEST.maxUniverseSize + 1} slot(s) freed first. You can free ${slots.count} yourself (${slots.demotesLeft} demotions left this week): ${slots.symbols.slice(0, 15).join(", ") || "none"}. Use demote_from_universe — this is NOT member-gated while that list is non-empty.`
       : `${activeNow}/${SELF_INVEST.maxUniverseSize} ACTIVE — ${SELF_INVEST.maxUniverseSize - activeNow} free. ${slots.count} more are reclaimable via demote_from_universe if you need room.`;
-  const [pf, settings, permanentLessons, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds] =
+  const [pf, settings, permanentLessons, lessons, retros, focus, openTheses, directives, slWindows, scoreboard, macro, macroEvents, upcoming, news, wakeups, agenda, marketFinds, trackRecord] =
     await Promise.all([
       getPortfolio(),
       prisma.settings.findUnique({ where: { id: 1 } }),
@@ -55,6 +56,7 @@ export async function buildContext(): Promise<string> {
       prisma.agentWakeup.findMany({ where: { status: "PENDING" }, orderBy: { dueAt: "asc" } }),
       prisma.agentAgendaItem.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "asc" } }),
       MBL_ON ? screenFinds(6).catch(() => []) : Promise.resolve([]),
+      trackRecordBlock(), // R6: never throws — degrades to a one-line note
     ]);
   const pad2 = (n: number) => String(n).padStart(2, "0");
   const dialName = settings?.riskLevel ?? "BALANCED";
@@ -208,6 +210,9 @@ Contributions ${money(pf.contributionsCents)} · Total P&L ${money(pf.totalPnlCe
 ${benchLine}
 ${hurdleLine}
 Fee budget: ${money(pf.feeSpentMonthCents)} spent of ${money(pf.feeBudgetCentsMonth)} this month.
+
+## Your track record — did your trading beat holding? (last 30 days; computed from your own fills)
+${trackRecord}
 
 ## Positions — THE ONE AND ONLY SOURCE OF TRUTH FOR WHAT THE FUND HOLDS (each line shows its weight as % of NAV + GRQ's current dossier call — use these to rank your own book by conviction and spot the weakest holding to rotate out of)
 GROUNDING RULE — READ BEFORE you state what we own or what filled: a name is HELD only if it appears in the list below. If it is NOT below, the fund does NOT hold it — no matter what a dossier, an old note, "our starter", a thesis, or your memory says (positions get cleared/sold/reset; a dossier's "we own this" can be STALE). Never write "we own X" / "hold the starter" / report a FILL for a name that is not below AND not in your trade ledger. When prose and this block disagree, this block wins. If unsure whether something filled, say so — do not narrate a fill you cannot see recorded.
