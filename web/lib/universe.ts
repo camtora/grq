@@ -114,20 +114,93 @@ export async function universeEntry(symbol: string): Promise<UniverseRow | null>
 // double-counting its options/social cache). RETIRED CDR shells share a bare symbol, so they're
 // excluded — they must not shadow a live listing. Returns null when nothing canonical exists.
 export async function canonicalMember(ticker: string): Promise<UniverseRow | null> {
-  const t = ticker.toUpperCase();
-  const rows = await load();
+  return pickCanonical(await load(), ticker);
+}
+
+const CA_SUFFIX = /\.(TO|V|NE|CN)$/i;
+
+/** Share-class / unit notation → the dash form we store and Yahoo quotes: the TSX (and
+ *  most US sources) write Hammond's class A as `HPS.A`, Yahoo as `HPS-A` (+ `.TO`), and so
+ *  do our rows. Any venue suffix (.TO/.V/.NE/.CN/.US) is left in place; every OTHER dot is
+ *  a class separator (`HPS.A`, `BRK.B`, `REI.UN`, `HPS.A.TO`). North-America only — a
+ *  foreign single-letter venue (`.L`) would be misread, which is why callers use this to
+ *  MATCH a tracked member or with a known NA exchange in hand, never as a blind rewrite. */
+export function classDash(symbol: string): string {
+  const s = symbol.trim().toUpperCase();
+  const m = s.match(/\.(TO|V|NE|CN|US)$/);
+  const venue = m ? m[0] : "";
+  return s.slice(0, s.length - venue.length).replace(/\./g, "-") + venue;
+}
+
+/** The pure rule behind canonicalMember (rows in, member out) — pinned in
+ *  test/symbol-resolution.test.ts. */
+export function pickCanonical(rows: UniverseRow[], ticker: string): UniverseRow | null {
+  const t = ticker.trim().toUpperCase();
   const exact = rows.find((r) => r.symbol === t);
   if (exact) return exact;
-  const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
+  const bare = (s: string) => classDash(s).replace(/\.(TO|V|NE|CN|US)$/i, "");
   const target = bare(t);
-  // An explicit `.US` request means "the US listing" — a Canadian member that merely
-  // shares the bare ticker is a DIFFERENT company (US T = AT&T, our T = Telus/T.TO),
-  // so it must not capture the URL. Cross-listed members (bare/US yahoo) still match.
+  // An explicit listing in the URL names a LISTING, not just a ticker, and bare tickers
+  // collide across the border. `.US` must not be captured by a Canadian member that merely
+  // shares the ticker (US T = AT&T, our T = Telus/T.TO); and a Canadian suffix must not be
+  // captured by a US one (NEO.TO = Neo Performance Materials, bare NEO = NeoGenomics —
+  // 2026-10-08, the wrong company got researched). Cross-listed members still match their
+  // own side.
   const wantsUs = /\.US$/i.test(t);
-  const caListed = (r: UniverseRow) => /\.(TO|V|NE|CN)$/i.test((r.yahoo ?? "").toUpperCase());
+  const wantsCa = CA_SUFFIX.test(t);
+  const caListed = (r: UniverseRow) => CA_SUFFIX.test((r.yahoo ?? "").toUpperCase());
   return (
-    rows.find((r) => r.status !== "RETIRED" && r.symbol !== t && bare(r.symbol) === target && !(wantsUs && caListed(r))) ?? null
+    rows.find(
+      (r) =>
+        r.status !== "RETIRED" &&
+        r.symbol !== t &&
+        bare(r.symbol) === target &&
+        !(wantsUs && caListed(r)) &&
+        !(wantsCa && !caListed(r)),
+    ) ?? null
   );
+}
+
+/** The tracked member that IS a given listing — for joining something that names a stock
+ *  from outside (a Chess play, a board piece) onto our universe. A bare-ticker join is not
+ *  enough: tickers collide across the border, and the join silently swaps the company
+ *  (the rare-earth board's NEO.TO play joined NeoGenomics the moment bare NEO was tracked).
+ *   1. the exact Yahoo listing, when the caller knows it;
+ *   2. else a same-ticker member whose NAME says it's the same company (a cross-listing
+ *      named by its other side — SHOP on the NYSE vs our SHOP.TO);
+ *   3. else, only when there is no name to compare, a same-ticker member on the same side
+ *      of the border.
+ *  Anything else is null: untracked beats wrong-company. */
+export function memberForListing(
+  rows: UniverseRow[],
+  want: { symbol: string; yahoo?: string | null; name?: string | null },
+): UniverseRow | null {
+  const live = rows.filter((r) => r.status !== "RETIRED");
+  const bare = (x: string) => classDash(x).replace(/\.(TO|V|NE|CN|US)$/i, "");
+  const asked = (want.yahoo || want.symbol).trim().toUpperCase();
+  if (want.yahoo) {
+    const y = classDash(want.yahoo).replace(/\.US$/, "");
+    const exact = live.find((r) => classDash(r.yahoo ?? "") === y);
+    if (exact) return exact;
+  }
+  const cands = live.filter((r) => bare(r.yahoo || r.symbol) === bare(asked));
+  if (cands.length === 0) return null;
+  const named = cands.find((r) => sameCompanyName(r.name, want.name));
+  if (named) return named;
+  if (want.name && want.name.trim()) return null;
+  const ca = CA_SUFFIX.test(asked);
+  return cands.find((r) => CA_SUFFIX.test((r.yahoo ?? "").toUpperCase()) === ca) ?? null;
+}
+
+/** The key a symbol's research + journal live under. Tracked → the member's own symbol.
+ *  Untracked → the symbol AS GIVEN, Canadian suffix included: everything downstream reads a
+ *  bare ticker as the US listing (toYahoo), so stripping `.TO` off an untracked name doesn't
+ *  shorten it, it renames it to a different company. Only `.US` (our tag, never a real
+ *  suffix) is dropped. */
+export async function researchKey(symbol: string): Promise<string> {
+  const m = await canonicalMember(symbol);
+  if (m && m.status !== "RETIRED") return m.symbol;
+  return symbol.trim().toUpperCase().replace(/\.US$/, "");
 }
 
 export async function inUniverse(symbol: string): Promise<boolean> {
@@ -176,9 +249,13 @@ export function yahooForListing(symbol: string, exchange?: string | null): strin
   // strip it and treat the result as an explicit US pick (bare on Yahoo).
   const s = symbol.trim().toUpperCase().replace(/\.US$/, "");
   if (s !== symbol.trim().toUpperCase()) return s;
-  if (/\.[A-Z]{1,3}$/.test(s)) return s; // FMP often already qualifies (RY.TO)
   const suf = exchange ? EXCHANGE_SUFFIX[exchange.trim().toUpperCase()] : undefined;
-  return suf ? `${s}${suf}` : s;
+  // On a Canadian venue a trailing `.A` is a share CLASS, not a listing (HPS.A on the TSX
+  // is Yahoo's HPS-A.TO) — it used to be "trusted as already qualified", which quoted
+  // nothing and labelled a Toronto stock USD.
+  if (suf && !CA_SUFFIX.test(s)) return `${classDash(s)}${suf}`;
+  if (/\.[A-Z]{1,3}$/.test(s)) return s; // FMP often already qualifies (RY.TO)
+  return s;
 }
 
 /** Bare ticker (suffix stripped) — the natural storage key when it's free. */

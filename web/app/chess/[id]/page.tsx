@@ -68,7 +68,7 @@ export default async function ChessBoardPage({ params }: { params: Promise<{ id:
   const board = book
     ? boardFull
     : { ...boardFull, stages: boardFull.stages.map((s) => ({ ...s, items: s.items.map((it) => ({ symbol: it.symbol, name: it.name })) })) };
-  const trendBySym = await buildBoardTrends(board);
+  const trendBySym = await buildBoardTrends(board, new Map(plays.map((p) => [bareChainKey(p.sym), p.listing])));
   const hrefBySym = new Map(plays.map((p) => [bareChainKey(p.sym), p.href]));
   const levers = parseConfidenceLevers(theme.confidenceLeversJson);
 

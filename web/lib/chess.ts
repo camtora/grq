@@ -3,7 +3,7 @@ import { computeHeat } from "./heat";
 import { fmpLogo } from "./logos";
 import { getQuotes } from "./broker/quotes";
 import { getCloses, refreshBars } from "./bars";
-import { trackedUniverse, yahooForListing, isCadTradeable, type UniverseRow } from "./universe";
+import { trackedUniverse, canonicalMember, memberForListing, yahooForListing, isCadTradeable, type UniverseRow } from "./universe";
 import { bareChainKey, parseBoard, type ChessBoardData, type BoardTrend } from "./chess-board";
 
 // Chess Moves (docs/CHESS-MOVES.md) — the view/helper layer for the thematic /
@@ -97,6 +97,15 @@ export type ChessBoardRef = {
  *  lead, never a trade. */
 export async function chessRefsForSymbol(symbol: string): Promise<ChessBoardRef[]> {
   const bare = bareChainKey(symbol);
+  // Same ticker is not same company (NEO.TO's rare-earth board is not NeoGenomics'): a board
+  // only belongs on this page if the piece resolves to THIS listing.
+  const me = await canonicalMember(symbol);
+  const caPage = /\.(TO|V|NE|CN)$/i.test(symbol);
+  const isMe = (want: { symbol: string; yahoo?: string | null; name?: string | null }) => {
+    if (bareChainKey(want.symbol) !== bare) return false;
+    if (me) return memberForListing([me], want)?.symbol === me.symbol;
+    return !want.yahoo || /\.(TO|V|NE|CN)$/i.test(want.yahoo) === caPage;
+  };
   const themes = await prisma.chessTheme.findMany({
     where: { status: "READY" },
     orderBy: { completedAt: "desc" },
@@ -109,7 +118,7 @@ export async function chessRefsForSymbol(symbol: string): Promise<ChessBoardRef[
       boardJson: true,
       plays: {
         orderBy: [{ conviction: "desc" }, { rank: "asc" }],
-        select: { symbol: true, role: true, direction: true, effectOrder: true, thesis: true, conviction: true },
+        select: { symbol: true, yahoo: true, exchange: true, companyName: true, role: true, direction: true, effectOrder: true, thesis: true, conviction: true },
       },
     },
   });
@@ -119,7 +128,7 @@ export async function chessRefsForSymbol(symbol: string): Promise<ChessBoardRef[
     const board = parseBoard(t.boardJson);
     const base = { themeId: t.id, title: t.title, anchor: t.anchor, kind: t.kind, completedAt: t.completedAt, board };
     // 1) A ranked play on this board → carry its role/direction/effect-order.
-    const play = t.plays.find((p) => bareChainKey(p.symbol) === bare);
+    const play = t.plays.find((p) => isMe({ symbol: p.symbol, yahoo: yahooForListing(p.yahoo || p.symbol, p.exchange), name: p.companyName }));
     if (play) {
       refs.push({
         ...base,
@@ -134,8 +143,7 @@ export async function chessRefsForSymbol(symbol: string): Promise<ChessBoardRef[
     }
     // 2) Otherwise, mentioned in the board MAP (a stage item's ticker, or a flow link).
     const inMap =
-      board.stages.some((st) => st.items.some((it) => it.symbol && bareChainKey(it.symbol) === bare)) ||
-      board.links.some((l) => bareChainKey(l.from) === bare || bareChainKey(l.to) === bare);
+      board.stages.some((st) => st.items.some((it) => it.symbol && isMe({ symbol: it.symbol, name: it.name })));
     if (inMap) {
       refs.push({ ...base, role: "on the board", direction: "NEUTRAL", effectOrder: 0, thesis: "", conviction: null, mentionedOnly: true });
     }
@@ -152,12 +160,13 @@ export async function buildPlayViews(plays: PlayRow[]): Promise<ChessPlayView[]>
   if (plays.length === 0) return [];
 
   const tracked = await trackedUniverse();
-  const uBy = new Map<string, UniverseRow>(tracked.map((r) => [bareChainKey(r.yahoo), r]));
 
   const resolved = plays.map((p) => {
     const bare = bareChainKey(p.symbol);
-    const u = uBy.get(bare) ?? null;
-    const listing = u ? u.symbol : p.yahoo || yahooForListing(p.symbol, p.exchange);
+    // Join on the play's LISTING, never the bare ticker (memberForListing).
+    const yahoo = yahooForListing(p.yahoo || p.symbol, p.exchange);
+    const u = memberForListing(tracked, { symbol: p.symbol, yahoo, name: p.companyName });
+    const listing = u ? u.symbol : yahoo;
     return { p, bare, u, listing };
   });
 
@@ -190,7 +199,9 @@ export async function buildPlayViews(plays: PlayRow[]): Promise<ChessPlayView[]>
       id: p.id,
       sym: bare,
       listing,
-      href: `/stocks/${encodeURIComponent(u?.symbol ?? bare)}`,
+      // The LISTING, not the bare ticker: an untracked Canadian play (NEO.TO) linked as
+      // bare "NEO" opens — and researches, and watches — the US company of that ticker.
+      href: `/stocks/${encodeURIComponent(listing)}`,
       name: p.companyName ?? u?.name ?? bare,
       role: p.role,
       direction: asDirection(p.direction),
@@ -230,14 +241,23 @@ export async function buildPlayViews(plays: PlayRow[]): Promise<ChessPlayView[]>
  *  read as-of-now. One batched getQuotes call, no per-name intraday fetch. A private/foreign piece with
  *  no listed bars is simply absent (no tape). Pure read/derive — a board is Alfred's reasoning, never a
  *  trade. */
-export async function buildBoardTrends(board: ChessBoardData): Promise<Map<string, BoardTrend>> {
+export async function buildBoardTrends(
+  board: ChessBoardData,
+  /** bare key → the listing its PLAY resolved to (buildPlayViews), so a chain piece charts
+   *  the same company its play card does. */
+  playListings?: Map<string, string>,
+): Promise<Map<string, BoardTrend>> {
   // Distinct board-item tickers (the flow-links reuse these same symbols).
   const bySym = new Map<string, string>(); // bareKey → first raw symbol seen
+  const nameBy = new Map<string, string>(); // bareKey → the piece's company name
   for (const st of board.stages) {
     for (const it of st.items) {
       if (!it.symbol) continue;
       const k = bareChainKey(it.symbol);
-      if (!bySym.has(k)) bySym.set(k, it.symbol);
+      if (!bySym.has(k)) {
+        bySym.set(k, it.symbol);
+        nameBy.set(k, it.name);
+      }
     }
   }
   if (bySym.size === 0) return new Map();
@@ -245,8 +265,13 @@ export async function buildBoardTrends(board: ChessBoardData): Promise<Map<strin
   // Resolve each ticker to the listing we price/chart it on: our tracked symbol when we cover it,
   // else the inferred Yahoo listing (toYahoo no longer mangles bare/US tickers — D45).
   const tracked = await trackedUniverse();
-  const uBy = new Map<string, UniverseRow>(tracked.map((r) => [bareChainKey(r.yahoo), r]));
-  const resolved = Array.from(bySym.entries()).map(([k, raw]) => ({ k, listing: uBy.get(k)?.symbol ?? yahooForListing(raw) }));
+  const resolved = Array.from(bySym.entries()).map(([k, raw]) => ({
+    k,
+    listing:
+      playListings?.get(k) ??
+      memberForListing(tracked, { symbol: raw, name: nameBy.get(k) })?.symbol ??
+      yahooForListing(raw),
+  }));
 
   const listings = Array.from(new Set(resolved.map((r) => r.listing)));
   // ~1y of daily closes so the 1D…1Y toggle can slice locally. Backfill "1y" only for names we've

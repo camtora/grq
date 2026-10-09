@@ -5,7 +5,7 @@ import { dailyQuote } from "./dailyquote";
 import { soakStatus } from "./soak";
 import { listFxRequests } from "./fx-requests";
 import { getQuotes, getQuote } from "./broker/quotes";
-import { allUniverse, type UniverseRow, bareTicker, yahooForListing } from "./universe";
+import { allUniverse, type UniverseRow, bareTicker, yahooForListing, pickCanonical } from "./universe";
 import { exchangeLine } from "./exchange";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
@@ -1410,7 +1410,7 @@ export async function chessBoardResponse(id: number) {
   const board = parseBoard(t.boardJson);
   const ready = t.status === "READY";
   const plays = ready ? await buildPlayViews(t.plays) : [];
-  const trendMap = ready ? await buildBoardTrends(board) : new Map<string, { series: { t: number; c: number }[]; todayBps?: number | null }>();
+  const trendMap = ready ? await buildBoardTrends(board, new Map(plays.map((p) => [bareChainKey(p.sym), p.listing]))) : new Map<string, { series: { t: number; c: number }[]; todayBps?: number | null }>();
   const levers = parseConfidenceLevers(t.confidenceLeversJson);
   return {
     id: t.id,
@@ -1435,7 +1435,9 @@ export async function chessBoardResponse(id: number) {
     ),
     plays: plays.map((p) => ({
       id: p.id,
-      symbol: p.sym,
+      // The listing-qualified symbol (NEO.TO for an untracked Canadian play): the app
+      // navigates, researches and watches by this, and a bare ticker means the US company.
+      symbol: p.listing,
       name: p.name,
       role: p.role,
       direction: p.direction,
@@ -1704,9 +1706,10 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
   // Canonicalise like the web stock page (D89): an exact symbol match first, else a non-RETIRED
   // member by bare ticker — so a stale `/api/dossier/MU.US` deep-link still resolves to bare `MU`
   // after the .US→bare rename. (mobile parity for the web /stocks/MU.US → /stocks/MU redirect.)
-  const bare = (s: string) => s.toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
+  // ONE rule, shared with the web page (pickCanonical): share-class notation (HPS.A → HPS-A)
+  // and the cross-border guard (NEO.TO is not bare NEO) live there, not in a copy here.
   const req = symbol.toUpperCase();
-  let entry = all.find((u) => u.symbol === req) ?? all.find((u) => u.status !== "RETIRED" && bare(u.symbol) === bare(req));
+  let entry = pickCanonical(all, req) ?? undefined;
   if (!entry) {
     // Not in the universe — synthesise a row so a researched find / screened name renders
     // the SAME rich dossier as a tracked name (mirror of the web stock page's untracked
@@ -1725,7 +1728,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     const hasFullDossier = pjournal.some((j) => j.kind === "RESEARCH" && j.title.startsWith("Dossier"));
     if (opts?.requestedBy && hasResearch && !hasFullDossier && !pending) {
       try {
-        await prisma.researchRequest.create({ data: { symbol: bareTicker(req), requestedBy: opts.requestedBy } });
+        await prisma.researchRequest.create({ data: { symbol: req.replace(/\.US$/, ""), requestedBy: opts.requestedBy } });
       } catch {
         /* best-effort — a race just means it's already queued */
       }

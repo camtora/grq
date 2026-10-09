@@ -178,7 +178,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
     const hasFullDossier = pjournal.some((j) => j.kind === "RESEARCH" && j.title.startsWith("Dossier"));
     if (isMember && hasResearch && !hasFullDossier && !pendingReq) {
       try {
-        await prisma.researchRequest.create({ data: { symbol: bareTicker(symbol), requestedBy: me } });
+        await prisma.researchRequest.create({ data: { symbol: symbol.replace(/\.US$/, ""), requestedBy: me } });
       } catch {
         /* best-effort — a race just means it's already queued */
       }
@@ -461,7 +461,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                   researchInFlight={researchInFlight}
                 />
               )}
-              {isMember && <WatchButton symbol={symbol} watching={iWatch} />}
+              {isMember && <WatchButton symbol={symbol} exchange={entry.exchange ?? undefined} currency={entry.currency ?? undefined} watching={iWatch} />}
               {book && (
                 <DirectiveButtons
                   symbol={symbol}

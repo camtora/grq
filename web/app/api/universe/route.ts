@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { memberFromRequest, displayName } from "@/lib/session";
 import {
   universeEntry,
+  canonicalMember,
   invalidateUniverseCache,
   BENCHMARK,
   CANDIDATE_CAP,
@@ -70,9 +71,21 @@ export async function POST(req: Request) {
     const pickExchange = typeof body.exchange === "string" ? body.exchange : null;
     const pickCurrency = typeof body.currency === "string" ? body.currency.toUpperCase() : null;
     const pickName = typeof body.name === "string" ? body.name.slice(0, 120) : null;
+    // Already tracked under another spelling — the TSX's share-class dot (HPS.A is our
+    // HPS-A) or a listing suffix (RY.TO is our RY): watch THAT member. Only a non-exact
+    // match, so an explicit pick of a second listing on an occupied bare ticker (US "T"
+    // vs our Telus) still reaches the collision logic below; pickCanonical itself refuses
+    // to hand a Canadian suffix to a US member or `.US` to a Canadian one.
+    const alias = await canonicalMember(symbol);
+    if (alias && alias.symbol !== symbol && alias.status !== "RETIRED" && !pickExchange) {
+      await watch(alias.symbol, session.email);
+      return NextResponse.json({ ok: true, status: alias.status, symbol: alias.symbol, watching: true });
+    }
+
     const explicit = !!(pickExchange || symbol.includes("."));
     const intendedYahoo = explicit ? yahooForListing(symbol, pickExchange) : null;
     const bare = bareTicker(symbol);
+    const caPick = !!intendedYahoo && /\.(TO|V|NE|CN)$/i.test(intendedYahoo);
 
     // Storage key: the bare ticker if free (or it's already this same listing),
     // else the exchange-qualified symbol so two listings of one ticker coexist.
@@ -81,6 +94,18 @@ export async function POST(req: Request) {
       const atBare = await universeEntry(bare);
       if (atBare && atBare.yahoo.toUpperCase() !== intendedYahoo.toUpperCase()) {
         key = intendedYahoo.toUpperCase() === bare ? `${bare}.US` : intendedYahoo.toUpperCase();
+      }
+      // The bare key can also be taken by RESEARCH rather than a member: an untracked US
+      // name's dossier lives under its bare ticker. A Canadian pick of the same ticker is a
+      // different company (NEO.TO vs NeoGenomics' "NEO"), so it keeps its qualified key and
+      // never inherits the other's write-ups.
+      if (key === bare && caPick && !atBare) {
+        const squatter = await prisma.journalEntry.findFirst({
+          where: { symbol: bare, kind: "RESEARCH", exchange: { not: null } },
+          orderBy: { at: "desc" },
+          select: { exchange: true },
+        });
+        if (squatter?.exchange && inferCountry(null, squatter.exchange) === "US") key = intendedYahoo.toUpperCase();
       }
     }
     const keyed = await universeEntry(key);
@@ -99,11 +124,12 @@ export async function POST(req: Request) {
       // legacy try-order for a bare ticker (US, then TSX/TSX-V). US names are
       // RESEARCH candidates — tradeable only once they're CAD or we trade USD.
       const tries = intendedYahoo ? [intendedYahoo] : symbol.includes(".") ? [symbol] : [symbol, `${symbol}.TO`, `${symbol}.V`];
-      let resolved: { yahoo: string; priceCents: number; name: string | null } | null = null;
+      let resolved: { yahoo: string; priceCents: number; name: string | null; currency: string | null } | null = null;
       for (const yahoo of tries) {
         const probe = await probeYahooSymbol(yahoo);
         if (probe) {
-          resolved = { yahoo, ...probe };
+          const fed = (probe.currency ?? "").toUpperCase();
+          resolved = { yahoo, priceCents: probe.priceCents, name: probe.name, currency: fed === "CAD" || fed === "USD" ? fed : null };
           break;
         }
       }
@@ -115,13 +141,20 @@ export async function POST(req: Request) {
           name: pickName ?? resolved.name ?? bare,
           status: "CANDIDATE",
           addedBy: who,
-          currency: pickCurrency,
+          // The listing's own currency from the exchange feed when the caller didn't pick
+          // one (D113) — the tick's reconcileListingCurrencies keeps it honest after.
+          currency: pickCurrency ?? resolved.currency,
           exchange: pickExchange,
-          country: inferCountry(pickCurrency, pickExchange),
+          country: inferCountry(pickCurrency ?? resolved.currency, pickExchange),
           note: typeof body.note === "string" ? body.note.slice(0, 200) : null,
         },
       });
       invalidateUniverseCache();
+      // Research done before it was tracked sits under the listing it was opened by
+      // (NEO.TO); bring it along when the member's key is the bare ticker.
+      if (key !== resolved.yahoo.toUpperCase()) {
+        await prisma.journalEntry.updateMany({ where: { symbol: resolved.yahoo.toUpperCase() }, data: { symbol: key } });
+      }
       await refreshQuotesFor([key]).catch(() => 0);
       await refreshBars([key], "1y").catch(() => 0);
       await prisma.researchRequest.create({ data: { symbol: key, requestedBy: who } });

@@ -94,7 +94,7 @@ export default function PlayCard({ play, isMember }: { play: ChessPlayView; isMe
 
       {isMember && (
         <div className="shrink-0">
-          <ChessResearchButton symbol={play.sym} />
+          <ChessResearchButton symbol={play.listing} />
         </div>
       )}
     </div>

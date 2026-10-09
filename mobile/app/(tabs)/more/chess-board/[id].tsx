@@ -202,6 +202,10 @@ export default function ChessBoardScreen() {
   const { data: d, error, loading, refreshing, refresh } = useApi<BoardWire>(`/api/chess/${id}`);
   const [range, setRange] = useState<BoardRangeKey>('1D');
 
+  // A chain piece that is also a play opens the play's LISTING (NEO.TO), not its bare
+  // ticker — bare means the US company of that ticker (NEO = NeoGenomics).
+  const listingBy = new Map((d?.plays ?? []).map((pl) => [bareChainKey(pl.symbol), pl.symbol]));
+  const stockPath = (raw: string) => `/stock/${listingBy.get(bareChainKey(raw)) ?? bareChainKey(raw)}`;
   const trends = d?.trends ?? {};
   const hasTrends = Object.keys(trends).length > 0;
   const working = d && d.status !== 'READY' && (d.status === 'PENDING' || d.status === 'RUNNING');
@@ -332,7 +336,7 @@ export default function ChessBoardScreen() {
                                 <Text style={s.itemLine}>
                                   {it.symbol ? (
                                     <Text
-                                      onPress={() => router.push(`/stock/${bareChainKey(it.symbol!)}`)}
+                                      onPress={() => router.push(stockPath(it.symbol!) as never)}
                                       style={[s.itemSym, { color: p.accentText }]}
                                     >
                                       {it.symbol}{' '}
@@ -372,11 +376,11 @@ export default function ChessBoardScreen() {
                   <View style={s.linksWrap}>
                     {d.board.links.map((l, i) => (
                       <Text key={i} style={[s.linkLine, { color: p.textMuted }]}>
-                        <Text onPress={() => router.push(`/stock/${bareChainKey(l.from)}`)} style={{ color: p.accentText, fontFamily: F.semi }}>
+                        <Text onPress={() => router.push(stockPath(l.from) as never)} style={{ color: p.accentText, fontFamily: F.semi }}>
                           {l.from}
                         </Text>
                         <Text style={{ color: p.accentText }}> → </Text>
-                        <Text onPress={() => router.push(`/stock/${bareChainKey(l.to)}`)} style={{ color: p.accentText, fontFamily: F.semi }}>
+                        <Text onPress={() => router.push(stockPath(l.to) as never)} style={{ color: p.accentText, fontFamily: F.semi }}>
                           {l.to}
                         </Text>
                         {l.label ? ` · ${l.label}` : ''}

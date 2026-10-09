@@ -105,17 +105,21 @@ export default function StockScreen() {
   const myKey = me?.email?.includes('appleby') ? 'graham' : 'cam';
   const iWatch = (d?.watchers ?? []).some((w) => w.key === myKey);
   const [watchBusy, setWatchBusy] = useState(false);
+  const [watchMsg, setWatchMsg] = useState<string | null>(null);
   const toggleWatch = async () => {
     if (watchBusy || !d) return;
     setWatchBusy(true);
+    setWatchMsg(null);
     try {
       await api('/api/universe', {
         method: 'POST',
         body: JSON.stringify(iWatch ? { action: 'unwatch', symbol: d.symbol } : { action: 'add', symbol: d.symbol, name: d.name, currency: d.currency }),
       });
       refresh();
-    } catch {
-      /* refresh shows truth */
+    } catch (e) {
+      // Say why. A swallowed refusal ("couldn't find a live quote", a full candidate pool)
+      // looked exactly like a dead button (Cam 2026-10-08) — same lesson as the web star.
+      setWatchMsg(e instanceof Error ? e.message : 'Could not update your watch.');
     } finally {
       setWatchBusy(false);
     }
@@ -206,6 +210,7 @@ export default function StockScreen() {
                       <Text style={[s.tag, s.watchAfter, { color: p.textMuted }]}>watch</Text>
                     )}
                   </Pressable>
+                  {watchMsg && <Text style={[s.tag, { color: p.neg }]}>{watchMsg}</Text>}
                   {d.status === 'ACTIVE' && <Text style={[s.tag, { color: p.pos }]}>in universe</Text>}
                   {d.researching && <Text style={[s.tag, { color: p.warn }]}>researching…</Text>}
                 </View>

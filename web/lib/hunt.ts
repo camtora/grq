@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import { universeEntry, bareTicker } from "./universe";
+import { universeEntry, researchKey } from "./universe";
 
 // Queue a FULL dossier for a discovery-hunt find — researched and ready for when a
 // member clicks it, WITHOUT adding it to the universe/Watchlist (Cam, 2026-06-17, D30).
@@ -14,7 +14,9 @@ import { universeEntry, bareTicker } from "./universe";
 export type HuntQueue = "queued" | "tracked" | "exists" | "pending";
 
 export async function queueHuntDossier(symbol: string): Promise<HuntQueue> {
-  const key = bareTicker(symbol);
+  // The key keeps an untracked name's Canadian suffix (researchKey): a Chess play for
+  // NEO.TO queued as bare "NEO" was researched as NeoGenomics on the NASDAQ (2026-10-08).
+  const key = await researchKey(symbol);
 
   // Already a universe member (watchlist/active/retired) — it has its own research flow.
   if (await universeEntry(key)) return "tracked";
