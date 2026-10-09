@@ -64,7 +64,9 @@ export default async function SmartMoney() {
     ...portfolios.flatMap((p) => p.topHoldings.map((h) => h.linkSymbol ?? h.symbol)),
     ...members.flatMap((m) => m.trades.map((t) => t.linkSymbol ?? t.symbol)),
   ].filter((s) => s && !overlap[s]);
-  await queueDossiers(shownSymbols, "smart-money").catch(() => {});
+  // Members only: a dossier is an Opus pass on the fund's quota, and a page VIEW by a viewer
+  // or a user must never be what spends it (same rule as the stock page's on-demand kick).
+  if (session?.role === "member") await queueDossiers(shownSymbols, "smart-money").catch(() => {});
 
   const congressRows: LeaderRow[] = congress.map((c) => ({
     symbol: c.symbol,

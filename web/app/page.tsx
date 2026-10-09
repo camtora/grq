@@ -210,7 +210,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   // Who's reading (D122): members and viewers get the fund's day + holdings; a GRQ USER gets
   // the newspaper without the book — the market, the names we track, the research.
-  const book = seesBook(await getSession());
+  const session = await getSession();
+  const book = seesBook(session);
 
   const [pf, weekly, dayOpenSnap, quoteRows, universeRows, watchlist, dossiers, ideaRows, marketNews, marketGainers, marketIndices, marketCadUsd, macro, earnCal] =
     await Promise.all([
@@ -252,7 +253,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   // The whole-market gainers aren't in our universe; queue a dossier for any we
   // haven't already researched or queued, and the agent fills in the stock page.
   // Idempotent — Today re-renders every load, so skip names already known.
-  if (isToday && marketGainers.length > 0) {
+  // Members only: each dossier is an Opus pass on the fund's quota — a viewer's or a user's
+  // page view must never be what spends it.
+  if (isToday && marketGainers.length > 0 && session?.role === "member") {
     const tracked = new Set(universeRows.map((u) => u.symbol));
     const fresh = marketGainers.map((m) => m.symbol).filter((s) => !tracked.has(s));
     if (fresh.length > 0) {

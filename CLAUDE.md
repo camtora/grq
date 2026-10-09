@@ -271,6 +271,15 @@ edit `lib/users.ts` (named) or `GRQ_ALLOWED_EMAILS` (anonymous), rebuild web.
 Add/remove a **user**: `GRQ_USER_EMAILS` in `.env`, then `docker-compose up -d
 --force-recreate web` (env-only, no rebuild).
 
+**Open user tier (D133, live since 2026-10-08):** `GRQ_USER_EMAILS` ends in `,*`, so **anyone on the infra SSO
+allowlist is a GRQ user** — the header is the proof (oauth2-proxy enforces the allowlist; GRQ does not re-read the
+file). `*` grants `user` only, never viewer/member. Remove the `,*` + force-recreate web to close it. **New API
+route? `test/route-guards.test.ts` fails the build** until it resolves an identity (or is listed `PUBLIC` with a
+reason) and, if it writes, takes `memberFromRequest` (or is listed `OPEN_WRITES`). A page view by a non-member must
+never queue research (Opus on the fund's quota) and never feeds the members' search history. **Known side door:**
+port 3012 is published on all interfaces and trusts `X-Forwarded-Email` from anyone who reaches it (LAN) — open
+decision in D133.
+
 **Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
 cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**
 (`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at

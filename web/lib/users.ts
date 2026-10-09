@@ -67,6 +67,12 @@ function viewerEmails(): string[] {
 // DENY-BY-DEFAULT: middleware admits a user only to the paths in lib/access.ts, and the
 // pages on that list gate their book fragments on session.seesBook(). GRQ_USER_EMAILS env,
 // comma-separated, no rebuild; empty = no users.
+//
+// `*` in the list OPENS the tier (Cam, 2026-10-08): anyone the SSO let in — i.e. anyone on
+// the infra allowlist (~/infrastructure/oauth2-proxy/authenticated_emails.txt), which
+// oauth2-proxy enforces before a request can carry X-Forwarded-Email — is a user. GRQ does
+// not re-read that file; the header IS the proof, exactly as it already is for members.
+// The tier a wildcard grants is only ever `user`: members and viewers stay named lists.
 function userEmails(): string[] {
   return (process.env.GRQ_USER_EMAILS ?? "")
     .split(",")
@@ -79,8 +85,12 @@ export function roleForEmail(email: string | null | undefined): Role | null {
   const normalized = email.trim().toLowerCase();
   if (isMember(normalized)) return "member";
   if (viewerEmails().includes(normalized)) return "viewer";
-  if (userEmails().includes(normalized)) return "user";
-  return null; // not on the GRQ allowlist → blocked (was: any allowlisted email got "viewer")
+  const users = userEmails();
+  if (normalized !== "*" && users.includes(normalized)) return "user";
+  // The open tier: any real address the SSO vouched for. Shape-checked so a junk header
+  // value isn't an identity.
+  if (users.includes("*") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return "user";
+  return null; // not on the GRQ allowlist → blocked
 }
 
 export function userForEmail(email: string | null | undefined): GrqUser | null {

@@ -35,6 +35,24 @@ describe("roleForEmail — member > viewer > user > nobody", () => {
     process.env.GRQ_USER_EMAILS = "";
     assert.equal(roleForEmail("jose@example.com"), null);
   });
+
+  // The open tier (Cam, 2026-10-08): `*` makes anyone the SSO vouched for a USER — and only
+  // ever a user. It must never lift anyone to viewer or member, or admit a non-address.
+  it("`*` opens the USER tier to any real address, and nothing higher", () => {
+    process.env.GRQ_USER_EMAILS = "*";
+    assert.equal(roleForEmail("stranger@example.com"), "user");
+    assert.equal(roleForEmail(" Someone.Else@Gmail.com "), "user");
+    assert.equal(roleForEmail("cameron.tora@gmail.com"), "member");
+    assert.equal(roleForEmail("cameron@camerontora.ca"), "viewer");
+    for (const junk of ["", " ", "*", "not-an-email", "a@b", "two words@x.com", null, undefined]) {
+      assert.equal(roleForEmail(junk as string | null), null, `"${junk}" is not an identity`);
+    }
+  });
+  it("`*` alongside named users changes nothing for them", () => {
+    process.env.GRQ_USER_EMAILS = "dave@example.com,*";
+    assert.equal(roleForEmail("dave@example.com"), "user");
+    assert.equal(roleForEmail("stranger@example.com"), "user");
+  });
 });
 
 // Everything a user may reach — the research + education surface, its browser fetches, and

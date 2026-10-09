@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { allUniverse, classDash, pickCanonical, sameCompanyName } from "@/lib/universe";
 import { allWatches } from "@/lib/watch";
 import { sessionFromRequest } from "@/lib/session";
+import { memberEmails } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,9 @@ export const dynamic = "force-dynamic";
 // (members + viewers); the door already authenticated, and every stock page
 // these point at is viewer-readable anyway.
 //
-// `seenAt` is the most-recent page view of that stock BY ANYONE (epoch ms, 0 if
-// never), derived from the existing PageView usage log — it drives the
-// recently-accessed ordering in the dropdown.
+// `seenAt` is the most-recent page view of that stock (epoch ms, 0 if never), derived
+// from the existing PageView usage log — it drives the recently-accessed ordering in the
+// dropdown. Scoped by tier: members share theirs, everyone else gets only their own.
 
 export type StockIndexItem = {
   symbol: string; // the canonical universe key → /stocks/<symbol>
@@ -98,9 +99,13 @@ export async function GET(req: Request) {
   }
 
   // Most-recent view per stock, by anyone — from the existing usage beacon.
+  // WHOSE views: the members share one history (Cam and Graham see what either looked at).
+  // Anyone else — a viewer, a user — sees only their own, and never feeds the members'
+  // (Cam, 2026-10-08: users may use search, they may not shape ours or read it).
+  const historyOf = session.role === "member" ? memberEmails() : [session.email];
   const views = await prisma.pageView.groupBy({
     by: ["path"],
-    where: { path: { startsWith: "/stocks/" } },
+    where: { path: { startsWith: "/stocks/" }, email: { in: historyOf } },
     _max: { at: true },
   });
   const seen = new Map<string, number>();

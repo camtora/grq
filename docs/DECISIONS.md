@@ -4130,3 +4130,48 @@ empty. Detail: `docs/MARKET-BASE-LAYER.md`.
   sources, so the `NEO.TO` page can show NeoGenomics' relations. Needs a re-key, not a patch.
 - AT&T shows in header search only as a nameless `T.US` row (bare `T` is Telus).
 - `test/auth-jwt.test.ts`: 3 `refreshGrqToken` tests fail on main, unrelated to this change, not investigated.
+
+### D133 — Access hardening: the meters are Cam's, the user tier opens to the SSO allowlist, and guards are checked by the build (Cam, 2026-10-08)
+
+**Ask.** Let more people in as GRQ users without any path to Cam's and Graham's holdings, keep usage tracking to
+Cam alone, and harden permissions generally.
+
+**Audit (probed live as a member, the other member, a viewer, a user, an allowlisted outsider, a junk header, a junk
+Bearer, and no identity).** The D122 user door held: no account, portfolio, report, journal, chat, settings or meter
+route answered a user; the stock page of a name Graham holds personally (TSM) rendered no personal-holdings panel;
+every user-tier page's payload carried null position fields. Four real gaps, all fixed:
+- **Traffic + Tokens were an owner privilege**, so Graham had them. Now `seesMeters` (`lib/users.ts`, default Cam,
+  `METER_EMAILS`): `/traffic`, `/tokens`, `/api/traffic`, `/api/tokens`, `/api/admin/usage-window`. Owners
+  (`isOwner`: Settings, How GRQ works) are unchanged. `/api/auth/me` carries `meters` so the app lists the rows
+  only for Cam.
+- **A page view could spend the fund's Claude quota.** Today's movers and Smart Money queued Opus dossiers for
+  whoever rendered the page. Now members only, like the stock page's on-demand dossier.
+- **Search history was "by anyone".** A user's stock views ordered the members' recents, and a user saw the
+  members'. Now members share theirs; everyone else gets only their own.
+- **`GRQ_DEV_EMAIL` resolved an identity in production** in the session resolvers (the middleware had the
+  `NODE_ENV` guard, they did not). Unset today, so latent — but with it set, a junk Bearer on a mobile route would
+  have become that email. Now `devEmail()`, dead in production.
+
+**The open user tier.** `*` in `GRQ_USER_EMAILS` makes anyone the SSO admitted a `user` — i.e. anyone on the infra
+allowlist (`oauth2-proxy/authenticated_emails.txt`, enforced by oauth2-proxy before a request can carry
+`X-Forwarded-Email`). GRQ does not re-read that file: the header is the proof, as it already is for members. The
+wildcard grants `user` and nothing higher, only to a value shaped like an address; members and viewers stay named
+lists. Set live 2026-10-08. Close it again by deleting `,*` and `docker-compose up -d --force-recreate web`.
+
+**Class guards (build fails, not a checklist):**
+- `test/route-guards.test.ts` reads every `app/api/**/route.ts`: each must resolve an identity or sit on a
+  `PUBLIC` list with a reason; each write method must take `memberFromRequest` or sit on `OPEN_WRITES` with a
+  reason. It also pins the members-only research kicks, the search-history scope and the dead dev fallback.
+- `test/meters-access.test.ts` pins who sees the meters and that no meter surface gates on ownership.
+- `test/access-tiers.test.ts` pins the wildcard (never above `user`, never a non-address — it caught a literal
+  `*` resolving as a user in the first draft) and every personal-accounts route behind the door.
+
+**Not changed, and worth a decision.**
+- **Port 3012 is published on every interface** (`0.0.0.0:3012`). GRQ trusts `X-Forwarded-Email` from whoever
+  reaches that port, so anything on the LAN can send Cam's address and be Cam — kill switch included. nginx sets
+  or clears the header correctly for traffic through the front door; this is the side door. It is documented
+  behaviour (LAN health probe, the curl-as-a-member trick), nginx reaches the app through that same port, and
+  whether the router/firewall exposes it beyond the LAN was not checked (needs sudo). Fix = bind the port to the
+  docker bridge address nginx uses, or a shared secret header from nginx; touches infra, so not done unasked.
+- Users can call `/api/explain` (a small Claude call each) with no rate limit.
+- A viewer still sees the whole fund read-only (by design, D122) — never put a new outsider on the viewer list.

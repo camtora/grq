@@ -4,6 +4,13 @@ import { emailFromGrqToken, bearerToken } from "./auth-jwt";
 
 export type Session = { email: string; user: GrqUser | null; role: Role };
 
+/** The local-dev identity fallback. NEVER in production: there it would hand GRQ_DEV_EMAIL's
+ *  role to any request that got past the door without an identity (a junk Bearer on a mobile
+ *  route). The middleware already had this guard; the session resolvers did not. */
+export function devEmail(): string | null {
+  return process.env.NODE_ENV !== "production" ? (process.env.GRQ_DEV_EMAIL ?? null) : null;
+}
+
 /** Resolve the request's email. The browser path is oauth2-proxy's
  *  X-Forwarded-Email (set upstream, never client-supplied through the front
  *  door). The mobile path has no cookie, so it falls back to a verified GRQ-JWT
@@ -13,7 +20,7 @@ function emailFromHeaders(h: { get(name: string): string | null }): string | nul
   if (forwarded) return forwarded;
   const authz = h.get("authorization");
   const token = authz ? /^Bearer\s+(.+)$/i.exec(authz.trim())?.[1]?.trim() ?? null : null;
-  return emailFromGrqToken(token) ?? process.env.GRQ_DEV_EMAIL ?? null;
+  return emailFromGrqToken(token) ?? devEmail();
 }
 
 /** Identity for server components/route handlers. Middleware already admitted
@@ -33,8 +40,7 @@ export function sessionFromRequest(req: Request): Session | null {
   const email =
     (req.headers.get("x-forwarded-email") || null) ??
     emailFromGrqToken(bearerToken(req)) ??
-    process.env.GRQ_DEV_EMAIL ??
-    null;
+    devEmail();
   const role = roleForEmail(email);
   if (!email || !role) return null;
   return { email: email.toLowerCase(), user: userForEmail(email), role };
