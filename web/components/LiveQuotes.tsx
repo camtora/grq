@@ -11,7 +11,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 //
 // Cadence is calmer than the hero ticker (the table is ambient, not the focus), and
 // polling pauses while the tab is hidden so background tabs don't burn FMP calls.
-export type LiveQuote = { priceCents: number; changePct: number };
+// `delayed` = served from our cached (≈15-min) price, not the live feed — see /api/quotes.
+export type LiveQuote = { priceCents: number; changePct: number; delayed?: boolean };
 const POLL_MS = 10_000;
 
 type Ctx = { quotes: Record<string, LiveQuote>; updatedAt: number | null };

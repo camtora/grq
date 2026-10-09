@@ -4,9 +4,44 @@
 // null/[] so the app degrades to Yahoo-only rather than breaking. The
 // company-screener endpoint is gated on the current plan — don't wire it.
 
+import { fetchYahooQuotes } from "./broker/yahoo";
+
 const BASE = "https://financialmodelingprep.com/stable";
 const fmpKey = () => process.env.FMP_API_KEY ?? "";
 export const fmpEnabled = () => fmpKey().length > 0;
+
+// ── What the data plan refuses ────────────────────────────────────────────────
+// GRQ was built against FMP Ultimate and is running on Starter (Cam, 2026-10-08). Starter
+// answers HTTP 402 for whole endpoints ("Restricted Endpoint": batch quotes, 13F) and for
+// particular values on endpoints it otherwise serves ("Premium Query Parameter": any `.TO`
+// symbol, the TSX index, oil). fmpGet still returns null for those, as it does for "no data"
+// — but it REMEMBERS which it was, so a panel can say "not in our data plan" instead of
+// "no coverage for this name", and so the quote paths can stop asking for what won't come.
+// Remembered for 30 min, so a plan change heals itself on the next probe.
+const PLAN_REFUSAL_TTL_MS = 30 * 60_000;
+const planRefusals = new Map<string, number>(); // "endpoint" (whole) or "endpoint|VALUE" → when
+
+function noteRefusal(path: string, body: string): void {
+  const endpoint = path.split("?")[0];
+  const now = Date.now();
+  if (/restricted endpoint/i.test(body)) {
+    planRefusals.set(endpoint, now);
+    return;
+  }
+  const value = /[?&](?:symbols?|exchange)=([^&]+)/.exec(path)?.[1];
+  if (value) planRefusals.set(`${endpoint}|${decodeURIComponent(value).toUpperCase()}`, now);
+}
+
+/** Did the plan refuse this endpoint (or this endpoint for this symbol/exchange) recently?
+ *  `endpoint` is the path before the query ("price-target-consensus"). Only ever true after a
+ *  real 402 in this process — never a guess about what a plan includes. */
+export function fmpPlanRefused(endpoint: string, value?: string): boolean {
+  const fresh = (k: string) => {
+    const at = planRefusals.get(k);
+    return at != null && Date.now() - at < PLAN_REFUSAL_TTL_MS;
+  };
+  return fresh(endpoint) || (value != null && fresh(`${endpoint}|${value.toUpperCase()}`));
+}
 
 async function fmpGet<T>(path: string): Promise<T | null> {
   const k = fmpKey();
@@ -14,6 +49,10 @@ async function fmpGet<T>(path: string): Promise<T | null> {
   try {
     const sep = path.includes("?") ? "&" : "?";
     const r = await fetch(`${BASE}/${path}${sep}apikey=${k}`, { cache: "no-store", signal: AbortSignal.timeout(12_000) });
+    if (r.status === 402) {
+      noteRefusal(path, await r.text().catch(() => ""));
+      return null;
+    }
     if (!r.ok) return null;
     const data = await r.json();
     // FMP returns { "Error Message": ... } for restricted/legacy endpoints.
@@ -22,6 +61,42 @@ async function fmpGet<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+// One symbol at a time (`quote-short` — the plan serves it where it refuses the batch form).
+// Cached a few seconds per symbol so several open pages share one call.
+const SINGLE_QUOTE_TTL_MS = 5_000;
+const singleQuotes = new Map<string, { at: number; v: { symbol: string; price: number; change: number } | null }>();
+async function fmpQuoteOne(symbol: string): Promise<{ symbol: string; price: number; change: number } | null> {
+  const sym = symbol.toUpperCase();
+  const hit = singleQuotes.get(sym);
+  if (hit && Date.now() - hit.at < SINGLE_QUOTE_TTL_MS) return hit.v;
+  if (fmpPlanRefused("quote-short", sym)) return null; // the plan said no for this one — don't keep asking
+  const raw = await fmpGet<Array<Record<string, unknown>>>(`quote-short?symbol=${encodeURIComponent(sym)}`);
+  const q = Array.isArray(raw) ? raw[0] : null;
+  const v = q && typeof q.price === "number" ? { symbol: sym, price: q.price, change: typeof q.change === "number" ? q.change : 0 } : null;
+  singleQuotes.set(sym, { at: Date.now(), v });
+  return v;
+}
+
+/** Several symbols → raw quotes. The batch endpoint when the plan has it; otherwise one call
+ *  each, but only for a SHORT list (a 250-row table polling every 2.5 s would be thousands of
+ *  calls a minute) — a long list returns nothing and the caller falls back to cached prices. */
+const SINGLE_QUOTE_MAX = 8;
+async function fmpQuotesRaw(symbols: string[]): Promise<Array<{ symbol: string; price: number; change: number }>> {
+  if (!fmpPlanRefused("batch-quote-short")) {
+    const raw = await fmpGet<Array<Record<string, unknown>>>(`batch-quote-short?symbols=${encodeURIComponent(symbols.join(","))}`);
+    if (Array.isArray(raw)) {
+      return raw.flatMap((q) =>
+        typeof q.price === "number" && q.symbol
+          ? [{ symbol: String(q.symbol), price: q.price, change: typeof q.change === "number" ? q.change : 0 }]
+          : [],
+      );
+    }
+    if (!fmpPlanRefused("batch-quote-short")) return []; // an ordinary failure, not the plan
+  }
+  if (symbols.length > SINGLE_QUOTE_MAX) return [];
+  return (await Promise.all(symbols.map((s) => fmpQuoteOne(s)))).filter((q): q is NonNullable<typeof q> => !!q);
 }
 
 export type FmpMatch = {
@@ -521,18 +596,10 @@ export type LiveQuote = { symbol: string; priceCents: number; changePct: number 
 export async function fmpBatchQuotes(fmpSymbols: string[]): Promise<LiveQuote[]> {
   const list = [...new Set(fmpSymbols.map((s) => s.toUpperCase()).filter(Boolean))];
   if (list.length === 0) return [];
-  const raw = await fmpGet<Array<Record<string, unknown>>>(`batch-quote-short?symbols=${encodeURIComponent(list.join(","))}`);
-  if (!Array.isArray(raw)) return [];
-  return raw
+  return (await fmpQuotesRaw(list))
     .map((q) => {
-      const price = typeof q.price === "number" ? q.price : null;
-      const change = typeof q.change === "number" ? q.change : 0;
-      const prev = price !== null ? price - change : null;
-      return {
-        symbol: String(q.symbol ?? ""),
-        priceCents: price !== null ? Math.round(price * 100) : 0,
-        changePct: prev && prev !== 0 ? (change / prev) * 100 : 0,
-      };
+      const prev = q.price - q.change;
+      return { symbol: q.symbol, priceCents: Math.round(q.price * 100), changePct: prev !== 0 ? (q.change / prev) * 100 : 0 };
     })
     .filter((q) => q.symbol && q.priceCents > 0);
 }
@@ -801,7 +868,8 @@ export async function fmpInsiderLatest(pages = 4): Promise<FmpInsiderTrade[]> {
 // --- Market indices + commodities strip (Today's "live until close" ticker) -----
 // Index levels / commodity prices are reference figures, not fund money — kept as
 // plain numbers (not cents). FMP batch-quote-short serves all of these.
-export type IndexQuote = { symbol: string; label: string; price: number; change: number; changePct: number };
+// `delayed` = read from the delayed Yahoo feed because the data plan refuses it (TSX, oil).
+export type IndexQuote = { symbol: string; label: string; price: number; change: number; changePct: number; delayed?: boolean };
 
 const INDEX_DEFS: { symbol: string; label: string }[] = [
   { symbol: "^GSPTSE", label: "TSX Comp" },
@@ -812,24 +880,29 @@ const INDEX_DEFS: { symbol: string; label: string }[] = [
   { symbol: "CLUSD", label: "Oil (USD)" },
 ];
 
+// What the plan refuses outright (the TSX index, oil) is read from Yahoo instead — the same
+// delayed feed the fund's own prices come from. Keyed by our symbol → Yahoo's.
+const INDEX_YAHOO: Record<string, string> = { "^GSPTSE": "^GSPTSE", CLUSD: "CL=F" };
+
 export async function fmpIndices(): Promise<IndexQuote[]> {
-  const raw = await fmpGet<Array<Record<string, unknown>>>(
-    `batch-quote-short?symbols=${encodeURIComponent(INDEX_DEFS.map((d) => d.symbol).join(","))}`,
-  );
-  const by = new Map<string, { price: number; change: number }>();
-  if (Array.isArray(raw)) {
-    for (const q of raw) {
-      const s = String(q.symbol ?? "");
-      const price = typeof q.price === "number" ? q.price : null;
-      const change = typeof q.change === "number" ? q.change : 0;
-      if (s && price !== null) by.set(s, { price, change });
+  const by = new Map<string, { price: number; change: number; delayed?: boolean }>();
+  for (const q of await fmpQuotesRaw(INDEX_DEFS.map((d) => d.symbol))) by.set(q.symbol, { price: q.price, change: q.change });
+  const missing = INDEX_DEFS.filter((d) => !by.has(d.symbol) && INDEX_YAHOO[d.symbol]);
+  if (missing.length > 0) {
+    const fetched = await fetchYahooQuotes(missing.map((d) => INDEX_YAHOO[d.symbol])).catch(() => []);
+    for (const d of missing) {
+      const y = fetched.find((f) => f.symbol === INDEX_YAHOO[d.symbol].toUpperCase());
+      if (!y || y.midCents <= 0) continue;
+      const price = y.midCents / 100;
+      const prev = price / (1 + y.dayChangeBps / 10_000);
+      by.set(d.symbol, { price, change: price - prev, delayed: true });
     }
   }
   return INDEX_DEFS.flatMap((d) => {
     const v = by.get(d.symbol);
     if (!v) return [];
     const prev = v.price - v.change;
-    return [{ symbol: d.symbol, label: d.label, price: v.price, change: v.change, changePct: prev !== 0 ? (v.change / prev) * 100 : 0 }];
+    return [{ symbol: d.symbol, label: d.label, price: v.price, change: v.change, changePct: prev !== 0 ? (v.change / prev) * 100 : 0, ...(v.delayed ? { delayed: true } : {}) }];
   });
 }
 
@@ -839,14 +912,8 @@ export type FxQuote = { price: number; change: number; changePct: number };
 // batch-quote endpoint the indices use (forex pairs quote the same way). null if FMP is off or
 // the pair didn't come back. Distinct from the BoC daily rate in the macro line (that's a fixing).
 export async function fmpCadUsd(): Promise<FxQuote | null> {
-  const raw = await fmpGet<Array<Record<string, unknown>>>(`batch-quote-short?symbols=CADUSD`);
-  if (!Array.isArray(raw)) return null;
-  for (const q of raw) {
-    if (String(q.symbol ?? "") === "CADUSD" && typeof q.price === "number") {
-      const change = typeof q.change === "number" ? q.change : 0;
-      const prev = q.price - change;
-      return { price: q.price, change, changePct: prev !== 0 ? (change / prev) * 100 : 0 };
-    }
-  }
-  return null;
+  const q = (await fmpQuotesRaw(["CADUSD"])).find((x) => x.symbol === "CADUSD");
+  if (!q) return null;
+  const prev = q.price - q.change;
+  return { price: q.price, change: q.change, changePct: prev !== 0 ? (q.change / prev) * 100 : 0 };
 }

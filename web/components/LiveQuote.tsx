@@ -50,6 +50,8 @@ export default function LiveQuote({
   const [chg, setChg] = useState<number | null>(initialChangePct);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
   const [lastOkAt, setLastOkAt] = useState<number | null>(null);
+  // The server marks a price it served from the delayed cache (not the live feed) — say so.
+  const [delayed, setDelayed] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
   const prev = useRef<number | null>(initialCents);
 
@@ -70,6 +72,7 @@ export default function LiveQuote({
         prev.current = q.priceCents;
         setCents(q.priceCents);
         setChg(q.changePct / 100);
+        setDelayed(q.delayed === true);
         setLastOkAt(Date.now());
       } catch {
         /* keep the last good value — lastOkAt stays put, so the age climbs */
@@ -112,9 +115,9 @@ export default function LiveQuote({
       )}
       {live && (
         <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-teal-200/40">
-          <span className={`h-1.5 w-1.5 rounded-full ${stale ? "bg-amber-400" : "animate-pulse bg-emerald-400"}`} />
-          {stale ? "stale" : "live"}
-          {ageSec !== null && <span className="tabular-nums normal-case text-teal-200/30">· {ageSec}s ago</span>}
+          <span className={`h-1.5 w-1.5 rounded-full ${stale || delayed ? "bg-amber-400" : "animate-pulse bg-emerald-400"}`} />
+          {stale ? "stale" : delayed ? "delayed ~15 min" : "live"}
+          {ageSec !== null && !delayed && <span className="tabular-nums normal-case text-teal-200/30">· {ageSec}s ago</span>}
         </span>
       )}
     </>

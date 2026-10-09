@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fmpEnabled, fmpBatchQuotes } from "@/lib/fmp";
+import { prisma } from "@/lib/db";
 import { toYahoo } from "@/lib/universe";
 import { sessionFromRequest } from "@/lib/session";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // on the page in one request, so we accept large sets and chunk the FMP fan-out
 // ourselves (FMP's batch-quote-short takes many per call, but a single URL with
 // hundreds of tickers risks length limits) instead of silently truncating at 60.
-type Q = { priceCents: number; changePct: number };
+type Q = { priceCents: number; changePct: number; delayed?: true };
 const MAX_SYMBOLS = 300; // a sane ceiling so one request can't ask for the world
 const FMP_CHUNK = 100; // symbols per FMP batch-quote-short call
 let cache: { at: number; key: string; data: Record<string, Q> } | null = null;
@@ -53,6 +54,21 @@ export async function GET(req: Request) {
   for (const q of batches.flat()) {
     const ours = fmpToOurs.get(q.symbol.toUpperCase()) ?? q.symbol;
     data[ours] = { priceCents: q.priceCents, changePct: q.changePct };
+  }
+
+  // Whatever the live feed didn't return — on the current plan that is every Canadian
+  // listing, and every symbol of a long list — is served from our own quote cache: the
+  // delayed Yahoo price the agent already keeps fresh for tracked names. Read-only on the
+  // table (no upstream call from a page poll), and marked `delayed` so the UI says so
+  // instead of calling a 15-minute-old price "live".
+  const missing = syms.filter((s) => !data[s]);
+  if (missing.length > 0) {
+    const rows = await prisma.quote
+      .findMany({ where: { symbol: { in: missing } }, select: { symbol: true, midCents: true, dayChangeBps: true } })
+      .catch(() => []);
+    for (const r of rows) {
+      if (r.midCents > 0) data[r.symbol] = { priceCents: r.midCents, changePct: r.dayChangeBps / 100, delayed: true };
+    }
   }
   cache = { at: Date.now(), key, data };
   return NextResponse.json({ quotes: data });

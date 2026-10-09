@@ -94,6 +94,7 @@ export default function MarketIndices({
             <div key={ix.symbol} className="px-4 py-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-bold text-teal-50">{ix.label}</span>
+                {ix.delayed && <span className="text-[10px] uppercase tracking-wider text-teal-200/40" title="Delayed about 15 minutes">delayed</span>}
                 <span className={tone}>{up ? "↗" : down ? "↘" : "→"}</span>
               </div>
               {/* Value + today's move (price change, then % in brackets); wraps if the cell is tight */}

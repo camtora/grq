@@ -23,7 +23,7 @@ import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import AvatarStack from "@/components/AvatarStack";
 import { watchersFor, isWatching } from "@/lib/watch";
-import { fmpEnabled, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
+import { fmpEnabled, fmpPlanRefused, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
 import { stockNewsCards } from "@/lib/news/queries";
 import { NewsRow } from "@/components/NewsList";
 import { getSmartMoneyForSymbol } from "@/lib/smart-money/queries";
@@ -326,10 +326,17 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   type Cov = { tier: number; name: string; status: "live" | "partial" | "none"; detail: string };
   const cadListing = /\.(TO|V|NE|CN)$/i.test(entry.yahoo); // CA listing → no structured insider feed yet
   const insiderBuys = smartMoney?.insiderBuyers ?? 0;
+  // WHY a feed panel is empty (D134). Our market-data plan (FMP Starter) refuses 13F outright
+  // and refuses any Toronto-listed symbol on targets / ratings / earnings; the panels ask by
+  // the US ticker, so a Canadian-only name simply comes back empty. Say that, rather than
+  // "no coverage yet" — which read as though the data didn't exist. `thirteenFRefused` is
+  // only true after a real refusal on this load's own request.
+  const thirteenFRefused = fmpPlanRefused("institutional-ownership/symbol-positions-summary");
+  const caPlanNote = (what: string) => `No info — ${what.toLowerCase()} for Toronto listings aren't in our market-data plan.`;
   const coverage: Cov[] = [
     { tier: 1, name: "Price/vol", status: closes.length > 1 ? "live" : "partial", detail: `${closes.length} sessions of OHLCV → signals` },
-    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
-    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : "no FMP coverage for this name" },
+    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : cadListing ? "cap/sector only — Toronto-listing analyst data isn't in our data plan" : "cap/sector only" },
+    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : cadListing ? "Toronto-listing earnings data isn't in our data plan" : "no FMP coverage for this name" },
     { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
     { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
     {
@@ -349,7 +356,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       status: institutional ? "live" : "none",
       detail: institutional
         ? `${institutional.investorsHolding.toLocaleString()} institutions · ${institutional.investorsHoldingChange >= 0 ? "+" : ""}${institutional.investorsHoldingChange} QoQ`
-        : "13F is US-listed holdings — empty for pure-TSX issuers",
+        : thirteenFRefused
+          ? "13F isn't included in our current market-data plan"
+          : "13F is US-listed holdings — empty for pure-TSX issuers",
     },
     {
       tier: 3,
@@ -837,7 +846,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <PanelEmpty
               reason={
                 cadListing
-                  ? "No analyst-rating breakdown from FMP for this TSX listing yet."
+                  ? caPlanNote("Analyst ratings")
                   : "No analyst ratings on record for this name yet."
               }
             />
@@ -980,7 +989,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <PanelEmpty
               reason={
                 cadListing
-                  ? "No analyst price targets from FMP for this TSX listing yet."
+                  ? caPlanNote("Analyst price targets")
                   : "No analyst price targets on record for this name yet."
               }
             />
@@ -1030,9 +1039,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           ) : (
             <PanelEmpty
               reason={
-                cadListing
-                  ? "No 13F data — 13F filings cover US-listed securities only, so a pure-TSX listing like this one doesn't appear."
-                  : "No institutional (13F) holdings on record for this name yet."
+                thirteenFRefused
+                  ? "No info — 13F holdings aren't in our market-data plan."
+                  : cadListing
+                    ? "No 13F data — 13F filings cover US-listed securities only, so a pure-TSX listing like this one doesn't appear."
+                    : "No institutional (13F) holdings on record for this name yet."
               }
             />
           )}
@@ -1133,7 +1144,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             <PanelEmpty
               reason={
                 cadListing
-                  ? "No earnings-calendar coverage from FMP for this TSX listing yet."
+                  ? caPlanNote("Earnings dates and results")
                   : "No earnings-calendar coverage from FMP for this name yet."
               }
             />
