@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { allUniverse } from "@/lib/universe";
+import { allUniverse, classDash, pickCanonical } from "@/lib/universe";
 import { allWatches } from "@/lib/watch";
 import { sessionFromRequest } from "@/lib/session";
 
@@ -27,7 +27,7 @@ export type StockIndexItem = {
   watchers?: string[]; // member keys watching this name (GRQ Go's search rows)
 };
 
-const bareKey = (s: string) => s.trim().toUpperCase().replace(/\.(TO|V|NE|CN|US)$/i, "");
+const bareKey = (s: string) => classDash(s).replace(/\.(TO|V|NE|CN|US)$/i, "");
 
 export async function GET(req: Request) {
   // Self-guard for the mobile Bearer path (GRQ Go's Search tab); the web door
@@ -57,6 +57,11 @@ export async function GET(req: Request) {
   for (const j of researched) {
     const key = (j.symbol ?? "").toUpperCase();
     if (!key || byKey.has(key)) continue; // a universe row already covers it
+    // …or covers it under another spelling: old research filed as HPS.A / RY.TO belongs to
+    // the member HPS-A / RY (the stock page redirects there), so listing it again just
+    // offers the same company twice, once with no name.
+    const member = pickCanonical(universe, key);
+    if (member && member.status !== "RETIRED") continue;
     byKey.set(key, { symbol: key, name: j.companyName || key, kind: "researched" });
   }
 

@@ -34,7 +34,14 @@ function escapeRegExp(s: string): string {
 
 // Score a name against an upper-cased query. -1 = no match. Symbol matches beat
 // name matches; prefix beats substring; a shorter symbol beats a longer one.
-function score(item: StockIndexItem, q: string): number {
+function score(item: StockIndexItem, typed: string): number {
+  // A share class typed the TSX way (HPS.A) is stored the Yahoo way (HPS-A) — match either.
+  // A venue suffix (.TO/.V/.NE/.CN/.US) is a real dot and stays.
+  const dashed = typed.replace(/\.(?!(?:TO|V|NE|CN|US)$)/g, "-");
+  return dashed === typed ? scoreOne(item, typed) : Math.max(scoreOne(item, typed), scoreOne(item, dashed));
+}
+
+function scoreOne(item: StockIndexItem, q: string): number {
   const sym = item.symbol.toUpperCase();
   const name = item.name.toUpperCase();
   if (sym === q) return 1000;
