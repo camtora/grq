@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const session = memberFromRequest(req);
   if (!session || !seesMeters(session.email)) {
-    return NextResponse.json({ error: "Owners only." }, { status: 403 });
+    return NextResponse.json({ error: "Not available on this account." }, { status: 403 });
   }
   const sp = new URL(req.url).searchParams;
   const valid = sp.get("d") && /^\d{4}-\d{2}-\d{2}$/.test(sp.get("d")!);

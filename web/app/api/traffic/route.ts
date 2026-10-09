@@ -12,7 +12,7 @@ const WINDOWS = [1, 7, 30, 90];
 export async function GET(req: Request) {
   const session = memberFromRequest(req);
   if (!session || !seesMeters(session.email)) {
-    return NextResponse.json({ error: "Owners only." }, { status: 403 });
+    return NextResponse.json({ error: "Not available on this account." }, { status: 403 });
   }
   const raw = Number(new URL(req.url).searchParams.get("days"));
   const days = WINDOWS.includes(raw) ? raw : 7;
