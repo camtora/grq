@@ -176,3 +176,17 @@ the liquidity screen + the ≥Buy/75 conviction bar + the §6 order gate, all hu
 - **Does it measurably help?** Slice 3 must be A/B-able — does surfacing pre-research actually change what
   the agent finds/buys, or is the hunt's live WebSearch already good enough? Build Tiers 0–1 first; let the
   human surfaces prove the screen is good before wiring the agent.
+
+## Known gap — Canada is not in the screen (found 2026-10-08)
+
+FMP's `company-screener` answers **HTTP 402 "not available under your current subscription"**
+for `exchange=TSX`, `TSXV` and `NEO`. The same refusal comes back for `.TO` symbols on `quote`,
+`price-target-consensus`, `earnings`, `grades-consensus` and `historical-price-eod`; `profile`,
+`search-symbol` and `news/stock` still answer. So `MarketScreen` holds NASDAQ/NYSE/AMEX only, and
+everything fed by it (Browse's default view, the header search's "screened" rows, hunt retrieval,
+the Related panel's screen read) has no Canadian-only companies. When this started is not known —
+the fetch used to return `[]` on any failure, so the nightly rebuild logged a normal count.
+
+Since 2026-10-08 a failed exchange is **reported and left alone** (`runMarketScreen().failed`, the
+`[market-screen] NOT SCREENED` log line) instead of being deleted, and Browse says why a Canadian
+view is empty. Closing the gap itself is a plan/source decision, not a code fix.

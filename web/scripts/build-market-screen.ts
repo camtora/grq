@@ -7,5 +7,6 @@ import { runMarketScreen } from "../lib/market-screen/screen";
   const t = Date.now();
   const r = await runMarketScreen();
   console.log(`market screen: scanned ${r.scanned} listings → kept ${r.kept} screened companies in ${((Date.now() - t) / 1000).toFixed(1)}s`);
+  for (const f of r.failed) console.error(`  NOT SCREENED: ${f.exchange} — ${f.reason}`);
   process.exit(0);
 })();

@@ -1199,7 +1199,11 @@ async function maybeDailyRefreshEnqueue() {
   // Market Base Layer — nightly re-screen (deterministic, ~free; preserves tags) + Haiku-tag
   // any NEW names. Bounded; background so it never blocks the daily refresh. (docs/MARKET-BASE-LAYER.md)
   runMarketScreenNightly()
-    .then((r) => console.log(`[market-screen] ${r.kept} screened · ${r.tagged} newly tagged`))
+    .then((r) => {
+      console.log(`[market-screen] ${r.kept} screened · ${r.tagged} newly tagged`);
+      // A refused exchange is a hole in the screen, not a quiet night — say which.
+      if (r.failed.length) console.error(`[market-screen] NOT SCREENED: ${r.failed.map((f) => `${f.exchange} (${f.reason})`).join(" · ")}`);
+    })
     .catch((e) => console.error("[market-screen] nightly failed", e));
 
   const [tracked, positions, inFlightRows, quotes, watchRows, stanceRows] = await Promise.all([

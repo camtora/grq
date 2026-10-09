@@ -26,16 +26,24 @@ type RawScreen = {
   isEtf: boolean; isFund: boolean; isActivelyTrading: boolean;
 };
 
-async function fetchScreener(exchange: string): Promise<RawScreen[]> {
+// null = the fetch FAILED (as opposed to an exchange with no rows). The distinction is the
+// whole point: this used to return [] for both, so when the data plan began refusing the
+// Canadian exchanges (HTTP 402 "not available under your current subscription", found
+// 2026-10-08) the nightly rebuild read "no Canadian companies exist", deleted them, and
+// logged a healthy-looking count. Nobody was told; the screen has been US-only since.
+async function fetchScreener(exchange: string): Promise<{ rows: RawScreen[] } | { failed: string }> {
   const k = process.env.FMP_API_KEY ?? "";
-  if (!k) return [];
+  if (!k) return { failed: "no FMP_API_KEY" };
   try {
     const r = await fetch(`${BASE}/company-screener?exchange=${encodeURIComponent(exchange)}&isActivelyTrading=true&limit=100000&apikey=${k}`, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
-    if (!r.ok) return [];
+    if (!r.ok) {
+      const body = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 160);
+      return { failed: r.status === 402 ? "HTTP 402 — not included in the data plan" : `HTTP ${r.status}${body ? ` — ${body}` : ""}` };
+    }
     const data = await r.json();
-    return Array.isArray(data) ? (data as RawScreen[]) : [];
-  } catch {
-    return [];
+    return Array.isArray(data) ? { rows: data as RawScreen[] } : { failed: "unexpected response shape" };
+  } catch (e) {
+    return { failed: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -53,9 +61,10 @@ function scoreOf(capM: number, priceCents: number, dollarVol: number, sector: st
   return Math.round(Math.min(100, band + sectorBonus + priceBonus + liqBonus));
 }
 
-/** Full deterministic re-screen. Replaces the table but PRESERVES Tier-1 tags
- *  (tag/take/obscurity) across runs. Safe to re-run; ~free. */
-export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<{ scanned: number; kept: number }> {
+/** Full deterministic re-screen. Replaces each exchange that ANSWERED, preserving Tier-1
+ *  tags (tag/take/obscurity) across runs; an exchange whose fetch failed keeps whatever it
+ *  had and is named in `failed`. Safe to re-run; ~free. */
+export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<{ scanned: number; kept: number; failed: { exchange: string; reason: string }[] }> {
   const exchanges = opts?.exchanges ?? EXCHANGES;
 
   // 1. fetch + score
@@ -65,8 +74,16 @@ export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<
     sector: string | null; country: string | null; marketCapM: number | null;
     priceCents: number | null; currency: string | null; screenScore: number;
   }> = [];
+  const answered: string[] = [];
+  const failed: { exchange: string; reason: string }[] = [];
   for (const ex of exchanges) {
-    const rows = await fetchScreener(ex);
+    const res = await fetchScreener(ex);
+    if ("failed" in res) {
+      failed.push({ exchange: ex, reason: res.failed });
+      continue;
+    }
+    answered.push(ex);
+    const rows = res.rows;
     scanned += rows.length;
     for (const r of rows) {
       if (r.isEtf || r.isFund || !r.isActivelyTrading) continue; // stocks only — no ETFs / mutual funds
@@ -91,7 +108,7 @@ export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<
   const tagBy = new Map(prior.map((p) => [`${p.symbol}|${p.exchange}`, p] as const));
 
   // 3. replace
-  await prisma.marketScreen.deleteMany({});
+  await prisma.marketScreen.deleteMany({ where: { exchange: { in: answered } } });
   const now = new Date();
   const withTags = keep.map((r) => {
     const t = tagBy.get(`${r.symbol}|${r.exchange}`);
@@ -100,7 +117,15 @@ export async function runMarketScreen(opts?: { exchanges?: string[] }): Promise<
   for (let i = 0; i < withTags.length; i += 1000) {
     await prisma.marketScreen.createMany({ data: withTags.slice(i, i + 1000) });
   }
-  return { scanned, kept: withTags.length };
+  return { scanned, kept: withTags.length, failed };
+}
+
+/** Canadian exchanges the screen holds NO rows for — Browse says so instead of showing an
+ *  empty table that reads as "no such companies". */
+export async function missingCanadianExchanges(): Promise<string[]> {
+  const have = await prisma.marketScreen.groupBy({ by: ["exchange"], where: { exchange: { in: [...CA_EXCHANGES] } } }).catch(() => []);
+  const got = new Set(have.map((h) => h.exchange));
+  return [...CA_EXCHANGES].filter((e) => !got.has(e));
 }
 
 export type ScreenRow = {

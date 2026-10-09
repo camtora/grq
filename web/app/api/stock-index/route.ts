@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { allUniverse, classDash, pickCanonical } from "@/lib/universe";
+import { allUniverse, classDash, pickCanonical, sameCompanyName } from "@/lib/universe";
 import { allWatches } from "@/lib/watch";
 import { sessionFromRequest } from "@/lib/session";
 
@@ -37,6 +37,14 @@ export async function GET(req: Request) {
   const universe = await allUniverse();
   const byKey = new Map<string, Omit<StockIndexItem, "seenAt">>();
 
+  // Live members by bare ticker — the only rows another spelling could resolve to.
+  const liveByBare = new Map<string, typeof universe>();
+  for (const r of universe) {
+    if (r.status === "RETIRED") continue;
+    const b = bareKey(r.symbol);
+    liveByBare.set(b, [...(liveByBare.get(b) ?? []), r]);
+  }
+
   for (const r of universe) {
     byKey.set(r.symbol.toUpperCase(), {
       symbol: r.symbol,
@@ -60,21 +68,33 @@ export async function GET(req: Request) {
     // …or covers it under another spelling: old research filed as HPS.A / RY.TO belongs to
     // the member HPS-A / RY (the stock page redirects there), so listing it again just
     // offers the same company twice, once with no name.
-    const member = pickCanonical(universe, key);
-    if (member && member.status !== "RETIRED") continue;
+    if (pickCanonical(liveByBare.get(bareKey(key)) ?? [], key)) continue;
     byKey.set(key, { symbol: key, name: j.companyName || key, kind: "researched" });
   }
 
   // The Market Base Layer — every screened (non-ETF) company we hold a first-pass
-  // read on (docs/MARKET-BASE-LAYER.md). Deduped by BARE ticker so a screened row
-  // never doubles a universe/researched name (which use their own symbol form).
-  // Routed via the FMP-native symbol (CARR · RY.TO) so CA listings resolve right.
-  const haveBare = new Set([...byKey.keys()].map(bareKey));
+  // read on (docs/MARKET-BASE-LAYER.md), routed via the FMP-native symbol (CARR · RY.TO)
+  // so CA listings resolve right.
+  // A screened row is skipped only when it's the SAME COMPANY as something already listed —
+  // the same listing, or a cross-listing of it (RY on the NYSE beside our RY.TO). Sharing a
+  // bare ticker is not enough: NEO.TO and NASDAQ NEO are different companies, and de-duping
+  // on the ticker hid whichever came second.
+  const namesByBare = new Map<string, string[]>();
+  for (const it of byKey.values()) {
+    const b = bareKey(it.symbol);
+    namesByBare.set(b, [...(namesByBare.get(b) ?? []), it.name]);
+  }
   const screened = await prisma.marketScreen.findMany({ select: { symbol: true, ticker: true, name: true } });
   for (const m of screened) {
-    if (haveBare.has(m.ticker)) continue; // already covered, or a cross-exchange dup
-    haveBare.add(m.ticker);
-    byKey.set(m.symbol.toUpperCase(), { symbol: m.symbol, name: m.name || m.symbol, kind: "screened" });
+    const key = m.symbol.toUpperCase();
+    if (byKey.has(key)) continue;
+    const b = bareKey(m.symbol);
+    const member = pickCanonical(liveByBare.get(b) ?? [], key);
+    if (member) continue;
+    const seen = namesByBare.get(b) ?? [];
+    if (seen.some((n) => n === m.name || sameCompanyName(n, m.name))) continue;
+    namesByBare.set(b, [...seen, m.name]);
+    byKey.set(key, { symbol: m.symbol, name: m.name || m.symbol, kind: "screened" });
   }
 
   // Most-recent view per stock, by anyone — from the existing usage beacon.

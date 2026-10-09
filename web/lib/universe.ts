@@ -280,7 +280,7 @@ function nameTokens(s: string): string[] {
     .split(/\s+/)
     .filter((t) => t && !NAME_NOISE.has(t));
 }
-function sameCompanyName(a?: string | null, b?: string | null): boolean {
+export function sameCompanyName(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
   const ta = nameTokens(a);
   const tb = nameTokens(b);

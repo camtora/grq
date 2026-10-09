@@ -7,8 +7,8 @@ import { refreshScreenSignals } from "./signals";
 // Haiku-tags any NEW untagged names that appeared, bounded so the nightly Haiku spend
 // stays trivial (after the initial full pass only new listings are untagged). Imports
 // agent/sessions via tag.ts — runner-only; keep OUT of any web-page bundle.
-export async function runMarketScreenNightly(opts?: { tagCap?: number; signalCap?: number }): Promise<{ scanned: number; kept: number; tagged: number; signals: number }> {
-  const { scanned, kept } = await runMarketScreen();
+export async function runMarketScreenNightly(opts?: { tagCap?: number; signalCap?: number }): Promise<{ scanned: number; kept: number; tagged: number; signals: number; failed: { exchange: string; reason: string }[] }> {
+  const { scanned, kept, failed } = await runMarketScreen();
   const cap = opts?.tagCap ?? 120; // bound nightly tagging; new names/day are few
   let tagged = 0;
   while (tagged < cap) {
@@ -18,5 +18,5 @@ export async function runMarketScreenNightly(opts?: { tagCap?: number; signalCap
   }
   // Technical read for the actionable names — bounded + stale-first (gentle on Yahoo).
   const { updated: signals } = await refreshScreenSignals({ limit: opts?.signalCap ?? 200 }).catch(() => ({ updated: 0 }));
-  return { scanned, kept, tagged, signals };
+  return { scanned, kept, tagged, signals, failed };
 }

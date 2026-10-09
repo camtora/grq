@@ -1,5 +1,5 @@
 import { fmpEnabled, fmpScreener, fmpSearch, fmpProfile, stripSuffix, type ScreenerRow } from "@/lib/fmp";
-import { topScreened } from "@/lib/market-screen/screen";
+import { topScreened, missingCanadianExchanges } from "@/lib/market-screen/screen";
 import { stanceMeta, STANCE_TONE_CLASSES } from "@/lib/stance";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
@@ -162,6 +162,12 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
         });
   }
 
+  // An empty Canadian view isn't "no such companies" — say why (the screen has no CA rows).
+  const caGap =
+    rows.length === 0 && !query && (["TSX", "TSXV", "NEO"].includes(exchange) || country === "CA")
+      ? (await missingCanadianExchanges()).length > 0
+      : false;
+
   // Per-row research state: a dossier already exists (→ "View dossier"), research is in
   // flight (→ "Researching…"), or neither (→ "Research"). Keyed by the bare ticker, which
   // is the dossier/researchRequest key + the stock-page route (Cam 2026-06-19).
@@ -278,7 +284,11 @@ export default async function Browse({ searchParams }: { searchParams: Promise<R
         <Card className="p-8 text-center text-sm text-teal-200/40">{note}</Card>
       ) : rows.length === 0 ? (
         <Card className="p-8 text-center text-sm text-teal-200/40">
-          {query ? `No matches for “${query}” — try the company name or a different ticker.` : "No matches — loosen the filters."}
+          {query
+            ? `No matches for “${query}” — try the company name or a different ticker.`
+            : caGap
+              ? "No Canadian names here: our data plan's screener currently refuses the Canadian exchanges, so the screen is US-listed only. Search by name or ticker above still finds them."
+              : "No matches — loosen the filters."}
         </Card>
       ) : (
         <Card className="overflow-x-auto">
