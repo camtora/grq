@@ -69,6 +69,8 @@ const BOOK = [
   "/api/desk", "/api/short-lab", "/api/short-desk", "/api/day-lab", "/api/report-card",
   "/api/smart-money", "/api/watchlist", "/api/browse", "/api/symbol-search", "/api/sim/order",
   "/api/stocks/directive", "/api/stocks/share", "/api/external/keys", "/api/admin/usage-window",
+  // Members' personal brokerage accounts — every route of the SnapTrade surface (Cam 2026-10-08).
+  "/api/external/status", "/api/external/connect", "/api/external/sync", "/api/external/disconnect",
   "/api/daily-quotes", "/api/tokens", "/api/traffic", "/api/ideas", "/api/market",
 ];
 
