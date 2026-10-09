@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { memberFromRequest } from "@/lib/session";
-import { isOwner } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
 import { resolveEtClockToInstant, getCurrentWindowBurn } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // boundary refreshes). Cheap sum-only query; returns the window bounds it summed over.
 export async function GET(req: Request) {
   const session = memberFromRequest(req);
-  if (!session || !isOwner(session.email)) {
+  if (!session || !seesMeters(session.email)) {
     return NextResponse.json({ error: "Owner only." }, { status: 403 });
   }
   const burn = await getCurrentWindowBurn();
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 // instant. Body { time: "HH:MM" } (ET clock time → next future occurrence) or { clear: true }.
 export async function POST(req: Request) {
   const session = memberFromRequest(req);
-  if (!session || !isOwner(session.email)) {
+  if (!session || !seesMeters(session.email)) {
     return NextResponse.json({ error: "Owner only." }, { status: 403 });
   }
 

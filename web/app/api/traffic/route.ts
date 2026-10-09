@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { memberFromRequest } from "@/lib/session";
-import { isOwner } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
 import { getUsage } from "@/lib/admin";
 
 // Traffic for GRQ Go (web /traffic parity): who's using GRQ and which sections get
@@ -11,7 +11,7 @@ const WINDOWS = [1, 7, 30, 90];
 
 export async function GET(req: Request) {
   const session = memberFromRequest(req);
-  if (!session || !isOwner(session.email)) {
+  if (!session || !seesMeters(session.email)) {
     return NextResponse.json({ error: "Owners only." }, { status: 403 });
   }
   const raw = Number(new URL(req.url).searchParams.get("days"));

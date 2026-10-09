@@ -39,6 +39,9 @@ export const MeResponse = z.object({
   // D125 sliding session: present when the server re-minted the caller's day-old GRQ-JWT —
   // the app stores it. Optional = additive; older builds ignore it. Never sent to a browser.
   token: z.string().optional(),
+  // Traffic + Tokens are Cam's alone (2026-10-08) — the app lists them only when true.
+  // Optional = additive; absent (an older server) reads as false.
+  meters: z.boolean().optional(),
 });
 export const GoogleLoginRequest = z.object({ idToken: z.string() });
 export const AuthResponse = z.object({ token: z.string(), me: MeResponse });

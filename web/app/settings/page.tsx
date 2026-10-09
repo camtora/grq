@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { USERS, isOwner } from "@/lib/users";
+import { USERS, isOwner, seesMeters } from "@/lib/users";
 import { getSession } from "@/lib/session";
 import { soakStatus } from "@/lib/soak";
 import { ACCOUNT_TYPE, DIALS } from "@/agent/policy";
@@ -52,6 +52,8 @@ export default async function Settings() {
   // Admin-only page: Cam & Graham (owners) only. Viewers — and any non-owner
   // member — get a 404; the page does not exist for them.
   if (!session || !isOwner(session.email)) notFound();
+  // Traffic + Tokens are Cam's alone — an owner who isn't Cam gets no link to them.
+  const meters = seesMeters(session.email);
   const isMember = session.role === "member";
 
   // Soak-gate countdown (PROJECT_PLAN §9) — the road to real money, shown in the
@@ -103,18 +105,22 @@ export default async function Settings() {
             >
               How GRQ works
             </Link>
-            <Link
-              href="/traffic"
-              className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
-            >
-              Traffic
-            </Link>
-            <Link
-              href="/tokens"
-              className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
-            >
-              Tokens
-            </Link>
+            {meters && (
+              <>
+                <Link
+                  href="/traffic"
+                  className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+                >
+                  Traffic
+                </Link>
+                <Link
+                  href="/tokens"
+                  className="rounded-lg border border-[color:var(--card-border)] px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-200/70 transition-colors hover:bg-teal-400/10 hover:text-teal-100"
+                >
+                  Tokens
+                </Link>
+              </>
+            )}
           </div>
         }
       />

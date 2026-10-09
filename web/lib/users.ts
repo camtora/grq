@@ -89,12 +89,12 @@ export function userForEmail(email: string | null | undefined): GrqUser | null {
 }
 
 // Owner/admin tier — the narrowest tier. Cam & Graham are both owners: they alone
-// see the admin-only pages (Settings, Traffic, Tokens, How GRQ works) and the
-// admin/usage dashboard. Viewers (and any anonymous GRQ_ALLOWED_EMAILS member)
+// see the admin-only pages (Settings, How GRQ works). Traffic and Tokens are NOT
+// here — see seesMeters below. Viewers (and any anonymous GRQ_ALLOWED_EMAILS member)
 // cannot. This is a separate concept from GrqUser.role ("admin"), which is just a
 // display label and gates nothing. Default = Cam + Graham; OWNER_EMAILS env
-// replaces the default without a rebuild. Gate /settings, /traffic, /tokens,
-// /how-it-works, and /api/admin/* on this; hide the nav links unless owner.
+// replaces the default without a rebuild. Gate /settings and /how-it-works on
+// this; hide the nav links unless owner.
 function ownerEmails(): string[] {
   const env = (process.env.OWNER_EMAILS ?? "")
     .split(",")
@@ -106,6 +106,24 @@ function ownerEmails(): string[] {
 export function isOwner(email: string | null | undefined): boolean {
   if (!email) return false;
   return ownerEmails().includes(email.trim().toLowerCase());
+}
+
+// The meters — Traffic (who uses GRQ, page by page) and Tokens (what the agent spends of
+// Cam's Claude quota) — are Cam's alone (Cam, 2026-10-08). NOT an owner privilege: Cam and
+// Graham are both still owners (Settings, How GRQ works, the kill switch); nobody but Cam,
+// Graham included, sees these two. METER_EMAILS env replaces the default without a rebuild.
+// Gate /traffic, /tokens, /api/traffic, /api/tokens and /api/admin/usage-window on this.
+function meterEmails(): string[] {
+  const env = (process.env.METER_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return env.length ? env : ["cameron.tora@gmail.com"];
+}
+
+export function seesMeters(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return meterEmails().includes(email.trim().toLowerCase());
 }
 
 // Stable member keys — match lib/people.ts (Person.key) and the iOS avatar assets

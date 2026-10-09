@@ -23,7 +23,7 @@ import { GLOSSARY } from "./glossary";
 import { watchersFor, allWatches } from "./watch";
 import { usdCadRate } from "./fx";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
-import { userForEmail, memberEmails } from "./users";
+import { userForEmail, memberEmails, seesMeters } from "./users";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
@@ -135,6 +135,8 @@ export async function meResponse(session: Session) {
     theme: session.user?.theme ?? "light",
     totalPnlCents: pf.totalPnlCents,
     contributionsCents: pf.contributionsCents,
+    // Whether the app should list Traffic + Tokens (Cam only). The routes are the lock.
+    meters: seesMeters(session.email),
   };
 }
 

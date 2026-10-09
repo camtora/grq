@@ -16,6 +16,8 @@ export type Me = {
   contributionsCents: number;
   // D125 sliding session: the server re-mints a day-old token on /api/auth/me and sends it here.
   token?: string;
+  // Traffic + Tokens are Cam's alone — More lists them only when the server says so.
+  meters?: boolean;
 };
 
 type AuthState = {

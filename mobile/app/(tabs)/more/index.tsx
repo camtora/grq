@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Screen, Card, SectionTitle, Footnote, Divider, Masonry } from '../../../components/Chrome';
 import { usePalette, F } from '../../../constants/theme';
 import { useResponsive } from '../../../constants/layout';
+import { useAuth } from '../../../store/auth';
 
 type Row = { href: string; icon: keyof typeof Ionicons.glyphMap; title: string; desc: string };
 
@@ -22,6 +23,10 @@ const LEARNING: Row[] = [
 
 const ABOUT: Row[] = [
   { href: '/more/about-grq', icon: 'book-outline', title: 'How GRQ works', desc: 'The operating manual — the rules, the rhythm, and every decision on record.' },
+];
+
+// The meters are Cam's alone (the server refuses everyone else) — listed only for him.
+const METERS: Row[] = [
   { href: '/traffic', icon: 'stats-chart-outline', title: 'Traffic', desc: "Who's using GRQ, and which sections get the views." },
   { href: '/tokens', icon: 'flame-outline', title: 'Tokens', desc: "What the agent spends of the shared Claude Max quota." },
 ];
@@ -40,6 +45,7 @@ export default function MoreScreen() {
   const { p } = usePalette();
   const router = useRouter();
   const { isTablet } = useResponsive();
+  const meters = useAuth((st) => st.me?.meters === true);
 
   const renderRows = (rows: Row[]) => (
     <Card style={s.listCard}>
@@ -81,7 +87,7 @@ export default function MoreScreen() {
         </View>
         <View>
           <SectionTitle sub="the manual & the meters">About GRQ</SectionTitle>
-          {renderRows(ABOUT)}
+          {renderRows(meters ? [...ABOUT, ...METERS] : ABOUT)}
         </View>
       </Masonry>
     </Screen>

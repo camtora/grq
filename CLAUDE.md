@@ -191,6 +191,14 @@ Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22
   profile, symbol search and news still answer. `MarketScreen` is therefore US-only. `lib/fmp.ts` `fmpGet` returns
   null on a refusal, so a dark Canadian panel may be the plan, not a bug — curl the endpoint before debugging.
   `docs/MARKET-BASE-LAYER.md`.
+- **Traffic + Tokens are Cam's alone (2026-10-08) — not an owner privilege.** Cam and Graham are both still
+  owners (`isOwner`: Settings, How GRQ works); `/traffic`, `/tokens`, `/api/traffic`, `/api/tokens` and
+  `/api/admin/usage-window` gate on **`seesMeters`** (`lib/users.ts`; default Cam, `METER_EMAILS` env overrides).
+  `test/meters-access.test.ts` fails the build if one of them goes back to `isOwner`. The app lists the two rows
+  only when `/api/auth/me` says `meters: true`.
+- **Skip one day's build diary (no agent rebuild):** the 3am job skips a day that already has a `CHANGE` report,
+  so pre-insert one for that ET day (`date` = that day 04:00:00 UTC in EDT, `statsJson` exactly `{"commits":0}`
+  so the Changes tab hides it like a quiet day, body saying it was paused). Done for 2026-10-08.
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

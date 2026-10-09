@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { isOwner } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
 import { getUsageDashboard, fmtTokens, fmtUsd, fmtDuration } from "@/lib/usage";
@@ -34,7 +34,7 @@ function etTime(d: Date): string {
 export default async function AdminUsagePage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
   const session = await getSession();
   // Same lock as /admin — owner only; everyone else gets a 404.
-  if (!session || !isOwner(session.email)) notFound();
+  if (!session || !seesMeters(session.email)) notFound();
 
   const sp = await searchParams;
   const valid = sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d);

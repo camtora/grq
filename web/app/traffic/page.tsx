@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { isOwner } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
 import { getUsage } from "@/lib/admin";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
@@ -39,7 +39,7 @@ export default async function AdminPage({
   const session = await getSession();
   // The lock. Members (Graham) and viewers get a 404 — the page does not exist
   // for them. Hiding the nav link is cosmetic; THIS is the enforcement.
-  if (!session || !isOwner(session.email)) notFound();
+  if (!session || !seesMeters(session.email)) notFound();
 
   const sp = await searchParams;
   const days = WINDOWS.some((w) => String(w.days) === sp.days) ? Number(sp.days) : 7;

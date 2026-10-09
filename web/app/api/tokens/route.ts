@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { memberFromRequest } from "@/lib/session";
-import { isOwner } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
 import { getUsageDashboard } from "@/lib/usage";
 import { etDateStr } from "@/agent/calendar";
 import { modelLabel } from "@/lib/race/models";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const session = memberFromRequest(req);
-  if (!session || !isOwner(session.email)) {
+  if (!session || !seesMeters(session.email)) {
     return NextResponse.json({ error: "Owners only." }, { status: 403 });
   }
   const sp = new URL(req.url).searchParams;
