@@ -4175,3 +4175,47 @@ lists. Set live 2026-10-08. Close it again by deleting `,*` and `docker-compose 
   docker bridge address nginx uses, or a shared secret header from nginx; touches infra, so not done unasked.
 - Users can call `/api/explain` (a small Claude call each) with no rate limit.
 - A viewer still sees the whole fund read-only (by design, D122) — never put a new outsider on the viewer list.
+
+### D134 — GRQ runs on the FMP Starter plan, and says what that plan doesn't give it (Cam, 2026-10-09)
+
+**Finding.** Every doc and the code assumed FMP **Ultimate** (D21). The key is on **Starter** (Cam confirmed
+2026-10-08). Probed with the live key, Starter answers HTTP 402 in two forms, and `fmpGet` turned both into the
+same silent `null` it returns for "no data":
+- *Restricted Endpoint* (the whole endpoint): `batch-quote-short`, `batch-quote`, `batch-index-quotes`,
+  `institutional-ownership/*` (13F).
+- *Premium Query Parameter* (one value on an endpoint it otherwise serves): any `.TO` symbol on `quote`,
+  `quote-short`, `price-target-consensus`, `grades-consensus`, `earnings`, `historical-price-eod`; the TSX index
+  (`^GSPTSE`); oil (`CLUSD`); `company-screener` for `exchange=TSX|TSXV|NEO`.
+- Still served: US single quotes (`quote`, `quote-short`), US indices, gold, `CADUSD`, profiles (incl. `.TO`),
+  targets / grades / earnings / peers for US tickers, the earnings calendar, news, movers, insider, Senate and
+  House trades, US daily prices, the US screener, symbol search (incl. Canadian names), `stock-peers` for `.TO`.
+
+**What was dark because of it:** the live on-page ticker (every stock — it only ever called the batch endpoint),
+Today's indices strip and the loonie pill, 13F on stock pages, every Canadian company in the market screen
+(D132), and the Canadian-listing panels. When the plan changed is not known.
+
+**Decision (Cam): stay on Starter; dead panels stay VISIBLE and say "No info"; correct the cost hurdle.**
+- `lib/fmp.ts` remembers a real 402 for 30 min, as whole-endpoint or endpoint+value (`fmpPlanRefused`). Callers can
+  tell "the plan said no" from "no data", stop re-asking, and a plan change heals itself on the next probe. It is
+  only ever true after an actual refusal in that process, never a table of what a plan is believed to include.
+- **Ticker** (`/api/quotes`): the batch endpoint if the plan has it; otherwise single `quote-short` calls, but only
+  for a list of ≤ 8 symbols (a 250-row table polling every 2.5 s would be thousands of calls a minute), cached 5 s
+  per symbol. Anything the live feed doesn't return — Canadian listings, long tables — is read from our own `Quote`
+  table (the delayed Yahoo price the agent keeps fresh), with **no upstream call from a page poll**, and marked
+  `delayed`. The hero quote shows "delayed ~15 min" rather than "live".
+- **Indices**: S&P, Dow, NASDAQ, gold from FMP singles; TSX and oil from Yahoo (`^GSPTSE`, `CL=F`), marked
+  "delayed" in the strip. `fmpCadUsd` uses the same single-quote path.
+- **Stock page**: the empty panels keep their place and read "No info — … aren't in our market-data plan": 13F on
+  every stock (only when this load's own request was refused), and targets / ratings / earnings on Toronto
+  listings. The per-stock feeds ask by the US ticker, so a Canadian-only name comes back empty rather than refused;
+  the wording says the Toronto listing's data isn't in the plan, which the probe above confirms.
+
+**Not done.**
+- **The cost hurdle.** `OPERATING_COST_USD_CENTS_PER_MONTH` (`agent/policy.ts`) still counts FMP at US$250/mo.
+  Agent-side: needs the real Starter price from Cam, a version bump and an agent rebuild.
+- **13F ingest** (Smart Money fund cards) will stop updating when the September-quarter filings land (~mid-November);
+  the cards are current today, so nothing is shown yet. The ingest should report the refusal, not skip quietly.
+- **Mobile**: the app's price cells get the delayed fallback through the same API, but nothing in the app says
+  "delayed" yet.
+- The market screen's Canadian gap (D132) is unchanged: Starter refuses those exchanges.
+- Verified through the API and rendered page text only; not looked at in a browser.

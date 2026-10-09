@@ -28,6 +28,11 @@ the Wall Street Journal on equal terms.
 
 ## The ten tiers
 
+> **2026-10-09 — read this first.** The FMP key is on the **Starter** plan, not Ultimate. Starter refuses batch
+> quotes, 13F, any Toronto-listed symbol, the TSX index, oil and the Canadian screener exchanges. The table below
+> describes what was built against Ultimate; `docs/DECISIONS.md` **D134** lists what the key actually serves and how
+> the site now degrades (delayed prices, "No info" panels).
+
 _Status updated 2026-06-17 — most of this is LIVE on **FMP Ultimate** (the paid backbone) +
 free Bank-of-Canada **and FRED** feeds. Tiers feed both the stock pages and the agent's
 decision context (so they move calls, not just displays). **US/CA asymmetry to know:** the
