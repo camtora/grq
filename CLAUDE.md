@@ -179,6 +179,18 @@ Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22
   (`AgentUsage` table, written by `runSession()`) → owner-only dashboard at **`/admin/usage`** + CLI
   `cd web && npx tsx scripts/token-report.ts`. To cut burn during dev, batch agent changes into ONE
   rebuild (also the `/var` disk rule) and avoid restart-looping the agent mid-session.
+- **A listing is not a bare ticker (D132).** Bare means "the US listing" everywhere downstream, so stripping
+  `.TO` off an UNTRACKED name renames it to another company (`NEO.TO` = Neo Performance Materials, bare `NEO` =
+  NeoGenomics — the wrong one got a dossier, 2026-10-08). And the TSX writes share classes with a dot (`HPS.A`)
+  where we and Yahoo store a dash (`HPS-A`). Never hand-roll a ticker join or a suffix strip: use
+  `lib/universe.ts` — `canonicalMember`/`pickCanonical` (URL or typed symbol → member), `memberForListing` (an
+  outside name → member, by listing then company name), `researchKey` (the journal key), `classDash`. Rules pinned
+  in `test/symbol-resolution.test.ts`. Still bare-keyed by design, and wrong across the border: `lib/graph/*`.
+- **FMP refuses Canadian exchanges on the current plan (found 2026-10-08, plan under review by Cam).** HTTP 402
+  for the screener on TSX/TSXV/NEO and for `.TO` symbols on quote / price targets / earnings / grades / EOD;
+  profile, symbol search and news still answer. `MarketScreen` is therefore US-only. `lib/fmp.ts` `fmpGet` returns
+  null on a refusal, so a dark Canadian panel may be the plan, not a bug — curl the endpoint before debugging.
+  `docs/MARKET-BASE-LAYER.md`.
 - The infra repo (`~/infrastructure/CLAUDE.md`) owns nginx/SSL/DNS/SSO. GRQ's nginx file is
   `~/infrastructure/nginx/conf.d/29-grq.conf`. Don't duplicate that knowledge here.
 

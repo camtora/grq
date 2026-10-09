@@ -4080,3 +4080,53 @@ sees this every session.
 **Watch (~2 weeks):** orders, new names and round trips a week, holding period and position count, against Opus 5.5's
 first week (19 orders, 8 new names, 20 positions); cash per currency against its ceiling (not swinging back to D39's
 ~87% cash); month-to-date P&L vs contributions and the rotation scorecard; check-in tokens (the quota is gone).
+
+### D132 — A listing is not a bare ticker: watch, research, chess and search resolve the right company (Cam, 2026-10-08)
+
+**What broke.** Cam tried to watch two names off Chess Moves boards. `HPS.A` "did nothing" on the phone and said
+"couldn't find a live quote" on web, labelled USD on the Toronto exchange. `NEO` got researched as NeoGenomics
+(NASDAQ) when the board's play is Neo Performance Materials (`NEO.TO`).
+
+**Cause — one class, two forms.** The board knew the exact listing (`ChessPlay.yahoo`); every hand-off after it
+(link, research key, watch) used the bare ticker, and everything downstream reads bare as "the US listing".
+- *Share-class spelling.* The TSX writes Hammond's class A as `HPS.A`; Yahoo and our row say `HPS-A` (`HPS-A.TO`).
+  `HPS.A` matched no member, and `yahooForListing` trusted `.A` as an exchange suffix, so nothing quoted.
+- *Cross-border ticker.* `bareTicker("NEO.TO")` = `NEO`, a different company. The research queue, the stock page's
+  on-demand dossier and the chess join all stripped the suffix.
+
+**Decision (`web/lib/universe.ts` is the one seam; rules pinned in `test/symbol-resolution.test.ts`):**
+- `classDash` — a dot that isn't a venue suffix (.TO/.V/.NE/.CN/.US) is a share class → dash. North America only, so
+  it is used to MATCH a member or with a known NA exchange in hand, never as a blind rewrite (`.L` is London).
+- `pickCanonical` (the pure rule behind `canonicalMember`; the mobile dossier now shares it instead of a copy) —
+  matches the class spelling, and an explicit Canadian suffix is never handed to a US-listed member (the mirror of the
+  existing `.US` guard).
+- `researchKey` — an untracked name keeps its Canadian suffix as its research/journal key. Stripping it doesn't
+  shorten the symbol, it renames it to another company.
+- `memberForListing` — joining an outside name onto the universe: exact Yahoo listing, else same ticker AND same
+  company name (a cross-listing named by its other side), else same side of the border only when there is no name.
+  Chess plays, board trends and the stock page's chess references use it; untracked beats wrong-company.
+- Watch route (`/api/universe` add): another spelling of a tracked member watches that member; stores the feed's
+  currency when the caller picked none (D113); a Canadian pick keeps its qualified key when the bare key already
+  holds another company's research.
+- Search: `/api/symbol-search` searches the dash spelling for `HPS.A` / `BRK.B` / `REI.UN`; the header index lists a
+  company once (old research under another spelling of a member is the member) and de-dupes screened rows by
+  company, not ticker.
+- GRQ Go: the watch toggle shows the server's refusal instead of swallowing it; board pieces open their play's listing.
+
+**Data.** Cam watches `HPS-A` and `NEO.TO` (member key `NEO.TO`, CAD). NeoGenomics (`NEO`) unwatched and RETIRED;
+its two dossiers stay on file.
+
+**Found on the way — Canada is not in the market screen.** FMP answers HTTP 402 (not in the data plan) for
+`company-screener?exchange=TSX|TSXV|NEO`, and for `.TO` symbols on `quote`, `price-target-consensus`, `earnings`,
+`grades-consensus`, `historical-price-eod`. `fetchScreener` returned `[]` on any failure, so the nightly rebuild
+deleted those exchanges and logged a normal count. Now a failed exchange is reported and left alone
+(`runMarketScreen().failed`; agent-side, lands with the next agent build) and Browse says why a Canadian view is
+empty. Detail: `docs/MARKET-BASE-LAYER.md`.
+
+**Open.**
+- The FMP plan: Cam is checking whether it should include Canadian exchanges. Until then the screen is US-only; how
+  much of a Canadian-only stock page is dark from the `.TO` refusals has not been measured.
+- The knowledge graph (`lib/graph/*`, the Related names panel) is keyed on bare ticker by design across all five
+  sources, so the `NEO.TO` page can show NeoGenomics' relations. Needs a re-key, not a patch.
+- AT&T shows in header search only as a nameless `T.US` row (bare `T` is Telus).
+- `test/auth-jwt.test.ts`: 3 `refreshGrqToken` tests fail on main, unrelated to this change, not investigated.
