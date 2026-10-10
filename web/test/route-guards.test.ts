@@ -39,6 +39,7 @@ const OPEN_WRITES: Record<string, string> = {
   explain: "the literacy explainer: a term-only prompt with no fund context, open to every tier",
   track: "the usage beacon: records the caller's own page view, nothing else",
   chat: "viewers may ask Alfred (read-only tools); users are refused by bookSessionFromRequest",
+  "access-check": "every tier saves ITS OWN access-check row (email from the session, body clamped to known ids)",
 };
 
 describe("every API route resolves an identity or is deliberately public", () => {

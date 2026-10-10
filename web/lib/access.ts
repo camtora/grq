@@ -45,6 +45,9 @@ export const USER_PAGES: readonly string[] = [
   "/research",
   "/today",
   "/chat",
+  // The access check (D135): a user confirms what their own account reaches. Shows the
+  // visitor only their own row.
+  "/access-check",
 ];
 
 // Only what the pages above actually fetch from the browser. Nothing here serves the
@@ -61,6 +64,7 @@ export const USER_APIS: readonly string[] = [
   "/api/hunt/status",
   "/api/chess/status",
   "/api/learn/svg",
+  "/api/access-check", // the caller's own access-check row — read and write, nothing else
 ];
 
 // Files served out of /public (logos, the bull watermark, faces) — a file, not a page. Never

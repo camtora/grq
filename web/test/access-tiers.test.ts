@@ -66,6 +66,7 @@ const ALLOWED = [
   "/options", "/options-desk", "/short-lab", "/day-lab", "/bulls",
   "/chess", "/chess/3", "/report-card",
   "/ideas", "/research", "/today", "/chat",
+  "/access-check", "/api/access-check",
   "/bull-splash.png", "/grq-logo-light.png", "/people/cam.png", "/smartmoney/buffett.jpg",
   "/api/quotes", "/api/quotes?symbols=BN", "/api/intraday", "/api/stock-extras/BN", "/api/stock-index",
   "/api/indices", "/api/explain", "/api/track", "/api/options/chain/AAPL", "/api/hunt/status",
@@ -128,5 +129,32 @@ describe("userTierAllows — the USER tier's deny-by-default door", () => {
         assert.equal(page.includes(f), false, `${page} is the book`);
       }
     }
+  });
+});
+
+// The access check (D135) reports on the door; it must never be a way around it. Its list of
+// "should be refused" paths is checked against the door itself, so the page can't claim a
+// path is protected that a user can in fact reach — and its "should open" paths must open.
+import { AUTO_CHECKS, sanitize } from "@/lib/access-check";
+
+describe("the access check agrees with the door", () => {
+  it("every 'should open' path is admitted and every 'should be refused' path is not", () => {
+    for (const c of AUTO_CHECKS) {
+      assert.equal(userTierAllows(c.path), c.kind === "open", `${c.id} ${c.path}`);
+    }
+  });
+  it("a posted body is clamped to known ids and sane values", () => {
+    const d = sanitize({
+      auto: { A1: 200, B1: 403, ZZ: 200, A2: "200", A3: 9999 },
+      manual: { C1: "pass", C2: "maybe", Q9: "fail" },
+      notes: { C1: "x".repeat(2000), Q9: "nope" },
+      overall: "y".repeat(5000),
+      extra: { anything: true },
+    });
+    assert.deepEqual(d.auto, { A1: 200, B1: 403 });
+    assert.deepEqual(d.manual, { C1: "pass" });
+    assert.equal(d.notes.C1.length, 500);
+    assert.equal(Object.keys(d.notes).length, 1);
+    assert.equal(d.overall.length, 2000);
   });
 });

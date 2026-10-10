@@ -1725,6 +1725,17 @@ model ViewerQuestion {
   @@index([at])
 }
 
+// The in-site access check (D135): one row per person who ran /access-check, written by
+// their own browser as they go. `dataJson` = { auto: {id: httpStatus}, manual: {id: "pass"|"fail"},
+// notes: {id: text}, overall: text }. Identity is the SSO email, never client-supplied.
+model AccessCheck {
+  email     String    @id
+  role      String
+  dataJson  String
+  doneAt    DateTime?
+  updatedAt DateTime  @updatedAt
+}
+
 model ExternalAccount {
   // SnapTrade's account UUID is the natural id.
   id              String            @id

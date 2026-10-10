@@ -4219,3 +4219,31 @@ Today's indices strip and the loonie pill, 13F on stock pages, every Canadian co
   "delayed" yet.
 - The market screen's Canadian gap (D132) is unchanged: Starter refuses those exchanges.
 - Verified through the API and rendered page text only; not looked at in a browser.
+
+### D135 — The access check lives on GRQ and saves itself (Cam, 2026-10-09)
+
+**Why.** To prove a new user's access, Cam sent Jose and Dave a checklist as a shared page. Dave ran through the
+site and nothing came back: an outside viewer can't save into a shared page unless invited at one particular
+sharing level, and the front-door log showed he never tried the restricted links anyway. Cam: "make sure jose's
+page auto saves".
+
+**Decision.** `/access-check`, on GRQ, open to every tier (a user is who it's for).
+- **Automatic half:** the visitor's own browser requests 22 paths with their session and records the HTTP status —
+  8 that must open (200) and 14 that must be refused (403: accounts, portfolio, reports, journal, settings, traffic,
+  tokens, race, how-it-works, and five data routes). Nobody has to click the forbidden links.
+- **By-eye half:** nine things that must be ABSENT on pages a user can open (no personal-holdings panel, no
+  position box, no Watch button, no other people's search history, …). "Not there" / "I see it".
+- **Saving:** every answer posts to `/api/access-check` as it happens — the caller's own `AccessCheck` row, keyed by
+  the SSO email (never the body), body clamped to known ids (`lib/access-check.ts` `sanitize`). Listed in
+  `OPEN_WRITES` with that reason.
+- **Reading:** the page shows the visitor only their own answers. Cam alone (`seesMeters`) sees a "Results so far"
+  table of everyone, with a verdict per person.
+- `test/access-tiers.test.ts` checks the page's "should open" / "should be refused" lists against the door itself,
+  so the check can't claim a path is protected that a user can reach.
+
+**Honest limits.** The statuses are reported by the visitor's browser, so this is evidence from a cooperative
+tester, not an audit; the front-door log is the independent record. A member or viewer who opens the page gets the
+"refused" rows opening — the page and Cam's table say "not a user account" rather than calling it a leak.
+
+**Found from Dave's session, not yet decided:** users see Cam's and Graham's photos wherever a stock shows who is
+watching it, and the Learn page shows users a link to `/race`, which they are refused.
