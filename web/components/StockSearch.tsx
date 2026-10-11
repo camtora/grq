@@ -80,7 +80,10 @@ export default function StockSearch() {
     const q = query.trim().toUpperCase();
     // No query → the most-recently-accessed names (by anyone), already sorted
     // recency-first by the API.
-    if (!q) return index.slice(0, MAX_RESULTS);
+    // Only names actually viewed (seenAt > 0). The list used to be padded out with the first
+    // few symbols alphabetically, under a "Recently viewed" heading — for someone with little
+    // or no history that read as a list of things they'd looked at (Jose, 2026-10-10).
+    if (!q) return index.filter((it) => it.seenAt > 0).slice(0, MAX_RESULTS);
     // Typed → relevance first (so Enter lands on the ticker you typed), recency
     // next, then live-before-retired. Retired matches sink below any live match
     // but still appear, so they're "sorted properly" rather than hidden.
