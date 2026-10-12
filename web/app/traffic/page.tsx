@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { seesMeters } from "@/lib/users";
-import { getUsage } from "@/lib/admin";
+import { getUsage, getTurnedAway } from "@/lib/admin";
 import { Card, StatCard, PageHeader, Chip, EmptyState } from "@/components/ui";
 import PanelHeader from "@/components/PanelHeader";
 
@@ -45,6 +45,7 @@ export default async function AdminPage({
   const days = WINDOWS.some((w) => String(w.days) === sp.days) ? Number(sp.days) : 7;
   const windowLabel = WINDOWS.find((w) => w.days === days)?.label ?? `${days} days`;
   const usage = await getUsage(days);
+  const turnedAway = await getTurnedAway(days);
 
   const maxSection = Math.max(1, ...usage.bySection.map((s) => s.views));
 
@@ -203,6 +204,46 @@ export default async function AdminPage({
                 </tbody>
               </table>
             </div>
+          </Card>
+
+          {/* People the door refused — from the door's own access log, not the page-view beacon. */}
+          <Card className="p-6">
+            <div className="mb-2"><PanelHeader>Turned away at the door</PanelHeader></div>
+            {turnedAway.length === 0 ? (
+              <p className="mt-2 text-sm text-teal-200/40">Nobody was refused in this window.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wider text-teal-200/40">
+                      <th className="pb-2 pr-4 font-medium">Who</th>
+                      <th className="pb-2 pr-4 font-medium">Why</th>
+                      <th className="pb-2 pr-4 text-right font-medium">Tries</th>
+                      <th className="pb-2 pr-4 font-medium">Last tried</th>
+                      <th className="pb-2 pr-4 font-medium">Last page</th>
+                      <th className="pb-2 font-medium">From</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-teal-400/5">
+                    {turnedAway.map((t, i) => (
+                      <tr key={i}>
+                        <td className="py-2 pr-4 text-teal-50 whitespace-nowrap">{t.who}</td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          <Chip tone={t.outcome === "removed" ? "red" : "dim"}>{t.outcome === "members-only" ? "members only" : t.outcome === "no-identity" ? "not signed in" : t.outcome}</Chip>
+                        </td>
+                        <td className="py-2 pr-4 text-right tabular-nums text-teal-100/80">{t.tries.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-teal-200/50 whitespace-nowrap">{timeAgo(t.lastAt)}</td>
+                        <td className="py-2 pr-4 max-w-[16rem] truncate text-xs text-teal-200/50">{t.lastPath}</td>
+                        <td className="py-2 text-xs tabular-nums text-teal-200/40 whitespace-nowrap">
+                          {t.client === "app" ? "app · " : ""}
+                          {t.lastIp ?? "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
 
           {/* What read-only viewers ask Alfred (logged from the chat). */}

@@ -292,6 +292,14 @@ Members keep GRQ's own (`lib/users.ts`: Cam, Graham); everyone else comes from i
 print `session.email` or a row's `email`, and never key a row a user can load by a member's address (it lands in
 the page source). A bare local part on screen (`jshor96`) means users.json is missing that person.
 
+**The door keeps an access log (2026-10-11; house rule).** `middleware.ts` runs on the **Node** runtime and
+writes one `AccessLog` row (+ a JSON line on stdout) per request: who, role, client (web/app), IP, method, path,
+and `outcome` — null when admitted, else `removed` / `no-identity` / `members-only`. Refusals are ALWAYS logged;
+admitted background polls are not (`lib/access-log.ts` lists them and says why — ~14k rows/day of noise on a tight
+`/var`). 180-day retention, pruned in-process. Cam sees refusals on **/traffic → "Turned away at the door"**.
+`PageView` is still the page-view beacon; it can't see anyone the door turned away. **Removing someone:**
+`GRQ_REMOVED_EMAILS` + `scripts/remove-member.sh` (docs/OPERATIONS.md).
+
 **Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
 cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**
 (`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at

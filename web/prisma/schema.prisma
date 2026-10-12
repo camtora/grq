@@ -1725,6 +1725,31 @@ model ViewerQuestion {
   @@index([at])
 }
 
+// The door's access log (house rule: access logs everywhere, by user). One row per request
+// the middleware sees — who (SSO email, or the app token's email), from where, what, with
+// what — and what the door DID with it: `outcome` is null when admitted, else why it was
+// refused ("removed" | "no-identity" | "members-only"). Refusals are always logged; admitted
+// background polls are not (lib/access-log.ts says which, and why). Unlike PageView (a
+// client beacon that only fires from a rendered page), this sees the people we turn away.
+model AccessLog {
+  id        BigInt   @id @default(autoincrement())
+  at        DateTime @default(now())
+  email     String?
+  role      String? // member | viewer | user, null when the door found none
+  outcome   String? // null = admitted; otherwise the refusal
+  client    String? // "web" (SSO header) | "app" (Bearer)
+  ip        String?
+  method    String
+  path      String
+  query     String?
+  userAgent String?
+  referer   String?
+
+  @@index([at])
+  @@index([email, at])
+  @@index([outcome, at])
+}
+
 // The in-site access check (D135): one row per person who ran /access-check, written by
 // their own browser as they go. `dataJson` = { auto: {id: httpStatus}, manual: {id: "pass"|"fail"},
 // notes: {id: text}, overall: text }. Identity is the SSO email, never client-supplied.

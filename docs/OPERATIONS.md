@@ -93,7 +93,7 @@ env). They also need to be on the infra oauth2-proxy allowlist to get past SSO a
 One switch, no rebuild, reversible: `GRQ_REMOVED_EMAILS` in the root `.env` (`lib/users.ts`
 `removedEmails`). It beats every other list — named members, owners, viewers, the open user
 tier — so the person has no role on the web or in the app, and every page answers with
-"Your access to GRQ has been removed." (`middleware.ts` `REMOVED_HTML`). The app signs itself
+"Your access has been removed." (`middleware.ts` `REMOVED_HTML`). The app signs itself
 out on next open and shows the same sentence under its sign-in button.
 
 ```bash

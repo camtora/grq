@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { roleForEmail, isRemoved } from "./lib/users";
+import { logAccess, type Refusal } from "./lib/access-log";
+import { emailFromGrqToken, bearerToken } from "./lib/auth-jwt";
 import { userTierAllows } from "./lib/access";
 
 // nginx + oauth2-proxy authenticate the Google account upstream and pass the
@@ -32,21 +34,31 @@ const MEMBERS_ONLY_HTML = `<!doctype html>
 
 // Someone who USED to have access and no longer does (GRQ_REMOVED_EMAILS). They get told so —
 // the other two pages would either invite them to sign in again or imply they're a guest.
-const REMOVED_MESSAGE = "Your access to GRQ has been removed.";
+const REMOVED_MESSAGE = "Your access has been removed.";
+// Logo, the one sentence, and a short paragraph ending in who to talk to (Cam, 2026-10-11). The sentence
+// carries "the shimmer" (~/.claude/CLAUDE.md; .sheen in ~/mematscale/web/app/globals.css): a
+// second copy of the text over the first, seen only through a band that glides left → right.
+// The base text never changes; on a white line the blue glow is what makes the band show.
 const REMOVED_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GRQ</title></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GRQ</title>
+<style>
+.sheen{position:relative}
+.sheen::after{content:attr(data-text);content:attr(data-text) / "";position:absolute;inset:-0.4em -0.6em;padding:0.4em 0.6em;color:#d6e8ff;text-shadow:0 0 0.3em rgba(96,165,250,.9),0 0 0.12em rgba(147,197,253,.85);-webkit-mask:linear-gradient(to right,transparent,#000 50%,transparent) 1100% 0 / 110% 100% no-repeat;mask:linear-gradient(to right,transparent,#000 50%,transparent) 1100% 0 / 110% 100% no-repeat;pointer-events:none;animation:sheen 2.5s ease-in-out infinite}
+@keyframes sheen{from{-webkit-mask-position:1100% 0;mask-position:1100% 0}to{-webkit-mask-position:-1000% 0;mask-position:-1000% 0}}
+@media (prefers-reduced-motion:reduce){.sheen::after{animation:none;opacity:0}}
+</style></head>
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#060d0c;color:#e7f5f2;font-family:system-ui,sans-serif">
 <div style="text-align:center;max-width:28rem;padding:2rem">
 <div style="font-size:2.75rem;font-weight:900;background:linear-gradient(90deg,#5eead4,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">GRQ</div>
-<p style="margin-top:1.5rem;font-size:1.1rem">${REMOVED_MESSAGE}</p>
-<p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">This account no longer opens the fund, the research, or the app. Signing in again won't change that. If you think this is a mistake, talk to Cam.</p>
+<p class="sheen" data-text="${REMOVED_MESSAGE}" style="margin:1.5rem 0 0;font-size:1.1rem">${REMOVED_MESSAGE}</p>
+<p style="margin-top:.75rem;color:#8fbfb6;font-size:.9rem">This account no longer opens the fund, the research, or the app. If you think this is a mistake, talk to Cam.</p>
 </div></body></html>`;
 
 // Mobile-app API surface (docs/IOS-PLAN.md + IOS-REBUILD-PLAN.md). The native app
 // authenticates with a GRQ-JWT Bearer token, not the oauth2-proxy cookie, so these
 // routes can't pass the cookie door — they self-guard in the Node runtime via
 // lib/session.ts (which verifies the token) + memberFromRequest for any writes. We
-// only let the edge admit them; no token is checked here (no Edge-runtime JWT).
+// only let the door admit them; the token is read here for the access log, never trusted.
 // Listed explicitly so anything NOT here (explain, quotes) stays cookie-only.
 const MOBILE_API = [
   // Reads (self-guard via sessionFromRequest — viewers may read).
@@ -107,51 +119,72 @@ function isMobileApi(path: string): boolean {
 }
 
 export function middleware(req: NextRequest) {
+  const d = decide(req);
+  logAccess(req, d);
+  return d.respond();
+}
+
+type Decision = {
+  email: string | null;
+  role: string | null;
+  client: "web" | "app" | null;
+  outcome: Refusal | null;
+  respond: () => NextResponse;
+};
+
+const page = (html: string) => () => new NextResponse(html, { status: 403, headers: { "content-type": "text/html; charset=utf-8" } });
+const json = (error: string) => () => NextResponse.json({ error }, { status: 403 });
+const admit = () => NextResponse.next();
+
+// The door's ruling on one request, separate from its logging so every exit is logged once.
+function decide(req: NextRequest): Decision {
+  const path = req.nextUrl.pathname;
+  const isApi = path.startsWith("/api/");
   const email =
     req.headers.get("x-forwarded-email") ??
     (process.env.NODE_ENV !== "production" ? (process.env.GRQ_DEV_EMAIL ?? null) : null);
 
   if (isRemoved(email)) {
-    if (req.nextUrl.pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: REMOVED_MESSAGE }, { status: 403 });
-    }
-    return new NextResponse(REMOVED_HTML, { status: 403, headers: { "content-type": "text/html; charset=utf-8" } });
+    return { email, role: null, client: "web", outcome: "removed", respond: isApi ? json(REMOVED_MESSAGE) : page(REMOVED_HTML) };
   }
 
   const role = roleForEmail(email);
   if (!role) {
-    const path = req.nextUrl.pathname;
     // Auth routes (login + me) are public at the edge and self-guard. Other mobile
     // read routes need a Bearer present (the route verifies it); without one, the
     // request is a browser hitting the door → the 403 page.
-    const hasBearer = req.headers.get("authorization")?.toLowerCase().startsWith("bearer ");
-    if (path.startsWith("/api/auth/") || (hasBearer && isMobileApi(path))) {
-      return NextResponse.next();
+    const token = bearerToken(req);
+    if (path.startsWith("/api/auth/") || (token && isMobileApi(path))) {
+      // Admitted to the route, which does the real check (lib/session.ts resolveIdentity).
+      // The token is read here ONLY to put a name on the log line — and to mark a removed
+      // member's phone still knocking, which the route will answer 401/403.
+      const appEmail = emailFromGrqToken(token);
+      return {
+        email: appEmail,
+        role: appEmail ? roleForEmail(appEmail) : null,
+        client: token ? "app" : null,
+        outcome: isRemoved(appEmail) ? "removed" : null,
+        respond: admit,
+      };
     }
-    return new NextResponse(DENIED_HTML, {
-      status: 403,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
+    return { email, role: null, client: null, outcome: "no-identity", respond: page(DENIED_HTML) };
   }
 
   // The USER tier (D122) is deny-by-default: a user reaches only the paths lib/access.ts
-  // lists — the research/education surface — never the book. This edge check IS the lock
+  // lists — the research/education surface — never the book. This check IS the lock
   // for browser traffic (not cosmetic): the pages it admits gate their own book fragments,
   // and lib/session.ts honours a GRQ-JWT only while its address is still a member, so there is
   // no Bearer path around it (a removed member's old token is the case that needs that rule).
-  if (role === "user" && !userTierAllows(req.nextUrl.pathname)) {
-    if (req.nextUrl.pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Members only." }, { status: 403 });
-    }
-    return new NextResponse(MEMBERS_ONLY_HTML, {
-      status: 403,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
+  if (role === "user" && !userTierAllows(path)) {
+    return { email, role, client: "web", outcome: "members-only", respond: isApi ? json("Members only.") : page(MEMBERS_ONLY_HTML) };
   }
-  return NextResponse.next();
+  return { email, role, client: "web", outcome: null, respond: admit };
 }
 
 export const config = {
+  // Node runtime (not Edge) so the door can write its own access log through Prisma and
+  // read the app token — same arrangement as ~/cruises/web/middleware.ts.
+  runtime: "nodejs",
   // /api/health stays open: the port is LAN-only and house monitoring probes it.
   matcher: ["/((?!api/health|_next/static|_next/image|icon.svg|favicon.ico).*)"],
 };

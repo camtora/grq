@@ -52,7 +52,7 @@ docker exec grq-db psql -U grq grq -Atc "delete from \"DeviceToken\" where lower
 fail=0
 for e in "$@"; do
   code=$(curl -s -o /tmp/grq-removed-check.html -w '%{http_code}' -H "X-Forwarded-Email: $e" localhost:3012/)
-  if [ "$code" = 403 ] && grep -q "Your access to GRQ has been removed" /tmp/grq-removed-check.html; then
+  if [ "$code" = 403 ] && grep -q "Your access has been removed" /tmp/grq-removed-check.html; then
     log "OK   $e → 403, removed page"
   else
     log "FAIL $e → $code (expected 403 + the removed page)"; fail=1

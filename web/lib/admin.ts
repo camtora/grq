@@ -207,3 +207,45 @@ export async function getUsage(days: number): Promise<Usage> {
     viewerQuestions,
   };
 }
+
+// ── Turned away at the door ───────────────────────────────────────────────
+// People the door REFUSED in the window (AccessLog rows with an outcome), grouped per person
+// and reason. PageView can't show these: its beacon only fires from a page that rendered.
+export type TurnedAway = {
+  who: string; // a name, or the local part of an unnamed address, or "no identity"
+  outcome: string; // "removed" | "members-only" | "no-identity"
+  client: string | null; // "web" | "app"
+  tries: number;
+  lastAt: Date;
+  lastPath: string;
+  lastIp: string | null;
+};
+
+export async function getTurnedAway(days: number): Promise<TurnedAway[]> {
+  const since = new Date(Date.now() - days * 864e5);
+  const rows = await prisma.accessLog
+    .findMany({
+      where: { at: { gte: since }, outcome: { not: null } },
+      orderBy: { at: "desc" },
+      take: 5000,
+      select: { at: true, email: true, outcome: true, client: true, path: true, ip: true },
+    })
+    .catch(() => []);
+  const groups = new Map<string, TurnedAway>();
+  for (const r of rows) {
+    const key = `${r.email ?? ""}|${r.outcome}|${r.client ?? ""}`;
+    const g = groups.get(key);
+    if (g) g.tries += 1;
+    else
+      groups.set(key, {
+        who: r.email ? (nameForEmail(r.email) ?? r.email.split("@")[0]) : "no identity",
+        outcome: r.outcome ?? "",
+        client: r.client,
+        tries: 1,
+        lastAt: r.at, // rows arrive newest first
+        lastPath: r.path,
+        lastIp: r.ip,
+      });
+  }
+  return [...groups.values()].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+}
