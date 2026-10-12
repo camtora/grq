@@ -109,6 +109,10 @@ docker exec grq-db psql -U grq grq -c "delete from \"DeviceToken\" where email i
 curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-Email: g.j.appleby@gmail.com" localhost:3012/
 ```
 
+**Current value (2026-10-11):** `cameron@camerontora.ca` — Cam's alternate address, there on
+purpose as a live preview of the page. Add to the list, don't overwrite it, until he asks for
+that address back.
+
 Not done by the switch — each is a decision, ask first: their stored SnapTrade keys and
 accounts (`ExternalCredential`, `ExternalUser` → accounts/holdings cascade), their watches
 (`StockWatch`, which is what keeps their face in the "Watching" columns), their profile in
