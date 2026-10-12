@@ -121,9 +121,8 @@ The unit files live in `~/.config/systemd/user/` (not in the repo); delete them 
 no visit from him in between. The one lasting effect: his push device record was deleted, and
 comes back when he next opens the app.)
 
-**Current value (2026-10-11):** `cameron@camerontora.ca` — Cam's alternate address, there on
-purpose as a live preview of the page. Add to the list, don't overwrite it, until he asks for
-that address back.
+**Current value (2026-10-11):** empty. (`cameron@camerontora.ca`, Cam's alternate address, sat
+on it for an hour that night as a live preview of the page and was put back.)
 
 Not done by the switch — each is a decision, ask first: their stored SnapTrade keys and
 accounts (`ExternalCredential`, `ExternalUser` → accounts/holdings cascade), their watches
