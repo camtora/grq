@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { memberFromRequest } from "@/lib/session";
 import { getQuote } from "@/lib/broker/quotes";
 import { universeEntry } from "@/lib/universe";
-import { userForEmail } from "@/lib/users";
+import { displayNameForEmail } from "@/lib/sso-names";
 import { personByName } from "@/lib/people";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ const shape = (a: AlertRow) => ({
 // The symbol-scoped view adds attribution so the fund sees WHO is watching a name
 // (notifications + deletes stay per-owner; this is visibility only).
 const shapeWithOwner = (a: AlertRow, me: string) => {
-  const name = userForEmail(a.email)?.name ?? a.email;
+  const name = displayNameForEmail(a.email);
   return {
     ...shape(a),
     owner: name,

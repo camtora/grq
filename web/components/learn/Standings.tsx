@@ -57,7 +57,7 @@ export default async function Standings() {
     <Card className="p-5">
       <div className="space-y-4">
         {rows.map((r) => (
-          <div key={r.email} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div key={r.name} className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex w-44 items-center gap-2.5">
               <Avatar src={r.photo} name={r.name} />
               <div>

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { userForEmail, roleForEmail, type GrqUser, type Role } from "./users";
 import { emailFromGrqToken, bearerToken } from "./auth-jwt";
+import { displayNameForEmail } from "./sso-names";
 
 export type Session = { email: string; user: GrqUser | null; role: Role };
 
@@ -75,5 +76,5 @@ export function bookSessionFromRequest(req: Request): Session | null {
 }
 
 export function displayName(s: Session | null): string {
-  return s?.user?.name ?? s?.email ?? "unknown";
+  return s ? displayNameForEmail(s.email) : "unknown";
 }

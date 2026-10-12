@@ -73,7 +73,7 @@ function ExamCard({
         {results.length ? (
           <div className="mt-3 space-y-1.5 border-t border-teal-400/10 pt-3">
             {results.map((r) => (
-              <div key={r.email} className="flex items-center gap-2.5 text-xs">
+              <div key={r.name} className="flex items-center gap-2.5 text-xs">
                 <Avatar src={r.photo} name={r.name} size="h-5 w-5" />
                 <span className="w-16 font-semibold text-teal-50">{r.name}</span>
                 <span className={`tabular-nums font-semibold ${r.passed ? "text-emerald-300" : "text-amber-300"}`}>

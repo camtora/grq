@@ -285,6 +285,13 @@ never queue research (Opus on the fund's quota) and never feeds the members' sea
 port 3012 is published on all interfaces and trusts `X-Forwarded-Email` from anyone who reaches it (LAN) — open
 decision in D133.
 
+**Names, never addresses (Cam, 2026-10-11).** Anything on screen that identifies a person shows their name.
+Members keep GRQ's own (`lib/users.ts`: Cam, Graham); everyone else comes from infra's
+`oauth2-proxy/users.json` — the one email → name map for the whole SSO allowlist, mounted read-only into `web`
+(`USERS_FILE`) and read live by `lib/sso-names.ts` (`nameForEmail` / `displayNameForEmail`; server-only). Never
+print `session.email` or a row's `email`, and never key a row a user can load by a member's address (it lands in
+the page source). A bare local part on screen (`jshor96`) means users.json is missing that person.
+
 **Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
 cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**
 (`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at

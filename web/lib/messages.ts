@@ -1,7 +1,8 @@
 import { prisma } from "./db";
 import { pushNotify } from "./push/notify";
 import { panelLabel } from "./panels";
-import { memberKeyForEmail, userForEmail } from "./users";
+import { memberKeyForEmail } from "./users";
+import { displayNameForEmail } from "./sso-names";
 import { notifyMessagesChanged } from "./messages-live";
 
 // The member-to-member messaging spine (D61). One shared Cam↔Graham thread backs
@@ -29,7 +30,7 @@ export function serializeMessage(m: DbMessage, viewerEmail: string) {
     id: m.id,
     at: m.at.toISOString(),
     fromKey: memberKeyForEmail(m.fromEmail), // "cam" | "graham" | null
-    fromName: userForEmail(m.fromEmail)?.name ?? m.fromEmail,
+    fromName: displayNameForEmail(m.fromEmail),
     mine: m.fromEmail === viewerEmail,
     body: m.body,
     symbol: m.symbol,

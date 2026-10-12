@@ -8,6 +8,7 @@ import Tracker from "@/components/Tracker";
 import { getSession, seesBook } from "@/lib/session";
 import { USERS, isOwner } from "@/lib/users";
 import { personByName } from "@/lib/people";
+import { displayNameForEmail } from "@/lib/sso-names";
 import { prisma } from "@/lib/db";
 
 // The named members (Cam, Graham) are the toggle-able chat threads.
@@ -43,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <img src="/bull-splash.png" alt="" className="w-[min(72vw,860px)] opacity-[0.04]" />
         </div>
         <NavBar
-          name={session?.user?.name ?? session?.email ?? "?"}
+          name={session ? displayNameForEmail(session.email) : "?"}
           photo={personByName(session?.user?.name)?.photo ?? null}
           killSwitch={settings?.killSwitch ?? false}
           killSwitchBy={settings?.killSwitchBy ?? null}

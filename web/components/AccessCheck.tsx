@@ -10,7 +10,7 @@ import { AUTO_CHECKS, MANUAL_CHECKS, autoOk, emptyData, type AccessCheckData } f
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export default function AccessCheck({ email, role }: { email: string; role: string }) {
+export default function AccessCheck({ name, role }: { name: string; role: string }) {
   const [data, setData] = useState<AccessCheckData>(emptyData());
   const [running, setRunning] = useState(false);
   const [save, setSave] = useState<SaveState>("idle");
@@ -99,7 +99,7 @@ export default function AccessCheck({ email, role }: { email: string; role: stri
     <div className="space-y-7">
       <div className="rounded-2xl border border-[color:var(--card-border)] bg-[var(--card-bg)] p-4 text-sm text-teal-100/80">
         <p>
-          Signed in as <span className="font-semibold text-teal-50">{email}</span> · account type{" "}
+          Signed in as <span className="font-semibold text-teal-50">{name}</span> · account type{" "}
           <span className="font-semibold text-teal-50">{role}</span>.
         </p>
         {!isUser && (

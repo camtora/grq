@@ -142,16 +142,8 @@ export default async function AdminPage({
                   {usage.byUser.map((u) => (
                     <tr key={u.email}>
                       <td className="py-2 pr-4">
-                        {u.name ? (
-                          <>
-                            <span className="text-teal-50">{u.name}</span>
-                            <span className="ml-2 text-xs text-teal-200/40">{u.email}</span>
-                          </>
-                        ) : (
-                          // No named member for this email (e.g. an allowlisted viewer) —
-                          // show the full address, not just the local part.
-                          <span className="text-teal-50">{u.email}</span>
-                        )}
+                        {/* Names, never addresses (Cam, 2026-10-11) — lib/sso-names.ts. */}
+                        <span className="text-teal-50">{u.name ?? u.email.split("@")[0]}</span>
                       </td>
                       <td className="py-2 pr-4">
                         <Chip tone={roleTone(u.role)}>{u.role}</Chip>

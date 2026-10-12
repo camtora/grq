@@ -33,6 +33,7 @@ import {
 import { toCadCents, usdCadRate } from "@/lib/fx";
 import { accountsForMembers, snaptradeConfiguredFor, externalDayBaselineCadCents } from "@/lib/external/store";
 import { personByEmail } from "@/lib/people";
+import { displayNameForEmail } from "@/lib/sso-names";
 import { etDateStr, startOfEtDay, isMarketDay, isMarketOpen, etSessionBounds } from "@/agent/calendar";
 import LiveTape from "@/components/LiveTape";
 import { lastSettledSnapshotBefore, settledSnapshotsBetween } from "@/lib/nav-history";
@@ -256,7 +257,7 @@ export default async function Portfolio() {
       const syncedAt = syncTimes.length ? new Date(Math.min(...syncTimes)) : null;
       const disabled = (v.accounts ?? []).some((a) => a.disabled);
       const key = person?.key ?? v.email;
-      personalGroups.push({ key, owner: { name: person?.name ?? v.email, photo: person?.photo ?? null }, rows, cash, extAccounts, cadTotalCents, syncedAt, disabled });
+      personalGroups.push({ key, owner: { name: person?.name ?? displayNameForEmail(v.email), photo: person?.photo ?? null }, rows, cash, extAccounts, cadTotalCents, syncedAt, disabled });
     }
     personalGroups.sort((a, b) => (ORDER[a.key] ?? 9) - (ORDER[b.key] ?? 9));
     // The "Outside GRQ" stat tiles show the VIEWER's own external total + change, not the combined.

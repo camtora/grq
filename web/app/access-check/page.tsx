@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { seesMeters, userForEmail } from "@/lib/users";
+import { seesMeters } from "@/lib/users";
+import { displayNameForEmail } from "@/lib/sso-names";
 import { prisma } from "@/lib/db";
 import { PageHeader, Card, Chip } from "@/components/ui";
 import AccessCheck from "@/components/AccessCheck";
@@ -63,8 +64,7 @@ export default async function AccessCheckPage() {
                 return (
                   <tr key={r.email} className="border-t border-teal-400/10 align-top">
                     <td className="px-4 py-2.5 text-teal-50">
-                      {userForEmail(r.email)?.name ?? r.email}
-                      {userForEmail(r.email) ? <div className="text-xs text-teal-200/40">{r.email}</div> : null}
+                      {displayNameForEmail(r.email)}
                     </td>
                     <td className="px-4 py-2.5 text-teal-200/60">{r.role}</td>
                     <td className="px-4 py-2.5 tabular-nums text-teal-100/80">
@@ -106,7 +106,7 @@ export default async function AccessCheckPage() {
         </Card>
       )}
 
-      <AccessCheck email={session.email} role={session.role} />
+      <AccessCheck name={displayNameForEmail(session.email)} role={session.role} />
     </main>
   );
 }

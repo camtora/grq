@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import { userForEmail, isOwner, roleForEmail } from "@/lib/users";
+import { isOwner, roleForEmail } from "@/lib/users";
+import { nameForEmail } from "@/lib/sso-names";
 import { sectionForPath } from "@/lib/sections";
 
 // Aggregations for the owner-only /admin usage dashboard. All read-only over the
@@ -158,7 +159,7 @@ export async function getUsage(days: number): Promise<Usage> {
   const byUser: UserStat[] = [...userMap.entries()]
     .map(([email, u]) => ({
       email,
-      name: userForEmail(email)?.name ?? null,
+      name: nameForEmail(email),
       // Show the CURRENT authoritative role, not the snapshot stored at view time —
       // a promotion (e.g. Graham → owner) should reflect immediately, not wait for
       // their next page view. Owner > member > viewer.
@@ -177,7 +178,7 @@ export async function getUsage(days: number): Promise<Usage> {
   const recent: RecentView[] = recentRows.map((r) => ({
     at: r.at,
     email: r.email,
-    name: userForEmail(r.email)?.name ?? null,
+    name: nameForEmail(r.email),
     // Re-derive the section from the path at read time (like role above) so a
     // re-categorisation — e.g. adding "Race" — reflects on existing rows too,
     // not only ones logged after the change.
@@ -190,7 +191,7 @@ export async function getUsage(days: number): Promise<Usage> {
   const viewerQuestions: ViewerQuestionView[] = viewerQ.map((q) => ({
     at: q.at,
     email: q.email,
-    name: userForEmail(q.email)?.name ?? null,
+    name: nameForEmail(q.email),
     message: q.message,
     symbol: q.symbol,
   }));

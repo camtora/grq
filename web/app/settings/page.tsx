@@ -212,7 +212,6 @@ export default async function Settings() {
                 {Object.entries(USERS).map(([email, u]) => (
                   <li key={email} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="font-semibold text-teal-50">{u.name}</span>
-                    <span className="text-teal-200/50">{email}</span>
                     <Chip tone="teal">{u.role}</Chip>
                     <span className="ml-auto text-xs text-teal-200/40">holds kill switch</span>
                   </li>

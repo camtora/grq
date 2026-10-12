@@ -13,8 +13,16 @@ services:
     # the live decision log (docs/DECISIONS.md) at request time — editing the log
     # reflects on the page instantly, no rebuild. The web build context is ./web, so
     # docs/ (a repo-root sibling) can't be COPY'd into the image; this bridges it.
+    # Second mount: the SSO email -> name map (infra's oauth2-proxy/users.json, the ONE place a
+    # user's name lives), read-only, that one file and nothing else from the auth directory.
+    # Read by web/lib/sso-names.ts via USERS_FILE; a missing file means no names, not a crash.
+    # A single-file mount pins the inode: an edit saved by RENAME (some editors, git checkout)
+    # is not seen until `docker-compose up -d --force-recreate web`. An in-place write is live.
+    environment:
+      - USERS_FILE=/infrastructure/users.json
     volumes:
       - ./docs:/app/docs:ro
+      - /home/camerontora/infrastructure/oauth2-proxy/users.json:/infrastructure/users.json:ro
     depends_on:
       - db
     healthcheck:

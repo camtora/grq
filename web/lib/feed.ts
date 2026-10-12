@@ -24,6 +24,7 @@ import { watchersFor, allWatches } from "./watch";
 import { usdCadRate } from "./fx";
 import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails, seesMeters } from "./users";
+import { displayNameForEmail } from "./sso-names";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
@@ -1342,7 +1343,7 @@ export async function accountsResponse(meEmail: string) {
     fxUsdCad,
     members: views.map((v) => ({
       email: v.email,
-      name: personByEmail(v.email)?.name ?? v.email,
+      name: personByEmail(v.email)?.name ?? displayNameForEmail(v.email),
       isSelf: v.email === meEmail,
       connected: v.connected,
       dailyValues: (dailyBy.get(v.email) ?? []).slice(-30),
@@ -2071,7 +2072,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     }),
     // Members' own money in this name (bought-at = avg cost). Empty for viewers.
     personalPositions: personalRaw.map((pp) => ({
-      owner: personByEmail(pp.email)?.name ?? pp.email,
+      owner: personByEmail(pp.email)?.name ?? displayNameForEmail(pp.email),
       ownerKey: ownerKeyFor(pp.email),
       institution: pp.institution,
       accountType: pp.accountType,
