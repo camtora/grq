@@ -112,14 +112,13 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-Email: g.j.appleby@gmai
 **Scripted:** `scripts/remove-member.sh <email> [<email> …]` does steps 1–4 (adds to the list,
 recreates web, deletes push devices, verifies) and nothing else; safe to run twice.
 
-**Scheduled — Graham, Friday 2026-10-16 12:00 AM ET** (Cam, 2026-10-11; access only, his data
-untouched): systemd user timer `grq-remove-graham.timer` → runs the script for both his
-addresses, log at `~/grq-remove-graham.log`. Check: `systemctl --user list-timers
-grq-remove-graham.timer`. Cancel: `systemctl --user disable --now grq-remove-graham.timer`.
-The unit files live in `~/.config/systemd/user/` (not in the repo); delete them after it runs.
+**Done — Graham, 2026-10-11 22:06 ET** (Cam said go that night, ahead of the Friday timer, which
+was then deleted). Access only: both his addresses are on the list and his push device record
+is gone. Untouched: his SnapTrade keys and six TD accounts, his watches, his profile. Log:
+`~/grq-remove-graham.log`.
 
-**Current value (2026-10-11):** `cameron@camerontora.ca` — Cam's alternate address, there on
-purpose as a live preview of the page. Add to the list, don't overwrite it, until he asks for
+**Current value (2026-10-11):** Graham's two addresses, plus `cameron@camerontora.ca` — Cam's
+alternate address, there on purpose as a live preview of the page. Add to the list, don't overwrite it, until he asks for
 that address back.
 
 Not done by the switch — each is a decision, ask first: their stored SnapTrade keys and
