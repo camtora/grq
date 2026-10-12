@@ -6,13 +6,14 @@ import MessagesDrawer from "@/components/MessagesDrawer";
 import GrqChat from "@/components/GrqChat";
 import Tracker from "@/components/Tracker";
 import { getSession, seesBook } from "@/lib/session";
-import { USERS, isOwner } from "@/lib/users";
+import { namedMembers, isOwner } from "@/lib/users";
 import { personByName } from "@/lib/people";
 import { displayNameForEmail } from "@/lib/sso-names";
 import { prisma } from "@/lib/db";
 
-// The named members (Cam, Graham) are the toggle-able chat threads.
-const CHAT_MEMBERS = Object.entries(USERS).map(([email, u]) => ({ email, name: u.name }));
+// The named members (Cam, Graham) are the toggle-able chat threads. Read per request: who is
+// still a member is env-driven (GRQ_REMOVED_EMAILS), not fixed at build time.
+const chatMembers = () => namedMembers().map(([email, u]) => ({ email, name: u.name }));
 
 export const metadata: Metadata = {
   title: "GRQ — Get Rich Quick",
@@ -66,7 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {session && (
           <GrqChat
             meEmail={session.email}
-            members={session.role === "member" ? CHAT_MEMBERS : []}
+            members={session.role === "member" ? chatMembers() : []}
             chat={seesBook(session)}
           />
         )}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
-import { roleForEmail, userForEmail } from "@/lib/users";
+import { roleForEmail, userForEmail, isRemoved } from "@/lib/users";
 import { signGrqToken, jwtConfigured } from "@/lib/auth-jwt";
 import { meResponse } from "@/lib/feed";
 import type { Session } from "@/lib/session";
@@ -37,6 +37,10 @@ export async function POST(req: Request) {
   }
   if (!email) return NextResponse.json({ error: "Google token has no verified email." }, { status: 401 });
 
+  // The app shows this text under its sign-in button, so a removed member reads why.
+  if (isRemoved(email)) {
+    return NextResponse.json({ error: "Your access to GRQ has been removed." }, { status: 403 });
+  }
   if (roleForEmail(email) !== "member") {
     return NextResponse.json({ error: "The GRQ app is members-only." }, { status: 403 });
   }

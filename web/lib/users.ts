@@ -16,10 +16,35 @@ function envEmails(): string[] {
     .filter(Boolean);
 }
 
+// REMOVED people (Cam, 2026-10-11): GRQ_REMOVED_EMAILS, comma-separated, no rebuild. Being on
+// it beats every other list — the named members above, owners, viewers, and the open user
+// tier (`*`) — so a removed person has NO role, on the web and in the app, and the door
+// tells them so in plain words (middleware REMOVED_HTML) instead of the members-only or
+// no-identity page. It is the one switch for taking someone out: nothing here is edited, so
+// history that names them (trades, notes, "added by") still reads correctly. List EVERY
+// address the person has — an alternate one is otherwise still a viewer, who reads the book.
+export function removedEmails(): string[] {
+  return (process.env.GRQ_REMOVED_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isRemoved(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return removedEmails().includes(email.trim().toLowerCase());
+}
+
+/** The named members who are still members — what a "Members" list on screen iterates. */
+export function namedMembers(): [string, GrqUser][] {
+  return Object.entries(USERS).filter(([email]) => !isRemoved(email));
+}
+
 // A member is Cam/Graham or anyone in GRQ_ALLOWED_EMAILS — they act on the fund.
 export function isMember(email: string | null | undefined): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
+  if (isRemoved(normalized)) return false;
   return normalized in USERS || envEmails().includes(normalized);
 }
 
@@ -27,7 +52,7 @@ export function isMember(email: string | null | undefined): boolean {
 // The notification fan-out resolves recipients from THIS list (not device tokens),
 // so the web feed reaches a member who has never opened the phone app.
 export function memberEmails(): string[] {
-  return [...new Set([...Object.keys(USERS), ...envEmails()].map((e) => e.toLowerCase()))];
+  return [...new Set([...Object.keys(USERS), ...envEmails()].map((e) => e.toLowerCase()))].filter((e) => !isRemoved(e));
 }
 
 // Back-compat alias (kept for any caller that means "is a member").
@@ -83,6 +108,7 @@ function userEmails(): string[] {
 export function roleForEmail(email: string | null | undefined): Role | null {
   if (!email || !email.trim()) return null;
   const normalized = email.trim().toLowerCase();
+  if (isRemoved(normalized)) return null; // beats every list below, the open tier included
   if (isMember(normalized)) return "member";
   if (viewerEmails().includes(normalized)) return "viewer";
   const users = userEmails();
@@ -114,7 +140,7 @@ function ownerEmails(): string[] {
 }
 
 export function isOwner(email: string | null | undefined): boolean {
-  if (!email) return false;
+  if (!email || isRemoved(email)) return false;
   return ownerEmails().includes(email.trim().toLowerCase());
 }
 
@@ -132,7 +158,7 @@ function meterEmails(): string[] {
 }
 
 export function seesMeters(email: string | null | undefined): boolean {
-  if (!email) return false;
+  if (!email || isRemoved(email)) return false;
   return meterEmails().includes(email.trim().toLowerCase());
 }
 

@@ -88,6 +88,34 @@ Named members (greeting + role): `web/lib/users.ts` → rebuild web. Quick extra
 append to `GRQ_ALLOWED_EMAILS` in `.env` → `docker-compose up -d web` (recreate to reload
 env). They also need to be on the infra oauth2-proxy allowlist to get past SSO at all.
 
+### Removing someone entirely (built 2026-10-11, not yet used)
+
+One switch, no rebuild, reversible: `GRQ_REMOVED_EMAILS` in the root `.env` (`lib/users.ts`
+`removedEmails`). It beats every other list — named members, owners, viewers, the open user
+tier — so the person has no role on the web or in the app, and every page answers with
+"Your access to GRQ has been removed." (`middleware.ts` `REMOVED_HTML`). The app signs itself
+out on next open and shows the same sentence under its sign-in button.
+
+```bash
+cd /home/camerontora/grq
+# 1. List EVERY address the person has. An alternate address left off is still a VIEWER,
+#    who reads the whole book. For Graham that is both of these:
+#      GRQ_REMOVED_EMAILS=g.j.appleby@gmail.com,graham.j.appleby@gmail.com
+# 2. Env-only, web only:
+set -a && . ./.env && set +a && docker-compose up -d --force-recreate --no-deps web
+# 3. Stop pushes to their phone now (the agent image only learns the list on its next rebuild):
+docker exec grq-db psql -U grq grq -c "delete from \"DeviceToken\" where email in ('…')"
+# 4. Check: 403 + the removed page, and a member is unaffected
+curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-Email: g.j.appleby@gmail.com" localhost:3012/
+```
+
+Not done by the switch — each is a decision, ask first: their stored SnapTrade keys and
+accounts (`ExternalCredential`, `ExternalUser` → accounts/holdings cascade), their watches
+(`StockWatch`, which is what keeps their face in the "Watching" columns), their profile in
+`lib/people.ts`, and the copy that says "both members hold the kill switch". History that
+names them (trades, notes, "added by") is deliberately left alone. Undo: empty the variable,
+recreate web. Pinned by `test/removed-members.test.ts`.
+
 ## Alerting (Discord)
 
 Single chokepoint: `agent/alerts.ts`. `alert(severity, title, body)` → `DISCORD_WEBHOOK_URL`

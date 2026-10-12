@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { USERS, isOwner, seesMeters } from "@/lib/users";
+import { namedMembers, isOwner, seesMeters } from "@/lib/users";
 import { getSession } from "@/lib/session";
 import { soakStatus } from "@/lib/soak";
 import { ACCOUNT_TYPE, DIALS } from "@/agent/policy";
@@ -209,7 +209,7 @@ export default async function Settings() {
             <div className="mt-4 border-t border-teal-400/10 pt-3">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal-200/40">Members</div>
               <ul className="space-y-2">
-                {Object.entries(USERS).map(([email, u]) => (
+                {namedMembers().map(([email, u]) => (
                   <li key={email} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="font-semibold text-teal-50">{u.name}</span>
                     <Chip tone="teal">{u.role}</Chip>

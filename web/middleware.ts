@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { roleForEmail } from "./lib/users";
+import { roleForEmail, isRemoved } from "./lib/users";
 import { userTierAllows } from "./lib/access";
 
 // nginx + oauth2-proxy authenticate the Google account upstream and pass the
@@ -28,6 +28,18 @@ const MEMBERS_ONLY_HTML = `<!doctype html>
 <p style="margin-top:1.5rem;font-size:1.1rem">This part of GRQ is for fund members.</p>
 <p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">The book — positions, reports, the desk — stays with the people whose money it is. The research, the market, and Learn are all yours.</p>
 <p style="margin-top:1.25rem"><a href="/" style="color:#5eead4;text-decoration:none;font-weight:600">← back to Today</a></p>
+</div></body></html>`;
+
+// Someone who USED to have access and no longer does (GRQ_REMOVED_EMAILS). They get told so —
+// the other two pages would either invite them to sign in again or imply they're a guest.
+const REMOVED_MESSAGE = "Your access to GRQ has been removed.";
+const REMOVED_HTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GRQ</title></head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#060d0c;color:#e7f5f2;font-family:system-ui,sans-serif">
+<div style="text-align:center;max-width:28rem;padding:2rem">
+<div style="font-size:2.75rem;font-weight:900;background:linear-gradient(90deg,#5eead4,#14b8a6);-webkit-background-clip:text;background-clip:text;color:transparent">GRQ</div>
+<p style="margin-top:1.5rem;font-size:1.1rem">${REMOVED_MESSAGE}</p>
+<p style="margin-top:.5rem;color:#8fbfb6;font-size:.9rem">This account no longer opens the fund, the research, or the app. Signing in again won't change that. If you think this is a mistake, talk to Cam.</p>
 </div></body></html>`;
 
 // Mobile-app API surface (docs/IOS-PLAN.md + IOS-REBUILD-PLAN.md). The native app
@@ -98,6 +110,13 @@ export function middleware(req: NextRequest) {
   const email =
     req.headers.get("x-forwarded-email") ??
     (process.env.NODE_ENV !== "production" ? (process.env.GRQ_DEV_EMAIL ?? null) : null);
+
+  if (isRemoved(email)) {
+    if (req.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: REMOVED_MESSAGE }, { status: 403 });
+    }
+    return new NextResponse(REMOVED_HTML, { status: 403, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
 
   const role = roleForEmail(email);
   if (!role) {
