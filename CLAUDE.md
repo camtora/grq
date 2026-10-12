@@ -281,7 +281,7 @@ allowlist is a GRQ user** — the header is the proof (oauth2-proxy enforces the
 file). `*` grants `user` only, never viewer/member. Remove the `,*` + force-recreate web to close it. **New API
 route? `test/route-guards.test.ts` fails the build** until it resolves an identity (or is listed `PUBLIC` with a
 reason) and, if it writes, takes `memberFromRequest` (or is listed `OPEN_WRITES`). A page view by a non-member must
-never queue research (Opus on the fund's quota) and never feeds the members' search history. **Known side door:**
+never queue research (Opus on the fund's quota) and never feeds the members' search history. **The app token is members-only at the seam** (`resolveIdentity`, `lib/session.ts`, 2026-10-11): a GRQ-JWT whose address is no longer a member resolves to no session. Without that, `*` turned a REMOVED member's old token into a "user" that the app's API routes served the book to (they sit outside the middleware's user-tier check) — `test/bearer-members-only.test.ts`. **Known side door:**
 port 3012 is published on all interfaces and trusts `X-Forwarded-Email` from anyone who reaches it (LAN) — open
 decision in D133.
 

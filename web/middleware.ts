@@ -118,8 +118,8 @@ export function middleware(req: NextRequest) {
   // The USER tier (D122) is deny-by-default: a user reaches only the paths lib/access.ts
   // lists — the research/education surface — never the book. This edge check IS the lock
   // for browser traffic (not cosmetic): the pages it admits gate their own book fragments,
-  // and a user can't hold a GRQ-JWT (auth/google + auth/dev are members-only), so there is
-  // no Bearer path around it.
+  // and lib/session.ts honours a GRQ-JWT only while its address is still a member, so there is
+  // no Bearer path around it (a removed member's old token is the case that needs that rule).
   if (role === "user" && !userTierAllows(req.nextUrl.pathname)) {
     if (req.nextUrl.pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Members only." }, { status: 403 });
