@@ -1884,3 +1884,18 @@ model LearnExample {
 
   @@index([courseSlug])
 }
+
+// A USER's acceptance of the terms (D136): who, which version, when, from where. The proof
+// behind the grq-terms cookie — the cookie is only a cache of this row. One row per
+// (email, version); a new TERMS_VERSION asks everyone again.
+model TermsAcceptance {
+  id        Int      @id @default(autoincrement())
+  email     String
+  version   String
+  at        DateTime @default(now())
+  ip        String?
+  userAgent String?
+
+  @@unique([email, version])
+  @@index([at])
+}

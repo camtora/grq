@@ -3,6 +3,7 @@ import { roleForEmail, isRemoved } from "./lib/users";
 import { logAccess, type Refusal } from "./lib/access-log";
 import { emailFromGrqToken, bearerToken } from "./lib/auth-jwt";
 import { userTierAllows } from "./lib/access";
+import { termsRuling, TERMS_COOKIE, TERMS_PATH, TERMS_API_ERROR } from "./lib/terms";
 
 // nginx + oauth2-proxy authenticate the Google account upstream and pass the
 // identity in X-Forwarded-Email. oauth2-proxy already rejects anyone not in the
@@ -177,6 +178,22 @@ function decide(req: NextRequest): Decision {
   // no Bearer path around it (a removed member's old token is the case that needs that rule).
   if (role === "user" && !userTierAllows(path)) {
     return { email, role, client: "web", outcome: "members-only", respond: isApi ? json("Members only.") : page(MEMBERS_ONLY_HTML) };
+  }
+
+  // The terms (D136): a USER clicks through the terms once before the site opens — decided
+  // from the signed grq-terms cookie, so no DB read here; /terms re-reads the acceptance row
+  // itself (a new device) and the accept route writes it. Members and viewers are never asked.
+  // Not a refusal for the log: an admitted person on a detour, so `outcome` stays null.
+  const terms = termsRuling(role, path, req.cookies.get(TERMS_COOKIE)?.value, email);
+  if (terms === "refuse") return { email, role, client: "web", outcome: null, respond: json(TERMS_API_ERROR) };
+  if (terms === "redirect") {
+    const next = encodeURIComponent(path + req.nextUrl.search);
+    // Next's middleware insists on an ABSOLUTE Location (a relative one is a 500: "Invalid URL"), and
+    // behind nginx the request's own origin is the container's. So the public origin is rebuilt from
+    // what nginx forwards — Host and X-Forwarded-Proto (infrastructure/nginx/conf.d/29-grq.conf).
+    const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(/:$/, "");
+    const host = req.headers.get("host") ?? req.nextUrl.host;
+    return { email, role, client: "web", outcome: null, respond: () => NextResponse.redirect(`${proto}://${host}${TERMS_PATH}?next=${next}`, 307) };
   }
   return { email, role, client: "web", outcome: null, respond: admit };
 }

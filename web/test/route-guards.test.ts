@@ -40,6 +40,7 @@ const OPEN_WRITES: Record<string, string> = {
   track: "the usage beacon: records the caller's own page view, nothing else",
   chat: "viewers may ask Alfred (read-only tools); users are refused by bookSessionFromRequest",
   "access-check": "every tier saves ITS OWN access-check row (email from the session, body clamped to known ids)",
+  "terms/accept": "the terms click-through (D136): writes the CALLER's own acceptance row for the current version, nothing from the body",
 };
 
 describe("every API route resolves an identity or is deliberately public", () => {

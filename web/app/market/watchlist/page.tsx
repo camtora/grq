@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { allUniverse } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getSession, displayName, seesBook } from "@/lib/session";
+import { INTEREST_LINE } from "@/lib/terms-content";
 import { Card, PageHeader, EmptyState } from "@/components/ui";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import AddTicker from "@/components/AddTicker";
@@ -136,7 +137,15 @@ export default async function Watchlist() {
 
   return (
     <main>
-      <PageHeader title="Watchlist" sub="The names you're watching — GRQ researches each one, and they stay here even after they're promoted into the Universe." />
+      <PageHeader
+        title="Watchlist"
+        sub={
+          <>
+            The names you&apos;re watching — GRQ researches each one, and they stay here even after they&apos;re promoted into the Universe.
+            {!book && <> {INTEREST_LINE}</>}
+          </>
+        }
+      />
 
       <section className="mb-8">
         {rows.length === 0 ? (

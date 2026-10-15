@@ -131,6 +131,23 @@ accounts (`ExternalCredential`, `ExternalUser` → accounts/holdings cascade), t
 names them (trades, notes, "added by") is deliberately left alone. Undo: empty the variable,
 recreate web. Pinned by `test/removed-members.test.ts`.
 
+### The terms (D136)
+
+A **user** (never a member or viewer) is sent to `/terms` on their first page view and must click
+**I understand** before the site opens. The row is the proof:
+
+```bash
+docker exec grq-db psql -U grq grq -c 'select email, version, at, ip from "TermsAcceptance" order by at desc;'
+```
+
+Cam also sees the list under the text on `/terms`. **Changing the words:** edit `web/lib/terms-content.ts`, bump
+`TERMS_VERSION` in `web/lib/terms.ts` (the date), rebuild web — every user is asked again on their next visit;
+old rows stay as the record of what they agreed to before. A user who clears their cookies is not asked again:
+`/terms` finds their row and re-issues the cookie. To make one person re-agree without a version bump, delete
+their row for the current version and their browser's `grq-terms` cookie will stop verifying on the next deploy
+(the cookie is an HMAC under `GRQ_JWT_SECRET`; rotating that secret re-asks everyone and also signs every phone
+out of GRQ Go).
+
 ## Alerting (Discord)
 
 Single chokepoint: `agent/alerts.ts`. `alert(severity, title, body)` → `DISCORD_WEBHOOK_URL`

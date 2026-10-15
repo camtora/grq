@@ -11,6 +11,7 @@ import { isMarketOpen } from "@/agent/calendar";
 import { DIALS } from "@/agent/policy";
 import { getScoreboard } from "@/lib/scoreboard";
 import { getSession, displayName, seesBook } from "@/lib/session";
+import { INTEREST_LINE } from "@/lib/terms-content";
 import { otherMemberEmail, userForEmail } from "@/lib/users";
 import UniverseActions from "@/components/UniverseActions";
 import AddNote from "@/components/AddNote";
@@ -555,6 +556,8 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                       <p className="mt-0.5 text-[11px] text-teal-200/40">rated {fmtWhen(stanceConfidenceAt)}</p>
                     )}
                   </div>
+                  {/* A non-member reads the call without the book: say the fund has an interest (D136). */}
+                  {!book && <p className="mt-2 max-w-xs text-[11px] leading-snug text-teal-200/45">{INTEREST_LINE}</p>}
                   <div className="mb-1 mt-3 text-[10px] uppercase tracking-wider text-teal-200/50">Signal</div>
                   <div className="w-full max-w-xs">
                     <RatingBar label={stance.label} tone={stance.tone} pos={stance.pos} mascots hideLabel className="w-full" />

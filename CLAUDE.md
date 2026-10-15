@@ -300,6 +300,14 @@ admitted background polls are not (`lib/access-log.ts` lists them and says why �
 `PageView` is still the page-view beacon; it can't see anyone the door turned away. **Removing someone:**
 `GRQ_REMOVED_EMAILS` + `scripts/remove-member.sh` (docs/OPERATIONS.md).
 
+**The terms (D136, 2026-10-15).** A **user** clicks through `/terms` once before anything else opens: the door
+(`termsRuling`, `lib/terms.ts`) sends an unsigned user's page view to `/terms?next=…` and refuses their API calls
+`403 {error:"terms"}`, judged from the signed `grq-terms` cookie (HMAC of email+version under `GRQ_JWT_SECRET`);
+the proof is the `TermsAcceptance` row that `POST /api/terms/accept` writes. Members/viewers are never asked.
+Text in `lib/terms-content.ts`; change it → bump `TERMS_VERSION` and everyone is asked again. Every footer carries
+"Not investment advice. Alfred is an AI. Nothing here is an offer to invest." and non-members see the fund's
+interest line beside every call (`INTEREST_LINE`). `test/terms.test.ts` pins the gate and the load-bearing sentences.
+
 **Mobile auth (2026-06-16, docs/IOS-PLAN.md):** the iOS app has no oauth2-proxy
 cookie, so `session.ts` also resolves identity from a verified **GRQ-JWT Bearer**
 (`lib/auth-jwt.ts`, `GRQ_JWT_SECRET`). The app trades a Google ID token at

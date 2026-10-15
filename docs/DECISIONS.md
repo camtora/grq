@@ -4247,3 +4247,44 @@ tester, not an audit; the front-door log is the independent record. A member or 
 
 **Found from Dave's session, not yet decided:** users see Cam's and Graham's photos wherever a stock shows who is
 watching it, and the Learn page shows users a link to `/race`, which they are refused.
+
+### D136 — The terms: a click-through before GRQ opens to a user (Cam, 2026-10-15)
+
+**Context.** D133 opened the USER tier to everyone on the SSO allowlist (16 people as of today), and the
+site is called Get Rich Quick. A person outside the joke signs in and reads "Strong Buy" beside a ticker,
+written by a machine, under that banner. The app had no disclaimer anywhere. Cam asked whether one was
+needed on the first session; the answer was yes, and that a click-through is the form that holds up.
+
+**What ships.**
+- **`/terms`** — the full text (`lib/terms-content.ts`: a short version + ten sections), linked from every
+  footer. Plain English; the money parts are not funny. It says what GRQ is (a joke name, a private fund),
+  whose money it is (Cam's and Graham's; nobody can invest, nobody will ever be asked for money), that
+  nothing is advice for the reader and nobody is registered to advise, that Alfred is an AI nobody reviews
+  per call, that the fund may hold or trade any name it rates and does not say which, that data is
+  third-party and delayed, that visits are logged by name for 180 days, that access is by invitation, no
+  warranty / no liability, Ontario law, and a version stamp.
+- **The gate.** A USER (only that tier) is sent to `/terms?next=…` by the door on their first page view and
+  refused `403 {error:"terms"}` on an API call, until they click **I understand**. `POST /api/terms/accept`
+  writes `TermsAcceptance(email, version, at, ip, userAgent)` — the proof — and sets the **`grq-terms`
+  cookie**, an HMAC of (email, version) under `GRQ_JWT_SECRET`, which is what `middleware.ts` checks so the
+  door never reads Postgres for this. The cookie is a cache of the row: a new device re-issues it from the
+  row without a second click. Bump `TERMS_VERSION` (`lib/terms.ts`) and everyone is asked again. Members
+  and viewers never see the gate (`termsRuling` is pure; `test/terms.test.ts`).
+- **The footer line** on every page: *Not investment advice. Alfred is an AI. Nothing here is an offer to
+  invest. · Terms.*
+- **The interest line** beside every call a non-member sees (stock page under Alfred's call, Universe,
+  Watchlist, the Hunt): *The fund behind these calls may own or trade any name it rates, before or after a
+  call appears, and does not say which.* NI 31-103 s.8.25 exempts general (non-tailored) advice from adviser
+  registration **provided** a financial interest is disclosed with it — and the user tier hides the book by
+  design (D122). One blanket sentence keeps the positions private and makes the disclosure.
+- Cam (`seesMeters`) sees **who has agreed** under the text on `/terms`.
+
+**Not legal advice.** This is the house's own read of the exposure: free, invitation-only, no
+solicitation, no money taken — almost certainly not "in the business" of advising — with the
+s.8.25 disclosure now made. Two things it does NOT settle: the data licences (FMP Starter and the
+unofficial Yahoo feed are for our own use; showing them to 16 people edges toward redistribution), and
+Ontario as the governing law is Cam's to confirm.
+
+**Also fixed today, found by the suite:** `test/auth-jwt.test.ts` pinned its clock to 1_789_000_000
+(2026-09-10); the 30-day tokens it minted expired 2026-10-10 and all four round-trip tests had failed on a
+clean checkout since. The origin is now the real clock; the offsets were always relative.

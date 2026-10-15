@@ -48,6 +48,9 @@ export const USER_PAGES: readonly string[] = [
   // The access check (D135): a user confirms what their own account reaches. Shows the
   // visitor only their own row.
   "/access-check",
+  // The terms (D136): the click-through a user signs before anything else opens. The door
+  // sends an unsigned user here and nowhere else.
+  "/terms",
 ];
 
 // Only what the pages above actually fetch from the browser. Nothing here serves the
@@ -65,6 +68,7 @@ export const USER_APIS: readonly string[] = [
   "/api/chess/status",
   "/api/learn/svg",
   "/api/access-check", // the caller's own access-check row — read and write, nothing else
+  "/api/terms/accept", // the caller's own terms acceptance (D136) — the one write before the gate opens
 ];
 
 // Files served out of /public (logos, the bull watermark, faces) — a file, not a page. Never

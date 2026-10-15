@@ -7,6 +7,7 @@ import { Card, PageHeader, Chip } from "@/components/ui";
 import { computeSignals, overallSignal } from "@/agent/signals";
 import { capTier, CAP_LABEL, type CapTier } from "@/lib/fundamentals";
 import { getSession, displayName, seesBook } from "@/lib/session";
+import { INTEREST_LINE } from "@/lib/terms-content";
 import StockFilters from "@/components/StockFilters";
 import UniverseActions from "@/components/UniverseActions";
 import UniverseTabs from "@/components/UniverseTabs";
@@ -255,7 +256,7 @@ export default async function Universe() {
             <Term k="universe">The universe</Term> — {active.length} investable
           </PanelHeader>
           <p className="text-xs text-teal-200/40">
-            What the agent is allowed to buy.{book ? (heldCount > 0 ? ` You hold ${heldCount} · ${money(investedCents)} invested.` : " No positions yet.") : null}
+            What the agent is allowed to buy.{book ? (heldCount > 0 ? ` You hold ${heldCount} · ${money(investedCents)} invested.` : " No positions yet.") : ` ${INTEREST_LINE}`}
           </p>
         </div>
         <StockFilters countries={countryOpts} exchanges={exchangeOpts} sectors={sectorOpts} caps={capOpts} />

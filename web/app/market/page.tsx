@@ -3,6 +3,7 @@ import { allUniverse, yahooForListing } from "@/lib/universe";
 import { getQuotes } from "@/lib/broker/quotes";
 import { getCloses, refreshBars } from "@/lib/bars";
 import { getSession, seesBook } from "@/lib/session";
+import { INTEREST_LINE } from "@/lib/terms-content";
 import { otherMemberEmail, userForEmail } from "@/lib/users";
 import { computeHeat } from "@/lib/heat";
 import { watchersFor } from "@/lib/watch";
@@ -120,7 +121,12 @@ export default async function Market() {
     <main>
       <PageHeader
         title="The Hunt"
-        sub="The agent's search for under-the-radar names — earlier-stage leads, ranked by heat (how ready to pop). Proposals only: watch the ones you like, dismiss the ones you don't."
+        sub={
+          <>
+            The agent&apos;s search for under-the-radar names — earlier-stage leads, ranked by heat (how ready to pop). Proposals only: watch the ones you like, dismiss the ones you don&apos;t.
+            {!book && <> {INTEREST_LINE}</>}
+          </>
+        }
       />
 
       {isMember && <HuntBar />}

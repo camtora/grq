@@ -67,6 +67,7 @@ const ALLOWED = [
   "/chess", "/chess/3", "/report-card",
   "/ideas", "/research", "/today", "/chat",
   "/access-check", "/api/access-check",
+  "/terms", "/api/terms/accept",
   "/bull-splash.png", "/grq-logo-light.png", "/people/cam.png", "/smartmoney/buffett.jpg",
   "/api/quotes", "/api/quotes?symbols=BN", "/api/intraday", "/api/stock-extras/BN", "/api/stock-index",
   "/api/indices", "/api/explain", "/api/track", "/api/options/chain/AAPL", "/api/hunt/status",

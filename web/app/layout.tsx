@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Link from "next/link";
 import { cookies } from "next/headers";
 import NavBar from "@/components/NavBar";
 import MessagesDrawer from "@/components/MessagesDrawer";
@@ -71,9 +72,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             chat={seesBook(session)}
           />
         )}
-        <footer className="mx-auto max-w-[1700px] px-6 pb-10 text-xs text-teal-200/30">
-          &ldquo;Get rich quick, slowly, with receipts.&rdquo; · Markets open 9:30–16:00 ET ·
-          Hard guardrails enforced in code, not vibes
+        <footer className="mx-auto max-w-[1700px] space-y-1 px-6 pb-10 text-xs text-teal-200/30">
+          <p>
+            &ldquo;Get rich quick, slowly, with receipts.&rdquo; · Markets open 9:30–16:00 ET ·
+            Hard guardrails enforced in code, not vibes
+          </p>
+          {/* The one line that follows every page (D136): what this is not, and where the terms are. */}
+          <p>
+            Not investment advice. Alfred is an AI. Nothing here is an offer to invest. ·{" "}
+            <Link href="/terms" className="text-teal-300/60 hover:underline">Terms</Link>
+          </p>
         </footer>
       </body>
     </html>
