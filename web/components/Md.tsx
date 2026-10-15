@@ -95,6 +95,16 @@ const components: Components = {
   code: ({ node: _n, ...props }) => (
     <code className="rounded bg-teal-400/10 px-1 py-0.5 text-[0.85em] text-teal-200" {...props} />
   ),
+  // A fenced block WRAPS (Cam, 2026-10-15: the prompt-audit page's ```text blocks ran off the
+  // right edge). The browser default for <pre> is no-wrap, which suits code and nothing GRQ
+  // puts in a fence — agent prompts, quoted instructions, report tables — all prose-length
+  // lines. The inline-code pill styling above is undone for the <code> inside a block.
+  pre: ({ node: _n, ...props }) => (
+    <pre
+      className="my-3 whitespace-pre-wrap break-words rounded-lg border border-teal-400/10 bg-teal-400/5 p-3 text-xs leading-relaxed text-teal-100/80 [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[1em] [&>code]:text-inherit"
+      {...props}
+    />
+  ),
   blockquote: ({ node: _n, ...props }) => (
     <blockquote className="border-l-2 border-teal-400/30 pl-3 italic text-teal-200/60" {...props} />
   ),
