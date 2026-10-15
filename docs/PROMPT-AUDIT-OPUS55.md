@@ -29,6 +29,26 @@ The incentive redesign moves ahead of everything else still open, because it is 
 
 **Amended Oct 15.** Stage 3's watch is in (row 3 above). Cam re-purchased the higher FMP plan, so nothing in the agent's cost hurdle changes and the Starter fallbacks heal on their own (they re-try after a real refusal expires). Stage 4 keeps its scope, absorbs the two flagged lines and R8, and waits only on those two decisions, not on anything technical. New watch metric from here: the deploy rate, idle cash as a share of NAV and trading days since the last buy.
 
+## The council on the stage-4 restart (Oct 15)
+
+Cam asked the council whether to restart the agent tonight (Thu Oct 15, after the close) to launch stage 4 as v2.87, or wait a week. All five seats spoke. Four said tonight; the Contrarian said wait.
+
+**Chairman's verdict: restart tonight.** The deciding argument is that v2.86 is not a clean baseline: every session reads "hold until the thesis breaks" beside three always-read lessons that say "trim below the 70 bar" and a header that says "spot the weakest holding to rotate out of". Those lines push toward selling, and selling raises cash, so under v2.86 the 13.6% cash pile has two possible causes and waiting keeps both. Stage 4 removes one. R2 (idle cash tops up winners) has no trigger in any session, so another week of v2.86 would show near-zero top-ups again and teach little, while the agent carries a live risk of a score-driven sell of a thesis-intact holding.
+
+**The Contrarian's case, kept on record:** stage 4 is not neutral on deployment, since it deletes "act on a new idea this development surfaced", so if the problem is under-deployment it lands on top of it; the market-data plan change (full data back tonight) is a confound either way. The chair's answer: the first week of the fortnight had full data and still produced one buy, and the proposed tripwire (wait for a bad score-driven sell, then deploy) only fires after the loss.
+
+**The written test for the week (the chair's first step):**
+
+- If by the Oct 22 close cash is still at or above about 13% of NAV with zero R2 top-ups of winners, call the gap structural and scope stage 5: an explicit idle-cash question at one daily check-in.
+- If cash breaches 15%, it is outside the AGGRESSIVE band. Flag it to both members immediately, not on Oct 22.
+- Count how many 4%-move position checks cite the written thesis and a level.
+
+**Rollback to v2.86 if:** any session fails; any SELL cites a score or the 70 bar instead of a broken thesis; councils climb back toward the old pace.
+
+**Separate, for both members:** the soak-clock question (does changing the brain mid-soak restart the paper soak?) is not forced by tonight but matters before any real-money step. All five seats flagged it.
+
+The council is advisory. Cam decides the restart.
+
 - **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
 - **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
 
