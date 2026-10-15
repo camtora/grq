@@ -150,7 +150,7 @@ export async function buildContext(): Promise<string> {
       ? `Cash by currency — floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% apply PER currency-account (its cash ÷ its own sleeve), NOT summed${fxNote}:
   CA$ ${(pf.cadCashCents / 100).toFixed(2)} = ${cadCashPct.toFixed(1)}% of the CAD sleeve (CA$${(cadAcctNav / 100).toFixed(0)})${cashFlag(cadCashPct, cadAcctNav > 0)}
   US$ ${(pf.usdCashCents / 100).toFixed(2)} = ${usdCashPct.toFixed(1)}% of the USD sleeve (US$${(usdAcctNav / 100).toFixed(0)})${cashFlag(usdCashPct, usdAcctNav > 0)}
-  CANADIAN AND US LISTINGS ARE EQUAL — the listing currency is NOT a selection factor and a thin sleeve is NOT a strike against a name (Cam 2026-06-29). Pick the best idea on its merits, wherever it trades. Moving money between the CAD and USD sleeves is a NORMAL, routine funding step — NOT a fallback or a last resort. So whenever a name CLEARS the gate (≥Buy/${HARD.minBuyConfidence}) and the sleeve it trades in can't cover the position you'd open, SIZE a conversion to that intended position (the currency you need + a small fee/slippage buffer) and request_fx to fund it AS A MATTER OF COURSE — USD_TO_CAD to fund a Canadian name, CAD_TO_USD to fund a US name. e.g. you want to open ~CA$3,000 of a Canadian name but hold only dust in CAD → request_fx USD_TO_CAD for ~CA$3,100, then buy once it lands. A member approves each conversion (that's the only gate on it; it isn't for trivial/dust amounts) — so never downweight, defer, or skip a ≥${HARD.minBuyConfidence} idea because of its currency or because its sleeve is thin. If nothing clears the bar in either currency, that's fine — stand down; just don't let currency itself tip the call. PROACTIVE, MEMBER-DIRECTED TOP-UP: if a MEMBER has explicitly DIRECTED you to build or top up a sleeve (e.g. an AGENDA item asking for a CAD sleeve), raise that request_fx NOW — you do NOT need a gate-clearing name first. The member's instruction is the trigger and their approval of the conversion is the authorization; pre-positioning the sleeve so the next Canadian buy has no FX-approval delay is EXACTLY what they asked for. Do not defer or queue a member-directed top-up "until a name clears" — that's the very lag they're trying to remove. Size it sensibly per their instruction and raise it.`
+  Canadian and US listings are equal: pick the best idea on its merits, wherever it trades — the listing currency and a thin sleeve are never a strike against a name. Moving money between sleeves is routine: when a name clears the bar (≥Buy/${HARD.minBuyConfidence}) and its sleeve can't cover the position, size a conversion to that position plus a small buffer and request_fx it (USD_TO_CAD for a Canadian name, CAD_TO_USD for a US one); a member approves each conversion and the cash lands before you buy. A member's explicit ask to build or top up a sleeve is itself the trigger — raise that request_fx now, sized to their instruction, without waiting for a gate-clearing name. If nothing clears the bar in either currency, stand down.`
       : `Cash: ${money(pf.cashCents)}, all CAD = ${cadCashPct.toFixed(1)}% of the CAD sleeve, floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}%${cashFlag(cadCashPct, cadAcctNav > 0)}.`;
 
   // Upcoming earnings on holdings + focus (Tier 6 awareness) — a catalyst to size
@@ -214,7 +214,7 @@ Fee budget: ${money(pf.feeSpentMonthCents)} spent of ${money(pf.feeBudgetCentsMo
 ## Your track record — did your trading beat holding? (last 30 days; computed from your own fills)
 ${trackRecord}
 
-## Positions — THE ONE AND ONLY SOURCE OF TRUTH FOR WHAT THE FUND HOLDS (each line shows its weight as % of NAV + GRQ's current dossier call — use these to rank your own book by conviction and spot the weakest holding to rotate out of)
+## Positions — THE ONE AND ONLY SOURCE OF TRUTH FOR WHAT THE FUND HOLDS (each line shows its weight as % of NAV + GRQ's current dossier call; a holding is kept until its thesis breaks — the call is a reading, not a sell signal)
 GROUNDING RULE — READ BEFORE you state what we own or what filled: a name is HELD only if it appears in the list below. If it is NOT below, the fund does NOT hold it — no matter what a dossier, an old note, "our starter", a thesis, or your memory says (positions get cleared/sold/reset; a dossier's "we own this" can be STALE). Never write "we own X" / "hold the starter" / report a FILL for a name that is not below AND not in your trade ledger. When prose and this block disagree, this block wins. If unsure whether something filled, say so — do not narrate a fill you cannot see recorded.
 ${positions}
 
@@ -236,14 +236,14 @@ ${
 The dated "GRQ's call" is the CURRENT dossier verdict and is AUTHORITATIVE. Your note is scratch text with no update timestamp — if it disagrees with a fresher dossier (e.g. claims a name "needs a refresh" or cites old data, but the dossier date is newer), the DOSSIER WINS: act on it and fix the note via set_focus. Don't re-state a stale note as if it were today's read.
 ${focus.length === 0 ? "  (empty)" : focus.map(focusLine).join("\n")}
 
-## Your agenda — follow-ups to work at your NEXT hourly check-in (add via add_agenda, close via resolve_agenda)
+## Your agenda — follow-ups to work at your NEXT scheduled check-in, every 30 min (add via add_agenda, close via resolve_agenda)
 ${
   agenda.length === 0
     ? "  (empty — park follow-ups here instead of scheduling separate sessions: \"revisit DRX once its dossier lands\", \"watch LNR for the add-zone\")"
     : agenda.map((a) => `  #${a.id}${a.symbol ? ` [${a.symbol}]` : ""}: ${a.body}`).join("\n")
 }
 
-## Your scheduled wake-ups today (ONLY for events that can't wait until the next hourly check-in; revise via schedule_checkin / cancel_checkin)
+## Your scheduled wake-ups today (for what can't wait until the next scheduled check-in, every 30 min; revise via schedule_checkin / cancel_checkin)
 ${
   wakeups.length === 0
     ? "  (none — for anything that can wait an hour, use add_agenda instead)"

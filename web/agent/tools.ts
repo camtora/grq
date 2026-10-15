@@ -414,7 +414,7 @@ const addCandidateTool = tool(
 
 const requestResearchTool = tool(
   "request_research",
-  "Queue a FRESH full dossier (the deep runStockDossier pass) for a name you ALREADY track. Use this ANY time you want real research and don't have it: a catalyst hit (earnings, news, a gap, an analyst move), the dossier you can see is STALE, or you only have a preliminary/inline scratch note (NOT a full 'Dossier —' entry) on a name you're weighing. Don't just write your own note and wait — if you'd act on a name once the research lands, queue it here NOW, then add_agenda/schedule_checkin to come back and decide with the finished dossier in front of you. Unlike add_candidate (for a name you don't yet track), this re-runs research on a tracked name. Be selective — not the whole book. Idempotent: a no-op if a refresh is already queued or running. The runner completes it in the background. Pass the ticker and a one-line reason.",
+  "Queue a FRESH full dossier (the deep runStockDossier pass) for a name you ALREADY track. Use this ANY time you want real research and don't have it: a catalyst hit (earnings, news, a gap, an analyst move), the dossier you can see is STALE, or you only have a preliminary/inline scratch note (NOT a full 'Dossier —' entry) on a name you're weighing. If you'd act on a name once the research lands, queue it and come back to decide with the finished dossier in front of you (add_agenda, or schedule_checkin if it can't wait). Unlike add_candidate (for a name you don't yet track), this re-runs research on a tracked name. Be selective — not the whole book. Idempotent: a no-op if a refresh is already queued or running. The runner completes it in the background. Pass the ticker and a one-line reason.",
   { symbol: z.string(), reason: z.string().min(10).max(300) },
   async (args) => {
     const key = bareTicker(args.symbol);
@@ -429,7 +429,7 @@ const requestResearchTool = tool(
 
 const promoteToUniverseTool = tool(
   "promote_to_universe",
-  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥" + HARD.minBuyConfidence + "; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. The human promotion path is single-actor too (D78). Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
+  "Self-invest: promote a CANDIDATE you've RESEARCHED into the tradeable universe so you can buy it. Rules apply and rejections are final + explain which fired — it must be a researched candidate; your latest dossier call ≥ Buy with confidence ≥" + HARD.minBuyConfidence + "; pass the liquidity screen (≥$2 · 20d ADV ≥100k · ≥30 bars); be CAD- or USD-tradeable (the fund holds both); not member-blocked; and within the weekly self-promotion cap. Promoting only makes it ELIGIBLE — every buy still clears the deterministic order gate. Pass a short reason (it's journaled and Discord-alerted to the members).",
   {
     symbol: z.string(),
     tier: z.enum(["large", "mid"]).optional(),
@@ -447,7 +447,7 @@ const promoteToUniverseTool = tool(
 
 const demoteFromUniverseTool = tool(
   "demote_from_universe",
-  "Hand a slot back: demote an ACTIVE name you no longer want to buy out of the tradeable universe, back to CANDIDATE. This is the counterpart to promote_to_universe and the way you make room when the " + SELF_INVEST.maxUniverseSize + "-name cap blocks a promote — the universe is a bench, not a trophy case, so a name you'd no longer open a position in is a slot you should give back. It stays fully researched and either member can put it back in one click, so this is reversible and low-stakes. LIMITS, all enforced and rejections explain which fired: the name must be ACTIVE, UNHELD (exit the position first — an existing holding is never trapped, but a held name isn't a spare slot), NOT watched by a member, NOT added by a member, NOT pinned, and not the benchmark; you also can't exceed the weekly demotion cap. You CANNOT retire a name (that stops research entirely) — that stays a members-only call. Pass a short reason: it's journaled and Discord-alerted to the members.",
+  "Hand a slot back: demote an ACTIVE name you no longer want to buy out of the tradeable universe, back to CANDIDATE. This is the counterpart to promote_to_universe and the way you make room when the " + SELF_INVEST.maxUniverseSize + "-name cap blocks a promote — a name you'd no longer open a position in is a slot you should give back. It stays fully researched and either member can put it back in one click, so this is reversible and low-stakes. LIMITS, all enforced and rejections explain which fired: the name must be ACTIVE, UNHELD (exit the position first — an existing holding is never trapped, but a held name isn't a spare slot), NOT watched by a member, NOT added by a member, NOT pinned, and not the benchmark; you also can't exceed the weekly demotion cap. You CANNOT retire a name (that stops research entirely) — that stays a members-only call. Pass a short reason: it's journaled and Discord-alerted to the members.",
   { symbol: z.string(), reason: z.string().min(20).max(1000) },
   async (args) => {
     const r = await agentSelfDemote(args.symbol, args.reason);
@@ -505,7 +505,7 @@ const requestFxTool = tool(
 
 const scheduleCheckinTool = tool(
   "schedule_checkin",
-  'Schedule a future trading check-in LATER TODAY for something that genuinely CANNOT wait until your next hourly check-in — e.g. "wake me at 14:05 for the Fed dot plot". `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now; future, same-day, market hours (9:30–16:00 ET). At that time you get a decision-capable session pre-loaded with your plan, and it draws on your ad-hoc decision budget. PREFER add_agenda for anything that CAN wait until the next hour — a follow-up like "revisit DRX once its dossier lands" or "watch LNR for the add-zone" belongs on the agenda (the next hourly check-in works it) rather than spawning its own session + push. Reserve schedule_checkin for genuinely sub-hourly events; capped at a few pending at once.',
+  'Schedule a decision-capable check-in later today (same day, market hours 9:30–16:00 ET). `at` is an ET clock time "HH:MM" (24h) or "+N" minutes from now. Use it to come back once a queued dossier has landed (typically ~20–30 min out) or for a timed event that hits before the next scheduled check-in (every 30 min) — e.g. "wake me at 14:05 for the Fed dot plot". At that time you get a decision-capable session pre-loaded with your plan; it draws on your ad-hoc decision budget, and only a few may be pending at once. For lower-priority follow-ups the next scheduled check-in can pick up, use add_agenda instead.',
   { at: z.string(), reason: z.string().min(5).max(300) },
   async (args) => {
     const r = resolveEtToday(args.at);
@@ -528,7 +528,7 @@ const listScheduledTool = tool("list_scheduled", "Your PENDING self-scheduled ch
 
 const cancelCheckinTool = tool(
   "cancel_checkin",
-  "Cancel a PENDING self-scheduled check-in by id (from list_scheduled). Fixed daily check-ins (the hourly intraday schedule) are not yours to cancel.",
+  "Cancel a PENDING self-scheduled check-in by id (from list_scheduled). Fixed daily check-ins (the every-30-minute intraday schedule) are not yours to cancel.",
   { id: z.number().int() },
   async (args) => {
     const w = await prisma.agentWakeup.findUnique({ where: { id: args.id } });
@@ -540,7 +540,7 @@ const cancelCheckinTool = tool(
 
 const addAgendaTool = tool(
   "add_agenda",
-  'Add a follow-up to your standing to-do list — the thing to come back to at your NEXT hourly check-in instead of scheduling a separate session. Use this for anything that can wait an hour: "revisit DRX once its dossier lands — promote if ≥Buy/' + HARD.minBuyConfidence + '", "watch LNR for the $96–99 add-zone", "trim ATD if it clears $98". The next scheduled intraday check-in reads the agenda and works through it. `symbol` is optional (the name it concerns).',
+  'Add a follow-up to your standing to-do list — the thing to come back to at your NEXT scheduled check-in (every 30 min) instead of scheduling a separate session. Use it for anything that can wait until then: "revisit DRX once its dossier lands — promote if ≥Buy/' + HARD.minBuyConfidence + '", "watch LNR for the $96–99 add-zone", "trim ATD if it clears $98". The next scheduled intraday check-in reads the agenda and works through it; if it cannot wait, schedule_checkin instead. `symbol` is optional (the name it concerns).',
   { item: z.string().min(5).max(300), symbol: z.string().optional() },
   async (args) => {
     const open = await prisma.agentAgendaItem.count({ where: { status: "OPEN" } });
@@ -548,7 +548,7 @@ const addAgendaTool = tool(
     const a = await prisma.agentAgendaItem.create({
       data: { body: args.item, symbol: args.symbol?.toUpperCase() ?? null, createdBy: "session" },
     });
-    return text(`AGENDA #${a.id} added: ${args.item}${a.symbol ? ` [${a.symbol}]` : ""}. Your next hourly check-in will work it.`);
+    return text(`AGENDA #${a.id} added: ${args.item}${a.symbol ? ` [${a.symbol}]` : ""}. Your next scheduled check-in will work it.`);
   },
 );
 
@@ -695,7 +695,7 @@ const saveChessBoardTool = tool(
 // it before a BUY / close-call SELL; the gate still disposes of every order regardless.
 const conveneCouncilTool = tool(
   "convene_council",
-  "Convene Alfred's LLM Council on a decision: five deliberately-conflicting lenses (Contrarian, First-Principles, Expansionist, Outsider, Executor) argue the question, then a Chairman synthesizes ONE verdict. You MUST convene it before you propose_order a BUY, and on any SELL you are genuinely unsure about — it pressure-tests the call against its own strongest bear/bull/base cases before real money moves. It reads the name's dossier, signals, quote, and the fund's position and returns the chairman's verdict plus the full room. It is ADVICE, not an order: the §6 gate and your conviction bar still decide, and a convene never lowers the bar. (Six Opus passes — convene for a real BUY / close-call, not for idle browsing.)",
+  "Convene Alfred's LLM Council on a decision: five deliberately-conflicting lenses (Contrarian, First-Principles, Expansionist, Outsider, Executor) argue the question, then a Chairman synthesizes ONE verdict. Use it before a BUY and on any SELL you are unsure about — it pressure-tests the call against its own strongest bear/bull/base cases before real money moves. It reads the name's dossier, signals, quote, and the fund's position and returns the chairman's verdict plus the full room. It is ADVICE, not an order: the §6 gate and your conviction bar still decide, and a convene never lowers the bar. (Six Opus passes — convene for a real BUY / close-call, not for idle browsing.)",
   {
     symbol: z.string().min(1).max(16),
     question: z

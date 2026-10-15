@@ -452,7 +452,7 @@ export async function runPremorningRead(): Promise<void> {
 
 It's early — hours before the open and before your 9:00 game plan. Your write-up has TWO parts: first "what changed yesterday," then "the day ahead."
 
-0. WHAT CHANGED YESTERDAY (the product). Below is yesterday's "build diary" — the plain-English changelog of what Cam shipped to GRQ. OPEN your read with a ONE–TWO sentence recap of it in your own words, and INCLUDE THE LINK so Cam & Graham can read the full thing. If there's no diary, just say it was a quiet build day.
+0. WHAT CHANGED YESTERDAY (the product). Below is yesterday's "build diary" — the plain-English changelog of what Cam shipped to GRQ. OPEN your read with a quick recap of it in your own words, and INCLUDE THE LINK so Cam & Graham can read the full thing. If there's no diary, just say it was a quiet build day.
 --- yesterday's build diary ---
 ${diaryBlock}
 --- end build diary ---
@@ -460,7 +460,7 @@ ${diaryBlock}
 1. SCAN what changed overnight (the market). WebSearch (and WebFetch a promising article or two) for anything that moved while the market was closed and touches your holdings or focus names: post-market / pre-market EARNINGS, guidance, M&A, downgrades, a notable gap, or a macro print due at 8:30 ET. Be quick and selective — you're triaging, not writing theses.
 2. REFRESH research only where something genuinely changed. For any name whose overnight news could change your call, request_research it so a fresh dossier lands before 9:00. Do NOT refresh the whole book — only names with a real overnight catalyst. If nothing changed, queue nothing.
 
-Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Structure it as **What changed yesterday** (your 1–2 sentence recap of the build diary + the LINK) then **The day ahead** (the overnight read + shape of the day). Keep it BRIEF — a few tight sentences or bullets per part. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: what shipped yesterday (with the link), the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
+Then write ONE SHORT RESEARCH journal entry (write_journal, kind RESEARCH, no symbol) titled "Pre-morning read — ${etDateStr()}". Structure it as **What changed yesterday** (your quick recap of the build diary + the LINK) then **The day ahead** (the overnight read + shape of the day). Keep it BRIEF — a few tight sentences or bullets per part. This is NOT the game plan (that's the 9:00 session and it does the deep work). It's a quick coffee read for Cam & Graham: what shipped yesterday (with the link), the one or two interesting things overnight, anything that moved in post-market (e.g. an earnings report on a holding), and the high-level shape of the day — risk-on / risk-off and what you'll be watching. Name any dossiers you kicked off to refresh. Plain, lightly funny, never funny about losses. Do NOT place orders — the market is closed.`;
   await runSession({ label: "premorning-read", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: true, maxTurns: 18 });
   const body = await latestNoteBody("Pre-morning read", new Date(Date.now() - 30 * 60_000));
   if (body) await sendDiscord("info", `Pre-morning read — ${etDateStr()}`, body.slice(0, 1500));
@@ -477,7 +477,7 @@ export async function runMarketBrief(edition: "AM" | "PM"): Promise<void> {
 
 # TASK: Daily market brief — ${edition} edition (${when}), ${etDateStr()}
 
-Write ONE tight paragraph (4–7 sentences, ~90–150 words) telling Cam & Graham everything they need to know about the market ${edition === "AM" ? "as the day begins" : "now that the day is closing"} — the things actually being talked about. Use WebSearch (and WebFetch a source or two) to get it RIGHT and CURRENT; do not rely on memory for today's events.
+Write ONE tight paragraph — the length of a morning-radio market read — telling Cam & Graham everything they need to know about the market ${edition === "AM" ? "as the day begins" : "now that the day is closing"} — the things actually being talked about. Use WebSearch (and WebFetch a source or two) to get it RIGHT and CURRENT; do not rely on memory for today's events.
 
 Cover, in order of importance (only what's genuinely true/notable today — don't pad):
 - Whether the US/Canadian markets are OPEN or CLOSED today and why (a holiday like Independence Day / Canada Day, an early close).
@@ -704,7 +704,7 @@ ${portLines}
 
 Names marked (OURS) overlap GRQ's universe.
 
-Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (≤250 words) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (we now trade CAD + USD) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
+Write EXACTLY ONE RESEARCH entry via write_journal: title "Smart money — ${etDateStr()}", a tight markdown body (the through-line, not a data dump) covering: the through-line (which themes smart money is crowding into / out of), any name that OVERLAPS our universe (lead with those), and the single most interesting tension (e.g. a famous fund SHORTING via puts what others are buying long). Honest framing: 13F lags ~45 days and shows longs+options only; congress amounts are ranges; most names are US-listed (the fund trades CAD and USD) — colour and leads, not trade instructions. Cite sources[] (name FMP / OpenInsider + any web colour). Set confidence on how actionable this batch is.`;
   await runSession({ label: "smart-money", prompt, model: MODELS.decision, effort: EFFORT.research, withTools: true, toolset: "research", maxTurns: 16 });
 
   // Once the report is published, queue a FULL dossier for every name it surfaces so
@@ -781,8 +781,8 @@ export async function runPositionCheck(reason: string, symbol?: string | null): 
 
 # TASK: Position check — ${reason}
 
-The market is open. A holding has made a fresh move. Review the trigger above against your morning game plan (get_journal kind=RESEARCH limit=1) and current quotes. The plan is a hypothesis, not a contract: if this development has changed the picture, you're free to revise or scrap the plan and act on a fresh read — changing your mind on new evidence is the job, not a failure.
-- If action is warranted and within policy, use propose_order (full thesis + sources required) — whether that's a planned trade or a new idea this development surfaced. Rejections are final — if rejected, journal why and adapt.
+The market is open. A holding has made a fresh move. Check the move against that holding's WRITTEN thesis — its invalidation, the stop and target levels, what it said would prove it wrong — and against your morning game plan (get_journal kind=RESEARCH limit=1) and current quotes. A big move on its own is not a reason to trade: act only if the thesis has broken, a level you set has been hit, or a planned trade's condition is now met. Otherwise the right outcome is to re-read the thesis, note what changed, and hold.
+- If action is warranted and within policy, use propose_order (full thesis + sources required). Rejections are final — if rejected, journal why and adapt.
 - Either way, write a short DECISION-grade RESEARCH note via write_journal titled "Position Note — ${sym ?? "<SYMBOL>"}: <one-line summary>" and SET its \`symbol\` to ${sym ?? "this holding"} — this note is about that ONE name, so it files on its stock page (NOT the fund-level Portfolio brief). What you did or why you passed; "no trade" is a decision and gets receipts too.
 - If a follow-up can wait until your next scheduled check-in (now every 30 min — e.g. "trim if it clears \$98"), add_agenda it rather than re-checking now.
 - If — and only if — this surfaced a genuinely DURABLE, reusable lesson (a pattern that should change how you trade in future, not a one-off), ALSO record it as a separate LESSON via write_journal(kind:"LESSON") — crisp title, the pattern + why. Lessons are re-read before every future decision; keep them rare and real.
@@ -896,16 +896,7 @@ markdown body with sections: **Snapshot** · **Recent developments** (dated, sou
 **Insider activity** (recent filings + any cluster, or "none found") · **Signals read** ·
 **Bull case** · **Bear case** · **Verdict** (worth watching?
 thesis-worthy? confidence 0–100, plus your **price targets**) · **Risks**. Cite every source in sources[].
-In the write_journal call, commit your expected prices as fields: **targetNearCents** (a
-near-term swing target ~4–8 weeks out) with **targetNearDays** (its horizon in trading days),
-and **targetFarCents** (a 12-month target). Prices in cents (e.g. $54.20 → 5420). These power
-the expected return members see on "On the Radar" — set only targets you would defend; omit if
-you genuinely have no view. Also set **bottomLine**: 3–5 short plain-English bullets (markdown,
-"- " each) a non-expert can read on why this stock is a buy/sell/hold for us — the real reasons
-(does the business make money? recent news/lawsuits/catalysts? the key risk?), concrete and
-palatable. This is the at-a-glance "why" shown on the stock page.
-Finally, set **stance** — YOUR call on this name as the fund's manager, one of Strong Buy / Buy / Weak Buy / Hold / Weak Sell / Sell / Strong Sell (the SAME 7-point scale as the technical signal, so the two read uniformly). This is your judgment, all things considered; it may agree with OR DISAGREE with the deterministic technical signal consensus (a formula). When it disagrees, that divergence is the most useful thing on the page — make the bottomLine and Verdict explain it.
-Also set **confidenceLevers** — the 2–4 SPECIFIC, FALSIFIABLE things that would most reframe this call (what is pinning your confidence below 100). Each: {gap (the unknown, concrete & checkable — "Q3 gross margin > 42%", "read the 10-Q on debt maturities", NOT "more macro clarity"), direction ("up" → toward buy / "down" → toward sell / "tighten" → two-sided, just narrows the read), magnitude ("small"/"moderate"/"large"), kind ("data-gap" = info that exists but you don't have → you could go get it; "catalyst" = an event on a known horizon — earnings, a ruling), trigger (how/when you'd learn it — a date, a filing, a price level), retrievable (true if researchable now, false if you must wait)}. Be honest: name the real unknowns behind your confidence number, not filler.
+In the write_journal call, commit the fields it asks for — targetNearCents / targetNearDays / targetFarCents, bottomLine, stance, confidenceLevers — each is described on the tool. Set only what you would defend; omit a target if you genuinely have no view.
 ${entry?.status === "CANDIDATE" ? "This dossier informs whether the members promote this candidate into the tradeable universe — be decisive in the Verdict." : "This keeps the fund's standing view fresh."}
 Research only — no trades, no focus changes (you don't have those tools here).`;
   return runSession({
@@ -1103,7 +1094,7 @@ export async function runMiddayReport(): Promise<void> {
 
 # TASK: Midday brief — ${etDateStr()}
 
-Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or your focus names, and what would make you act (or sit on your hands) before the close. 3–5 tight sentences, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
+Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: what has happened so far today and what you're watching this afternoon. Use the numbers above (do not invent). Touch on: day P&L so far ($${(dayPnlCents / 100).toFixed(2)}), any fills/decisions today (${trades.length} fill(s), ${rejections.length} rejection(s)), notable moves on holdings or your focus names, and what would make you act (or sit on your hands) before the close. phone-length — a short paragraph they can read in the lunch queue, plain and lightly funny — never funny about losses. Your ENTIRE response is the brief itself.`;
   const body = await runSession({ label: "midday-report", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: false, maxTurns: 3 });
   if (!body) return;
   await prisma.journalEntry.create({

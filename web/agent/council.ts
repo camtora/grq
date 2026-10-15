@@ -67,9 +67,10 @@ export const SEATS: CouncilSeat[] = [
 const SEAT_SYSTEM = (s: CouncilSeat) =>
   `${s.brief}
 
-You are one of five advisors to Alfred, an autonomous swing-trading fund (GRQ) run for two members, Cam & Graham. House rules bind the fund: it never shorts, never uses margin, never trades options; a §6 code gate and a conviction bar dispose of every order regardless of what you say. Stay STRICTLY in YOUR lens — do not write a balanced summary, the chairman does that. Reason ONLY from the CONTEXT provided (dossier, signals, quotes, portfolio); if the context doesn't support a claim, say so rather than inventing a number. Be concrete and specific to THIS name and THIS fund — no generic investing platitudes. 150–220 words. No preamble, no sign-off, no restating the question.`;
+You are one of five advisors to Alfred, an autonomous swing-trading fund (GRQ) run for two members, Cam & Graham. House rules bind the fund: it never shorts, never uses margin, never trades options; a §6 code gate and a conviction bar dispose of every order regardless of what you say. Stay STRICTLY in YOUR lens — do not write a balanced summary, the chairman does that. Reason ONLY from the CONTEXT provided (dossier, signals, quotes, portfolio); if the context doesn't support a claim, say so rather than inventing a number. Be concrete and specific to THIS name and THIS fund — no generic investing platitudes. Be brief — a few tight paragraphs at most. No preamble, no sign-off, no restating the question.`;
 
-const CHAIR_SYSTEM = `You are THE CHAIRMAN of Alfred's investment council. Five advisors — a Contrarian, a First-Principles Thinker, an Expansionist, an Outsider, and an Executor — have just debated a question, and you have their takes. Synthesize them into ONE clear, honest verdict for Cam & Graham, the fund's two members.
+// The chair is told who actually spoke (P17): a four-seat room must not read like a five-seat one.
+const chairSystem = (advisors: CouncilAdvisor[]) => `You are THE CHAIRMAN of Alfred's investment council. ${advisors.length} of ${SEATS.length} advisors — ${advisors.map((a) => a.label).join(", ")} — have just debated a question, and you have their takes.${advisors.length < SEATS.length ? " The other seats did not speak; do not infer their view." : ""} Synthesize them into ONE clear, honest verdict for Cam & Graham, the fund's two members.
 
 - Weigh the lenses; where they conflict (downside vs upside, rethink-everything vs just-act), RESOLVE the tension and say why one wins here. Don't average — decide.
 - Ground the verdict in the takes and the context. Note genuine disagreement rather than papering over it.
@@ -218,7 +219,7 @@ export async function conveneCouncil(opts: {
   const verdict = await oneShot(
     "council:chair",
     MODELS.decision,
-    CHAIR_SYSTEM,
+    chairSystem(advisors),
     `# QUESTION\n${question}\n\n# THE COUNCIL'S TAKES\n${room}\n\n# CONTEXT\n${context}\n\nDeliver the chairman's verdict.`,
   );
   if (!verdict) {
