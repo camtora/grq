@@ -112,14 +112,15 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "X-Forwarded-Email: g.j.appleby@gmai
 **Scripted:** `scripts/remove-member.sh <email> [<email> …]` does steps 1–4 (adds to the list,
 recreates web, deletes push devices, verifies) and nothing else; safe to run twice.
 
-**Scheduled — Graham, Friday 2026-10-16 12:00 AM ET** (Cam, 2026-10-11; access only, his data
-untouched): systemd user timer `grq-remove-graham.timer` → runs the script for both his
-addresses, log at `~/grq-remove-graham.log`. Check: `systemctl --user list-timers
-grq-remove-graham.timer`. Cancel: `systemctl --user disable --now grq-remove-graham.timer`.
-The unit files live in `~/.config/systemd/user/` (not in the repo); delete them after it runs.
-(It was run early by mistake on 2026-10-11 22:06 ET and reversed at 22:10: access restored,
-no visit from him in between. The one lasting effect: his push device record was deleted, and
-comes back when he next opens the app.)
+**Cancelled — Graham's Friday 2026-10-16 removal** (Cam, 2026-10-15 18:40 ET, ~5 h before it
+would have fired). The `grq-remove-graham.timer` user timer was disabled and both unit files
+deleted from `~/.config/systemd/user/`; nothing is scheduled and his access is unchanged. If it
+is ever wanted again: `scripts/remove-member.sh g.j.appleby@gmail.com graham.j.appleby@gmail.com`,
+by hand or behind a fresh `systemd-run --user --on-calendar=…` timer. History: it was scheduled
+2026-10-11, run early by mistake at 22:06 ET that night and reversed at 22:10 (access restored,
+no visit from him in between; the one lasting effect was his push device record, which comes
+back when he next opens the app). The script's own verify step logs the removed person as
+"turned away" on /traffic — the ghost rows from the rehearsal were deleted 2026-10-15.
 
 **Current value (2026-10-11):** empty. (`cameron@camerontora.ca`, Cam's alternate address, sat
 on it for an hour that night as a live preview of the page and was put back.)
