@@ -51,6 +51,29 @@ Cam asked the council whether to restart the agent tonight (Thu Oct 15, after th
 
 The council is advisory. Cam decides the restart.
 
+## The council on resetting the paper account (Oct 15, later)
+
+Cam's question was in fact about resetting the FUND, the IBKR paper account, not restarting the agent. Asked properly: no reset (A); reset now, go flat, reset the balance, restart the clock (B); reset later at a deliberate boundary (C); or restart only the clock and baseline, keep the positions (D). All five seats spoke. Four chose C; the Contrarian chose A, which is the same thing tomorrow.
+
+**Chairman's verdict: C. No reset now. One deliberate flat-start rehearsal before any real-money step.** Resetting tonight would wipe the one number that hurts, −4.4% against contributions since June 26, two weeks into a new mandate and during a good October: the fund-incubation trick, which the members' own goal, more than we put in, with receipts, rules out. It would also stack v2.87, 18 forced sells and exclusion code that does not exist yet into one session, swapping a readable test (is idle cash structural on this book?) for an unreadable one (a fresh all-cash book that sits in cash could mean a passive mandate or just a new book). D was rejected unanimously as a change of labels.
+
+**Where the Contrarian is wrong, per the chair:** a paper reset before real money is not redundant. Deploying from zero is exactly where this fund already failed, at about 87% cash in June, and that is far cheaper to rediscover on paper. So the eventual reset is a launch rehearsal, not a mulligan: fund it at the intended real-money size and CAD/USD split, set pass/fail thresholds before flattening (time to deploy, cash at days 5, 10 and 20, churn during the build), run the flatten and portal reset over a weekend with the kill switch holding the agent.
+
+**The soak clock does not restart on a brain change.** Otherwise the soak never ends. Record Sep 30 and Oct 15 as annotated breaks, with an Oct 15 bookmark: NAV C$67,868, cash C$9,251 (13.6%), 18 positions, contributions C$71,009 (−4.4%). A reading line, not a re-baseline.
+
+**To Oct 22, on the current book:** does cash stay near 13.6% with no thesis-driven reason; does every churn-era name get an explicit thesis-intact or thesis-broken call, and is any sold for an old-mandate reason. Neither October's +5.2% nor September's −3.8% argues for or against the book.
+
+**When the reset happens — preserve versus clear:**
+
+| Preserve | Clear or re-anchor |
+| --- | --- |
+| Full fill history, with the reset sells tagged and excluded, never deleted | Positions: go flat first, then the portal balance reset |
+| The continuous NAV series, archived as Run 2 (Jun 26 to the reset) with a marked break, −4.4% and October included | Contributions baseline, inception date, high-water mark |
+| Journal, dossiers, lessons, retros, directives, universe and watchlists, conviction tally, token records, the sandboxes | Stale agenda and focus items; the boot scan skipped |
+| A system note per cleared name and a fund-level lesson that the flatten was not the agent's decision | The shadow race books; reset fills removed from the 30-day track record and the weekly thesis grading |
+
+**First step, per the chair:** no portal action tomorrow; write the Oct 15 bookmark; build and test the reset-trade tag and its two exclusions before Oct 22, while the members pick the launch size and the CAD/USD split. The council is advisory; the reset is Cam and Graham's call.
+
 - **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
 - **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
 
