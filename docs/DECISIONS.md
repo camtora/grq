@@ -4220,8 +4220,9 @@ Today's indices strip and the loonie pill, 13F on stock pages, every Canadian co
 - The market screen's Canadian gap (D132) is unchanged: Starter refuses those exchanges.
 - Verified through the API and rendered page text only; not looked at in a browser.
 
-**D134 addendum (Cam, 2026-10-15): going back up.** Cam will re-purchase the higher FMP plan the code was built
-against. Nothing to revert: every Starter fallback above is probe-driven — `fmpPlanRefused` remembers a real 402
+**D134 addendum (Cam, 2026-10-15): back up.** Cam re-purchased the higher FMP plan the code was built against
+the same evening; verified 2026-10-15 ~19:30 ET — batch quotes, a `.TO` quote, the TSX index, oil, 13F dates, the TSX
+screener and the price-target endpoint all answer 200 with the key. Nothing to revert: every Starter fallback above is probe-driven — `fmpPlanRefused` remembers a real 402
 for a TTL and then re-tries — so batch quotes, `.TO` quotes, the TSX index and oil, the Canadian screener exchanges
 and the 13F ingest resume on their own once the key is upgraded (restart web + agent to skip the TTL). The cost
 hurdle in `agent/policy.ts` (US$490/mo = Max + FMP ~$250) was wrong on Starter and is right again after the

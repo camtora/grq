@@ -15,7 +15,7 @@ per-member themes, stocks one-pagers, signals v1, source scoreboard, member dire
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
 chat. Decision sessions run on **Opus 5.5** (`claude-opus-5-5`, effort per route — `high` for sessions that can trade, `medium` for research + reports, D130; was Opus 4.8), triage on Haiku 4.5 — Fable 5
 access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer
-live on FMP + free BoC & FRED feeds (D21; **the key is on FMP STARTER, see D134 — much of the FMP list below is refused by the plan**):** earnings/news/grades/13F + structured macro
+live on FMP + free BoC & FRED feeds (D21; **the key was on FMP Starter 2026-10-08→15 (D134) and is back on the higher plan since 2026-10-15 — the Starter fallbacks stay in the code and only bite after a real 402**):** earnings/news/grades/13F + structured macro
 (**CA via BoC + US via FRED** — Fed funds/10y/US-CPI; `FRED_API_KEY`),
 on the stock pages (honest 10-tier coverage map) AND fed into the agent's decision context;
 **tier-4 insider is structured for US + cross-listed CA** (FMP Form 4 + nightly OpenInsider) —
@@ -186,8 +186,8 @@ Key re-approval**. **NB SPCX — the old CDR note is SUPERSEDED (Cam, 2026-09-22
   `lib/universe.ts` — `canonicalMember`/`pickCanonical` (URL or typed symbol → member), `memberForListing` (an
   outside name → member, by listing then company name), `researchKey` (the journal key), `classDash`. Rules pinned
   in `test/symbol-resolution.test.ts`. Still bare-keyed by design, and wrong across the border: `lib/graph/*`.
-- **The FMP key is on the STARTER plan, not Ultimate (D134, confirmed by Cam 2026-10-08).** Anything in this file
-  or the docs that says "FMP Ultimate" describes what the code was built against, not what the key can do. Starter
+- **FMP: the key is back on the higher plan since 2026-10-15 (D134 addendum); it was on STARTER 2026-10-08→15.** The
+  Starter-era fallbacks below stay in the code, armed only by a real 402, so they cost nothing now. If the plan ever lapses again: Starter
   answers HTTP 402 for batch quotes and 13F outright, and for any `.TO` symbol, the TSX index, oil and the Canadian
   screener exchanges on endpoints it otherwise serves; `fmpGet` returns null for a refusal exactly as for "no data".
   `fmpPlanRefused(endpoint, value?)` (`lib/fmp.ts`) says which it was, after a real 402. **A dark FMP panel is
