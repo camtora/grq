@@ -4220,6 +4220,15 @@ Today's indices strip and the loonie pill, 13F on stock pages, every Canadian co
 - The market screen's Canadian gap (D132) is unchanged: Starter refuses those exchanges.
 - Verified through the API and rendered page text only; not looked at in a browser.
 
+**D134 addendum (Cam, 2026-10-15): going back up.** Cam will re-purchase the higher FMP plan the code was built
+against. Nothing to revert: every Starter fallback above is probe-driven — `fmpPlanRefused` remembers a real 402
+for a TTL and then re-tries — so batch quotes, `.TO` quotes, the TSX index and oil, the Canadian screener exchanges
+and the 13F ingest resume on their own once the key is upgraded (restart web + agent to skip the TTL). The cost
+hurdle in `agent/policy.ts` (US$490/mo = Max + FMP ~$250) was wrong on Starter and is right again after the
+upgrade, so it needs no change. **To do after the purchase:** curl the once-refused endpoints with the key, confirm
+the next nightly screen lists TSX/TSXV/NEO and the next smart-money ingest backfills 13F, then correct the
+"Starter" notes in CLAUDE.md and above, and confirm the real monthly price against the hurdle.
+
 ### D135 — The access check lives on GRQ and saves itself (Cam, 2026-10-09)
 
 **Why.** To prove a new user's access, Cam sent Jose and Dave a checklist as a shared page. Dave ran through the
