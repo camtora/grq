@@ -13,7 +13,7 @@ Tagline: *"Get rich quick, slowly, with receipts."*
 clock started 2026-06-17 (day 1)**; the sim soaked 2026-06-12→17, with
 per-member themes, stocks one-pagers, signals v1, source scoreboard, member directives
 (pin/no-fly), the UI-managed universe pipeline + research dossiers, and the read-only agent
-chat. Decision sessions run on **Opus 5.5** (`claude-opus-5-5`, effort per route — `high` for sessions that can trade, `medium` for research + reports, D130; was Opus 4.8), triage on Haiku 4.5 — Fable 5
+chat. Decision sessions run on **Opus 5.5** (`claude-opus-5-5`, effort per route — `high` for sessions that can trade, `medium` for research + reports, D130; was Opus 4.8), triage on Haiku 4.5. **Agent v2.87-phase4 (D137, 2026-10-15) = stage 4 of the prompt audit: holding is the job (D131) with the last contradicting lines and lessons gone; the week to 10/22 tests whether idle cash (13.6%) is structural → stage 5 = an idle-cash question at one check-in, never a cap** — Fable 5
 access via the Max token broke 2026-06-13 (see `docs/DECISIONS.md` D17). **Data layer
 live on FMP + free BoC & FRED feeds (D21; **the key was on FMP Starter 2026-10-08→15 (D134) and is back on the higher plan since 2026-10-15 — the Starter fallbacks stay in the code and only bite after a real 402**):** earnings/news/grades/13F + structured macro
 (**CA via BoC + US via FRED** — Fed funds/10y/US-CPI; `FRED_API_KEY`),

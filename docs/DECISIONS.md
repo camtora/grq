@@ -4298,3 +4298,49 @@ Ontario as the governing law is Cam's to confirm.
 **Also fixed today, found by the suite:** `test/auth-jwt.test.ts` pinned its clock to 1_789_000_000
 (2026-09-10); the 30-day tokens it minted expired 2026-10-10 and all four round-trip tests had failed on a
 clean checkout since. The origin is now the real clock; the offsets were always relative.
+
+### D137 — Stage 4 of the prompt audit: the last lines that pushed trading, the reworded lessons, the cleanup (Cam, 2026-10-15)
+
+**Context.** Stage 3 (D131) was measured 2026-10-15 over 11 trading days: churn gone (3 fills vs 17 in Opus 5.5's
+first week, 0 first-ever names), October +5.2% vs the benchmark's +2.5%, check-in tokens −83%, no failed sessions —
+and C$9.2k (13.6% of NAV) idle for two weeks with one buy, because R2's "top up winners first" has no trigger now
+that check-ins are monitoring. Two lines outside R1–R8 and three always-read lessons still said the opposite of the
+mandate. Cam approved both recommendations the same day: change the lines, reword the lessons.
+
+**What shipped (agent + chat v2.87-phase4, deployed 2026-10-15 after the close).**
+- **The two lines.** The Positions header in every context no longer says "spot the weakest holding to rotate out
+  of"; it says a holding is kept until its thesis breaks and the dossier call is a reading, not a sell signal. The
+  4%-move position check (`runPositionCheck`) no longer says "free to … scrap the plan and act on a fresh read … or a
+  new idea this development surfaced"; it checks the move against the holding's WRITTEN thesis and acts only if the
+  thesis broke, a level was hit, or a planned condition is met.
+- **R8, reworded (data, not code).** Permanent lessons #3092, #4645, #11170 keep their mechanics — trim on your own
+  terms before the 12% code stop, never leave an orphan stub, "cheap" is not a catalyst — but the trigger is now
+  "thesis broken / invalidation hit", not "dossier score below the 70 bar". Each row starts with the dated reworded
+  rule and keeps the original text below it; the context pushes title + first 200 chars, so the new rule is what
+  the agent reads.
+- **Cleanup from the audit:** P2 (nothing says "hourly" any more; check-ins are every 30 min), P9 (the FX paragraph
+  in five sentences, same rules), P10 (no behaviour steering inside tool descriptions — "You MUST convene" → "use
+  it before a BUY and on any SELL you are unsure about"), P11 (qualitative lengths instead of word counts; the
+  push/Discord slices stay the hard ceilings), P12 (the chat persona in present tense and sections, no decision
+  numbers, no "tune-up", "begin your visible answer immediately"), P15 (the dossier prompt stops repeating the
+  fields the tool already describes — safe because P6 put every field's meaning on the tool), P16 ("now" phrasing),
+  P17 (the chairman is told how many of the five seats spoke and which).
+- Untouched: the §6 gate, the kill switch, limits, stops, the broker seam, the conviction bar.
+
+**The council on the timing.** Cam asked the council whether to restart tonight or wait a week (convened directly
+with the fund's state and both cases as context; 5/5 seats). 4–1 for tonight: v2.86 was not a clean baseline — its
+own lessons and header pushed selling, which raises cash, so waiting kept both causes of the idle pile; R2 has no
+trigger, so another week would teach nothing; the Contrarian's tripwire (wait for a bad score-driven sell) fires
+only after the loss. The dissent is on record in the review doc.
+
+**The written test for the week (the measurement).** By the 2026-10-22 close: cash still ≥ ~13% of NAV with zero R2
+top-ups of winners → the gap is structural → scope **stage 5: an explicit idle-cash question at one daily check-in**
+(not a cap). Cash > 15% (outside the AGGRESSIVE band) → flag both members at once. Count the 4%-move checks that
+cite the written thesis and a level. **Rollback to v2.86** if a session fails, any SELL cites a score or the bar
+instead of a broken thesis, or councils climb back toward the old pace. **For both members' agenda:** whether
+changing the brain mid-soak restarts the §9 paper-soak clock (parked since D128; all five seats flagged it).
+
+**Also decided today, same thread:** the review doc is mirrored on the site (`/how-it-works` → "Opus 5.5 plan",
+owners only, `docs/PROMPT-AUDIT-OPUS55.md` re-exported when the doc changes) so Graham reads it too; the Manual's
+rhythm text and `lib/changelog.ts` were brought up to date (they had stopped at D96). Council verdicts are still not
+stored as rows — grading the council took a grep through check-in notes; proposed, not yet approved.
