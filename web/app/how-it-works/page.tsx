@@ -20,6 +20,7 @@ import { startOfEtDay, etDateStr } from "@/agent/calendar";
 import Md from "@/components/Md";
 import { CHANGELOG, type ChangeTag } from "@/lib/changelog";
 import { getDecisions } from "@/lib/decisions";
+import { getPromptAudit } from "@/lib/prompt-audit";
 
 const cad = (cents: number) => `C$${(cents / 100).toLocaleString("en-CA", { maximumFractionDigits: 0 })}`;
 
@@ -38,7 +39,8 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
   // Admin-only: Cam & Graham (owners) only — viewers and non-owner members get a 404.
   if (!session || !isOwner(session.email)) notFound();
   const sp = await searchParams;
-  const tab = sp.tab === "decisions" ? "decisions" : sp.tab === "daily-report" ? "daily-report" : "manual";
+  const tab =
+    sp.tab === "decisions" ? "decisions" : sp.tab === "daily-report" ? "daily-report" : sp.tab === "opus-plan" ? "opus-plan" : "manual";
 
   const tabBar = (
     <div className="mb-6 flex gap-1 border-b border-teal-400/10">
@@ -46,6 +48,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
         { key: "manual", label: "Manual", href: "/how-it-works" },
         { key: "daily-report", label: "Daily report", href: "/how-it-works?tab=daily-report" },
         { key: "decisions", label: "Decision log", href: "/how-it-works?tab=decisions" },
+        { key: "opus-plan", label: "Opus 5.5 plan", href: "/how-it-works?tab=opus-plan" },
       ].map((t) => (
         <Link
           key={t.key}
@@ -59,6 +62,36 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
       ))}
     </div>
   );
+
+  if (tab === "opus-plan") {
+    // The prompt-audit review and its staged rollout (D128–D131), exported from Cam's Claude Doc so
+    // Graham can read it here. Owners only, like the rest of this page: it discusses the book.
+    const audit = await getPromptAudit();
+    const asOf = audit?.asOf.toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" });
+    return (
+      <main>
+        <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
+        <PageHeader
+          title="How GRQ works"
+          sub="The Opus 5.5 prompt audit and its staged rollout: 37 findings, what each stage shipped, what it measured, and what's next."
+        />
+        {tabBar}
+        {!audit ? (
+          <Card className="p-6 text-sm text-teal-200/60">The review isn&apos;t available right now.</Card>
+        ) : (
+          <>
+            <p className="mb-4 text-xs text-teal-200/40">
+              A copy of the review document, exported {asOf} ET. Cam keeps the live one and makes the Decision marks there; this
+              page is refreshed when it changes.
+            </p>
+            <Card className="p-6 text-sm text-teal-100/80">
+              <Md text={audit.md} />
+            </Card>
+          </>
+        )}
+      </main>
+    );
+  }
 
   if (tab === "decisions") {
     const decisions = await getDecisions();
@@ -193,8 +226,9 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
 
   const rhythm = [
     { t: "~6:00 ET", d: "Pre-morning read — a quick scan of the overnight tape; refreshes research it'll want before the open." },
-    { t: "9:00 ET", d: "Game plan — the day's hypothesis, written before the bell." },
-    { t: `${CHECKIN_TIMES_ET.join(" · ")} ET`, d: "Check-ins every 30 minutes — each one rebuilds the plan from scratch, acts on what's live, and must widen the net by vetting 12–18 fresh names (dossiering only the promising few). It can also schedule itself a near-term return to act once a queued dossier lands, rather than waiting for the next slot." },
+    { t: "8:00 ET", d: "The hunt — the daily search for under-the-radar names, run before the open so it never collides with a check-in. Leads only: a full dossier is written when one of you opens the name or asks for research." },
+    { t: "9:00 ET", d: "Game plan — the day's hypothesis, written before the bell. A quiet day is a legitimate plan." },
+    { t: `${CHECKIN_TIMES_ET.join(" · ")} ET`, d: "Check-ins every 30 minutes — monitoring, not a fresh plan each time (since Sep 30): it re-reads the plan and acts only on what's live — a fill, a stop, a thesis that broke, a dossier that landed. Most end with no trade, by design. Research is always available, and it can schedule itself a near-term return to act once a queued dossier lands." },
     { t: "12:30 ET", d: "Midday brief — a readable lunchtime summary (no trading decisions)." },
     { t: "16:15 ET", d: "End-of-day report — what happened, why, and tomorrow's watch list." },
     { t: "Saturday", d: "Weekly review — grades closed theses, bank lessons, and gives a contribute/hold/withdraw recommendation." },
@@ -212,7 +246,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
       <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
       <PageHeader
         title="How GRQ works"
-        sub="The plain-English operating manual. The rules and numbers below are pulled live from the same code the agent obeys — so this page can't drift out of sync with reality."
+        sub="The plain-English operating manual. The rules and numbers are pulled live from the same code the agent obeys. The daily rhythm and 'What's changed' are written by hand, so they carry dates."
       />
 
       {tabBar}
@@ -310,6 +344,11 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                   <span className="text-sm font-semibold text-teal-50">{c.title}</span>
                   <span className="ml-auto text-xs tabular-nums text-teal-200/40">{c.date}{c.dRef ? ` · ${c.dRef}` : ""}</span>
                 </div>
+                {c.supersededBy && (
+                  <p className="mt-2 text-xs text-amber-300/80">
+                    <span className="font-semibold">Superseded:</span> {c.supersededBy}
+                  </p>
+                )}
                 <p className="mt-3 text-sm text-teal-100/80"><span className="font-semibold text-teal-200/70">What:</span> {c.what}</p>
                 <p className="mt-1.5 text-sm text-teal-200/60"><span className="font-semibold text-teal-200/70">Why:</span> {c.why}</p>
               </Card>
