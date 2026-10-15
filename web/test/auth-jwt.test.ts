@@ -17,7 +17,11 @@ import {
 } from "@/lib/auth-jwt";
 
 const DAY = 86_400;
-const NOW = 1_789_000_000; // an arbitrary epoch second, fixed so the tests are deterministic
+// The real clock, whole seconds. Every token here is minted RELATIVE to NOW and then VERIFIED by
+// jsonwebtoken against the actual wall clock — so NOW cannot be a fixed epoch: it was 1_789_000_000
+// (2026-09-10) until 2026-10-15, and the 30-day tokens it minted expired on 2026-10-10, failing
+// all four round-trip tests on a clean checkout. Offsets stay deterministic; only the origin moves.
+const NOW = Math.floor(Date.now() / 1000);
 
 describe("GRQ-JWT round trip", () => {
   before(() => assert.ok(process.env.GRQ_JWT_SECRET));
