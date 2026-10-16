@@ -25,11 +25,11 @@ The incentive redesign moves ahead of everything else still open, because it is 
 | 2 | Stage 2 (shipped Sep 30) | Effort per route | Research and report tokens | Dossier and report quality | To Oct 7, overlapping stage 3 |
 | 3 | **Stage 3: incentive redesign** | R1–R8 below (absorbs P7, P8, P13, P14) | **Highest.** Aligns the agent with the monthly goal and stops the churn. Removing the 12–18-name quota should also cut check-in tokens, the one route still \~30% above Opus 4.8 | Behaviour: could swing back to idle cash, so cash levels are watched | About 2 weeks |
 | 4 | Stage 4: cleanup | P2 tool text, P9 FX paragraph, P10 tool descriptions, P11 word caps, P12 chat persona, P15–P17, plus the two flagged lines (Positions header, position check) and R8 | Clarity and small token savings | Low | About a week; then the deploy-rate check |
-| 5 | Later, decide separately | Stage 5, decided at the Oct 22 close by the written test in row 4: R2's missing trigger, an explicit idle-cash question at one daily check-in ("is there a winner to top up, or a name you would hold for months?"), never a cap. Also for both members: the soak-clock question, and whether to store council verdicts as rows so the council can be graded. Then C6 council caching; check-in effort; flags C7–C14, F4 | Stage 3 left $9.2k (13.6% of NAV) idle for two weeks with one buy, and R2's top-up rule never fired. Flag: cash above 10% of NAV for more than 10 trading days with no buy | Varies | None |
+| 5 | Later, decide separately | Stage 5, decided at the Oct 22 close by the written test in row 4: R2's missing trigger, an explicit idle-cash question at one daily check-in ("is there a winner to top up, or a name you would hold for months?"), never a cap. After stage 5, the launch rehearsal: the one planned reset of the paper account, right before any real-money decision (its own section below: what Cam and Graham decide first, what gets built first, the runbook, what is preserved). Also for both members: whether to store council verdicts as rows so the council can be graded. The soak-clock question is answered: a brain change does not restart it. Then C6 council caching; check-in effort; flags C7–C14, F4 | Stage 3 left $9.2k (13.6% of NAV) idle for two weeks with one buy, and R2's top-up rule never fired. Flag: cash above 10% of NAV for more than 10 trading days with no buy | Varies | None |
 
 **Amended Oct 15.** Stage 3's watch is in (row 3 above). Cam re-purchased the higher FMP plan, so nothing in the agent's cost hurdle changes and the Starter fallbacks heal on their own (they re-try after a real refusal expires). Stage 4 keeps its scope, absorbs the two flagged lines and R8, and waits only on those two decisions, not on anything technical. New watch metric from here: the deploy rate, idle cash as a share of NAV and trading days since the last buy.
 
-**Revised Oct 15, evening.** Stage 4 shipped as v2.87 after the council's verdict (next section). The plan from here is one week of measurement, not building: the test in row 4 decides stage 5 at the Oct 22 close. Three things sit with Cam and Graham rather than the agent: the soak-clock question, whether council verdicts should be stored so the council can be graded (today's grading took a search through check-in notes), and reading the Manual's "What's changed" entry for stage 3, which now describes the mandate in owner language.
+**Revised Oct 15, evening.** Stage 4 shipped as v2.87 after the council's verdict (next section). The plan from here is one week of measurement, not building: the test in row 4 decides stage 5 at the Oct 22 close. Later the same evening the council was asked about resetting the paper account and said not now: the reset becomes the launch rehearsal, a planned stage after stage 5, with its own section below. Two things sit with Cam and Graham before it can run: the launch size and currency split, and the pass/fail thresholds. The soak clock does not restart on a brain change.
 
 ## The council on the stage-4 restart (Oct 15)
 
@@ -73,6 +73,37 @@ Cam's question was in fact about resetting the FUND, the IBKR paper account, not
 | A system note per cleared name and a fund-level lesson that the flatten was not the agent's decision | The shadow race books; reset fills removed from the 30-day track record and the weekly thesis grading |
 
 **First step, per the chair:** no portal action tomorrow; write the Oct 15 bookmark; build and test the reset-trade tag and its two exclusions before Oct 22, while the members pick the launch size and the CAD/USD split. The council is advisory; the reset is Cam and Graham's call.
+
+## The launch rehearsal: how the reset will be done
+
+The reset is a planned stage, not a reaction. It runs once, right before any real-money decision, after stage 5 is settled, and it answers the question the current book cannot: can the agent build a book from all cash under "holding is the job" without churning or freezing, and how fast. Nothing here is scheduled yet; Cam and Graham start it.
+
+**Decided by Cam and Graham before anything is flattened**
+
+| Decision | Why it comes first |
+| --- | --- |
+| Launch size and the CAD/USD split (last time: US$50,000 all in USD; before that C$25k + US$25k) | The rehearsal must use the real intended size and mix, or it rehearses the wrong thing |
+| Pass/fail thresholds: days to deploy, cash share at days 5, 10 and 20, churn during the build (round trips inside a month) | Written before the flatten so the result cannot be re-read afterwards |
+| The date: a Friday, with the agent held by the kill switch from the flatten to the Monday verification | The portal reset clears positions on IBKR's overnight cycle; a weekend gives it a clean gap |
+
+**Built and tested before the rehearsal (no agent redeploy needed until the day)**
+
+- [ ] A reset-trade tag on orders (the flatten sells are placed by a member, not the agent) and its two exclusions: the 30-day track-record block the agent reads in every session, and the weekly review's grading of closed theses. Without it the agent reads 18 forced exits as its own record.
+- [ ] The rebaseline script re-parameterised for the chosen size and split (it currently hard-codes last June's US$50,000 and a C$79.61 residual).
+- [ ] A system note per cleared name and a fund-level lesson, written at the flatten, so the weekend retro excludes them.
+- [ ] The Oct 15 bookmark written into the soak record: NAV C$67,868, cash C$9,251 (13.6%), 18 positions, contributions C$71,009 (−4.4%); Sep 30 and Oct 15 annotated as brain changes, not clock restarts.
+
+**The runbook, in order**
+
+1. Friday, market open: engage the kill switch. A member flattens the book (market sells on every position) and tags them as the reset. The reset-detection guard stays on.
+2. Friday after the close: the member resets the paper balance in the IBKR portal to the chosen size. Cash changes at once; positions, already flat, have nothing left to clear overnight.
+3. Monday before the open: re-fund the split (a conversion between sleeves is a member-approved request), run the rebaseline script, set the new inception date, confirm the high-water mark re-anchors to the new NAV, clear stale agenda and focus items, reset the shadow race books to the same cash, write the boot-scan marker.
+4. Monday, verify: the mirror shows all cash at the chosen size, contributions equal NAV, the track record shows no exits, the drawdown guard reads zero. Then release the kill switch.
+5. Measure daily against the pre-registered thresholds; the weekly review grades the build, not the flatten.
+
+**Preserved through all of it:** the journal, dossiers, lessons, retros, directives, universe and watchlists, the conviction tally, token records, the sandboxes, every fill (tagged, not deleted), and the NAV series archived as Run 2 with a marked break.
+
+**Not a gate:** a rehearsal that passes does not by itself clear real money. The §6 gate, the conviction bar, the soak judgement and the two members' decision still apply.
 
 - **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
 - **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
