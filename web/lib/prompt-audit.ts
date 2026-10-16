@@ -20,3 +20,19 @@ export async function getPromptAudit(): Promise<PromptAudit | null> {
     return null; // not mounted (local dev without the volume) → the tab says so
   }
 }
+
+/** Pull one `## heading` section (that line through the line before the next `## `) out of a
+ *  markdown document, so the page can render it apart from the rest. `null` when absent. Pure. */
+export function splitSection(md: string, headingPrefix: string): { section: string | null; rest: string } {
+  const lines = md.split("\n");
+  const start = lines.findIndex((l) => l.startsWith("## ") && l.slice(3).startsWith(headingPrefix));
+  if (start < 0) return { section: null, rest: md };
+  let end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
+  if (end < 0) end = lines.length;
+  return { section: lines.slice(start, end).join("\n").trim(), rest: [...lines.slice(0, start), ...lines.slice(end)].join("\n") };
+}
+
+/** The section's body without its own heading line (the page draws the heading its own way). */
+export function sectionBody(section: string): string {
+  return section.replace(/^## [^\n]*\n?/, "").trim();
+}

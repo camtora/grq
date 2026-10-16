@@ -20,7 +20,9 @@ import { startOfEtDay, etDateStr } from "@/agent/calendar";
 import Md from "@/components/Md";
 import { CHANGELOG, type ChangeTag } from "@/lib/changelog";
 import { getDecisions } from "@/lib/decisions";
-import { getPromptAudit } from "@/lib/prompt-audit";
+import { getPromptAudit, splitSection, sectionBody } from "@/lib/prompt-audit";
+import Avatar from "@/components/Avatar";
+import { personByName } from "@/lib/people";
 
 const cad = (cents: number) => `C$${(cents / 100).toLocaleString("en-CA", { maximumFractionDigits: 0 })}`;
 
@@ -68,6 +70,11 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
     // Graham can read it here. Owners only, like the rest of this page: it discusses the book.
     const audit = await getPromptAudit();
     const asOf = audit?.asOf.toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "medium", timeStyle: "short" });
+    // The "For Graham" section is lifted out of the export and drawn as the first thing on the tab,
+    // in its own highlighted card (Cam, 2026-10-15: "highlight it so it's clear for him what to look
+    // at"). The doc stays the single source: the section lives there, the page only moves it up.
+    const split = audit ? splitSection(audit.md, "For Graham") : { section: null, rest: "" };
+    const graham = personByName("Graham");
     return (
       <main>
         <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
@@ -84,8 +91,22 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
               A copy of the review document, exported {asOf} ET. Cam keeps the live one and makes the Decision marks there; this
               page is refreshed when it changes.
             </p>
+            {split.section && (
+              <Card className="mb-6 border-amber-400/40 bg-amber-400/[0.06] p-6">
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <Avatar src={graham?.photo ?? null} name="Graham" size="h-10 w-10" />
+                  <div>
+                    <div className="text-sm font-bold uppercase tracking-wider text-amber-200/90">Graham, start here</div>
+                    <div className="text-xs text-teal-200/50">The short version, as of Oct 15. Everything below is the record behind it.</div>
+                  </div>
+                </div>
+                <div className="text-sm text-teal-100/85">
+                  <Md text={sectionBody(split.section)} />
+                </div>
+              </Card>
+            )}
             <Card className="p-6 text-sm text-teal-100/80">
-              <Md text={audit.md} />
+              <Md text={split.section ? split.rest : audit.md} />
             </Card>
           </>
         )}
