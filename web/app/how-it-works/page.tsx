@@ -21,6 +21,7 @@ import Md from "@/components/Md";
 import { CHANGELOG, type ChangeTag } from "@/lib/changelog";
 import { getDecisions } from "@/lib/decisions";
 import { getPromptAudit, splitSection, sectionBody } from "@/lib/prompt-audit";
+import { monthToDate } from "@/lib/mtd";
 import Avatar from "@/components/Avatar";
 import { personByName } from "@/lib/people";
 
@@ -75,6 +76,8 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
     // at"). The doc stays the single source: the section lives there, the page only moves it up.
     const split = audit ? splitSection(audit.md, "For Graham") : { section: null, rest: "" };
     const graham = personByName("Graham");
+    const mtd = split.section ? await monthToDate().catch(() => null) : null;
+    const pct = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
     return (
       <main>
         <Link href="/settings" className="text-xs text-teal-300 hover:underline">← settings</Link>
@@ -96,9 +99,23 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                   <Avatar src={graham?.photo ?? null} name="Graham" size="h-10 w-10" />
                   <div>
-                    <div className="text-sm font-bold uppercase tracking-wider text-amber-200/90">Graham, start here</div>
+                    <div className="text-sm font-bold uppercase tracking-wider text-amber-300">Graham, start here</div>
                     <div className="text-xs text-teal-200/50">The short version, as of Oct 15. Everything below is the record behind it.</div>
                   </div>
+                  {/* The headline figure, LIVE from the settled NAV history so it never freezes at the text's Oct 15 numbers. */}
+                  {mtd && (
+                    <div className="ml-auto flex items-center gap-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">{mtd.month} so far</div>
+                      <div className="text-right">
+                        <div className={`text-xl font-black tabular-nums leading-tight ${mtd.fundPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>{pct(mtd.fundPct)}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-teal-200/50">GRQ</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-black tabular-nums leading-tight text-teal-100/80">{pct(mtd.benchPct)}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-teal-200/50">TSX (XIC)</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="text-sm text-teal-100/85">
                   <Md text={sectionBody(split.section)} />
