@@ -27,6 +27,9 @@ The incentive redesign moves ahead of everything else still open, because it is 
 | 4 | Stage 4: cleanup | P2 tool text, P9 FX paragraph, P10 tool descriptions, P11 word caps, P12 chat persona, P15–P17, plus the two flagged lines (Positions header, position check) and R8 | Clarity and small token savings | Low | About a week; then the deploy-rate check |
 | 5 | Later, decide separately | Stage 5, decided at the Oct 22 close by the written test in row 4: R2's missing trigger, an explicit idle-cash question at one daily check-in ("is there a winner to top up, or a name you would hold for months?"), never a cap. After stage 5, the launch rehearsal: the one planned reset of the paper account, right before any real-money decision (its own section below: what Cam and Graham decide first, what gets built first, the runbook, what is preserved). Also for both members: whether to store council verdicts as rows so the council can be graded. The soak-clock question is answered: a brain change does not restart it. Then C6 council caching; check-in effort; flags C7–C14, F4 | Stage 3 left $9.2k (13.6% of NAV) idle for two weeks with one buy, and R2's top-up rule never fired. Flag: cash above 10% of NAV for more than 10 trading days with no buy | Varies | None |
 
+- **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
+- **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
+
 **Amended Oct 15.** Stage 3's watch is in (row 3 above). Cam re-purchased the higher FMP plan, so nothing in the agent's cost hurdle changes and the Starter fallbacks heal on their own (they re-try after a real refusal expires). Stage 4 keeps its scope, absorbs the two flagged lines and R8, and waits only on those two decisions, not on anything technical. New watch metric from here: the deploy rate, idle cash as a share of NAV and trading days since the last buy.
 
 **Revised Oct 15, evening.** Stage 4 shipped as v2.87 after the council's verdict (next section). The plan from here is one week of measurement, not building: the test in row 4 decides stage 5 at the Oct 22 close. Later the same evening the council was asked about resetting the paper account and said not now: the reset becomes the launch rehearsal, a planned stage after stage 5, with its own section below. Two things sit with Cam and Graham before it can run: the launch size and currency split, and the pass/fail thresholds. The soak clock does not restart on a brain change.
@@ -104,9 +107,6 @@ The reset is a planned stage, not a reaction. It runs once, right before any rea
 **Preserved through all of it:** the journal, dossiers, lessons, retros, directives, universe and watchlists, the conviction tally, token records, the sandboxes, every fill (tagged, not deleted), and the NAV series archived as Run 2 with a marked break.
 
 **Not a gate:** a rehearsal that passes does not by itself clear real money. The §6 gate, the conviction bar, the soak judgement and the two members' decision still apply.
-
-- **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
-- **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
 
 ## Results so far
 
