@@ -109,21 +109,22 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                     <div className="ml-auto flex flex-wrap items-stretch gap-3">
                       <div className="flex items-center gap-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">{mtd.month} so far</div>
+                        {/* Dollars lead, the rate sits under them: Graham reads dollars (Cam, 2026-10-15). */}
                         <div className="text-right">
-                          <div className={`text-xl font-black tabular-nums leading-tight ${mtd.fundPct >= 0 ? "text-emerald-300" : "text-red-300"}`}>{pct(mtd.fundPct)}</div>
-                          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">GRQ · {cad(mtd.fundDeltaCents)}</div>
+                          <div className={`text-xl font-black tabular-nums leading-tight ${mtd.fundDeltaCents >= 0 ? "text-emerald-300" : "text-red-300"}`}>{cad(mtd.fundDeltaCents)}</div>
+                          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">GRQ · {pct(mtd.fundPct)}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-xl font-black tabular-nums leading-tight text-teal-100/80">{pct(mtd.benchPct)}</div>
-                          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">TSX · {cad(mtd.marketDeltaCents)} of it</div>
+                          <div className="text-xl font-black tabular-nums leading-tight text-teal-100/80">{cad(mtd.marketDeltaCents)}</div>
+                          <div className="text-[10px] uppercase tracking-wider text-teal-200/50">the market's share · {pct(mtd.benchPct)}</div>
                         </div>
                       </div>
                       {life && (
                         <div className="flex items-center gap-4 rounded-xl border border-teal-400/15 bg-teal-400/5 px-4 py-2">
                           <div className="text-[10px] font-bold uppercase tracking-wider text-teal-200/60">vs what went in{sinceLabel ? ` since ${sinceLabel}` : ""}</div>
                           <div className="text-right">
-                            <div className={`text-xl font-black tabular-nums leading-tight ${life.deltaCents >= 0 ? "text-emerald-300" : "text-red-300"}`}>{pct(life.pct)}</div>
-                            <div className="text-[10px] uppercase tracking-wider text-teal-200/50">{cad(life.deltaCents)}</div>
+                            <div className={`text-xl font-black tabular-nums leading-tight ${life.deltaCents >= 0 ? "text-emerald-300" : "text-red-300"}`}>{cad(life.deltaCents)}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-teal-200/50">{pct(life.pct)}</div>
                           </div>
                         </div>
                       )}
