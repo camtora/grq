@@ -2,7 +2,23 @@
 
 Sep 30, 2026 · @Cam
 
-Fable audited every prompt GRQ sends to Claude against Anthropic's current guidance for Opus 5.5 (decision tier) and Haiku 4.5 (triage): 37 findings, 10 high-confidence. Stages 1 and 2 have shipped (Status, below); your Decision marks on the review board decide what goes into stages 3 and 4.
+Fable audited every prompt GRQ sends to Claude against Anthropic's current guidance for Opus 5.5 (decision tier) and Haiku 4.5 (triage): 37 findings, 10 high-confidence. All four stages have shipped (Status, below). The summary for Graham comes first; the council's two verdicts and the planned launch rehearsal follow the plan.
+
+## For Graham: what you need to know (as of Oct 15)
+
+**The agent's brain changed, and its instructions were rewritten for it.** On Sep 23 the decision sessions moved to Claude Opus 5.5. Its standing instructions had been written for the older model, so they were audited (37 findings) and the fixes shipped in four stages, the last one tonight. Nothing in the money rules moved: the order gate, the kill switch, position limits, stops and the no-short, no-options, no-margin rules are exactly as they were.
+
+**The one change that matters: holding is the job (Sep 30).** The new model, on the old "put the fund to work" instructions, was trading about four times a day, opening eight new names in five days and round-tripping one inside a week. Since Sep 30 a holding is kept until its thesis breaks, check-ins are monitoring rather than a fresh plan every half hour, and the agent sees its own track record (did each rotation beat holding, how long it holds, turnover, realized tax) in every session. Result over 11 trading days: 3 trades instead of 17, no new names, October +5.2% against the TSX's +2.5%, and the agent's running cost down by about two thirds. The fund is still 4.4% below what went in since June 26. Neither October nor September proves anything on its own.
+
+**The open worry: idle cash.** C$9,251, 13.6% of the fund, has sat unused for two weeks with one buy, because the rule that says "top up your best holdings first" has nothing that asks the question. Decision at the Oct 22 close: if cash is still idle, a small fifth change adds an explicit idle-cash question to one daily check-in. Never a cap on positions or a minimum hold; caps just become the number it always holds.
+
+**No reset of the paper account now.** Cam asked the agent's advisory council, five deliberately opposed lenses plus a chairman, whether to reset the fund for a clean start. Four to one, it said no: wiping a losing record two weeks into a new mandate, during a good month, is the trick fund families use to bury losers, and the members' own goal is "more than we put in, with receipts". The one reset will be a launch rehearsal, right before any real-money decision, to test the thing a mature book can't: building from all cash without churning or freezing. Its plan is at the end of this page.
+
+**The soak clock keeps running.** A brain change does not restart it, or it would never end. The day count is long satisfied; whether the run has been clean is a judgement for the two of you.
+
+**What is asked of you:** read the launch-rehearsal section at the end, and when you're ready, weigh in on three decisions it needs from both members: the launch size and CAD/USD split, the pass/fail thresholds, and whether the soak so far counts as clean. Nothing else is waiting on you this week.
+
+**Where to look:** the Status table below for what shipped and what it measured; the Manual tab's "What's changed" for the same story in owner language; the Decision log for the engineering record (D128 to D137).
 
 ## Status
 
