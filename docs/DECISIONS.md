@@ -4363,3 +4363,24 @@ build on a version literal outside `agent/policy.ts` or a TRADE writer without a
 a two-step deploy (code first, then the column).
 
 **Addendum, 2026-10-16, late.** Cam asked whether stop-outs on below-bar starters are in the plan. They were not: the stage-3 line keeps "a stop fires" as a valid exit and the written test cannot see one. Added to the review doc as plan-table row 6 and a "Stage 5, proposed Oct 16" section, for the Oct 22 decision: measurement only this week (every sell tagged thesis-break / stop / score, stop width in weekly moves); then a stop-width rule for new starters, the twelve below-bar holdings decided as a class (an Oct 23 launch rehearsal clears them by construction), and the stop as a structured dossier field. The evidence table (16 holdings, room to stop in weekly moves) narrows the live risk to ATRL, TDY, GD and GOOGL's re-review line. The Graham summary now carries the Oct 16 cash flag (19.7%). The rehearsal's three build items (reset-trade tag + two exclusions, the rebaseline script's hard-coded US$50k/C$79.61, the per-name system notes) are NOT built as of tonight, and the three member decisions (size + split, pass/fail thresholds, the date) are open.
+
+### D138 — The paper-account reset is scheduled: flatten Thu 2026-10-22, portal reset that night, Fri 2026-10-23 is day 1 (Cam, 2026-10-16)
+
+Cam, late on 10/16: "we do another reset on friday. thursday night at midnight, it has to happen, watch for another few weeks,
+before adding funds." The council's option C (D137: one deliberate flat-start rehearsal before real money, date left open)
+now has its date. The sequence follows the June lesson that an IBKR paper balance reset changes cash at once but clears
+positions on the OVERNIGHT cycle (`grq-ibkr-paper-reset-gotcha`): **Thursday during the session** the kill switch goes on
+and a member sells the book flat, tagged as the reset so the agent never reads the exits as its own; **Thursday after the
+close** Cam resets the balance in the portal to the launch size; the overnight cycle completes it with nothing to wipe;
+**Friday before the open** the split is re-funded (member-approved FX), the rebaseline script run, inception re-set, the
+high-water mark re-anchored, stale agenda/focus cleared, the race books reset, the boot-scan marker written; verify; release
+the kill switch; the 9:00 plan is day 1. The stage-4 readout (D137's written test) is taken from the Wed 10/21 close since
+Thursday's session is the flatten. Then **a few weeks of daily measurement against pre-registered pass marks before any
+funds are added**; the weekly review grades the build, not the flatten. **Needed from both members by Wed 10/21:** the
+launch size + CAD/USD split, and the pass marks (days to deploy, cash share at days 5/10/20, round trips inside a month).
+**Build this week (web + scripts; no agent redeploy before the day):** the reset-trade tag on orders + its two exclusions
+(the 30-day track-record block, the weekly review's grading), the rebaseline script parameterised for the chosen size and
+split (it hard-codes June's US$50k + C$79.61), the per-name system notes + fund-level lesson at the flatten, the Oct 15
+bookmark. Stage 5 (D137 + the stops item added 10/16) is decided Thursday at the close and deploys Thursday evening so the
+rehearsal runs on the brain we keep. Everything to Oct 22 is archived as Run 2 with a marked break; nothing is deleted.
+The review doc (For Graham, the rehearsal section, the runbook) carries the same; re-exported to the site.

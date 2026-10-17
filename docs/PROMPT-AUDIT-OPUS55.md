@@ -14,11 +14,11 @@ Fable audited every prompt GRQ sends to Claude against Anthropic's current guida
 
 **The open worry: idle cash, and it jumped on Oct 16.** Cash was C$9,251 (13.6% of the fund) on Oct 15 and C$13,344 (19.7%) at the Oct 16 close, after two stop-outs, VNP and NVDA, both on price lines written before the change and both at a loss. That is above the 15% line the plan set for telling both members at once; this is the flag. The rule that says "top up your best holdings first" still has nothing that asks the question, and a stop-out has no way back in: a new buy needs a 70, a holding only an intact thesis. Decision at the Oct 22 close: a fifth change adds an explicit idle-cash question to one daily check-in, and settles the stop question in the new section below. Never a cap on positions or a minimum hold; caps just become the number it always holds.
 
-**No reset of the paper account now.** Cam asked the agent's advisory council, five deliberately opposed lenses plus a chairman, whether to reset the fund for a clean start. Four to one, it said no: wiping a losing record two weeks into a new mandate, during a good month, is the trick fund families use to bury losers, and the members' own goal is "more than we put in, with receipts". The one reset will be a launch rehearsal, right before any real-money decision, to test the thing a mature book can't: building from all cash without churning or freezing. Its plan is at the end of this page.
+**The paper account is reset on the night of Thursday Oct 22 (Cam, Oct 16).** On Thursday the book is sold flat with the agent held by the kill switch; that night IBKR resets the paper balance to the launch size you two choose; Friday Oct 23 is day 1 of a new book, built from all cash against pass marks written down beforehand. Then a few more weeks of watching before any real money goes in. The council had said once, deliberately, before real money, and left the date open; Cam set it. Nothing is erased: everything to Oct 22 stays in the record as Run 2, October and the −4.4% included.
 
 **The soak clock keeps running.** A brain change does not restart it, or it would never end. The day count is long satisfied; whether the run has been clean is a judgement for the two of you.
 
-**What is asked of you:** read the launch-rehearsal section at the end, and when you're ready, weigh in on three decisions it needs from both members: the launch size and CAD/USD split, the pass/fail thresholds, and whether the soak so far counts as clean. Nothing else is waiting on you this week.
+**What is asked of you, by Wednesday Oct 21:** two decisions the reset needs from both members. The launch size and the CAD/USD split, which Cam types into the IBKR portal on Thursday night (last time US$50,000 all in USD; before that C$25k + US$25k). And the pass marks for the new book, written before the flatten so they cannot be re-read afterwards: days to deploy, cash share at days 5, 10 and 20, round trips inside a month. The soak question answers itself: the few weeks after Oct 23 are the watch before any funds are added. The launch-rehearsal section at the end has the runbook.
 
 **Where to look:** the Status table below for what shipped and what it measured; the Manual tab's "What's changed" for the same story in owner language; the Decision log for the engineering record (D128 to D137).
 
@@ -103,7 +103,7 @@ The council is advisory. Cam decides the restart.
 **Proposed for the Oct 22 decision; nothing changes before then.**
 
 1. This week, measure only: every sell tagged thesis-break, stop or score, with the stop's width in weekly moves at the time it fired (added to the Oct 22 test above).
-2. If the launch rehearsal runs on Oct 23, the flatten clears the legacy class by construction. What survives the reset is a rule for new starters: a written stop no tighter than about two weekly moves (or the code stop), set in the dossier that opens the position, moved only with a dated reason.
+2. The rehearsal is set for Oct 23 (section below), so the flatten clears the legacy class by construction. What survives the reset is a rule for new starters: a written stop no tighter than about two weekly moves (or the code stop), set in the dossier that opens the position, moved only with a dated reason.
 3. If the rehearsal slips, decide the twelve as a class, not one at a time: re-underwrite each with a thesis and a stop sized as above, or exit the ones that would not be bought today on purpose, with the tax treatment chosen.
 4. Make the stop a structured field on the dossier, beside the near and far targets it already carries, so the test, the position check and the Haiku triage read the number the agent wrote.
 
@@ -132,7 +132,7 @@ Cam's question was in fact about resetting the FUND, the IBKR paper account, not
 
 ## The launch rehearsal: how the reset will be done
 
-The reset is a planned stage, not a reaction. It runs once, right before any real-money decision, after stage 5 is settled, and it answers the question the current book cannot: can the agent build a book from all cash under "holding is the job" without churning or freezing, and how fast. Nothing here is scheduled yet; Cam and Graham start it.
+The reset is a planned stage, not a reaction. It runs once, right before any real-money decision, after stage 5 is settled, and it answers the question the current book cannot: can the agent build a book from all cash under "holding is the job" without churning or freezing, and how fast. Scheduled by Cam on Oct 16: the reset is the night of Thursday Oct 22, Friday Oct 23 is day 1, then a few more weeks of watching before any funds are added.
 
 **Decided by Cam and Graham before anything is flattened**
 
@@ -140,7 +140,7 @@ The reset is a planned stage, not a reaction. It runs once, right before any rea
 | --- | --- |
 | Launch size and the CAD/USD split (last time: US$50,000 all in USD; before that C$25k + US$25k) | The rehearsal must use the real intended size and mix, or it rehearses the wrong thing |
 | Pass/fail thresholds: days to deploy, cash share at days 5, 10 and 20, churn during the build (round trips inside a month) | Written before the flatten so the result cannot be re-read afterwards |
-| The date: a Friday, with the agent held by the kill switch from the flatten to the Monday verification | The portal reset clears positions on IBKR's overnight cycle; a weekend gives it a clean gap |
+| The date, set by Cam on Oct 16: Thursday Oct 22. Flatten during Thursday's session, portal reset after the close (it completes on IBKR's overnight cycle), Friday Oct 23 is day 1; the agent is held by the kill switch from the flatten to Friday's verification | The portal reset clears positions on IBKR's overnight cycle, so the book is flat before it and the new balance is there at Friday's open |
 
 **Built and tested before the rehearsal (no agent redeploy needed until the day)**
 
@@ -151,11 +151,11 @@ The reset is a planned stage, not a reaction. It runs once, right before any rea
 
 **The runbook, in order**
 
-1. Friday, market open: engage the kill switch. A member flattens the book (market sells on every position) and tags them as the reset. The reset-detection guard stays on.
-2. Friday after the close: the member resets the paper balance in the IBKR portal to the chosen size. Cash changes at once; positions, already flat, have nothing left to clear overnight.
-3. Monday before the open: re-fund the split (a conversion between sleeves is a member-approved request), run the rebaseline script, set the new inception date, confirm the high-water mark re-anchors to the new NAV, clear stale agenda and focus items, reset the shadow race books to the same cash, write the boot-scan marker.
-4. Monday, verify: the mirror shows all cash at the chosen size, contributions equal NAV, the track record shows no exits, the drawdown guard reads zero. Then release the kill switch.
-5. Measure daily against the pre-registered thresholds; the weekly review grades the build, not the flatten.
+1. Thursday Oct 22, during the session: engage the kill switch. A member flattens the book (market sells on every position, CAD and USD) and tags them as the reset. The reset-detection guard stays on. The stage-4 readout is taken from the Wednesday Oct 21 close, since Thursday's session is the flatten.
+2. Thursday after the close: Cam resets the paper balance in the IBKR portal to the chosen size. Cash changes at once; the overnight cycle, the midnight step, completes it, and with the book already flat it has nothing to wipe and nothing to trip the drawdown guard.
+3. Friday Oct 23 before the open: re-fund the split (a conversion between sleeves is a member-approved request), run the rebaseline script, set the new inception date, confirm the high-water mark re-anchors to the new NAV, clear stale agenda and focus items, reset the shadow race books to the same cash, write the boot-scan marker.
+4. Friday, verify: the mirror shows all cash at the chosen size, contributions equal NAV, the track record shows no exits, the drawdown guard reads zero. Then release the kill switch; the 9:00 morning plan is day 1.
+5. Measure daily against the pre-registered thresholds for a few weeks; the weekly review grades the build, not the flatten. No funds are added before that watch is done and both members have read it.
 
 **Preserved through all of it:** the journal, dossiers, lessons, retros, directives, universe and watchlists, the conviction tally, token records, the sandboxes, every fill (tagged, not deleted), and the NAV series archived as Run 2 with a marked break.
 
