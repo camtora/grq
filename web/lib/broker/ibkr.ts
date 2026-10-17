@@ -2,7 +2,7 @@ import https from "node:https";
 import { prisma } from "../db";
 import { getQuote as yahooQuote, getQuotes as yahooQuotes } from "./quotes";
 import { activeSymbols, universeEntry } from "../universe";
-import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents } from "./sim";
+import { ibkrFixedCommissionCents, writeNavSnapshot, feeSpendThisMonthCents, liveAgentVersion } from "./sim";
 import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCents } from "./guardrails";
 import { effectiveHeldQty, mirrorLag, isSettled } from "./positions";
 import { usdCadRate } from "../fx";
@@ -432,6 +432,7 @@ export class IBKRBroker implements BrokerAdapter {
     await prisma.journalEntry.create({
       data: {
         kind: "TRADE", symbol: order.symbol, orderId: order.id,
+        agentVersion: await liveAgentVersion(), // the brain that was live — not the schema default (a dead literal)
         title: `${order.side} ${order.qty} ${order.symbol} @ ${(priceCents / 100).toFixed(2)} (IBKR paper)`,
         body:
           (order.reason ?? "(no thesis recorded)") +

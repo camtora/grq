@@ -4344,3 +4344,18 @@ changing the brain mid-soak restarts the §9 paper-soak clock (parked since D128
 owners only, `docs/PROMPT-AUDIT-OPUS55.md` re-exported when the doc changes) so Graham reads it too; the Manual's
 rhythm text and `lib/changelog.ts` were brought up to date (they had stopped at D96). Council verdicts are still not
 stored as rows — grading the council took a grep through check-in notes; proposed, not yet approved.
+
+**Addendum, 2026-10-16 (day 1 of the watch).** Two sells fired, both on price levels written under v2.86 before the
+deploy (VNP's intraday C$27.20 cut, 12:57 ET 10/15; NVDA's two-close $218 rule, 05:07 ET 10/15), −C$131 and −US$66.
+Both notes also cite "Hold/58, below the bar" as corroboration; the trigger was the level, so not a rollback on its
+own — Cam's read too. NVDA's timing moved intraday the same morning (agenda #673, 10:30 ET, "avoid the weekend gap")
+where the pre-market note had said the 10/19 first check-in. Cash 13.6% → 19.7% of NAV, outside the 15% band: flagged
+to Cam the same evening; Graham reads it on the site (he has no push device, by his choice). Two fixes the day
+surfaced: (1) the "Graham, start here" card carried two Octobers — the live strip and, an inch under it, the doc's
+frozen Oct 15 figures; the doc's summary now names no figure that moves (the strip carries them), re-exported;
+(2) every IBKR-paper TRADE journal row was stamped `v1.48-phase4` — the schema default, a dead literal, because the
+adapter's `settleFill`, the pending-order sweep and the options fills passed no version. They now stamp
+`liveAgentVersion()` (what the running agent wrote on `Settings` at boot) and `test/trade-stamp.test.ts` fails the
+build on a version literal outside `agent/policy.ts` or a TRADE writer without a stamp. Rides the next agent build
+(no redeploy for it alone); the column should become nullable once the human-action routes pass a version too,
+a two-step deploy (code first, then the column).

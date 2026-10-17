@@ -65,6 +65,7 @@ model Settings {
   killSwitch          Boolean   @default(false)
   killSwitchBy        String?
   killSwitchAt        DateTime?
+  // Written by the running agent at boot (runner.ts) and read back by liveAgentVersion(); the default is only ever seen before the first boot.
   agentVersion        String    @default("v1.48-phase4")
   // Live options trading (Alfred, D99 — docs/ALFRED-OPTIONS.md). Buy-to-open long
   // calls/puts only (defined risk = premium). This is the REAL, enforced "no options"
@@ -305,6 +306,9 @@ model JournalEntry {
   // NO cap (agent/context.ts). The agent sets it at write_journal time and can re-flag
   // an existing lesson via pin_lesson. Meant to stay small — a constitution, not a notebook.
   permanent    Boolean     @default(false)
+  // Band-aid, named: this default is a DEAD literal. Every writer must pass the version — TRADE writers are held to it
+  // by test/trade-stamp.test.ts (lib/broker/sim.ts liveAgentVersion()). It should become nullable once the human-action
+  // routes pass one too: a two-step deploy (code first, then the column). D137 addendum, 2026-10-16.
   agentVersion String      @default("v1.48-phase4")
   orderId      Int?
   order        Order?      @relation(fields: [orderId], references: [id])

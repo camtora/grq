@@ -7,6 +7,16 @@ import { isValidQty, shortingShortfallQty, breachesFeeBudget, fundingShortfallCe
 import { mirrorLag, isSettled } from "./positions";
 import { markHeldContract, valueOptionPositionsCad } from "../options/order";
 
+/** The version stamp for a fill written by code that has no AGENT_VERSION of its own — the pending-order
+ *  sweep, the options fills, the IBKR adapter's settleFill. It is what the running agent wrote on Settings
+ *  at boot (runner.ts), so it names the brain that was live when the fill happened. Without it the row
+ *  takes the schema default, a dead literal ("v1.48" + "-phase4"), which is what every IBKR-paper TRADE row
+ *  carried until 2026-10-16. `test/trade-stamp.test.ts` holds every TRADE writer to this. */
+export async function liveAgentVersion(): Promise<string | undefined> {
+  const s = await prisma.settings.findUnique({ where: { id: 1 }, select: { agentVersion: true } });
+  return s?.agentVersion ?? undefined;
+}
+
 /** IBKR Fixed (CAD stocks): $0.01/share, min $1.00/order, capped at 0.5% of
  *  trade value (the cap may undercut the minimum on small orders — that's how
  *  IBKR's schedule works). All cents. */
@@ -323,7 +333,7 @@ export class SimBroker implements BrokerAdapter {
             (realizedPnlCents !== null
               ? `\n\n**Realized P&L:** ${(realizedPnlCents / 100).toFixed(2)} ${ccy} (after ${(commissionCents / 100).toFixed(2)} commission)`
               : `\n\n**Commission:** ${(commissionCents / 100).toFixed(2)} ${ccy}`),
-          agentVersion: agentVersion ?? "v1.48-phase4",
+          agentVersion: agentVersion ?? (await liveAgentVersion()),
         },
       });
 
@@ -402,7 +412,7 @@ export class SimBroker implements BrokerAdapter {
           data: {
             kind: "TRADE", symbol, orderId: order.id, title: orderTitle,
             body: (input.reason ?? "(no thesis recorded)") + `\n\n**Premium:** US$${(cost / 100).toFixed(2)} (${contracts}×${multiplier}×$${(mark / 100).toFixed(2)} + $${(commission / 100).toFixed(2)} commission) · defined risk, max loss = premium.`,
-            agentVersion: "v1.48-phase4",
+            agentVersion: await liveAgentVersion(),
           },
         });
         return { orderId: order.id };
@@ -437,7 +447,7 @@ export class SimBroker implements BrokerAdapter {
         data: {
           kind: "TRADE", symbol, orderId: order.id, title: orderTitle,
           body: (input.reason ?? "(no thesis recorded)") + `\n\n**Realized P&L:** US$${(realized / 100).toFixed(2)} (after $${(commission / 100).toFixed(2)} commission).`,
-          agentVersion: "v1.48-phase4",
+          agentVersion: await liveAgentVersion(),
         },
       });
       return { orderId: order.id };
