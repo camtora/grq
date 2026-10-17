@@ -12,7 +12,7 @@ Fable audited every prompt GRQ sends to Claude against Anthropic's current guida
 
 **In dollars:** the live figures are on the site, in the strip at the top of Graham's card (How GRQ works, the Opus 5.5 plan tab): the month so far for the fund, the market's share of it, and the gap to what went in since June 26. They move every trading day, so this text does not repeat them. The October gain came from holding: three trades in eleven days and nothing new opened, which is the point of the change. Eleven days is a small sample, so neither this month nor September's −3.8% proves anything on its own. On Oct 15, 13.6% of the fund sat in cash and missed a month the market rose, which is why the Oct 22 idle-cash decision is where the next gain most likely sits.
 
-**The open worry: idle cash.** C$9,251, 13.6% of the fund, has sat unused for two weeks with one buy, because the rule that says "top up your best holdings first" has nothing that asks the question. Decision at the Oct 22 close: if cash is still idle, a small fifth change adds an explicit idle-cash question to one daily check-in. Never a cap on positions or a minimum hold; caps just become the number it always holds.
+**The open worry: idle cash, and it jumped on Oct 16.** Cash was C$9,251 (13.6% of the fund) on Oct 15 and C$13,344 (19.7%) at the Oct 16 close, after two stop-outs, VNP and NVDA, both on price lines written before the change and both at a loss. That is above the 15% line the plan set for telling both members at once; this is the flag. The rule that says "top up your best holdings first" still has nothing that asks the question, and a stop-out has no way back in: a new buy needs a 70, a holding only an intact thesis. Decision at the Oct 22 close: a fifth change adds an explicit idle-cash question to one daily check-in, and settles the stop question in the new section below. Never a cap on positions or a minimum hold; caps just become the number it always holds.
 
 **No reset of the paper account now.** Cam asked the agent's advisory council, five deliberately opposed lenses plus a chairman, whether to reset the fund for a clean start. Four to one, it said no: wiping a losing record two weeks into a new mandate, during a good month, is the trick fund families use to bury losers, and the members' own goal is "more than we put in, with receipts". The one reset will be a launch rehearsal, right before any real-money decision, to test the thing a mature book can't: building from all cash without churning or freezing. Its plan is at the end of this page.
 
@@ -44,6 +44,7 @@ The incentive redesign moves ahead of everything else still open, because it is 
 | 3 | **Stage 3: incentive redesign** | R1–R8 below (absorbs P7, P8, P13, P14) | **Highest.** Aligns the agent with the monthly goal and stops the churn. Removing the 12–18-name quota should also cut check-in tokens, the one route still \~30% above Opus 4.8 | Behaviour: could swing back to idle cash, so cash levels are watched | About 2 weeks |
 | 4 | Stage 4: cleanup | P2 tool text, P9 FX paragraph, P10 tool descriptions, P11 word caps, P12 chat persona, P15–P17, plus the two flagged lines (Positions header, position check) and R8 | Clarity and small token savings | Low | About a week; then the deploy-rate check |
 | 5 | Later, decide separately | Stage 5, decided at the Oct 22 close by the written test in row 4: R2's missing trigger, an explicit idle-cash question at one daily check-in ("is there a winner to top up, or a name you would hold for months?"), never a cap. After stage 5, the launch rehearsal: the one planned reset of the paper account, right before any real-money decision (its own section below: what Cam and Graham decide first, what gets built first, the runbook, what is preserved). Also for both members: whether to store council verdicts as rows so the council can be graded. The soak-clock question is answered: a brain change does not restart it. Then C6 council caching; check-in effort; flags C7–C14, F4 | Stage 3 left $9.2k (13.6% of NAV) idle for two weeks with one buy, and R2's top-up rule never fired. Flag: cash above 10% of NAV for more than 10 trading days with no buy | Varies | None |
+| 6 | Stops and the legacy below-bar class (proposed Oct 16) | Measurement only this week: every sell tagged thesis-break, stop or score, and each stop's width in the name's weekly moves. Decided Oct 22 with stage 5: a stop-width rule for new starters, the twelve below-bar holdings handled as a class (an Oct 23 rehearsal clears them by construction), and the stop as a structured dossier field. Section below. | Six sells since Sep 30, all at a loss, five on a written price line; cash went from 13.6% to 19.7% on Oct 16 by stop-outs, with no way back in (a buy needs 70, a hold only an intact thesis). The written test cannot see a stop-out. | Low this week (measurement). The rule itself could keep a losing starter too long; that is what the 12% code stop is for. | ATRL, TDY and GD sit inside about two weekly moves of their lines; GOOGL's re-review line inside one. |
 
 - **Why not wait for stage 2 to finish:** its watch runs to Oct 7, and churn costs money every day it runs. Stage 3 changes the persona, which every dossier and report also reads, so stage 2's token comparison gets slightly muddier. That trade is worth it; stage 2 is judged mainly on the report routes' output, which the persona barely moves.
 - **Why stage 4 waits:** it's wording cleanup. Shipping it alongside stage 3 would make it impossible to tell which change moved trading behaviour.
@@ -72,6 +73,40 @@ Cam asked the council whether to restart the agent tonight (Thu Oct 15, after th
 
 The council is advisory. Cam decides the restart.
 
+## Stage 5, proposed Oct 16: stops, and the names the old brain opened below the bar
+
+**Not in the plan until now.** The stage-3 line keeps "a stop fires" as a valid exit, and nothing in the audit says how wide a stop should be or what to do with the starters opened below the bar under the old instructions. The written test cannot see a stop-out: it is neither a score nor a thesis break. VNP on Oct 16 was one, at a loss, with no company news: its C$28.50 close-stop came from the Oct 10 dossier and its C$27.20 backstop from Oct 15, both written under v2.86.
+
+**What the book says, Oct 16 close.** Six sells since Sep 30, all at a loss; five of the six fired on a written price line, and five also cited the bar. Twelve of the sixteen holdings are below the 70 bar on their latest dossier. Cash went from 13.6% to 19.7% in one day, with no buy since Oct 7. The cash is stop-out residue with no way back in: a new buy needs a 70, a holding only an intact thesis.
+
+**How close each holding is to its line.** Stop = the dossier's written close-stop or exit line; where none is priced, the 12% code stop below cost. Weekly move = 20-day daily volatility times the square root of 5. Three names sit inside about two weekly moves of a written line (ATRL, TDY, GD) and GOOGL's re-review line is inside one; the rest have room. The issue is real but narrower than "twelve names on tight stops".
+
+| Name | Call | Stop | Room to stop | Weekly move | Room, in weekly moves |
+| --- | --- | --- | --- | --- | --- |
+| ATRL | Hold/54 | C$84.00 close | 2.3% | 4.3% | 0.5 |
+| TDY | Weak Buy/63 | US$595 close | 3.8% | 2.4% | 1.6 |
+| GD | Hold/58 | US$323.41 close | 6.0% | 2.6% | 2.3 |
+| GOOGL | Weak Buy/68 | US$305 hard; US$334 re-review is 1.9% away | 10.4% | 3.2% | 3.3 |
+| DOL | Weak Buy/62 | C$185 close | 10.4% | 2.5% | 4.2 |
+| MRU | Weak Buy/65 | C$86.50 close | 11.0% | 2.3% | 4.8 |
+| MSFT | Buy/72 | about US$470, soft | 11.2% | 3.1% | 3.6 |
+| TD | Weak Buy/69 | none written; code stop C$149.17 | 12.4% | 2.9% | 4.3 |
+| XIC | Hold/55 | none written; code stop C$50.44 | 12.7% | 2.1% | 6.0 |
+| ATD | Buy/71 | C$72.70 | 12.9% | 2.4% | 5.4 |
+| ELV | Weak Buy/63 | US$358 close | 16.4% | 2.9% | 5.7 |
+| RSG | Hold/58 | none written; code stop US$189.68 | 18.1% | 2.4% | 7.5 |
+| COR | Hold/68 | none written; code stop US$275.07 | 19.3% | 3.1% | 6.2 |
+| LLY | Buy/74 | thesis invalidation only; code stop US$1,007.16 | 19.9% | 3.7% | 5.4 |
+| V | Hold/64 | none written; code stop US$318.60 | 20.9% | 2.9% | 7.2 |
+| CASY | Buy/71 | none written; code stop US$542.06 | 21.4% | 2.9% | 7.4 |
+
+**Proposed for the Oct 22 decision; nothing changes before then.**
+
+1. This week, measure only: every sell tagged thesis-break, stop or score, with the stop's width in weekly moves at the time it fired (added to the Oct 22 test above).
+2. If the launch rehearsal runs on Oct 23, the flatten clears the legacy class by construction. What survives the reset is a rule for new starters: a written stop no tighter than about two weekly moves (or the code stop), set in the dossier that opens the position, moved only with a dated reason.
+3. If the rehearsal slips, decide the twelve as a class, not one at a time: re-underwrite each with a thesis and a stop sized as above, or exit the ones that would not be bought today on purpose, with the tax treatment chosen.
+4. Make the stop a structured field on the dossier, beside the near and far targets it already carries, so the test, the position check and the Haiku triage read the number the agent wrote.
+
 ## The council on resetting the paper account (Oct 15, later)
 
 Cam's question was in fact about resetting the FUND, the IBKR paper account, not restarting the agent. Asked properly: no reset (A); reset now, go flat, reset the balance, restart the clock (B); reset later at a deliberate boundary (C); or restart only the clock and baseline, keep the positions (D). All five seats spoke. Four chose C; the Contrarian chose A, which is the same thing tomorrow.
@@ -82,7 +117,7 @@ Cam's question was in fact about resetting the FUND, the IBKR paper account, not
 
 **The soak clock does not restart on a brain change.** Otherwise the soak never ends. Record Sep 30 and Oct 15 as annotated breaks, with an Oct 15 bookmark: NAV C$67,868, cash C$9,251 (13.6%), 18 positions, contributions C$71,009 (−4.4%). A reading line, not a re-baseline.
 
-**To Oct 22, on the current book:** does cash stay near 13.6% with no thesis-driven reason; does every churn-era name get an explicit thesis-intact or thesis-broken call, and is any sold for an old-mandate reason. Neither October's +5.2% nor September's −3.8% argues for or against the book.
+**To Oct 22, on the current book:** does cash stay near 13.6% with no thesis-driven reason; does every churn-era name get an explicit thesis-intact or thesis-broken call, and is any sold for an old-mandate reason; and, added Oct 16, every sell is tagged thesis-break, stop or score, with the stop's width in the name's weekly moves. Neither October's +5.2% nor September's −3.8% argues for or against the book.
 
 **When the reset happens — preserve versus clear:**
 
