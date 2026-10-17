@@ -84,3 +84,18 @@ test("the rendered block states the goal, activity, holding period, cost and eac
   assert.match(text, /0 of 1 beat simply holding/);
   assert.match(text, /sold OLD \(\+10\.0% since\) to buy NEW \(-5\.0% since\)/);
 });
+
+test("D138: a member's reset flatten stays in the replay but is not the agent's exit, P&L or timing", () => {
+  const fills = [
+    fill({ symbol: "A", side: "BUY", qty: 10, priceCents: 1000, at: at(0) }),
+    fill({ symbol: "A", side: "SELL", qty: 10, priceCents: 900, at: at(10), realizedPnlCents: -1100, placedBy: "cam@example.com", tag: "reset" }),
+    fill({ symbol: "B", side: "BUY", qty: 5, priceCents: 1000, at: at(1) }),
+    fill({ symbol: "B", side: "SELL", qty: 5, priceCents: 1200, at: at(8), realizedPnlCents: 900 }),
+  ];
+  const text = renderTrackRecord({ fills, now: at(12), windowDays: 30, nowCents: new Map(), openPositions: 0, currentQty: new Map([["A", 0], ["B", 0]]), ordersInWindow: 3, mtd: null });
+  assert.match(text, /1 full exits/); // B's exit counts; A's was the reset
+  assert.match(text, /realized gains/); // +$9 from B; A's −$11 is not the agent's
+  assert.match(text, /Not yours:\*\* 1 fills on 2026-09-11/);
+  // The replay still reconciles: A opened once and is flat now, so nothing is a ghost.
+  assert.equal(episodes(fills, new Map([["A", 0], ["B", 0]])).filter((e) => e.symbol === "A").length, 1);
+});

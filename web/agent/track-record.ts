@@ -24,6 +24,7 @@ export type Fill = {
   realizedPnlCents: number | null;
   at: Date;
   placedBy: string; // "agent" | "system-stop" | a member's email
+  tag?: string | null; // "reset" = a member's flatten before a paper-account reset (D138)
 };
 
 /** One continuous holding of a name: opened when the position went 0 → >0, closed on >0 → 0. */
@@ -124,14 +125,19 @@ export type TrackInputs = {
 export function renderTrackRecord(t: TrackInputs): string {
   const since = new Date(t.now.getTime() - t.windowDays * DAY);
   const inWin = (d: Date) => d >= since;
+  // D138: a member's reset flatten (tag "reset") is not the agent's decision. Those fills stay in the
+  // episode replay so quantities reconcile, but a close they made is not an exit the agent made, and
+  // their realized P&L, commissions and timing are left out of every number below.
+  const resetInWin = t.fills.filter((f) => f.tag === "reset" && inWin(f.at));
+  const resetClose = new Set(t.fills.filter((f) => f.tag === "reset" && f.side === "SELL").map((f) => `${f.symbol}@${f.at.getTime()}`));
   const eps = episodes(t.fills, t.currentQty);
   const opened = eps.filter((e) => inWin(e.openedAt));
-  const closed = eps.filter((e) => e.closedAt && inWin(e.closedAt));
+  const closed = eps.filter((e) => e.closedAt && inWin(e.closedAt) && !resetClose.has(`${e.symbol}@${e.closedAt.getTime()}`));
   const held = closed.map((e) => ((e.closedAt as Date).getTime() - e.openedAt.getTime()) / DAY);
   const avgHeld = held.length ? held.reduce((s, d) => s + d, 0) / held.length : null;
   const quick = held.filter((d) => d < 28).length;
 
-  const winFills = t.fills.filter((f) => inWin(f.at));
+  const winFills = t.fills.filter((f) => inWin(f.at) && f.tag !== "reset");
   const realized = winFills.reduce((s, f) => s + (f.realizedPnlCents ?? 0), 0);
   const commissions = winFills.reduce((s, f) => s + f.commissionCents, 0);
 
@@ -150,6 +156,12 @@ export function renderTrackRecord(t: TrackInputs): string {
   lines.push(
     `- **Activity (last ${t.windowDays} days):** ${t.ordersInWindow} orders · ${opened.length} new names opened · ${closed.length} full exits · ${t.openPositions} positions now.`,
   );
+  if (resetInWin.length) {
+    const d = resetInWin[resetInWin.length - 1].at.toISOString().slice(0, 10);
+    lines.push(
+      `- **Not yours:** ${resetInWin.length} fills on ${d} were the members' paper-account reset (the book was sold flat before the balance reset). They are left out of every number here and are not exits to grade.`,
+    );
+  }
   lines.push(
     `- **Holding period:** ${avgHeld != null ? `positions closed in the window were held ${avgHeld.toFixed(0)} days on average; ${quick} of ${closed.length} were sold within 4 weeks of opening` : "no positions closed in the window"}.`,
   );
@@ -187,11 +199,12 @@ export async function trackRecordBlock(windowDays = 30): Promise<string> {
     });
     const orderIds = [...new Set(trades.map((t) => t.orderId))];
     const [orders, positions, ordersInWindow] = await Promise.all([
-      prisma.order.findMany({ where: { id: { in: orderIds } }, select: { id: true, placedBy: true } }),
+      prisma.order.findMany({ where: { id: { in: orderIds } }, select: { id: true, placedBy: true, tag: true } }),
       prisma.position.findMany({ where: { qty: { gt: 0 } }, select: { symbol: true, qty: true } }),
       prisma.order.count({ where: { placedBy: "agent", createdAt: { gte: since } } }),
     ]);
     const placedBy = new Map(orders.map((o) => [o.id, o.placedBy]));
+    const tagOf = new Map(orders.map((o) => [o.id, o.tag]));
     const fills: Fill[] = trades.map((t) => ({
       symbol: t.symbol,
       side: t.side as "BUY" | "SELL",
@@ -201,6 +214,7 @@ export async function trackRecordBlock(windowDays = 30): Promise<string> {
       realizedPnlCents: t.realizedPnlCents,
       at: t.at,
       placedBy: placedBy.get(t.orderId) ?? "unknown",
+      tag: tagOf.get(t.orderId) ?? null,
     }));
 
     const rotSymbols = [...new Set(rotations(fills.filter((f) => f.at >= since)).flatMap((r) => [...r.sold, ...r.bought].map((f) => f.symbol)))];

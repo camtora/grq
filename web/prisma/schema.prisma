@@ -158,6 +158,10 @@ model Order {
   commissionCents   Int            @default(0)
   placedBy          String
   reason            String?
+  // D138 — "reset": a member's flatten sell placed before a paper-account balance reset. Not a
+  // portfolio decision: the agent's track record, the weekly review's grading and the retro leave
+  // it out (lib/reset.ts, agent/track-record.ts). Null for every other order.
+  tag               String?
   rejectReason      String?
   broker            String         @default("sim")
   // Broker-side order id (IBKR). Stored when an order is left PENDING (its fill

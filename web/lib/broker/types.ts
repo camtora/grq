@@ -29,6 +29,8 @@ export type PlaceOrderInput = {
   limitPriceCents?: number;
   placedBy: string;
   reason?: string;
+  // D138: "reset" marks a member's flatten sell before a paper-account balance reset (lib/reset.ts).
+  tag?: "reset";
   option?: OptionLeg;
 };
 

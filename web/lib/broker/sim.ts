@@ -133,7 +133,7 @@ export class SimBroker implements BrokerAdapter {
           limitPriceCents: input.limitPriceCents,
           status: "REJECTED",
           rejectReason,
-          placedBy: input.placedBy,
+          placedBy: input.placedBy, tag: input.tag,
           reason: input.reason,
         },
       });
@@ -186,7 +186,7 @@ export class SimBroker implements BrokerAdapter {
           qty: input.qty,
           limitPriceCents: input.limitPriceCents,
           status: "PENDING",
-          placedBy: input.placedBy,
+          placedBy: input.placedBy, tag: input.tag,
           reason: input.reason,
         },
       });
@@ -221,7 +221,7 @@ export class SimBroker implements BrokerAdapter {
           limitPriceCents: input.limitPriceCents,
           status: "REJECTED",
           rejectReason,
-          placedBy: input.placedBy,
+          placedBy: input.placedBy, tag: input.tag,
           reason: input.reason,
         },
       });
@@ -279,7 +279,7 @@ export class SimBroker implements BrokerAdapter {
               filledQty: input.qty,
               avgFillPriceCents: price,
               commissionCents,
-              placedBy: input.placedBy,
+              placedBy: input.placedBy, tag: input.tag,
               reason: input.reason,
             },
           });
@@ -362,7 +362,7 @@ export class SimBroker implements BrokerAdapter {
       const order = await prisma.order.create({
         data: {
           symbol, side: input.side, type: input.type, qty: contracts, status: "REJECTED", rejectReason,
-          placedBy: input.placedBy, reason: input.reason,
+          placedBy: input.placedBy, tag: input.tag, reason: input.reason,
           secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
         },
       });
@@ -390,7 +390,7 @@ export class SimBroker implements BrokerAdapter {
         const order = await tx.order.create({
           data: {
             symbol, side: "BUY", type: input.type, qty: contracts, status: "FILLED", filledQty: contracts,
-            avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, reason: input.reason,
+            avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, tag: input.tag, reason: input.reason,
             secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
           },
         });
@@ -432,7 +432,7 @@ export class SimBroker implements BrokerAdapter {
       const order = await tx.order.create({
         data: {
           symbol, side: "SELL", type: input.type, qty: contracts, status: "FILLED", filledQty: contracts,
-          avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, reason: input.reason,
+          avgFillPriceCents: mark, commissionCents: commission, placedBy: input.placedBy, tag: input.tag, reason: input.reason,
           secType: "OPT", right, strikeCents: opt.strikeCents, expiry: expiryDate, multiplier,
         },
       });
@@ -488,6 +488,7 @@ export class SimBroker implements BrokerAdapter {
           limitPriceCents: o.limitPriceCents ?? undefined,
           placedBy: o.placedBy,
           reason: o.reason ?? undefined,
+          tag: o.tag === "reset" ? "reset" : undefined,
         },
         o.symbol,
         price,

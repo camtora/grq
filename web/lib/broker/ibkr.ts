@@ -365,7 +365,7 @@ export class IBKRBroker implements BrokerAdapter {
         const o = await prisma.order.create({
           data: {
             symbol: input.symbol.toUpperCase(), side: input.side, type: input.type, qty: input.qty,
-            limitPriceCents: input.limitPriceCents, status: "PENDING", placedBy: input.placedBy,
+            limitPriceCents: input.limitPriceCents, status: "PENDING", placedBy: input.placedBy, tag: input.tag,
             reason: input.reason, broker: "ibkr", brokerOrderId: orderId,
           },
         });
@@ -404,7 +404,7 @@ export class IBKRBroker implements BrokerAdapter {
       data: {
         symbol, side: input.side, type: input.type, qty: input.qty, limitPriceCents: input.limitPriceCents,
         status: "FILLED", filledQty: input.qty, avgFillPriceCents: priceCents, commissionCents,
-        placedBy: input.placedBy, reason: input.reason, broker: "ibkr",
+        placedBy: input.placedBy, tag: input.tag, reason: input.reason, broker: "ibkr",
       },
     });
     await this.settleFill(
@@ -551,7 +551,7 @@ export class IBKRBroker implements BrokerAdapter {
       data: {
         symbol: input.symbol.toUpperCase(), side: input.side, type: input.type, qty: input.qty,
         limitPriceCents: input.limitPriceCents, status: "REJECTED", rejectReason,
-        placedBy: input.placedBy, reason: input.reason, broker: "ibkr",
+        placedBy: input.placedBy, tag: input.tag, reason: input.reason, broker: "ibkr",
       },
     });
     return { ok: false, orderId: order.id, rejectReason };
