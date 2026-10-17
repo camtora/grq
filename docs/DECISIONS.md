@@ -4346,7 +4346,9 @@ rhythm text and `lib/changelog.ts` were brought up to date (they had stopped at 
 stored as rows — grading the council took a grep through check-in notes; proposed, not yet approved.
 
 **Addendum, 2026-10-16 (day 1 of the watch).** Two sells fired, both on price levels written under v2.86 before the
-deploy (VNP's intraday C$27.20 cut, 12:57 ET 10/15; NVDA's two-close $218 rule, 05:07 ET 10/15), −C$131 and −US$66.
+deploy: VNP's daily-close stop at C$28.50 was set in the 10/10 dossier and its intraday C$27.20 backstop at 12:57 ET
+10/15 (it closed 10/15 at C$28.53, three cents above the stop, and was held); NVDA's two-close $218 rule at 05:07 ET
+10/15. Today's 10:30 agenda item restated those lines, it did not move them. −C$131 and −US$66.
 Both notes also cite "Hold/58, below the bar" as corroboration; the trigger was the level, so not a rollback on its
 own — Cam's read too. NVDA's timing moved intraday the same morning (agenda #673, 10:30 ET, "avoid the weekend gap")
 where the pre-market note had said the 10/19 first check-in. Cash 13.6% → 19.7% of NAV, outside the 15% band: flagged
