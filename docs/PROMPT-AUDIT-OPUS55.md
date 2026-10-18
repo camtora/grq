@@ -4,7 +4,7 @@ Sep 30, 2026 · @Cam
 
 Fable audited every prompt GRQ sends to Claude against Anthropic's current guidance for Opus 5.5 (decision tier) and Haiku 4.5 (triage): 37 findings, 10 high-confidence. All four stages have shipped (Status, below). The summary for Graham comes first; the council's two verdicts and the planned launch rehearsal follow the plan.
 
-## For Graham: what you need to know (as of Oct 15)
+## For Graham: what you need to know (as of Oct 18)
 
 **The agent's brain changed, and its instructions were rewritten for it.** On Sep 23 the decision sessions moved to Claude Opus 5.5. Its standing instructions had been written for the older model, so they were audited (37 findings) and the fixes shipped in four stages, the last one tonight. Nothing in the money rules moved: the order gate, the kill switch, position limits, stops and the no-short, no-options, no-margin rules are exactly as they were.
 
@@ -18,7 +18,20 @@ Fable audited every prompt GRQ sends to Claude against Anthropic's current guida
 
 **The soak clock keeps running.** A brain change does not restart it, or it would never end. The day count is long satisfied; whether the run has been clean is a judgement for the two of you.
 
-**What is asked of you, by Wednesday Oct 21:** one decision. The launch size and split are set: US$50,000, all in USD, the same as the June 26 reset (Cam, Oct 16). What remains is the pass marks for the new book, written before the flatten so they cannot be re-read afterwards. A proposal is in the rehearsal table at the end: cash at most 50% by trading day 5, 30% by day 10, 15% by day 20; no round trip inside 30 days; every buy at or above the bar with a written thesis, invalidation and a stop; no sell that cites a score. Accept it, change a number, or add one. The few weeks after Oct 23 are the watch before any funds are added.
+**What is asked of you, by Wednesday Oct 21:** one decision here, and the eight questions at the end of this card on the site. The launch size and split are set: US$50,000, all in USD, the same as the June 26 reset (Cam, Oct 16). What remains is the pass marks for the new book, written before the flatten so they cannot be re-read afterwards. A proposal is in the rehearsal table at the end: cash at most 50% by trading day 5, 30% by day 10, 15% by day 20; no round trip inside 30 days; every buy at or above the bar with a written thesis, invalidation and a stop; no sell that cites a score. Accept it, change a number, or add one. The few weeks after Oct 23 are the watch before any funds are added.
+
+**What Alfred has been asking for, and your questions (Oct 18).** Every Saturday review since June 14 has ended with proposed strategy changes "pending Cam & Graham's approval". Nothing recorded an answer, so he asked for the same things week after week (a cap on one name, eight times) and asked for things that had already shipped (an order-cancel tool, three days after one landed). The nineteen weeks of asks fall into six themes:
+
+| Theme | Asked | Where it stands |
+| --- | --- | --- |
+| A cap on one name or one theme, 13 to 15% of the fund | 8 of 19 weeks | Never adopted. The hard limit is 80% in one name; the Sep 30 change chose incentives over caps. Your question 3. |
+| Let him free universe slots himself | Aug 15 to Sep 12 | Shipped Sep 22. Closed. |
+| An index ETF for idle US dollars | Jun 27 and Oct 3 | His instructions say to park idle USD in VOO, but VOO cannot be bought. Your question 4. |
+| Stops no tighter than about two weekly moves, in code | Aug 1 to Oct 17 | He pinned it as a lesson twice; the code rule is the stage 5 proposal. Your question 2. |
+| Fewer names, fewer new positions, a tougher bar, options "walls" retired as a reason to buy | Every week since Sep 26 | Caps were declined Sep 30; the reset clears the current book. Your questions 6, 7 and 8. |
+| Plumbing: a stop that reconciles before re-firing, a cancel tool, an order budget, the day-change figure | Jul 18, Sep 26, Oct 17 | The first three shipped before he asked. The day-change figure was a real bug, fixed Oct 18. |
+
+**The questions are at the end of this card on the site, with buttons.** Eight of them, due Wednesday Oct 21: the pass marks (above), the stop rule, the single-name cap, idle-dollar ballast, the idle-cash check-in question, new names per week, options walls, and the size of the new book. Pick an answer, add a note if it needs one, and save; both of you see both answers, and they go into Thursday's plan. The full review of the nineteen weeks is its own section below.
 
 **Where to look:** the Status table below for what shipped and what it measured; the Manual tab's "What's changed" for the same story in owner language; the Decision log for the engineering record (D128 to D137).
 
@@ -106,6 +119,25 @@ The council is advisory. Cam decides the restart.
 2. The rehearsal is set for Oct 23 (section below), so the flatten clears the legacy class by construction. What survives the reset is a rule for new starters: a written stop no tighter than about two weekly moves (or the code stop), set in the dossier that opens the position, moved only with a dated reason.
 3. If the rehearsal slips, decide the twelve as a class, not one at a time: re-underwrite each with a thesis and a stop sized as above, or exit the ones that would not be bought today on purpose, with the tax treatment chosen.
 4. Make the stop a structured field on the dossier, beside the near and far targets it already carries, so the test, the position check and the Haiku triage read the number the agent wrote.
+
+## The weekly reviews' proposals, Jun 14 to Oct 17 (reviewed Oct 18)
+
+Every one of the 19 Saturday reviews carried a "proposed strategy adjustments" section that said it needed both members' approval. Nothing recorded an answer, so the review re-raised the same asks week after week, and asked for things that had already shipped because it could not see the build diary. Six themes account for nearly all of it; one of the asks in the Oct 17 review was a real bug.
+
+| Theme | Weeks raised | Where it stands |
+| --- | --- | --- |
+| Single-name and axis concentration caps: a 35% axis cap, trim TSM to 15%, 14% then 13% ceilings, Hold-rated names capped at 8% | 8 of 19 | Never adopted as a dial. The live AGGRESSIVE dial allows 80% in one name. D131 chose incentives over caps, so this stays the agent's own discipline. Open: question 3. |
+| The universe cap is the bottleneck; let the agent demote dead names | 3 weeks, Aug 15 to Sep 12 | Shipped as D126 on Sep 22. Closed. |
+| An index ETF as idle-USD ballast; make VOO buyable | Jun 27 and Oct 3, plus a Jul 31 lesson calling VOO "a phantom" | Contradictory: the persona tells it to park idle USD in VOO, but VOO is a CANDIDATE it cannot buy. Open: question 4. |
+| Stop width: no stop tighter than roughly 1.5 to 2 weekly moves, no orphan stubs, put it in code | Aug 1, Sep 19, Oct 3, Oct 10, Oct 17 | Pinned as a permanent lesson on Sep 19 and Oct 17. The code rule plus a structured stop field on the dossier is the stage 5 proposal. Open: question 2. |
+| Breadth and turnover: raise the bar to 74 or half-size starters, cap the book at 12 to 15 names, 2 new names a week, a Monday prune, retire put/call walls as entry anchors | Every week since Sep 26 | The per-week starter cap is the kind of cap D131 declined. The Oct 22 reset clears the legacy below-bar names by construction, and the rehearsal pass marks answer the consolidation question. The walls item was never ruled on. Open: questions 6, 7 and 8. |
+| Plumbing: the stop must reconcile before re-firing, a cancel tool, an order budget, the day-change feed | Jul 18, Sep 26, Oct 17 | D118, D127 and D129 shipped the first three, each before the review that asked. The day-change feed was the bug below. |
+
+The early-summer asks were different in kind: deploy the XIC tranche, deploy more cash, keep two or three independent thesis axes. That last one is the only proposal with a recorded approval, on Jun 21, and it lives in the persona text. The capital recommendation was HOLD in 16 of 19 weeks and a modest contribution in the other three.
+
+**The bug.** The day-change percentage was measured against the close two sessions back, not the prior one, since the Phase 2 commit on Jun 12: the quote fetch asked Yahoo for a two-day chart and read the chart's previous close, which is the close before the chart begins. On Friday Oct 16 NVDA's true day move was −1.43% and the feed said −3.24%; all ten holdings checked showed the same. The agent's 4%-move position trigger reads that number, so position check-ins fired on two-day moves, and it is the number the stage 4 watch counts. Fixed Oct 18: the prior close is taken from the chart's own bars (D139); the correct figure appears with the next quote refresh. The agent had noticed and was checking real closes before acting on any price line, so no trade went wrong because of it.
+
+**What shipped Oct 18 (D139).** The questions are a form on the site, at the end of the Graham card: each member picks an answer, adds a note if it needs one, and saves; every answer is recorded with its time and both members see both. The Saturday review now reads the week's build diary, its own proposals from the week before and the members' standing answers before it proposes anything, and lists what is still open in one line each instead of pitching it again. Agent v2.88. Nothing in the money rules or the decision prompts changed.
 
 ## The council on resetting the paper account (Oct 15, later)
 

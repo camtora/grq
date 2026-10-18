@@ -24,6 +24,9 @@ import { fmtUsd } from "../lib/smart-money/types";
 import { commitsInWindow } from "../lib/github";
 import { refreshOptions, optionsLine } from "../lib/options/store";
 import { refreshSocialOne, socialLine } from "../lib/social/store";
+import { proposalsSection, reviewMemoryBlock } from "./review-memory";
+import { standingAnswers } from "../lib/plan-answers";
+import { planQuestion } from "../lib/plan-questions";
 
 
 type SessionOpts = {
@@ -1115,11 +1118,26 @@ Lunchtime, market open. Write a SHORT brief for Cam & Graham on their phones: wh
 export async function runWeeklyReview(): Promise<void> {
   const ctx = await buildContext();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60_000);
-  const [trades, decisions] = await Promise.all([
+  // D139: the review remembers what shipped (the build diary), what it proposed last week and what
+  // the members answered — so it stops re-proposing decided items and asking for what has landed.
+  const [trades, decisions, diary, lastWeekly, answers] = await Promise.all([
     prisma.trade.findMany({ where: { at: { gte: weekAgo } }, orderBy: { at: "asc" } }),
     prisma.journalEntry.findMany({ where: { kind: "DECISION", at: { gte: weekAgo } }, orderBy: { at: "asc" } }),
+    prisma.report.findMany({ where: { kind: "CHANGE", date: { gte: weekAgo } }, orderBy: { date: "asc" } }),
+    prisma.report.findFirst({ where: { kind: "WEEKLY", date: { lt: startOfEtDay() } }, orderBy: { date: "desc" } }),
+    standingAnswers().catch(() => []),
   ]);
+  const memory = reviewMemoryBlock({
+    diary: diary
+      .filter((d) => !(d.statsJson ?? "").includes('"commits":0')) // a quiet day is a placeholder, not a change
+      .map((d) => ({ date: etDateStr(d.date), title: d.title, body: d.body })),
+    lastProposals: lastWeekly ? proposalsSection(lastWeekly.body) : null,
+    lastProposalsDate: lastWeekly ? etDateStr(lastWeekly.date) : null,
+    answers: answers.map((a) => ({ question: planQuestion(a.questionKey)?.title ?? a.questionKey, name: a.name, choice: a.choiceLabel, note: a.note, date: etDateStr(a.at) })),
+  });
   const prompt = `${ctx}
+
+${memory}
 
 # TASK: Weekly deep review — ${etDateStr()}
 
@@ -1130,7 +1148,7 @@ Do the full review, using tools:
 1. RETRO entries (write_journal kind=RETRO) for every position closed this week and every resolved thesis — outcome vs thesis, right-for-the-right-reasons or lucky. **After each RETRO, call grade_sources** for every source that thesis cited (+1 pointed right, −1 misleading, 0 neutral) — including signal families like signal:rsi. The scoreboard is how the fund learns whom to trust.
 2. LESSON entries for durable patterns worth carrying forward (only real ones).
 2a. GRADE YOUR TRACK RECORD (the "Your track record" block in your context): for each rotation this week and last, did the swap beat simply holding? Report the holding period and turnover, and name any churn plainly — a round trip inside a month, a starter sold to fund another starter. This goes in the report.
-3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades (re-read each name's CURRENT dossier before grading — never carry forward a data error a later refresh already corrected, and don't flag a name for "refresh" without confirming the issue still exists), lessons added, proposed strategy adjustments (these need Cam & Graham's approval — say so), source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
+3. Then produce the weekly report body in markdown: performance attribution, open-thesis grades (re-read each name's CURRENT dossier before grading — never carry forward a data error a later refresh already corrected, and don't flag a name for "refresh" without confirming the issue still exists), lessons added, proposed strategy adjustments — NEW ones only (these need Cam & Graham's approval — say so; the members answer them on the site, see WHAT YOU ALREADY PROPOSED above), then one line each under "Still open" for anything you proposed before that has no answer yet, with the date first raised — never re-pitch it, never re-ask for something that shipped or was answered — source hit-rate notes, a soak-cleanliness verdict for the week (clean / incident + what), and finish with the CAPITAL RECOMMENDATION: contribute / hold / withdraw, honestly framed (more capital amortizes overhead, it does not raise ROI %).
 
 Your ENTIRE final response must be just the report body.`;
   const body = await runSession({ label: "weekly-review", prompt, model: MODELS.decision, effort: EFFORT.report, withTools: true, maxTurns: 30 });

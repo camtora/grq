@@ -32,6 +32,25 @@ type ChartMeta = {
   currency?: string;
 };
 
+/** The prior session's close, taken from the chart's own bars. Yahoo's `chartPreviousClose` is the
+ *  close before the chart's RANGE begins, not before the last session: with `range=2d` it is the
+ *  close two sessions back, so the "day change" built on it was a TWO-day change — every quote
+ *  from 2026-06-12 to 2026-10-18 carried that, and the agent's 4%-move trigger, the home-page
+ *  movers and Today all read it (D139). The bars are chronological and the last one is the
+ *  session the price belongs to, so the prior close is the last priced bar before it; the meta
+ *  field is only the fallback for a one-bar chart (a new listing), where it is right. */
+export function previousCloseFromChart(
+  closes: readonly (number | null | undefined)[],
+  meta: Pick<ChartMeta, "chartPreviousClose" | "previousClose">,
+): number | null {
+  for (let i = closes.length - 2; i >= 0; i--) {
+    const c = closes[i];
+    if (typeof c === "number" && c > 0) return c;
+  }
+  const m = meta.chartPreviousClose ?? meta.previousClose;
+  return typeof m === "number" && m > 0 ? m : null;
+}
+
 async function fetchOne(symbol: string): Promise<FetchedQuote | null> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     await toYahoo(symbol),
@@ -45,15 +64,16 @@ async function fetchOne(symbol: string): Promise<FetchedQuote | null> {
     });
     if (!res.ok) return null;
     const json = (await res.json()) as {
-      chart?: { result?: { meta?: ChartMeta }[] };
+      chart?: { result?: { meta?: ChartMeta; indicators?: { quote?: { close?: (number | null)[] }[] } }[] };
     };
-    const meta = json.chart?.result?.[0]?.meta;
+    const result = json.chart?.result?.[0];
+    const meta = result?.meta;
     const price = meta?.regularMarketPrice;
     if (!meta || typeof price !== "number" || !(price > 0)) return null;
 
     const mid = Math.round(price * 100);
     const half = Math.max(1, Math.round((mid * SYNTH_SPREAD_BPS) / 10_000 / 2));
-    const prev = meta.chartPreviousClose ?? meta.previousClose;
+    const prev = previousCloseFromChart(result?.indicators?.quote?.[0]?.close ?? [], meta);
     return {
       symbol: symbol.toUpperCase(),
       midCents: mid,

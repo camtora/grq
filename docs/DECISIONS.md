@@ -4364,6 +4364,48 @@ a two-step deploy (code first, then the column).
 
 **Addendum, 2026-10-16, late.** Cam asked whether stop-outs on below-bar starters are in the plan. They were not: the stage-3 line keeps "a stop fires" as a valid exit and the written test cannot see one. Added to the review doc as plan-table row 6 and a "Stage 5, proposed Oct 16" section, for the Oct 22 decision: measurement only this week (every sell tagged thesis-break / stop / score, stop width in weekly moves); then a stop-width rule for new starters, the twelve below-bar holdings decided as a class (an Oct 23 launch rehearsal clears them by construction), and the stop as a structured dossier field. The evidence table (16 holdings, room to stop in weekly moves) narrows the live risk to ATRL, TDY, GD and GOOGL's re-review line. The Graham summary now carries the Oct 16 cash flag (19.7%). The rehearsal's three build items (reset-trade tag + two exclusions, the rebaseline script's hard-coded US$50k/C$79.61, the per-name system notes) are NOT built as of tonight, and the three member decisions (size + split, pass/fail thresholds, the date) are open.
 
+### D139 — The plan's questions are asked on the site and recorded; the review remembers; a day's change is one day's change (Cam, 2026-10-18)
+
+**Context.** Cam asked what the weekly reviews' "proposed strategy adjustments" had amounted to. All 19 Saturday
+reviews since 2026-06-14 ended with proposals "pending Cam & Graham's approval", and nothing anywhere recorded an
+answer: the only approval on record is the Jun 21 diversification rule, written into the persona by hand. So the
+review re-raised the same asks week after week (a single-name cap in 8 of 19 weeks) and asked for things that had
+already shipped (the stop-reconcile fix D118 two days before the Jul 18 ask; the cancel tool D127 three days before
+the Sep 26 ask; the order budget D129 two days before it) because it could not see the build diary. One ask in the
+Oct 17 review was a real bug.
+
+**The bug (day change).** `lib/broker/yahoo.ts` asked Yahoo for a two-day chart and took `meta.chartPreviousClose`
+as the prior close. That field is the close before the chart's RANGE begins, so with `range=2d` it is the close two
+sessions back, and every `Quote.dayChangeBps` since the Phase 2 commit (2026-06-12) was a two-day change. Verified
+on Sat Oct 18 against the cached quotes of ten holdings: each one's implied prior close equalled Wednesday's close,
+not Thursday's (NVDA: feed −3.24%, true Friday move −1.43%). Readers of that number: the agent's 4%-move position
+trigger (`runner.ts`, `HARD.triggerMoveBps`) — so position check-ins fired on two-day moves, and the stage 4 watch
+was counting them — the agent's positions context, the home-page movers, Today, the mobile feed, the race/desk
+contexts and `fmp.ts`'s derived prior close. **Fix:** `previousCloseFromChart()` takes the prior close from the
+chart's own bars (the last priced bar before the current session) and uses the meta field only for a one-bar chart;
+`test/yahoo-prev-close.test.ts` pins it with the NVDA fixture. The agent had noticed and was checking real closes
+before acting on any price line; no trade went wrong because of it.
+
+**The loop (questions, answers, memory).** Cam: *"pose the questions to Graham, with the ability for him to submit
+answers that we record. we can then review them prior to Thursday night and include it in our plan."*
+- `lib/plan-questions.ts` — the round's questions as data (key, title, the ask in owner language, options). Eight
+  for the Oct 22 round: the pass marks, the stop-width rule in code, a single-name cap, idle-USD ballast (VOO), the
+  idle-cash check-in question, starters per week, put/call walls as entry anchors, the size of the new book.
+- `PlanAnswer` (append-only; the newest row per round+question+email is the standing answer — a changed mind is
+  kept) · `lib/plan-answers.ts` (`standingAnswers`, `recordAnswer`) · `POST/GET /api/plan/answers` (members only
+  both ways; `memberFromRequest`) · `components/PlanQuestions.tsx` on the "Graham, start here" card of
+  /how-it-works (Opus 5.5 plan tab): pick, note, save per question; both members see both answers with times.
+- `agent/review-memory.ts` (pure, tested) — the Saturday review's prompt now carries the week's CHANGE diary
+  (quiet days skipped), the previous WEEKLY's "Proposed strategy" section, and the members' standing answers,
+  with the instruction: new proposals only; answered items are decisions; unanswered ones go under "Still open"
+  in one line each with the date first raised; shipped items are closed. `runWeeklyReview` only — no decision
+  prompt changed. Agent **v2.88-phase4**.
+- The review doc (For Graham + a new section "The weekly reviews' proposals, Jun 14 to Oct 17") carries the
+  themes table and the bug; re-exported to `docs/PROMPT-AUDIT-OPUS55.md`.
+
+**Not done, on purpose.** The questions are curated by hand from the reviews, not generated from them; a round's
+keys are stable and a new round gets new keys. No cap, dial or gate changed — the answers are read Thursday.
+
 ### D138 — The paper-account reset is scheduled: flatten Thu 2026-10-22, portal reset that night, Fri 2026-10-23 is day 1 (Cam, 2026-10-16)
 
 Cam, late on 10/16: "we do another reset on friday. thursday night at midnight, it has to happen, watch for another few weeks,

@@ -1907,3 +1907,18 @@ model TermsAcceptance {
   @@unique([email, version])
   @@index([at])
 }
+
+// The members' recorded answers to the plan's open questions (D139, Cam 2026-10-18). Append-only:
+// one row per submission; the newest per (round, question, email) is the standing answer. The
+// questions live in code (lib/plan-questions.ts) so a key is stable within its round.
+model PlanAnswer {
+  id          Int      @id @default(autoincrement())
+  round       String
+  questionKey String
+  email       String
+  choice      String
+  note        String?
+  at          DateTime @default(now())
+
+  @@index([round, questionKey, email, at])
+}

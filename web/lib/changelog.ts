@@ -17,6 +17,22 @@ export type ChangeEntry = {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    date: "2026-10-18",
+    title: "The plan's questions are asked on the site, and the answers are recorded",
+    what: "The 'Graham, start here' card on this page now ends with the open questions for the Oct 22 decision — the pass marks for the new book, a stop-width rule, a single-name cap, idle-cash ballast, the idle-cash check-in question, new names per week, options 'walls' as a reason to buy, and the size of the new book. Each member picks an answer, adds a note if it needs one, and saves; every answer is recorded with its time and both members see both. The Saturday review now reads what shipped that week, what it proposed last week and these answers before it proposes anything, and lists what is still open in one line each instead of pitching it again.",
+    why: "For 19 weeks the review proposed strategy changes 'pending Cam & Graham's approval' with nowhere for an answer to land. It asked for a single-name cap in 8 of 19 weeks and for an order-cancel tool three days after one shipped. A decision that is recorded is a decision the agent can be held to, and one it stops asking for.",
+    tag: "Transparency",
+    dRef: "D139",
+  },
+  {
+    date: "2026-10-18",
+    title: "A day's change is now one day's change",
+    what: "Every 'today' percentage on the site and in Alfred's view — the home-page movers, Today, the positions list, the figure that decides whether a holding moved enough to wake him — was measured against the close two sessions back, not the prior one. On Friday Oct 16 NVDA showed −3.2% when the day's move was −1.4%. Fixed at the source; the correct figure appears with the next quote refresh. Alfred had noticed and was checking real closes before acting on any price line, so no trade went wrong because of it.",
+    why: "The quote feed read Yahoo's 'previous close' for a two-day chart, which is the close before the chart starts. It had been that way since June 12. The 4%-move checks counted in this month's test were counting two-day moves.",
+    tag: "Operations",
+    dRef: "D139",
+  },
+  {
     date: "2026-10-15",
     title: "Open to invited readers, with terms at the door",
     what: "Since Sep 6 a third kind of reader exists — a 'user' (Jose, Dave, now anyone on the site's sign-in list): they get the research and education side of GRQ and never the book — no positions, P&L, fills, reports or Alfred's write-ups about names. Since Oct 15 a user reads and accepts the terms before anything else opens: what GRQ is (a joke name on a private fund), that nobody can invest in it, that nothing is advice, that Alfred is an AI nobody reviews per call, that the fund may hold what it rates, and that visits are logged. Every page footer now says 'Not investment advice. Alfred is an AI. Nothing here is an offer to invest.'",

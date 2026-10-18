@@ -24,6 +24,10 @@ import { getPromptAudit, splitSection, sectionBody } from "@/lib/prompt-audit";
 import { monthToDate, vsContributions } from "@/lib/mtd";
 import Avatar from "@/components/Avatar";
 import { personByName } from "@/lib/people";
+import PlanQuestions from "@/components/PlanQuestions";
+import { PLAN_QUESTIONS, PLAN_ROUND } from "@/lib/plan-questions";
+import { standingAnswers } from "@/lib/plan-answers";
+import { memberKeyForEmail } from "@/lib/users";
 
 const cad = (cents: number) => `C$${(cents / 100).toLocaleString("en-CA", { maximumFractionDigits: 0 })}`;
 
@@ -76,7 +80,9 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
     // at"). The doc stays the single source: the section lives there, the page only moves it up.
     const split = audit ? splitSection(audit.md, "For Graham") : { section: null, rest: "" };
     const graham = personByName("Graham");
-    const [mtd, life] = split.section ? await Promise.all([monthToDate().catch(() => null), vsContributions().catch(() => null)]) : [null, null];
+    const [mtd, life, planAnswers] = split.section
+      ? await Promise.all([monthToDate().catch(() => null), vsContributions().catch(() => null), standingAnswers().catch(() => [])])
+      : [null, null, []];
     const pct = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
     const cad = (cents: number) => `${cents >= 0 ? "+" : "−"}C$${Math.round(Math.abs(cents) / 100).toLocaleString("en-CA")}`;
     const sinceLabel = life?.since ? life.since.toLocaleDateString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric" }) : null;
@@ -102,7 +108,7 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                   <Avatar src={graham?.photo ?? null} name="Graham" size="h-10 w-10" />
                   <div>
                     <div className="text-sm font-bold uppercase tracking-wider text-amber-300">Graham, start here</div>
-                    <div className="text-xs text-teal-200/50">The short version, as of Oct 15. Everything below is the record behind it.</div>
+                    <div className="text-xs text-teal-200/50">The short version, as of Oct 18, with your questions at the end of it. Everything below is the record behind it.</div>
                   </div>
                   {/* The headline figure, LIVE from the settled NAV history so it never freezes at the text's Oct 15 numbers. */}
                   {mtd && (
@@ -134,6 +140,13 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                 <div className="text-sm text-teal-100/85">
                   <Md text={sectionBody(split.section)} />
                 </div>
+                {/* The plan's open questions, answered in place and recorded (D139). Members decide; a viewer sees the answers. */}
+                <PlanQuestions
+                  round={PLAN_ROUND}
+                  questions={PLAN_QUESTIONS}
+                  answers={planAnswers.map((a) => ({ ...a, at: a.at.toISOString() }))}
+                  me={memberKeyForEmail(session.email)}
+                />
               </Card>
             )}
             <Card className="p-6 text-sm text-teal-100/80">
