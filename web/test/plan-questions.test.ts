@@ -13,7 +13,30 @@ describe("plan questions", () => {
     for (const q of PLAN_QUESTIONS) {
       assert.ok(q.options.length >= 2, q.key);
       assert.equal(new Set(q.options.map((o) => o.key)).size, q.options.length, q.key);
-      assert.ok(q.title.trim() && q.means.trim() && q.asks.trim(), q.key);
+      assert.ok(q.title.trim() && q.simple.trim() && q.means.trim() && q.asks.trim(), q.key);
+    }
+  });
+  // Graham, 2026-10-20, after two drafts he could not answer: "rewrite so a 10 year old can
+  // understand". The simple version and the title are held to that: short sentences and none of the
+  // fund's vocabulary. A word on this list has to be said in everyday words instead (a give-up
+  // price, not a stop; a side bet, not an option; the money, not the book).
+  it("keep the simple version and the title in a 10-year-old's words", () => {
+    const jargon = [
+      "position", "thesis", "invalidation", "stop-loss", "stop loss", "etf", "index fund", "option", "sector", "conviction",
+      "ballast", "round trip", "volatil", "hedge", "dealer", "nav", "starter", "cap ", "capped", "weekly move", "ticker",
+      "liquidity", "drawdown", "exposure", "allocat", "benchmark", "portfolio", "deploy", "bar ", "the bar", "gate", "mandate",
+      "idle", "consolidat", "%",
+    ];
+    for (const q of PLAN_QUESTIONS) {
+      for (const text of [q.title, q.simple]) {
+        const lower = ` ${text.toLowerCase()} `;
+        for (const w of jargon) assert.ok(!lower.includes(w), `${q.key}: "${w}" is jargon in: "${text.slice(0, 70)}"`);
+        for (const sentence of text.replace(/\n+/g, " ").split(/(?<=[.?!])\s+/)) {
+          const words = sentence.trim().split(/\s+/).filter(Boolean).length;
+          assert.ok(words <= 22, `${q.key}: a ${words}-word sentence: "${sentence.slice(0, 80)}"`);
+        }
+      }
+      for (const o of q.options) assert.ok(o.label.split(/\s+/).length <= 8, `${q.key}: a long option label: "${o.label}"`);
     }
   });
   // Written for Graham (2026-10-20): he could not answer the first draft. Two rules the text must
@@ -22,7 +45,7 @@ describe("plan questions", () => {
   // or the tap asks the agent to improvise a definition of a term we chose.
   it("say dollars wherever they say a percentage, and only link glossary words that exist", () => {
     for (const q of PLAN_QUESTIONS) {
-      for (const text of [q.means, q.asks]) {
+      for (const text of [q.simple, q.means, q.asks]) {
         for (const para of text.split(/\n\s*\n/)) {
           if (para.includes("%")) assert.ok(para.includes("$"), `${q.key}: a percentage with no dollars beside it: "${para.slice(0, 80)}"`);
         }

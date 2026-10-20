@@ -129,10 +129,19 @@ export default function PlanQuestions({
               <div className="text-sm font-semibold text-teal-50">
                 <span className="tabular-nums text-amber-300">{i + 1}.</span> {q.title}
               </div>
-              <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">What it means</div>
-              <Plain text={q.means} className="mt-0.5 text-xs leading-relaxed text-teal-100/80" />
-              <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">Why we're asking</div>
-              <Plain text={q.asks} className="mt-0.5 text-xs leading-relaxed text-teal-200/60" />
+              {/* The simple version leads (Graham, 2026-10-20: "rewrite so a 10 year old can understand");
+                  the defined-terms version and the history fold under "More detail". */}
+              <Plain text={q.simple} className="mt-2 text-sm leading-relaxed text-teal-100/90" />
+              <details className="mt-2 group">
+                <summary className="cursor-pointer select-none text-xs text-teal-300/80 hover:text-teal-200">
+                  <span className="group-open:hidden">More detail</span>
+                  <span className="hidden group-open:inline">Less detail</span>
+                </summary>
+                <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">What it means</div>
+                <Plain text={q.means} className="mt-0.5 text-xs leading-relaxed text-teal-100/80" />
+                <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">Why we're asking</div>
+                <Plain text={q.asks} className="mt-0.5 text-xs leading-relaxed text-teal-200/60" />
+              </details>
               <div className="mt-3 flex flex-wrap gap-2">
                 {q.options.map((o) => {
                   const on = d.choice === o.key;
