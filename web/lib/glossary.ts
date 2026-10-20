@@ -252,8 +252,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
   confidence: {
     term: "Confidence",
-    def: "How sure the agent (or a signal) is about a call, 0–100. A self-assessment, not a probability — and the agent needs ≥75% conviction before the gate will let it buy.",
-    example: "The agent can like a name at 60%, but the gate won't let it buy until conviction clears 75%.",
+    def: "How sure the agent (or a signal) is about a call, 0–100. A self-assessment, not a probability — and the agent needs a score of 70 or higher before the gate will let it buy (the bar was 75 until Jun 29, 2026).",
+    example: "The agent can like a name at 60%, but the gate won't let it buy until the score clears 70.",
     related: ["recommendation", "agent-call", "dossier", "confidence-levers"],
   },
   "confidence-levers": {

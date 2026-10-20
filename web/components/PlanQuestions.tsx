@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { PlanQuestion } from "@/lib/plan-questions";
+import { PLAN_INTRO, type PlanQuestion } from "@/lib/plan-questions";
+import Term from "./Term";
 
 // The plan's questions, answered in place (D139). Each member picks an answer and may add a note;
 // Save appends a PlanAnswer row. Both members' standing answers show under each question, so the
@@ -18,6 +19,30 @@ export type ShownAnswer = {
 };
 
 type Draft = { choice: string; note: string; savedAt: string | null; dirty: boolean; busy: boolean; err: string };
+
+// The question text is plain prose for Graham (2026-10-20): paragraphs split on a blank line and a
+// `[[slug|label]]` is a glossary word that explains itself on tap (lib/glossary.ts). No markdown
+// otherwise, so nothing in the text can surprise the layout.
+function Plain({ text, className }: { text: string; className: string }) {
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      {text.split(/\n\s*\n/).map((para, i) => (
+        <p key={i}>
+          {para.split(/(\[\[[^\][|]+\|[^\][]+\]\])/).map((part, j) => {
+            const m = /^\[\[([^\][|]+)\|([^\][]+)\]\]$/.exec(part);
+            return m ? (
+              <Term key={j} k={m[1].trim().toLowerCase()} className="underline decoration-dotted underline-offset-2">
+                {m[2]}
+              </Term>
+            ) : (
+              part
+            );
+          })}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 const fmtEt = (iso: string) =>
   new Date(iso).toLocaleString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -85,6 +110,7 @@ export default function PlanQuestions({
   return (
     <div className="mt-6 border-t border-amber-400/20 pt-5">
       <div className="mb-1 text-sm font-bold uppercase tracking-wider text-amber-300">Your answers, before Thursday</div>
+      <p className="mb-2 text-sm text-teal-100/85">{PLAN_INTRO}</p>
       <p className="mb-1 text-sm text-teal-100/85">
         {questions.length} questions for Graham and Cam, due {round.due}. Pick an answer, add a note if it needs one, and save. Every
         answer is recorded with its time, both of you see both, and they go into {round.label}. Change your mind any time before then —
@@ -103,7 +129,10 @@ export default function PlanQuestions({
               <div className="text-sm font-semibold text-teal-50">
                 <span className="tabular-nums text-amber-300">{i + 1}.</span> {q.title}
               </div>
-              <p className="mt-1 text-xs leading-relaxed text-teal-200/60">{q.asks}</p>
+              <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">What it means</div>
+              <Plain text={q.means} className="mt-0.5 text-xs leading-relaxed text-teal-100/80" />
+              <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-teal-200/50">Why we're asking</div>
+              <Plain text={q.asks} className="mt-0.5 text-xs leading-relaxed text-teal-200/60" />
               <div className="mt-3 flex flex-wrap gap-2">
                 {q.options.map((o) => {
                   const on = d.choice === o.key;

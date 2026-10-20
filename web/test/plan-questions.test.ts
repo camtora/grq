@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PLAN_QUESTIONS, PLAN_ROUND, planOptionLabel } from "../lib/plan-questions";
 import { proposalsSection, reviewMemoryBlock } from "../agent/review-memory";
+import { GLOSSARY } from "../lib/glossary";
 
 // D139: the plan's questions are answered on the site and read back into the Saturday review.
 describe("plan questions", () => {
@@ -12,7 +13,24 @@ describe("plan questions", () => {
     for (const q of PLAN_QUESTIONS) {
       assert.ok(q.options.length >= 2, q.key);
       assert.equal(new Set(q.options.map((o) => o.key)).size, q.options.length, q.key);
-      assert.ok(q.title.trim() && q.asks.trim(), q.key);
+      assert.ok(q.title.trim() && q.means.trim() && q.asks.trim(), q.key);
+    }
+  });
+  // Written for Graham (2026-10-20): he could not answer the first draft. Two rules the text must
+  // keep. A percentage never stands alone — he reads dollars, so any paragraph that says "%" also
+  // says "$". And a [[slug|label]] tap-to-explain must point at a word the glossary actually has,
+  // or the tap asks the agent to improvise a definition of a term we chose.
+  it("say dollars wherever they say a percentage, and only link glossary words that exist", () => {
+    for (const q of PLAN_QUESTIONS) {
+      for (const text of [q.means, q.asks]) {
+        for (const para of text.split(/\n\s*\n/)) {
+          if (para.includes("%")) assert.ok(para.includes("$"), `${q.key}: a percentage with no dollars beside it: "${para.slice(0, 80)}"`);
+        }
+        for (const m of text.matchAll(/\[\[([^\][|]+)\|[^\][]+\]\]/g)) {
+          assert.ok(GLOSSARY[m[1].trim().toLowerCase()], `${q.key}: [[${m[1]}|…]] is not in the glossary`);
+        }
+        assert.doesNotMatch(text, /\[\[[^\][|]+\]\]/, `${q.key}: a [[term]] without a |label`);
+      }
     }
   });
   it("labels a recorded choice, and falls back to the raw key for a retired one", () => {
