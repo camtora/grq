@@ -26,8 +26,10 @@ import Avatar from "@/components/Avatar";
 import { personByName } from "@/lib/people";
 import PlanQuestions from "@/components/PlanQuestions";
 import { PLAN_QUESTIONS, PLAN_ROUND } from "@/lib/plan-questions";
-import { standingAnswers } from "@/lib/plan-answers";
+import { standingAnswers, standingDecisions } from "@/lib/plan-answers";
 import { memberKeyForEmail } from "@/lib/users";
+import PlanDiscussion, { type BookLine } from "@/components/PlanDiscussion";
+import { discussionRows, discussionSummary, orderOfBusiness, PREP_AS_OF } from "@/lib/plan-discussion";
 
 const cad = (cents: number) => `C$${(cents / 100).toLocaleString("en-CA", { maximumFractionDigits: 0 })}`;
 
@@ -80,9 +82,41 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
     // at"). The doc stays the single source: the section lives there, the page only moves it up.
     const split = audit ? splitSection(audit.md, "For Graham") : { section: null, rest: "" };
     const graham = personByName("Graham");
-    const [mtd, life, planAnswers] = split.section
-      ? await Promise.all([monthToDate().catch(() => null), vsContributions().catch(() => null), standingAnswers().catch(() => [])])
-      : [null, null, []];
+    const [mtd, life, planAnswers, planDecisions, pfForBook, lastBuyRow] = split.section
+      ? await Promise.all([
+          monthToDate().catch(() => null),
+          vsContributions().catch(() => null),
+          standingAnswers().catch(() => []),
+          standingDecisions().catch(() => []),
+          getPortfolio().catch(() => null),
+          prisma.trade.findFirst({ where: { side: "BUY" }, orderBy: { at: "desc" }, select: { at: true, symbol: true } }).catch(() => null),
+        ])
+      : [null, null, [], [], null, null];
+    // Tonight's discussion (D139, 2026-10-22): the two sets of answers side by side, prepared.
+    const discussion = orderOfBusiness(
+      discussionRows(
+        PLAN_QUESTIONS,
+        planAnswers.map((a) => ({ ...a, at: a.at.toISOString() })),
+        planDecisions.map((d) => ({ questionKey: d.questionKey, choice: d.choice, choiceLabel: d.choiceLabel, note: d.note, decidedBy: d.decidedByName, at: d.at.toISOString() })),
+      ),
+    );
+    const FLOOR_USD = 5000; // Graham's floor (book-size answer, Oct 20): nothing under US$5,000 in one stock
+    const book: BookLine | null = pfForBook
+      ? (() => {
+          const fx = pfForBook.fxUsdCad ?? 1.39;
+          const usdValue = (p: (typeof pfForBook.positions)[number]) => (p.currency === "USD" ? p.marketValueCents : Math.round(p.marketValueCadCents / fx));
+          const lastBuy = lastBuyRow
+            ? `${lastBuyRow.at.toLocaleDateString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric" })} (${lastBuyRow.symbol})`
+            : null;
+          return {
+            cashPct: pfForBook.navCents > 0 ? (pfForBook.cashCents / pfForBook.navCents) * 100 : 0,
+            positions: pfForBook.positions.length,
+            aboveFloor: pfForBook.positions.filter((p) => usdValue(p) >= FLOOR_USD * 100).length,
+            floorUsd: FLOOR_USD,
+            lastBuy,
+          };
+        })()
+      : null;
     const pct = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
     const cad = (cents: number) => `${cents >= 0 ? "+" : "−"}C$${Math.round(Math.abs(cents) / 100).toLocaleString("en-CA")}`;
     const sinceLabel = life?.since ? life.since.toLocaleDateString("en-CA", { timeZone: "America/Toronto", month: "short", day: "numeric" }) : null;
@@ -146,6 +180,18 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                   questions={PLAN_QUESTIONS}
                   answers={planAnswers.map((a) => ({ ...a, at: a.at.toISOString() }))}
                   me={memberKeyForEmail(session.email)}
+                />
+              </Card>
+            )}
+            {split.section && (
+              <Card className="mb-6 border-amber-400/40 bg-amber-400/[0.06] p-6">
+                <PlanDiscussion
+                  rows={discussion}
+                  summary={discussionSummary(discussion)}
+                  me={memberKeyForEmail(session.email)}
+                  book={book}
+                  prepAsOf={PREP_AS_OF}
+                  roundLabel={PLAN_ROUND.label}
                 />
               </Card>
             )}

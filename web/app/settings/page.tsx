@@ -15,6 +15,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NotificationSettings from "@/components/NotificationSettings";
 import DailyQuotesManager from "@/components/DailyQuotesManager";
 import FxPanel, { type FxRequestRow } from "@/components/FxPanel";
+import ResetPanel from "@/components/ResetPanel";
+import { resetStatus } from "@/lib/reset-run";
 import { prefsFromRow } from "@/lib/push/categories";
 import { getPortfolio } from "@/lib/portfolio";
 import { listFxRequests } from "@/lib/fx-requests";
@@ -42,12 +44,13 @@ const RISK_DIAL_CARDS = (["CAUTIOUS", "BALANCED", "AGGRESSIVE"] as const).map((v
 });
 
 export default async function Settings() {
-  const [settings, session, cookieStore, pf, fxReqs] = await Promise.all([
+  const [settings, session, cookieStore, pf, fxReqs, reset] = await Promise.all([
     prisma.settings.findUnique({ where: { id: 1 } }),
     getSession(),
     cookies(),
     getPortfolio(),
     listFxRequests(),
+    resetStatus().catch(() => null),
   ]);
   // Admin-only page: Cam & Graham (owners) only. Viewers — and any non-owner
   // member — get a 404; the page does not exist for them.
@@ -263,6 +266,15 @@ export default async function Settings() {
             </div>
           </Card>
         </div>
+
+        {/* The reset rehearsal (D138): the runbook as buttons, in order. Shown while it is the live plan. */}
+        {reset && (
+          <div id="reset" className="scroll-mt-24">
+            <Card className="border-amber-400/30 bg-amber-400/[0.04] p-5">
+              <ResetPanel initial={reset} readOnly={!isMember} />
+            </Card>
+          </div>
+        )}
 
         {/* Currency & FX beside Notifications (notifications half-width). */}
         <div className="grid items-start gap-6 lg:grid-cols-2">

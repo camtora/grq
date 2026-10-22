@@ -1922,3 +1922,18 @@ model PlanAnswer {
 
   @@index([round, questionKey, email, at])
 }
+
+// The outcome of the members' discussion of a plan question (D139, 2026-10-22): one row per
+// decision, append-only like PlanAnswer — the newest per (round, question) stands. Distinct from
+// an answer: an answer is one member's view, a decision is what both agreed, recorded by either.
+model PlanDecision {
+  id          Int      @id @default(autoincrement())
+  round       String
+  questionKey String
+  choice      String
+  note        String?
+  decidedBy   String
+  at          DateTime @default(now())
+
+  @@index([round, questionKey, at])
+}

@@ -40,7 +40,7 @@ export const PLAN_ROUND = {
 
 /** The framing above the questions: why they are being asked at all. */
 export const PLAN_INTRO =
-  "Alfred is the computer program that picks the stocks. On Thursday we wipe his practice money and start him again with US$50,000 of pretend money. " +
+  "Alfred is the computer program that picks the stocks. On Friday we sell everything he owns, and on Monday he starts again with US$50,000 of pretend money. " +
   "These eight questions set the rules for the restart. Each one has a short version; tap \"More detail\" if you want the long one. " +
   "If a question still makes no sense, pick \"Not sure\" and tell us what lost you in the note.";
 
@@ -51,7 +51,7 @@ export const PLAN_QUESTIONS: readonly PlanQuestion[] = [
     key: "pass-marks",
     title: "What does Alfred have to get right before we trust him with real money?",
     simple:
-      "On Thursday Alfred starts over with US$50,000 of pretend money. Before he ever gets real money, we want a test written down now, so nobody can change it later. Four rules are proposed.\n\n" +
+      "On Monday Alfred starts over with US$50,000 of pretend money. Before he ever gets real money, we want a test written down now, so nobody can change it later. Four rules are proposed.\n\n" +
       "1. He has to use the money, not sit on it. At least US$25,000 spent on stocks by Oct 30, and US$42,500 by Nov 20.\n\n" +
       "2. He can't buy a stock and then sell it again within a month.\n\n" +
       "3. Before every buy, he writes down three things: why he's buying, what would prove him wrong, and his give-up price.\n\n" +
@@ -65,7 +65,7 @@ export const PLAN_QUESTIONS: readonly PlanQuestion[] = [
       "4. He can't sell a stock just because his confidence number on it dropped. The reason has to be the business, or the stop he wrote down.\n\n" +
       "Miss any one and it's a fail: the practice run continues and real money waits another cycle.",
     asks:
-      "These numbers are a proposal, not a decision. If you'd give him more time to invest, or want a rule softer or harder, say so in the note. Due Wednesday so they're on paper before Thursday's reset.",
+      "These numbers are a proposal, not a decision. If you'd give him more time to invest, or want a rule softer or harder, say so in the note. Due Wednesday so they're on paper before the reset.",
     options: [
       { key: "accept", label: "Yes, that's the test" },
       { key: "change", label: "Change something (say what, in the note)" },
