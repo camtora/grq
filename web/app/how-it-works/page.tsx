@@ -138,6 +138,18 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
             </p>
             {split.section && (
               <Card className="mb-6 border-amber-400/40 bg-amber-400/[0.06] p-6">
+                <PlanDiscussion
+                  rows={discussion}
+                  summary={discussionSummary(discussion)}
+                  me={memberKeyForEmail(session.email)}
+                  book={book}
+                  prepAsOf={PREP_AS_OF}
+                  roundLabel={PLAN_ROUND.label}
+                />
+              </Card>
+            )}
+            {split.section && (
+              <Card className="mb-6 border-amber-400/40 bg-amber-400/[0.06] p-6">
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                   <Avatar src={graham?.photo ?? null} name="Graham" size="h-10 w-10" />
                   <div>
@@ -180,18 +192,6 @@ export default async function HowItWorks({ searchParams }: { searchParams: Promi
                   questions={PLAN_QUESTIONS}
                   answers={planAnswers.map((a) => ({ ...a, at: a.at.toISOString() }))}
                   me={memberKeyForEmail(session.email)}
-                />
-              </Card>
-            )}
-            {split.section && (
-              <Card className="mb-6 border-amber-400/40 bg-amber-400/[0.06] p-6">
-                <PlanDiscussion
-                  rows={discussion}
-                  summary={discussionSummary(discussion)}
-                  me={memberKeyForEmail(session.email)}
-                  book={book}
-                  prepAsOf={PREP_AS_OF}
-                  roundLabel={PLAN_ROUND.label}
                 />
               </Card>
             )}
