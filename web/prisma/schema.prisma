@@ -1937,3 +1937,179 @@ model PlanDecision {
 
   @@index([round, questionKey, at])
 }
+
+// ── Company financials (D140, docs/COMPANY-FINANCIALS.md) ────────────────────────────────────
+// Every table here is keyed by the FMP KEY = the listing symbol (`UniverseMember.yahoo`: NVDA,
+// RY.TO, TN.CN), never a bare ticker (P0 R1: bare DRX is a different security). Money is integer
+// minor units of the COMPANY'S REPORTING CURRENCY (`currency`), which is often not the listing's
+// (AEM.TO reports USD, TSM TWD). Display + storage only: nothing here reaches the agent (§3.1).
+
+// One row per company per fiscal period (quarters "Q1".."Q4" and years "FY"): income + cash flow +
+// balance sheet merged. Restatements overwrite (upsert on the unique key).
+model FinancialPeriod {
+  id                Int      @id @default(autoincrement())
+  symbol            String // FMP key = listing symbol
+  period            String // "Q1".."Q4" | "FY" — FMP's own label (P0 R10: never derived from the date)
+  fiscalYear        Int
+  periodEnd         String // YYYY-MM-DD
+  filingDate        String?
+  acceptedAt        String? // FMP acceptedDate, "YYYY-MM-DD HH:MM:SS"
+  currency          String // reportedCurrency
+  revenue           BigInt? // minor units (cents) of `currency`
+  costOfRevenue     BigInt?
+  grossProfit       BigInt? // synthesised by FMP for banks — meaningless there (P0 R3)
+  operatingIncome   BigInt?
+  netIncome         BigInt?
+  ebitda            BigInt?
+  epsDiluted4       Int? // diluted EPS × 10,000 (P0 R8)
+  sharesDiluted     BigInt? // weighted average diluted shares (whole shares)
+  operatingCashFlow BigInt?
+  capex             BigInt? // NEGATIVE as FMP reports it (cash out)
+  freeCashFlow      BigInt?
+  buybacks          BigInt? // commonStockRepurchased (negative = cash out)
+  dividendsPaid     BigInt? // commonDividendsPaid (negative = cash out)
+  stockComp         BigInt?
+  cash              BigInt? // cash + short-term investments
+  totalDebt         BigInt?
+  totalAssets       BigInt?
+  totalEquity       BigInt?
+  raw               Json? // {income, cashflow, balance} as fetched — lets the display iterate without a refetch
+  fetchedAt         DateTime @default(now())
+
+  @@unique([symbol, period, periodEnd])
+  @@index([symbol, periodEnd])
+}
+
+// Consensus estimates, stored ON CHANGE: a row is written only when a target's consensus differs from
+// the last row we hold for it, so `asOf` = the ET day we first saw that consensus. Revisions come from
+// this history alone — FMP keeps none (P0 R7) — so the clock started the day this table did.
+model EstimateSnapshot {
+  id              Int     @id @default(autoincrement())
+  symbol          String
+  asOf            String // ET YYYY-MM-DD this consensus was first seen
+  period          String // "FY" | "Q"
+  targetEnd       String // the fiscal period-end being estimated
+  revenueAvg      BigInt? // minor units of the company's reporting currency
+  revenueLow      BigInt?
+  revenueHigh     BigInt?
+  netIncomeAvg    BigInt?
+  epsAvg4         Int? // × 10,000
+  epsLow4         Int?
+  epsHigh4        Int?
+  analystsRevenue Int?
+  analystsEps     Int?
+  lastSeen        String // ET day we last saw this consensus unchanged
+
+  @@unique([symbol, period, targetEnd, asOf])
+  @@index([symbol, period, targetEnd, asOf])
+}
+
+// Weekly: FMP's quality/distress scores, float, its own rating + DCF (an outside opinion, display only).
+model CompanyHealth {
+  id                Int      @id @default(autoincrement())
+  symbol            String
+  date              String // ET YYYY-MM-DD
+  currency          String?
+  piotroski         Int? // 0–9
+  altmanZ           Float? // a score, not money; meaningless for banks/insurers (P0 R3)
+  freeFloatBps      Int? // free float % × 100
+  floatShares       BigInt?
+  sharesOutstanding BigInt?
+  fmpRating         String? // "A-" etc.
+  fmpRatingScore    Int? // 1–5
+  fmpDcfCents       Int? // FMP's DCF value, in the LISTING's price currency
+  fmpDcfPriceCents  Int? // the price FMP compared it to
+  fetchedAt         DateTime @default(now())
+
+  @@unique([symbol, date])
+}
+
+// Revenue by business line ("product") or region ("geographic"), per fiscal period.
+model RevenueSegment {
+  id         Int     @id @default(autoincrement())
+  symbol     String
+  kind       String // "product" | "geographic"
+  period     String // "Q1".."Q4" | "FY"
+  fiscalYear Int
+  periodEnd  String
+  currency   String?
+  data       Json // { "Data Center": 8902300000000, ... } — minor units
+
+  @@unique([symbol, kind, period, periodEnd])
+  @@index([symbol, kind, periodEnd])
+}
+
+// One row per earnings call FMP has a transcript for. The SUMMARY is stored; the transcript itself is
+// fetched on demand (~50 KB each; /var is tight, §4.5). The summary is written from the transcript
+// alone — never with the fund's book in context — which is why users may read it (Cam, 2026-10-22).
+model EarningsCall {
+  id            Int       @id @default(autoincrement())
+  symbol        String
+  fiscalYear    Int
+  fiscalQuarter Int
+  callDate      String // YYYY-MM-DD
+  summary       Json? // see lib/financials/call-summary.ts CallSummary
+  model         String?
+  summarizedAt  DateTime?
+  attempts      Int       @default(0)
+  error         String?
+  createdAt     DateTime  @default(now())
+
+  @@unique([symbol, fiscalYear, fiscalQuarter])
+  @@index([symbol, callDate])
+}
+
+// SEC filings for US filers, filtered to the forms that matter (P0 R6).
+model CompanyFiling {
+  id         Int     @id @default(autoincrement())
+  symbol     String
+  form       String
+  filedAt    String // YYYY-MM-DD
+  acceptedAt String?
+  url        String // the filing index page
+  docUrl     String? // the primary document
+
+  @@unique([symbol, url])
+  @@index([symbol, filedAt])
+}
+
+// Insider buying/selling per calendar quarter (FMP statistics; US filers).
+model InsiderQuarter {
+  id             Int      @id @default(autoincrement())
+  symbol         String
+  year           Int
+  quarter        Int
+  buys           Int // open-market purchase transactions
+  sells          Int // open-market sale transactions
+  acquired       Int // all acquisitions (incl. grants)
+  disposed       Int // all disposals
+  sharesAcquired BigInt? // all shares acquired (grants included — FMP's totalAcquired)
+  sharesDisposed BigInt? // all shares disposed (FMP's totalDisposed)
+  fetchedAt      DateTime @default(now())
+
+  @@unique([symbol, year, quarter])
+}
+
+// Per-name bookkeeping: what kind of thing it is and when each feed was last checked, so the daily
+// job is idempotent and a restart costs nothing.
+model FinancialsStatus {
+  symbol            String    @id // FMP key
+  companyName       String?
+  sector            String?
+  industry          String?
+  isEtf             Boolean   @default(false)
+  isFund            Boolean   @default(false)
+  usFiler           Boolean   @default(false) // has a CIK + US listing → filings/insider feeds apply
+  splits            Json? // [{date, numerator, denominator}]
+  profileAt         DateTime?
+  statementsAt      DateTime?
+  statementsCovered Boolean?
+  latestPeriodEnd   String? // newest quarter we hold — a new one is due ~90 days after
+  estimatesDay      String? // ET day of the last estimates pass
+  healthAt          DateTime?
+  segmentsAt        DateTime?
+  filingsDay        String?
+  insiderAt         DateTime?
+  callsDay          String?
+  updatedAt         DateTime  @updatedAt
+}

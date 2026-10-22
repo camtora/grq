@@ -1,0 +1,380 @@
+// Company financials — the PURE half (D140, docs/COMPANY-FINANCIALS.md §4.3). No I/O, no Prisma:
+// everything takes plain rows and returns numbers, so test/financials-derive.test.ts can pin every
+// formula and every edge case. Money stays in integer minor units (bigint) until a RATIO is taken;
+// ratios come back as integer basis points.
+
+// ── Converting FMP's floats to our integers ──────────────────────────────────────────────────
+
+/** FMP money (a float in whole currency units) → integer minor units (cents). Whole values (the
+ *  usual case for statement lines) convert exactly, however large; fractional ones round to the cent. */
+export function toMinor(v: unknown): bigint | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  if (Number.isInteger(v)) return BigInt(v) * 100n;
+  return BigInt(Math.round(v * 100));
+}
+
+/** A share or count field → whole units. */
+export function toWhole(v: unknown): bigint | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return BigInt(Math.round(v));
+}
+
+/** EPS → × 10,000, rounding half away from zero (P0 R8: −0.0022 must stay −22, not −21). */
+export function toEps4(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return Math.sign(v) * Math.round(Math.abs(v) * 10_000);
+}
+
+/** A price-like float (DCF, per-share value) → integer cents. */
+export function toCents(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return Math.round(v * 100);
+}
+
+// ── Growth: the one rule that keeps a panel honest ───────────────────────────────────────────
+
+/** A change from a base. `nm` = not meaningful: growth off a zero or negative base is not a
+ *  percentage (a loss of $1 becoming a profit of $1 is not "+200%"). The panel prints "n/m". */
+export type Growth = { kind: "ok"; bps: number } | { kind: "nm"; reason: "zero-base" | "negative-base" | "basis-changed" };
+
+export function growth(cur: bigint | number | null | undefined, prev: bigint | number | null | undefined): Growth | null {
+  if (cur == null || prev == null) return null;
+  const c = Number(cur);
+  const p = Number(prev);
+  if (p === 0) return { kind: "nm", reason: "zero-base" };
+  if (p < 0) return { kind: "nm", reason: "negative-base" };
+  return { kind: "ok", bps: Math.round(((c - p) / p) * 10_000) };
+}
+
+/** part ÷ whole as basis points; null when the whole is missing or not positive. */
+export function ratioBps(part: bigint | number | null | undefined, whole: bigint | number | null | undefined): number | null {
+  if (part == null || whole == null) return null;
+  const w = Number(whole);
+  if (!(w > 0)) return null;
+  return Math.round((Number(part) / w) * 10_000);
+}
+
+// ── Periods ──────────────────────────────────────────────────────────────────────────────────
+
+export type PeriodRow = {
+  period: string; // "Q1".."Q4" | "FY"
+  fiscalYear: number;
+  periodEnd: string; // YYYY-MM-DD
+  currency: string;
+  revenue: bigint | null;
+  costOfRevenue: bigint | null;
+  grossProfit: bigint | null;
+  operatingIncome: bigint | null;
+  netIncome: bigint | null;
+  epsDiluted4: number | null;
+  sharesDiluted: bigint | null;
+  operatingCashFlow: bigint | null;
+  capex: bigint | null;
+  freeCashFlow: bigint | null;
+  cash: bigint | null;
+  totalDebt: bigint | null;
+};
+
+const DAY = 86_400_000;
+const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
+
+/** Quarterly rows only, newest first. */
+export function quarters(rows: PeriodRow[]): PeriodRow[] {
+  return rows.filter((r) => /^Q[1-4]$/.test(r.period)).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+}
+
+/** Annual rows only, newest first. */
+export function years(rows: PeriodRow[]): PeriodRow[] {
+  return rows.filter((r) => r.period === "FY").sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+}
+
+/** The same fiscal quarter one fiscal year earlier — matched by FMP's labels, never by calendar
+ *  (NVDA's Q2 ends in July; P0 R10). Falls back to "the quarter ending ~1 year earlier" only when
+ *  the labels don't line up (a company that changed its fiscal year), with a ±45-day tolerance. */
+export function yearAgo(qs: PeriodRow[], cur: PeriodRow): PeriodRow | null {
+  const byLabel = qs.find((q) => q.period === cur.period && q.fiscalYear === cur.fiscalYear - 1);
+  if (byLabel) return byLabel;
+  const target = ms(cur.periodEnd) - 365 * DAY;
+  return qs.find((q) => Math.abs(ms(q.periodEnd) - target) <= 45 * DAY) ?? null;
+}
+
+/** The quarter immediately before (sequential). Requires it to end 60–120 days earlier, so a gap
+ *  in the data is never mistaken for the previous quarter. */
+export function prevQuarter(qs: PeriodRow[], cur: PeriodRow): PeriodRow | null {
+  const i = qs.indexOf(cur);
+  const p = i >= 0 ? qs[i + 1] : undefined;
+  if (!p) return null;
+  const gap = (ms(cur.periodEnd) - ms(p.periodEnd)) / DAY;
+  return gap >= 60 && gap <= 120 ? p : null;
+}
+
+type MoneyField = "revenue" | "grossProfit" | "operatingIncome" | "netIncome" | "operatingCashFlow" | "freeCashFlow";
+
+/** Trailing twelve months: the sum of 4 consecutive quarters starting at `from` (index into the
+ *  newest-first list). null if any quarter is missing, the field is null in any, or the four don't
+ *  span ~a year (never annualise a partial year). */
+export function ttm(qs: PeriodRow[], field: MoneyField | "fcf", from = 0): bigint | null {
+  const four = qs.slice(from, from + 4);
+  if (four.length < 4) return null;
+  const span = (ms(four[0].periodEnd) - ms(four[3].periodEnd)) / DAY;
+  if (span < 240 || span > 300) return null; // 3 quarter-gaps ≈ 273 days
+  let sum = 0n;
+  for (const q of four) {
+    const v = field === "fcf" ? fcf(q) : q[field];
+    if (v == null) return null;
+    sum += v;
+  }
+  return sum;
+}
+
+/** TTM revenue on the right basis; null across a basis change for non-financials (a sum of two
+ *  different definitions is no number at all). */
+export function ttmRevenue(qs: PeriodRow[], financial: boolean, from = 0): bigint | null {
+  const four = qs.slice(from, from + 4);
+  if (four.length < 4 || ttm(qs, "revenue", from) == null) return null;
+  if (!financial && four.some((q) => basisChanged(q, four[0]))) return null;
+  return four.reduce((s, q) => s + (revenueOf(q, financial) ?? 0n), 0n);
+}
+
+/** Free cash flow: FMP's own figure when present, else operating cash flow less capex. Capex is
+ *  reported negative (cash out) but some rows carry it positive — either way it is subtracted. */
+export function fcf(q: Pick<PeriodRow, "freeCashFlow" | "operatingCashFlow" | "capex">): bigint | null {
+  if (q.freeCashFlow != null) return q.freeCashFlow;
+  if (q.operatingCashFlow == null || q.capex == null) return null;
+  const capex = q.capex < 0n ? -q.capex : q.capex;
+  return q.operatingCashFlow - capex;
+}
+
+export function netDebt(q: Pick<PeriodRow, "totalDebt" | "cash">): bigint | null {
+  if (q.totalDebt == null || q.cash == null) return null;
+  return q.totalDebt - q.cash;
+}
+
+// ── Splits and dilution ──────────────────────────────────────────────────────────────────────
+
+export type Split = { date: string; numerator: number; denominator: number };
+
+/** Share-count change over a year, split-aware (P0 R9). A split between the two periods multiplies
+ *  the share count by numerator/denominator; whether FMP already restated the older count is not
+ *  something we know per row, so we adjust only when the raw ratio sits closer to the split factor
+ *  than to 1 — i.e. when the older count is visibly NOT restated. */
+export function shareChange(cur: PeriodRow, prev: PeriodRow, splits: Split[]): Growth | null {
+  if (cur.sharesDiluted == null || prev.sharesDiluted == null) return null;
+  let factor = 1;
+  for (const s of splits) {
+    if (s.date > prev.periodEnd && s.date <= cur.periodEnd && s.denominator > 0) factor *= s.numerator / s.denominator;
+  }
+  const c = Number(cur.sharesDiluted);
+  let p = Number(prev.sharesDiluted);
+  if (factor !== 1 && p > 0) {
+    const raw = c / p;
+    if (Math.abs(Math.log(raw / factor)) < Math.abs(Math.log(raw))) p *= factor;
+  }
+  return growth(c, Math.round(p));
+}
+
+// ── Revenue basis: FMP changes how it books a bank's revenue between quarters ────────────────
+
+/** FMP's "revenue" for a bank or insurer flips between GROSS (interest income included, the interest
+ *  paid booked as "cost of revenue") and NET from one quarter to the next — RY switched to gross in
+ *  late 2025, C to net in Q3 2026 (measured 2026-10-22: +140% and −46% "growth" that never happened).
+ *  Revenue less cost of revenue is the same number on either basis, so for financials that NET figure
+ *  is the revenue we measure. */
+export function revenueOf(q: Pick<PeriodRow, "revenue" | "costOfRevenue">, financial: boolean): bigint | null {
+  if (!financial || q.revenue == null) return q.revenue;
+  return q.costOfRevenue != null && q.costOfRevenue > 0n ? q.revenue - q.costOfRevenue : q.revenue;
+}
+
+/** Did the reporting basis change between two periods? (Cost of revenue present in one, absent in the
+ *  other — the visible tell of FMP re-classifying.) For non-financials a revenue comparison across a
+ *  basis change is "n/m", never a percentage. */
+export function basisChanged(a: Pick<PeriodRow, "costOfRevenue">, b: Pick<PeriodRow, "costOfRevenue">): boolean {
+  if (a.costOfRevenue == null || b.costOfRevenue == null) return false;
+  return (a.costOfRevenue === 0n) !== (b.costOfRevenue === 0n);
+}
+
+function revenueGrowth(cur: PeriodRow, prev: PeriodRow | null, financial: boolean): Growth | null {
+  if (!prev) return null;
+  if (!financial && basisChanged(cur, prev)) return { kind: "nm", reason: "basis-changed" };
+  return growth(revenueOf(cur, financial), revenueOf(prev, financial));
+}
+
+// ── The headline numbers for one company ─────────────────────────────────────────────────────
+
+/** Banks and insurers: FMP synthesises a "gross profit" and the Altman Z formula reads them as
+ *  distressed (P0 R3). Their card drops gross margin, Altman Z and the DCF. */
+export function isFinancialSector(sector: string | null | undefined): boolean {
+  return /financial/i.test(sector ?? "");
+}
+
+export type Headline = {
+  asOf: string; // newest quarter's period end
+  label: string; // "FY2027 Q2"
+  currency: string;
+  revenueBasis: "revenue" | "net-revenue"; // net for banks/insurers — see revenueOf
+  revenueTtm: bigint | null;
+  revenueQ: bigint | null;
+  revenueYoY: Growth | null; // latest quarter vs same quarter a year earlier
+  revenueQoQ: Growth | null;
+  revenueAccelBps: number | null; // YoY growth now − YoY growth two quarters ago
+  epsQ4: number | null;
+  epsYoY: Growth | null;
+  netIncomeTtm: bigint | null;
+  grossMarginBps: number | null; // null for financials
+  operatingMarginBps: number | null;
+  netMarginBps: number | null;
+  operatingMarginChangeBps: number | null; // vs the same quarter a year earlier
+  fcfTtm: bigint | null;
+  fcfMarginBps: number | null;
+  netDebt: bigint | null;
+  shareChangeYoY: Growth | null; // + = dilution, − = buybacks
+  quartersAvailable: number;
+};
+
+export function headline(rows: PeriodRow[], opts: { sector?: string | null; splits?: Split[] } = {}): Headline | null {
+  const qs = quarters(rows);
+  const q0 = qs[0];
+  if (!q0) return null;
+  const fin = isFinancialSector(opts.sector);
+  const ya = yearAgo(qs, q0);
+  const pq = prevQuarter(qs, q0);
+  const q2 = qs[2] ?? null;
+  const q2ya = q2 ? yearAgo(qs, q2) : null;
+
+  const rev = (q: PeriodRow) => revenueOf(q, fin);
+  const yoyNow = revenueGrowth(q0, ya, fin);
+  const yoyThen = q2 ? revenueGrowth(q2, q2ya, fin) : null;
+  const accel = yoyNow?.kind === "ok" && yoyThen?.kind === "ok" ? yoyNow.bps - yoyThen.bps : null;
+
+  const opNow = ratioBps(q0.operatingIncome, rev(q0));
+  const opThen = ya ? ratioBps(ya.operatingIncome, rev(ya)) : null;
+  const revTtm = ttmRevenue(qs, fin);
+  const fcfTtm = ttm(qs, "fcf");
+
+  return {
+    asOf: q0.periodEnd,
+    label: `FY${q0.fiscalYear} ${q0.period}`,
+    currency: q0.currency,
+    revenueBasis: fin ? "net-revenue" : "revenue",
+    revenueTtm: revTtm,
+    revenueQ: rev(q0),
+    revenueYoY: yoyNow,
+    revenueQoQ: revenueGrowth(q0, pq, fin),
+    revenueAccelBps: accel,
+    epsQ4: q0.epsDiluted4,
+    epsYoY: ya ? growth(q0.epsDiluted4, ya.epsDiluted4) : null,
+    netIncomeTtm: ttm(qs, "netIncome"),
+    grossMarginBps: fin ? null : ratioBps(q0.grossProfit, q0.revenue),
+    operatingMarginBps: opNow,
+    netMarginBps: ratioBps(q0.netIncome, rev(q0)),
+    operatingMarginChangeBps: opNow != null && opThen != null ? opNow - opThen : null,
+    fcfTtm,
+    fcfMarginBps: fin ? null : ratioBps(fcfTtm, revTtm),
+    netDebt: fin ? null : netDebt(q0), // a bank's "debt" is its deposits/funding — not leverage in this sense
+    shareChangeYoY: ya ? shareChange(q0, ya, opts.splits ?? []) : null,
+    quartersAvailable: qs.length,
+  };
+}
+
+/** Per-quarter series for a trend chart, oldest → newest, with YoY growth where a year-ago quarter exists. */
+export function quarterSeries(rows: PeriodRow[], n = 8, sector?: string | null) {
+  const fin = isFinancialSector(sector);
+  const qs = quarters(rows);
+  return qs
+    .slice(0, n)
+    .map((q) => {
+      const ya = yearAgo(qs, q);
+      return {
+        periodEnd: q.periodEnd,
+        label: `${q.period} FY${q.fiscalYear}`,
+        revenue: revenueOf(q, fin),
+        netIncome: q.netIncome,
+        epsQ4: q.epsDiluted4,
+        fcf: fcf(q),
+        operatingMarginBps: ratioBps(q.operatingIncome, revenueOf(q, fin)),
+        revenueYoY: revenueGrowth(q, ya, fin),
+        epsYoY: ya ? growth(q.epsDiluted4, ya.epsDiluted4) : null,
+      };
+    })
+    .reverse();
+}
+
+// ── Estimates: storing on change, and reading revisions back ─────────────────────────────────
+
+export type EstimateRow = {
+  period: string; // "FY" | "Q"
+  targetEnd: string;
+  asOf: string;
+  revenueAvg: bigint | null;
+  revenueLow: bigint | null;
+  revenueHigh: bigint | null;
+  netIncomeAvg: bigint | null;
+  epsAvg4: number | null;
+  epsLow4: number | null;
+  epsHigh4: number | null;
+  analystsRevenue: number | null;
+  analystsEps: number | null;
+};
+
+type EstimateValues = Omit<EstimateRow, "period" | "targetEnd" | "asOf">;
+
+/** Has the consensus moved since the last row we stored? (Only then do we write a new row.) */
+export function estimateChanged(prev: EstimateValues | null | undefined, next: EstimateValues): boolean {
+  if (!prev) return true;
+  return (
+    prev.revenueAvg !== next.revenueAvg ||
+    prev.revenueLow !== next.revenueLow ||
+    prev.revenueHigh !== next.revenueHigh ||
+    prev.netIncomeAvg !== next.netIncomeAvg ||
+    prev.epsAvg4 !== next.epsAvg4 ||
+    prev.epsLow4 !== next.epsLow4 ||
+    prev.epsHigh4 !== next.epsHigh4 ||
+    prev.analystsRevenue !== next.analystsRevenue ||
+    prev.analystsEps !== next.analystsEps
+  );
+}
+
+/** The consensus in force on `day`: the newest row first seen on or before it. */
+export function consensusOn(history: EstimateRow[], day: string): EstimateRow | null {
+  let best: EstimateRow | null = null;
+  for (const r of history) if (r.asOf <= day && (!best || r.asOf > best.asOf)) best = r;
+  return best;
+}
+
+export type Revision =
+  | { kind: "ok"; days: number; eps: Growth | null; revenue: Growth | null }
+  | { kind: "building"; daysOfHistory: number }; // our history doesn't reach back that far yet
+
+/** How the consensus for one target moved over the last `days` days, from OUR snapshots only. */
+export function revision(history: EstimateRow[], today: string, days: number): Revision {
+  if (history.length === 0) return { kind: "building", daysOfHistory: 0 };
+  const first = history.reduce((a, r) => (r.asOf < a ? r.asOf : a), history[0].asOf);
+  const back = new Date(ms(today) - days * DAY).toISOString().slice(0, 10);
+  if (first > back) return { kind: "building", daysOfHistory: Math.round((ms(today) - ms(first)) / DAY) };
+  const now = consensusOn(history, today);
+  const then = consensusOn(history, back);
+  if (!now || !then) return { kind: "building", daysOfHistory: Math.round((ms(today) - ms(first)) / DAY) };
+  return { kind: "ok", days, eps: growth(now.epsAvg4, then.epsAvg4), revenue: growth(now.revenueAvg, then.revenueAvg) };
+}
+
+/** The fiscal targets worth keeping: the next `fy` fiscal years and next `q` quarters whose period
+ *  hasn't ended (plus the one that just ended, still unreported for a few weeks). FMP returns
+ *  decades of rows; history for targets years out is noise we'd pay disk for. */
+export function targetsToKeep(rows: Array<{ date: string }>, today: string, n: number): string[] {
+  const grace = new Date(ms(today) - 75 * DAY).toISOString().slice(0, 10);
+  return rows
+    .map((r) => r.date)
+    .filter((d) => d >= grace)
+    .sort()
+    .slice(0, n);
+}
+
+// ── Filings ──────────────────────────────────────────────────────────────────────────────────
+
+/** The forms worth showing (P0 R6). Everything else — structured-note prospectuses (424B2, FWP),
+ *  fund filings, Form 4 (already on the insider panel) — is dropped. */
+export const FILING_FORMS = new Set(["8-K", "10-Q", "10-K", "6-K", "40-F", "20-F", "S-1", "DEF 14A", "SC 13D", "SC 13D/A", "10-K/A", "10-Q/A", "8-K/A"]);
+
+export function keepFiling(form: string): boolean {
+  return FILING_FORMS.has(form.trim().toUpperCase());
+}

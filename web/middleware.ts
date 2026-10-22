@@ -83,6 +83,7 @@ const MOBILE_API = [
   "/api/accounts",        // personal/external accounts (SnapTrade — TD TFSA etc.); members-only in-route
   "/api/reports",         // A10 (list + /day/[date])
   "/api/stock-extras",    // A7 (lazy earnings/grades)
+  "/api/financials",      // D140 company financials (self-guards via sessionFromRequest)
   "/api/symbol-search",   // A7 (Browse; member-guarded in-route)
   "/api/watchlist",       // GRQ Go — the watch-driven list (D78 semantics)
   "/api/stock-index",     // GRQ Go — the jump-to-stock index (Search tab; self-guards)

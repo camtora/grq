@@ -22,6 +22,8 @@ import { runMarketScreenNightly } from "../lib/market-screen/nightly";
 import { runSmartMoneyIngest } from "../lib/smart-money/ingest";
 import { runOptionsRefresh } from "../lib/options/store";
 import { runSocialRefresh } from "../lib/social/store";
+import { runFinancialsRefresh } from "../lib/financials/store";
+import { runCallSummaries } from "./earnings-call";
 import { runMacroEventScan, refreshEconomicCalendar } from "../lib/macro-events";
 import { runNewsIngest } from "../lib/news/ingest";
 import { triageNews } from "./news-triage";
@@ -69,6 +71,7 @@ let lastExtAcctSyncDay = "";
 let lastLearnExamplesDay = "";
 let lastOptionsMs = 0;
 let lastSocialMs = 0;
+let lastFinancialsDay = "";
 let lastMacroEventDay = "";
 let lastNewsRun = 0;
 let lastNoonNewsDay = "";
@@ -1009,6 +1012,24 @@ async function tick() {
     runSocialRefresh()
       .then((r) => { if (!r.reused) console.log(`[social] refreshed ${r.covered}/${r.tried} names with retail chatter`); })
       .catch((e) => console.error("[social] refresh failed:", e instanceof Error ? e.message : e));
+  }
+
+  // Company financials (D140, docs/COMPANY-FINANCIALS.md) — once per ET day from 05:00, before the
+  // 06:00 pre-morning read: statements (daily only for names whose next quarter is due), the estimates
+  // snapshot (the revision history starts the day we first snapshot, so it never skips a day), health,
+  // segments, filings, insider stats, the earnings-call list; then Haiku summaries of new calls for
+  // ACTIVE/held/watched/focus names. DISPLAY + STORAGE ONLY — nothing here reaches buildContext, the
+  // dossier prompt or the §6 gate. Idempotent per name per feed (FinancialsStatus), so a restart later
+  // in the day re-checks status rows and calls nothing it already has. Background: never blocks the tick.
+  if (lastFinancialsDay !== p.dateStr && p.minutesSinceMidnight >= 5 * 60) {
+    lastFinancialsDay = p.dateStr;
+    runFinancialsRefresh()
+      .then(async (r) => {
+        if (!r.skipped) console.log(`[financials] ${r.names} names refreshed (${r.calls} feeds)`);
+        const s = await runCallSummaries();
+        if (s.written + s.failed > 0) console.log(`[financials] call summaries: ${s.written} written, ${s.failed} failed`);
+      })
+      .catch((e) => console.error("[financials] refresh failed:", e instanceof Error ? e.message : e));
   }
 
   // Macro events (D81) — once per ET day: diff the live macro snapshot against

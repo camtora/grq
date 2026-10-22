@@ -4436,3 +4436,40 @@ The review doc (For Graham, the rehearsal section, the runbook) carries the same
 **Dates moved (Cam, 2026-10-22 ~01:50 ET: "lets plan the flatten for end of week — so we start the reset on a clean week start on monday").** Thursday Oct 22 and Friday Oct 23 trade on as Run 2. **The flatten is during Friday's session** — any time 9:30–16:00 ET, not a tight window: one member click on Settings → *Reset rehearsal* starts a server-side job that sells the book one name at a time (tagged `reset`, ~20 s a name, one Discord message at the end), so nobody has to sit with it; Alfred is paused by the first button before it and stays paused to Monday 08:00 ET; the kill switch goes on after the last sell. **Cam's portal balance reset is Friday after the close or over the weekend; Monday Oct 26 is day 1 of Run 3.** The pass-mark dates are unchanged — Oct 30 / Nov 6 / Nov 20 are exactly trading days 5 / 10 / 20 from a Monday start (they were off by a day from a Friday start). The stage-4 readout stays the Wed Oct 21 close (cash 14.0%, two R2 top-ups on 10/21 — TDY, ATD — so R2 did fire; cash peaked 19.7% on 10/16). The stage-5 agent build follows tonight's member discussion and deploys after a close before Monday. Built today (web, no agent change): `lib/reset.ts` (pure guards `flattenRefusal` — pause first, kill switch off, market open, nothing running; the per-name SYSTEM note + fund LESSON text; the named pause reason), `lib/reset-run.ts` (the pause via `AgentState.limitQuietUntil` under `RESET_PAUSE_REASON`, the status, the flatten job), `POST /api/reset/{pause,flatten}` + `GET /api/reset/status`, `components/ResetPanel.tsx` on Settings. Also D139's discussion panel: `PlanDecision` (append-only; the newest per question stands), `POST/GET /api/plan/decisions`, `lib/plan-discussion.ts` (status per question from the two standing answers + the prep written from them), `components/PlanDiscussion.tsx` on the Opus 5.5 plan tab under the questions. Both members have now answered (Graham 7/8 on 10/20, Cam 7/8 on 10/22; Cam lacks stop-width, Graham lacks walls); the discussion is tonight.
 
 **Decided the same night (Cam: "same as before"):** launch size and split = **US$50,000, all in USD**, as on 2026-06-26. The portal reset is typed in CAD and converted by a member-approved FX request on Friday morning, so the CAD figure is US$50,000 at Thursday's rate; the rebaseline reads the real post-FX cash from the mirror rather than a hard-coded residual. **Pass marks proposed for both members to accept or change by Wed 10/21:** cash ≤50% of NAV by trading day 5 (10/30), ≤30% by day 10 (11/6), ≤15% by day 20 (11/20, the AGGRESSIVE ceiling); no round trip inside 30 days; every buy ≥ the 70 bar with a written thesis, invalidation and a stop no tighter than two weekly moves; no sell citing a score. Any miss = fail: the paper book continues, the real-money question waits a cycle. The watch therefore runs to about 11/20.
+
+### D140 — Company financials: every FMP company feed we pay for, stored and derived; display first, signals later (Cam, 2026-10-22)
+
+**Context.** Cam asked whether GRQ tracks company financials year over year or quarter over quarter. It didn't:
+the stock page showed one quarter's beat/miss and P/E vs peers, the agent saw only the next report date, and every
+dossier's "recent revenue/earnings growth" came from Alfred web-searching it. The FMP plan already served
+statements, estimates, scores, segments, transcripts, float, filings and insider statistics; none were called.
+Plan: `docs/COMPANY-FINANCIALS.md`.
+
+**Decided (Cam).** Wire all of them. The display is a back-and-forth design loop on the stock page; whether any of
+it becomes an agent signal is a separate later decision (§7 of the plan). **The backend may ship at any point, Run
+3 included** — it changes nothing Alfred reads. **The open user tier may read the earnings-call summaries**: they
+are written from the transcript alone, never with the book (pinned by `test/financials-call-summary.test.ts`).
+
+**What shipped (backend).** Eight tables keyed by the FMP key = the listing symbol (`FinancialPeriod`,
+`EstimateSnapshot`, `CompanyHealth`, `RevenueSegment`, `EarningsCall`, `CompanyFiling`, `InsiderQuarter`,
+`FinancialsStatus`); `lib/financials/{store,derive,view,call-summary}.ts`; `agent/earnings-call.ts`;
+`GET /api/financials/[symbol]` (users admitted); a daily runner job from 05:00 ET; `scripts/financials-probe.ts`
+and `scripts/financials-backfill.ts`. 30 + 8 tests.
+
+**What the probe and the backfill taught (each now a rule in code):**
+- **A CA name's FMP key is its listing (`RY.TO`), never the bare ticker** — bare `DRX` is a fund.
+- **Reporting currency is per company** (AEM.TO and SHOP.TO report USD, TSM TWD, ASML EUR); nothing converts.
+- **FMP flips a bank's revenue between gross and net from one quarter to the next** (RY to gross in late 2025, C to
+  net in Q3 2026), which read as +140% and −46% growth. For banks and insurers revenue is measured NET of cost of
+  revenue, the same number on either basis (RY +22.9%, C +8.0%); for anyone else a basis change is "n/m".
+  Banks also lose gross margin, Altman Z and the DCF, which are meaningless for them.
+- **Growth off a zero or negative base is "n/m"**, never a percentage.
+- **FMP keeps no history of estimates**, so revisions come only from our own snapshots, stored on change; the
+  clock started 2026-10-22.
+- **A failed call is not "no data".** The first backfill ran at ~75 calls/s, FMP's per-minute limit refused part
+  of it, `fmpGet` returned null for the refusals exactly as for "nothing", and 104 covered names were recorded as
+  having no statements. `fmpGetStrict` (lib/fmp.ts) throws on anything but a 200, the job paces itself at ≤5
+  calls/s with retry, and a failed feed stays due. `fmpGet` is unchanged — null-for-everything is still right for
+  a panel that degrades quietly, and wrong for any job that writes "nothing found" down.
+
+**Not in this decision:** any change to `buildContext`, the dossier prompt, the signal families or the scoreboard.

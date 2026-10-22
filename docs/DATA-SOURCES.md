@@ -44,7 +44,7 @@ FRED). The fund now trades CAD **and** USD (see `docs/DECISIONS.md` D34)._
 | Tier | Category | GRQ priority | Status |
 |---|---|---|---|
 | 1 | Price/volume (OHLCV) | **Now** | **Live** — delayed Yahoo quotes + 1y bars (signals) + a **real-time on-page ticker** via FMP Ultimate (`<LiveQuote>` polls `/api/quotes` ~2.5s; stock page). FMP TSX real-time vs delayed = verify at market open |
-| 2 | Fundamentals | **Now** | **Live** — FMP profile/cap/sector + analyst price-target consensus + buy/hold/sell grades + peer comparison |
+| 2 | Fundamentals | **Now** | **Live** — FMP profile/cap/sector + analyst price-target consensus + buy/hold/sell grades + peer comparison. **D140 (2026-10-22): stored financial statements (12 quarters + 5 years), estimates snapshotted daily (revision history from 2026-10-22), health scores, float, segments, earnings-call summaries, SEC filings, insider statistics** — `lib/financials/`, `docs/COMPANY-FINANCIALS.md`. Display-only until the signal decision |
 | 6 | Earnings intelligence | **Now** | **Live** — FMP next-earnings date + EPS/rev estimates, on the stock page **and** injected into the agent's context (catalyst awareness) |
 | 7 | News | **Now** | **Live** — FMP per-stock + market news, plus the agent's web research |
 | 9 | Macroeconomic | **Now** | **Live (CA + US)** — **Bank of Canada Valet** (overnight rate / 5y GoC / CPI / USD-CAD) **+ US via FRED** (Fed funds `DFF` / 10y Treasury `DGS10` / US CPI YoY `CPIAUCNS`); both in the agent context + macro strip (`lib/macro.ts`, `FRED_API_KEY`) |

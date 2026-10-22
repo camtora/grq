@@ -1,6 +1,6 @@
 # Company financials — implementation plan
 
-**Status:** APPROVED (Cam, 2026-10-22). Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
+**Status:** APPROVED (Cam, 2026-10-22). **Backend BUILT 2026-10-22 (P0–P5 data layer: every feed below except X1/X2), display not started.** Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
 any point**, Run 3 included; the display goes through the design loop (§5). Decision record: **D140**.
 
 **One line:** wire every company-level feed our FMP plan already pays for (financial statements, forward

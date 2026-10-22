@@ -59,6 +59,7 @@ export const USER_APIS: readonly string[] = [
   "/api/quotes",
   "/api/intraday",
   "/api/stock-extras",
+  "/api/financials", // D140 — company financials on the stock page: research numbers, no book (call summaries are transcript-only)
   "/api/stock-index",
   "/api/indices",
   "/api/explain", // term-only prompt, no fund context (agent/chat-server.ts handleExplain)

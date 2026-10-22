@@ -43,7 +43,7 @@ export function fmpPlanRefused(endpoint: string, value?: string): boolean {
   return fresh(endpoint) || (value != null && fresh(`${endpoint}|${value.toUpperCase()}`));
 }
 
-async function fmpGet<T>(path: string): Promise<T | null> {
+export async function fmpGet<T>(path: string): Promise<T | null> {
   const k = fmpKey();
   if (!k) return null;
   try {
@@ -61,6 +61,40 @@ async function fmpGet<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/** Like fmpGet, but an ANSWER is never confused with a FAILURE: returns the data on a 200 (an empty
+ *  array means FMP has nothing), and THROWS on anything else — a 429 rate limit, a 402 plan refusal,
+ *  a 5xx, a timeout, an "Error Message" body. fmpGet's null-for-everything is right for a panel that
+ *  degrades quietly; it is wrong for a job that RECORDS "no data", because a transient error then
+ *  gets written down as a fact (D140: a too-fast backfill marked 104 covered names "no statements").
+ *  `status` on the error is the HTTP status (0 for a network/timeout failure). */
+export class FmpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+export async function fmpGetStrict<T>(path: string): Promise<T> {
+  const k = fmpKey();
+  if (!k) throw new FmpError("FMP_API_KEY not set", 0);
+  const sep = path.includes("?") ? "&" : "?";
+  let r: Response;
+  try {
+    r = await fetch(`${BASE}/${path}${sep}apikey=${k}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  } catch (e) {
+    throw new FmpError(`${path.split("?")[0]}: ${e instanceof Error ? e.message : String(e)}`, 0);
+  }
+  if (r.status === 402) {
+    const body = await r.text().catch(() => "");
+    noteRefusal(path, body);
+    throw new FmpError(`${path.split("?")[0]}: refused by the data plan (402)`, 402);
+  }
+  if (!r.ok) throw new FmpError(`${path.split("?")[0]}: HTTP ${r.status}`, r.status);
+  const data = await r.json();
+  if (data && !Array.isArray(data) && typeof data === "object" && "Error Message" in data) {
+    throw new FmpError(`${path.split("?")[0]}: ${String((data as Record<string, unknown>)["Error Message"]).slice(0, 120)}`, r.status);
+  }
+  return data as T;
 }
 
 // One symbol at a time (`quote-short` — the plan serves it where it refuses the batch form).
