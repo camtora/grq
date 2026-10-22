@@ -306,3 +306,47 @@ prompt-audit staging (D129–D137) and must not land mid-watch.
 | Q3 | Show FMP's own rating/DCF at all? | Cam + Graham | Show, clearly labelled as FMP's model, below Alfred's call |
 | Q4 | Transcript summaries on Max token or metered? | Cam | Follow news triage; confirm in P5 |
 | Q5 | Store raw transcripts? | Cam | No: summary only, fetch on demand (disk) |
+
+---
+
+## 9. P0 results (probed 2026-10-22, `web/scripts/financials-probe.ts`)
+
+19 awkward names × 16 feeds, then income-statement coverage across every non-retired universe name.
+
+**Coverage is far better than the plan assumed, Canada included.**
+- **Statements cover 256 of 262 tracked names.** The 6 misses are ETFs or CDRs (`VOO`, `XIC.TO`, `BANK.TO`,
+  `NFLX.TO`, `CHPS.TO`) and one TSX Venture name (`BQE.V`). Pure-TSX small caps (`DRX.TO`) and even a CSE micro
+  cap (`TN.CN`) have 12 quarters + 5 years + cash flow + balance sheet.
+- **Earnings-call transcripts cover CA names** (RY 59 calls, DRX 4, AEM 75), not just US. ~45–55 KB each.
+- **Estimates exist for CA names**, but often from 1–5 analysts (DRX, TXG: 1). The analyst count must be shown.
+- **US-only, as expected:** SEC filings and insider statistics. CA listings return nothing; the CA side stays as is.
+- **Sparse:** product segments (~half of names, often stale), geographic segments (stale for some: C's newest is
+  2018). Display rule: hide a segment chart whose newest period is > 15 months old.
+
+**Rules this adds to §3/§4:**
+- **R1 — the FMP key for a CA name is its listing symbol (`yahoo`, e.g. `RY.TO`), never the bare ticker.** Bare
+  `DRX` is a different security (a fund; 100 fund filings, no statements): the D132 trap, confirmed. Bare `RY`
+  happens to return the same statements, but different scores, rating and DCF. One key per name: `member.yahoo`.
+- **R2 — reporting currency is per company, and often not the listing's.** `AEM.TO` and `TXG.TO` report USD,
+  `TSM` TWD, `ASML` EUR, `SHOP.TO` USD. Confirms §3.3.
+- **R3 — financials (banks, insurers) get a different card.** FMP synthesises a "gross profit" for banks (C:
+  revenue − "cost of revenue" = interest expense), so gross margin is meaningless there; Altman Z is meaningless
+  too (C 0.1, RY 0.3: "distress" by formula, healthy in fact); and the DCF is nonsense (RY.TO −549). For
+  sector = Financial Services: suppress gross margin, Altman Z and DCF; keep revenue, net income, EPS, margins
+  on net income.
+- **R4 — FMP's DCF is shown only when > 0** (DLR −8.71, RY.TO −549.36) and never for financials.
+- **R5 — ETFs are skipped entirely** (profile `isEtf`), not shown as "No info".
+- **R6 — SEC filings need a form filter.** Banks flood the feed with structured-note prospectuses (C: 100 rows of
+  424B2/FWP in 3 months; bare RY the same). Keep `8-K, 10-Q, 10-K, 6-K, 40-F, 20-F, S-1, DEF 14A, SC 13D`;
+  Form 4 already lives in the insider panel.
+- **R7 — no history of estimates from FMP.** Past rows in `analyst-estimates` are past *fiscal years*, not past
+  *snapshots*, so revisions can only come from our own daily snapshots (§4.4: start the clock early).
+  Quarterly estimates need `limit≥20` to include the nearest quarters (NVDA's 8 rows start a year out).
+- **R8 — EPS precision.** Small names report EPS like `−0.0022` (TN) and `0.0579` (CCO): 1/10,000 units is
+  enough, but only just; store `epsDiluted4` and round half-away-from-zero.
+- **R9 — splits.** `splits?symbol=` exists (NVDA 10:1 2024-06-10). Dilution math divides share counts across a
+  split by its ratio rather than flagging it.
+- **R10 — fiscal labels are FMP's** (`fiscalYear` + `period`, e.g. NVDA period-end 2026-07-26 = FY2027 Q2; TN.CN
+  2026-06-30 = FY2027 Q1). Store them as given; never derive the fiscal year from the date.
+- **R11 — filing timing.** `acceptedDate`/`filingDate` are present (C filed 2026-10-13, the same morning as its
+  call). The refresh after an earnings date can key off them.
