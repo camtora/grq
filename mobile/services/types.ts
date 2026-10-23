@@ -254,6 +254,8 @@ export type Dossier = {
     bullPct: number | null;
     asOf: string;
   } | null;
+  // "The business" (D140) — typed from @shared/contract (not hand-mirrored); null/absent = nothing to show.
+  financials?: import('@shared/contract').Financials | null;
   personalPositions?: {
     owner: string;
     ownerKey: string | null;

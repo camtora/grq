@@ -85,7 +85,10 @@ export function Grid({
   return (
     <View
       onLayout={(e) => setW(e.nativeEvent.layout.width)}
-      style={[{ flexDirection: cols > 1 ? 'row' : 'column', flexWrap: 'wrap', gap }, style]}
+      // Wrap ONLY in the multi-column case: a wrapping column sizes each panel to its own content
+      // (each wrap line is as wide as its widest child), so on a phone the short panels — analyst
+      // ratings, targets, earnings, 13F, signals — stopped short of the screen width (Cam, 2026-10-23).
+      style={[cols > 1 ? { flexDirection: 'row', flexWrap: 'wrap', gap } : { flexDirection: 'column', gap }, style]}
     >
       {items.map((child, i) => (
         <View key={i} style={cols > 1 ? { width: cellW } : undefined}>

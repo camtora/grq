@@ -16,6 +16,8 @@ import { money, signedMoney, signedPctFromBps, pnlColor, fmtDate, fmtEps } from 
 import { useApi, useLiveQuote } from '../../../services/hooks';
 import { useAuth } from '../../../store/auth';
 import type { Dossier } from '../../../services/types';
+import Headline from '../../../components/financials/Headline';
+import { HealthPanel, ScoresPanel, EstimatesPanel, SegmentsPanel, CallPanel, FilingsPanel } from '../../../components/financials/Panels';
 
 const tabular = { fontVariant: ['tabular-nums' as const] };
 
@@ -659,6 +661,25 @@ export default function StockScreen() {
               </View>
             )}
             </Grid>
+
+            {/* ---- "The business" (D140) — the company's financials, the web section's twin: the
+                 headline card, then health · scores · analysts · segments (2-up on iPad), then the
+                 last earnings call · filings & insiders. ---- */}
+            {d.financials?.kind === 'company' && (
+              <>
+                <Headline v={d.financials} symbol={d.symbol} listingCurrency={d.currency ?? null} />
+                <Grid min={300} gap={12}>
+                  <HealthPanel v={d.financials} />
+                  <ScoresPanel v={d.financials} listingCurrency={d.currency ?? null} />
+                  <EstimatesPanel v={d.financials} />
+                  <SegmentsPanel v={d.financials} />
+                </Grid>
+                <Grid min={300} gap={12}>
+                  <CallPanel v={d.financials} />
+                  <FilingsPanel v={d.financials} />
+                </Grid>
+              </>
+            )}
 
             {/* ---- Options positioning + social chatter — both signals, never traded ---- */}
             <Grid min={300} gap={12}>
