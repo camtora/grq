@@ -4554,3 +4554,21 @@ Form 4s in dollars (and say when a 40-F filer's people report on SEDI instead), 
 summarized, macro is BoC + FRED. **The Starter-week "isn't in our market-data plan" wording for Toronto names was
 unconditional** — on the coverage map and three empty panels (ratings, targets, earnings) — and kept saying it
 after the plan came back; it now appears only after a real refusal on that load (`fmpPlanRefused`).
+
+### D141 — The members' plan decisions become rules (Graham + Cam, 2026-10-23)
+
+All eight D139 questions were decided on the plan tab (PlanDecision rows 3–10; Graham took each suggested landing,
+Cam confirmed the 50% cap). In code for agent **v2.90-phase4** (built, NOT deployed — it ships with Monday's reset):
+- **Q3** Aggressive dial `maxPositionPct` 80 → 50 (a ceiling, not a target). The race/desk sandboxes read the same dial.
+- **Q6** ≤ 2 new names per rolling 7 days, up to 4 in the first week from `PAPER_INCEPTION`; top-ups never count.
+- **Q8** a new position is ≥ US$5,000 at entry; top-ups free.
+- **Q2** a new position needs a written invalidation and a stop no closer than max(two normal weekly moves, the
+  dial's safety stop); weekly move = median |5-session return| over ~26 weeks. Permanent LESSON #14116: "a stop is
+  for losses, never for impatience".
+- **Q4** VOO is outside all of the above and out of the rotation score.
+- **Q5** the 11:00 check-in asks the idle-cash question in writing. **Q7** walls are timing colour only (context +
+  dossier wording). **Q1** the four pass marks stand.
+All gate rules live in `agent/standing-rules.ts` (pure; `test/standing-rules.test.ts`) and are wired into
+`validator.ts` for BUYs of names not held. Same build: the drawdown high-water mark and the track record's
+month-to-date are scoped to `PAPER_INCEPTION`, so a reset day reads neither the old run's peak nor the re-baselined
+capital as a −C$67,000 month. The flatten stays in market hours through the app (Monday), so every sale is on record.

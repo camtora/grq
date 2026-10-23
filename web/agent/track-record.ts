@@ -14,6 +14,8 @@ import { prisma } from "../lib/db";
 import { getQuotes } from "../lib/broker/quotes";
 import { lastSettledSnapshotBefore } from "../lib/nav-history";
 import { etDateStr, startOfEtDay } from "./calendar";
+import { isBallast } from "./standing-rules";
+import { PAPER_INCEPTION } from "../lib/portfolio";
 
 export type Fill = {
   symbol: string;
@@ -67,7 +69,8 @@ function forwardNet(fills: Fill[]): Map<string, number> {
 export type Rotation = { at: Date; sold: Fill[]; bought: Fill[] };
 
 export function rotations(fills: Fill[], windowMs = 45 * 60_000): Rotation[] {
-  const agent = fills.filter((f) => f.placedBy === "agent").sort((a, b) => a.at.getTime() - b.at.getTime());
+  // VOO is parking, not a position (D141): selling it to fund a stock is not a rotation to score.
+  const agent = fills.filter((f) => f.placedBy === "agent" && !isBallast(f.symbol)).sort((a, b) => a.at.getTime() - b.at.getTime());
   const clusters: Fill[][] = [];
   for (const f of agent) {
     const last = clusters.at(-1);
@@ -224,15 +227,23 @@ export async function trackRecordBlock(windowDays = 30): Promise<string> {
 
     // Month-to-date P&L after contributions: settled NAV now − settled NAV before the ET month began
     // − money added since. SETTLED only: an unsettled snapshot can double-count a sale (D120).
+    // A run that began this month (a paper reset, D138) is measured from its own start: the
+    // re-baselined contributions are its starting capital, not money added mid-month — counting
+    // them as "added" would read a fresh US$50,000 book as a −C$67,000 month.
     const monthStart = startOfEtDay(new Date(`${etDateStr(now).slice(0, 8)}01T12:00:00Z`));
-    const [startSnap, latestSnap, added] = await Promise.all([
-      lastSettledSnapshotBefore(monthStart),
-      lastSettledSnapshotBefore(now),
+    const runStartedThisMonth = PAPER_INCEPTION > monthStart;
+    const [startSnap, latestSnap, added, allIn] = await Promise.all([
+      runStartedThisMonth ? Promise.resolve(null) : lastSettledSnapshotBefore(monthStart, PAPER_INCEPTION),
+      lastSettledSnapshotBefore(now, PAPER_INCEPTION),
       prisma.contribution.aggregate({ where: { at: { gte: monthStart } }, _sum: { amountCents: true } }),
+      prisma.contribution.aggregate({ _sum: { amountCents: true } }),
     ]);
+    const base = runStartedThisMonth ? (allIn._sum.amountCents ?? 0) : startSnap?.navCents ?? 0;
     const mtd =
-      startSnap && latestSnap
-        ? { pnlCents: latestSnap.navCents - startSnap.navCents - (added._sum.amountCents ?? 0), startNavCents: startSnap.navCents }
+      latestSnap && base > 0
+        ? runStartedThisMonth
+          ? { pnlCents: latestSnap.navCents - base, startNavCents: base }
+          : { pnlCents: latestSnap.navCents - base - (added._sum.amountCents ?? 0), startNavCents: base }
         : null;
 
     const currentQty = new Map(positions.map((p) => [p.symbol, p.qty]));

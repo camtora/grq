@@ -16,6 +16,7 @@ import { MODELS, RACE, HARD, AGENT_VERSION, SELF_INVEST, EFFORT, effortFor, type
 import { chatComplete, isOpenRouterModel, type ChatResult } from "./openrouter";
 import { parseProposal, SHADOW_DECISION_SUFFIX, SHADOW_NARRATIVE_SUFFIX } from "./race/shadow";
 import { PERSONA } from "./persona";
+import { idleCashQuestion } from "./standing-rules";
 import { alert, heartbeat, sendDiscord } from "./alerts";
 import { limitQuietUntil, isClaudeLimitError, tripLimitQuiet, fmtEt } from "./limit-quiet";
 import { recordAgentUsage } from "./usage";
@@ -835,7 +836,7 @@ The market is open. This check-in is monitoring: are the holdings' theses intact
 4. New ideas only when there is a reason: cash above its ceiling, a focus name whose entry condition is now met, or an idea that is a large, clear step up on a current holding. Before opening a new name, ask whether adding to an existing winner is better. Every buy clears the §6 gate and the ${HARD.minBuyConfidence}% bar, and a new position is one you would hold for months. If a name that clears the bar can't be funded in its own currency sleeve while the other sleeve is flush, request_fx sized to the position. Rejections are final: journal why and adapt. The screen shortlist below is a starting point when you are looking.${screenBlock}
 5. Research as needed: add_candidate (untracked) or request_research (already tracked) queues a full dossier; schedule_checkin a return once it lands (~20–30 min) rather than acting on an inline note, and add_agenda lower-priority follow-ups for the next scheduled check-in. There is no quota.
 6. Write ONE short RESEARCH note (write_journal) titled "Intraday Check-in — <one-line summary>": what you checked, what you did or why you held. Leave \`symbol\` blank — this is a fund-level read (a symbol hides it from the Portfolio brief and the check-in notifications); file any single-name write-up as a separate symbol-tagged RESEARCH entry.
-7. Only if this check-in surfaced a durable, reusable lesson, record it separately as write_journal(kind:"LESSON"). Most won't.
+7. Only if this check-in surfaced a durable, reusable lesson, record it separately as write_journal(kind:"LESSON"). Most won't.${idleCashQuestion(reason)}
 Keep it tight.`;
   await runSession({ label: `checkin:${reason.slice(0, 40)}`, prompt, model: MODELS.decision, withTools: true, maxTurns: 45 });
   await notifyCheckinDecision(startedAt, "scheduled");
@@ -884,7 +885,7 @@ Listing: ${venue} — trades in ${cur}. This is a ${cur} buy funded from the ${c
 Quote: ${quote ? `$${(quote.midCents / 100).toFixed(2)} ${cur} (${((quote.dayChangeBps ?? 0) / 100).toFixed(2)}% today)` : "n/a"}
 Signals: ${sig ? signalsOneLine(sig) : "(no bar history yet)"}
 Smart money (disclosed — weigh it, don't follow blindly): ${smLine || "(none tracked on this name)"}
-Options positioning (a SIGNAL about the underlying — we NEVER trade options): ${optLine || "(no listed options for this name)"}
+Options positioning (a SIGNAL about the underlying — we NEVER trade options; put/call walls are timing colour only, never a reason to buy, sell or hold): ${optLine || "(no listed options for this name)"}
 Social buzz (Reddit + Stocktwits — a CROWDING/RISK signal, ON PROBATION, noisy & gameable; weigh lightly, never decisive): ${socLine || "(no retail chatter — off the radar)"}
 Prior journal on ${sym}: ${recent.map((j) => `[${j.kind}] ${j.title}`).join("; ") || "(none)"}
 

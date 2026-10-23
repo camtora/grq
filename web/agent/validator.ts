@@ -22,6 +22,8 @@ import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
 import { isMarketOpen, minutesSinceOpen, minutesToClose, startOfEtDay, etDateStr } from "./calendar";
 import { HARD, DIALS, OPTIONS, AGENT_VERSION } from "./policy";
 import { alert } from "./alerts";
+import { getCloses } from "../lib/bars";
+import { newNamesSince, standingRuleRefusal, starterCap, weeklyMoveBps } from "./standing-rules";
 
 export type Thesis = {
   thesis: string;
@@ -226,6 +228,31 @@ export async function validateAndPlace(order: AgentOrder, thesis: Thesis): Promi
     const newPosValueCad = (existing?.marketValueCadCents ?? 0) + cad(order.qty * estPrice);
     if (breachesPositionCap(newPosValueCad, pf.navCents, dial.maxPositionPct)) {
       return refuse(`Position would exceed ${dial.maxPositionPct}% of NAV (${settings?.riskLevel} dial).`);
+    }
+    // The members' standing rules (D141, decided 2026-10-23): new-name limit, US$5,000 first buy,
+    // stop width. Top-ups and VOO pass untouched (agent/standing-rules.ts).
+    if (!existing || existing.qty <= 0) {
+      const now = new Date();
+      const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000);
+      const [weekFills, closes] = await Promise.all([
+        prisma.trade.findMany({ where: { secType: "STK", at: { gte: since } }, select: { symbol: true, side: true, qty: true, at: true } }),
+        getCloses(symbol, 140),
+      ]);
+      const currentQty = new Map(pf.positions.map((p) => [p.symbol, p.qty]));
+      const native = order.qty * estPrice;
+      const ruling = standingRuleRefusal({
+        symbol,
+        isNewName: true,
+        costUsdCents: posCcy === "USD" ? native : pf.fxUsdCad ? Math.round(native / pf.fxUsdCad) : native,
+        priceCents: estPrice,
+        stopCents: thesis.stopCents,
+        invalidation: thesis.invalidation,
+        weeklyBps: weeklyMoveBps(closes.map((c) => c.closeCents)),
+        safetyStopPct: dial.stopPct,
+        newNamesThisWeek: newNamesSince(weekFills.map((f) => ({ ...f, side: f.side as "BUY" | "SELL" })), currentQty, since),
+        cap: starterCap(now, PAPER_INCEPTION),
+      });
+      if (ruling) return refuse(ruling);
     }
     // Cash already promised to RESTING BUY limits is not spendable (2026-09-23). The gate
     // saw only `cash - cost`, so a GTC dip-bid was invisible to it. The cash floor already

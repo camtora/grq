@@ -1,5 +1,6 @@
 import { prisma } from "../lib/db";
-import { getPortfolio } from "../lib/portfolio";
+import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
+import { standingRulesText, starterCap } from "./standing-rules";
 import { etParts, isMarketOpen, minutesToClose, openExchanges, startOfEtDay } from "./calendar";
 import { orderBudgetBlock } from "./order-budget";
 import { dayPnlBps, superficialLossWindows } from "./validator";
@@ -285,7 +286,7 @@ ${
 ## Market screen — fresh finds (INTERESTING & not yet tracked — leads from our deterministic + Haiku scan of the whole market; an INPUT to widen the funnel, NEVER the gate; research before acting)
 ${marketFinds.length === 0 ? "  (none surfaced — or retrieval disabled)" : marketFinds.map(findLine).join("\n")}
 
-## Options positioning (held/focus US names — dealer gamma · put/call · IV-skew; a SIGNAL about the underlying, you NEVER trade options)
+## Options positioning (held/focus US names — dealer gamma · put/call · IV-skew; a SIGNAL about the underlying, you NEVER trade options. Put/call walls are timing colour only — where an order might fill — never a reason to buy, sell or hold)
 ${
   optRows.length === 0
     ? "  (no listed-options coverage on the book — CA/illiquid names)"
@@ -303,6 +304,8 @@ ${shortLesson ? `## Shorting lesson (Short Lab sandbox — you NEVER short; rule
 ## Policy — ${dialName} dial (you cannot change any of this)
 Max position ${dial.maxPositionPct}% NAV · cash floor ${dial.cashFloorPct}% / ceiling ${dial.cashCeilingPct}% (PER currency-account) · stop distance ${dial.stopPct}% below ACB (enforced deterministically) · max ${dial.maxNewTradesPerWeek} new buys/week · tiers ${dial.tiers.join("+")}
 Universe slots: ${slotLine}
+The members' standing rules (decided 2026-10-23, enforced by the order gate):
+${standingRulesText(starterCap(new Date(), PAPER_INCEPTION), dial.stopPct)}
 Hard limits: ${HARD.maxOrdersPerDay} orders/day · ${HARD.maxOrdersPerHour}/hour · no cap on # of holdings (breadth is your call — size, the cash floor, and the weekly BUY cap still bind) · no shorting · no margin · no options · no same-day round trips · no entries first/last ${HARD.noEntriesFirstMin} min · daily-loss pause at ${HARD.dailyLossPauseBps / 100}% · BUY targets must clear ${HARD.feeEdgeMultiple}× round-trip commissions.
 
 ## Orders so far today — your order budget (counted exactly as the gate counts it)

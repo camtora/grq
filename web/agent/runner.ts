@@ -12,7 +12,7 @@ import { highWaterMarkCents } from "../lib/nav-history";
 import { effectiveHeldQty } from "../lib/broker/positions";
 import { getBroker } from "../lib/broker";
 import { IBKRBroker } from "../lib/broker/ibkr";
-import { getPortfolio } from "../lib/portfolio";
+import { getPortfolio, PAPER_INCEPTION } from "../lib/portfolio";
 import { refreshBars } from "../lib/bars";
 import { runLearnExamplesRefresh } from "../lib/learn/examples";
 import { planWeeklyCuration, applyCuration, decideDailyRefresh } from "./curation";
@@ -308,7 +308,9 @@ async function checkDrawdown() {
   // (a sale's proceeds counted on top of the shares it sold) was a permanent phantom peak that
   // halted the fund on 2026-07-16 and again 2026-07-29. The 2-tick confirm below cannot help with
   // that: it guards the CURRENT reading, and both ticks were honest — it was the mark that lied.
-  const hwm = await highWaterMarkCents();
+  // Scoped to the current run (PAPER_INCEPTION): a reset starts a new book, so the old run's peak
+  // is not this one's high-water mark (D138/D141).
+  const hwm = await highWaterMarkCents(PAPER_INCEPTION);
   if (hwm <= 0) return;
   const pf = await getPortfolio();
   const ddBps = Math.round(((pf.navCents - hwm) / hwm) * 10_000);

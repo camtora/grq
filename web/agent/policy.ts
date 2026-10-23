@@ -8,7 +8,7 @@ import type { Tier } from "../lib/universe";
 //           just tracks deploys. The CLAUDE.md deploy block carries the rule so it isn't forgotten.
 //   phase — the PROJECT_PLAN §9 project phase (phase4).
 // Edit this constant in the SAME build you ship, so the new stamp is honest.
-export const AGENT_VERSION = "v2.89-phase4";
+export const AGENT_VERSION = "v2.90-phase4";
 
 // Hard limits — humans edit this file, the agent never does (D11).
 export const HARD = {
@@ -145,7 +145,8 @@ export const DIALS: Record<"CAUTIOUS" | "BALANCED" | "AGGRESSIVE", DialPolicy> =
   // concentration allowed at each level — Aggressive can run up to 80% of NAV in one name.
   CAUTIOUS: { maxPositionPct: 25, cashFloorPct: 30, cashCeilingPct: 50, tiers: ["etf", "large"], stopPct: 5, takeProfitPct: 15, maxNewTradesPerWeek: 15 },
   BALANCED: { maxPositionPct: 50, cashFloorPct: 15, cashCeilingPct: 30, tiers: ["etf", "large", "mid"], stopPct: 8, takeProfitPct: 25, maxNewTradesPerWeek: 20 },
-  AGGRESSIVE: { maxPositionPct: 80, cashFloorPct: 0, cashCeilingPct: 15, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 25 },
+  // Aggressive 80 → 50 (D141, the members' decision 2026-10-23): a ceiling, not a target.
+  AGGRESSIVE: { maxPositionPct: 50, cashFloorPct: 0, cashCeilingPct: 15, tiers: ["etf", "large", "mid"], stopPct: 12, takeProfitPct: 40, maxNewTradesPerWeek: 25 },
 };
 
 // The fund's REAL hurdle (Cam 2026-06-25): it only earns genuine return once it clears its own
