@@ -68,13 +68,26 @@ export type StandingDecision = {
   at: Date;
 };
 
-export async function standingDecisions(round: string = PLAN_ROUND.key): Promise<StandingDecision[]> {
-  const rows = await prisma.planDecision.findMany({ where: { round }, orderBy: { at: "desc" } });
+/** The choice an UNDO records: decisions are append-only (the history stays), and a withdrawal as
+ *  the newest row means "not decided" again (Cam, 2026-10-23: "can you undo my decided on question 1"). */
+export const WITHDRAWN = "withdrawn";
+
+/** Newest row per question wins; a withdrawal leaves the question undecided. Pure — the rows newest first. */
+export function standingRows<T extends { questionKey: string; choice: string }>(rowsNewestFirst: T[]): T[] {
   const seen = new Set<string>();
-  const out: StandingDecision[] = [];
-  for (const r of rows) {
+  const out: T[] = [];
+  for (const r of rowsNewestFirst) {
     if (seen.has(r.questionKey)) continue;
     seen.add(r.questionKey);
+    if (r.choice !== WITHDRAWN) out.push(r);
+  }
+  return out;
+}
+
+export async function standingDecisions(round: string = PLAN_ROUND.key): Promise<StandingDecision[]> {
+  const rows = await prisma.planDecision.findMany({ where: { round }, orderBy: { at: "desc" } });
+  const out: StandingDecision[] = [];
+  for (const r of standingRows(rows)) {
     out.push({
       round: r.round,
       questionKey: r.questionKey,
@@ -96,7 +109,7 @@ export async function recordDecision(input: RecordDecisionInput) {
   const round = input.round ?? PLAN_ROUND.key;
   const q = planQuestion(input.questionKey);
   if (!q) throw new Error("Unknown question.");
-  if (!q.options.some((o) => o.key === input.choice)) throw new Error("Pick one of the offered answers.");
+  if (input.choice !== WITHDRAWN && !q.options.some((o) => o.key === input.choice)) throw new Error("Pick one of the offered answers.");
   const note = (input.note ?? "").trim().slice(0, 2000) || null;
   return prisma.planDecision.create({ data: { round, questionKey: q.key, choice: input.choice, note, decidedBy: input.decidedBy.toLowerCase() } });
 }

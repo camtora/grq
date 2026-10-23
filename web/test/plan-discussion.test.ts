@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { PLAN_QUESTIONS } from "../lib/plan-questions";
-import { PLAN_PREP, discussionRows, discussionStatus, discussionSummary, orderOfBusiness } from "../lib/plan-discussion";
+import { PLAN_PREP, PRIORITY, discussionRows, discussionStatus, discussionSummary, orderOfBusiness } from "../lib/plan-discussion";
+import { standingRows, WITHDRAWN } from "../lib/plan-answers";
 
 // The discussion panel (D139, 2026-10-22): one row per question, status computed from the two
 // standing answers, disagreements first, a prep note for every question.
@@ -56,5 +57,32 @@ describe("discussion rows", () => {
     assert.ok(ordered.indexOf(q3) < ordered.indexOf(q1), "an open question comes before an agreed one");
     const s = discussionSummary(rows);
     assert.deepEqual(s, { agreed: 1, differ: 1, open: PLAN_QUESTIONS.length - 2, decided: 1, total: PLAN_QUESTIONS.length });
+  });
+});
+
+
+describe("the suggested landings + Cam's short list (2026-10-23)", () => {
+  it("every suggested landing records one of its own question's options", () => {
+    for (const q of PLAN_QUESTIONS) {
+      const prep = PLAN_PREP[q.key];
+      if (!prep) continue;
+      assert.ok(q.options.some((o) => o.key === prep.suggestChoice), `${q.key}: ${prep.suggestChoice} is not an option`);
+    }
+  });
+  it("the priorities lead the page, in Cam's order (3, 6, 7), even once decided", () => {
+    const rows = discussionRows(PLAN_QUESTIONS, [], [
+      { questionKey: "single-name-cap", choice: "cap", choiceLabel: "", note: null, decidedBy: "Cam", at: "2026-10-23T17:00:00Z" },
+    ]);
+    assert.deepEqual(orderOfBusiness(rows).slice(0, 3).map((r) => r.n), [3, 6, 7]);
+    assert.equal(PRIORITY.length, 3);
+  });
+  it("undo: a withdrawal as the newest row leaves the question undecided; the history stays", () => {
+    const rows = [
+      { questionKey: "pass-marks", choice: WITHDRAWN },
+      { questionKey: "pass-marks", choice: "change" },
+      { questionKey: "usd-ballast", choice: "voo" },
+    ];
+    assert.deepEqual(standingRows(rows).map((r) => r.questionKey), ["usd-ballast"]);
+    assert.deepEqual(standingRows([{ questionKey: "pass-marks", choice: "accept" }, ...rows]).map((r) => r.choice), ["accept", "voo"]);
   });
 });

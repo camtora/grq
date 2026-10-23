@@ -94,6 +94,50 @@ export default function PlanDiscussion({
     }
   }
 
+  async function post(r: DiscussionRow, choice: string, note: string): Promise<string | null> {
+    patch(r.key, { busy: true, err: "" });
+    try {
+      const res = await fetch("/api/plan/decisions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ questionKey: r.key, choice, note }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        patch(r.key, { busy: false, err: j.error ?? `HTTP ${res.status}` });
+        return null;
+      }
+      patch(r.key, { busy: false });
+      return typeof j.at === "string" ? j.at : new Date().toISOString();
+    } catch (e) {
+      patch(r.key, { busy: false, err: e instanceof Error ? e.message : String(e) });
+      return null;
+    }
+  }
+
+  /** Record the prep's suggested landing as the decision: its option, its words as the note. */
+  async function takeSuggestion(r: DiscussionRow) {
+    if (!r.prep || drafts[r.key].busy) return;
+    const at = await post(r, r.prep.suggestChoice, r.prep.suggest);
+    if (!at) return;
+    setDecided((x) => ({
+      ...x,
+      [r.key]: { choice: r.prep!.suggestChoice, choiceLabel: r.options.find((o) => o.key === r.prep!.suggestChoice)?.label ?? r.prep!.suggestChoice, note: r.prep!.suggest, decidedBy: me === "graham" ? "Graham" : "Cam", at },
+    }));
+    patch(r.key, { choice: r.prep.suggestChoice, note: r.prep.suggest });
+    setOpenRec((o) => ({ ...o, [r.key]: false }));
+  }
+
+  /** Undo: records a withdrawal (the history stays); the question is open again. */
+  async function undo(r: DiscussionRow) {
+    if (drafts[r.key].busy) return;
+    const at = await post(r, "withdrawn", "");
+    if (!at) return;
+    setDecided((x) => ({ ...x, [r.key]: null }));
+    patch(r.key, { choice: "", note: "" });
+    setOpenRec((o) => ({ ...o, [r.key]: false }));
+  }
+
   const decidedCount = Object.values(decided).filter(Boolean).length;
 
   return (
@@ -104,6 +148,18 @@ export default function PlanDiscussion({
         prep for each: what hangs on it, where the two answers stand, and a suggested landing. Disagreements come first. When you have
         talked, record the decision under the question; that is what goes into the restart.
       </p>
+      {rows.some((r) => r.priority) && (
+        <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2 text-sm text-teal-50">
+          <span className="font-bold text-amber-300">Cam&apos;s short list for the talk:</span>{" "}
+          {rows
+            .filter((r) => r.priority)
+            .sort((a, b) => a.priority!.rank - b.priority!.rank)
+            .map((r) => `question ${r.n}`)
+            .join(", ")
+            .replace(/, ([^,]*)$/, " and $1")}
+          . They&apos;re first below; everything else can follow the suggested landings.
+        </p>
+      )}
       <div className="mb-4 flex flex-wrap gap-2 text-xs">
         <span className="rounded-lg border border-red-400/40 bg-red-400/10 px-2.5 py-1 text-red-300">{summary.differ} you differ</span>
         <span className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-amber-300">{summary.open} open or unsure</span>
@@ -115,7 +171,7 @@ export default function PlanDiscussion({
       {book && (
         <p className="mb-4 text-xs text-teal-200/60">
           Where the book stands going in: {book.positions} stocks, cash {book.cashPct.toFixed(1)}% of the fund, {book.aboveFloor} of the {book.positions} above
-          Graham&apos;s US${book.floorUsd.toLocaleString("en-CA")} floor{book.lastBuy ? `, last buy ${book.lastBuy}` : ""}. The whole book is sold flat on Friday for the restart, so these numbers describe the old book, not the new one.
+          Graham&apos;s US${book.floorUsd.toLocaleString("en-CA")} floor{book.lastBuy ? `, last buy ${book.lastBuy}` : ""}. The whole book is sold flat for the restart, so these numbers describe the old book, not the new one.
         </p>
       )}
       <ol className="space-y-4">
@@ -127,7 +183,13 @@ export default function PlanDiscussion({
             <li key={r.key} className={`rounded-xl border p-4 ${dec ? "border-teal-400/10 bg-teal-400/[0.02]" : "border-teal-400/15 bg-teal-400/[0.03]"}`}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="text-sm font-semibold text-teal-50">
+                  {r.priority && (
+                    <span className="mr-2 rounded-lg border border-amber-400/50 bg-amber-400/15 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                      Priority {r.priority.rank + 1}
+                    </span>
+                  )}
                   <span className="tabular-nums text-amber-300">{r.n}.</span> {r.title}
+                  {r.priority && <div className="mt-1 text-xs font-normal text-amber-200/90">{r.priority.ask}</div>}
                 </div>
                 <span className={`rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
               </div>
@@ -166,16 +228,35 @@ export default function PlanDiscussion({
                     {dec.note && <span className="text-teal-200/70">— {dec.note}</span>}
                     <span className="text-teal-200/35">· recorded by {dec.decidedBy} {fmtEt(dec.at)}</span>
                     {me && (
-                      <button type="button" onClick={() => setOpenRec((o) => ({ ...o, [r.key]: !showRec }))} className="ml-auto text-teal-300/70 hover:text-teal-300">
-                        {showRec ? "cancel" : "change"}
-                      </button>
+                      <span className="ml-auto flex gap-3">
+                        <button type="button" onClick={() => setOpenRec((o) => ({ ...o, [r.key]: !showRec }))} className="text-teal-300/70 hover:text-teal-300">
+                          {showRec ? "cancel" : "change"}
+                        </button>
+                        <button type="button" disabled={d.busy} onClick={() => undo(r)} className="text-teal-300/70 hover:text-red-300 disabled:opacity-50">
+                          undo
+                        </button>
+                      </span>
                     )}
                   </div>
                 ) : me ? (
                   !showRec && (
-                    <button type="button" onClick={() => setOpenRec((o) => ({ ...o, [r.key]: true }))} className="rounded-lg bg-teal-400/20 px-2.5 py-1 text-xs font-semibold text-teal-50 hover:bg-teal-400/30">
-                      Record the decision
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {r.prep && (
+                        <button
+                          type="button"
+                          disabled={d.busy}
+                          onClick={() => takeSuggestion(r)}
+                          title={r.prep.suggest}
+                          className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/25 disabled:opacity-50"
+                        >
+                          {d.busy ? "Saving…" : "Take the suggested landing"}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => setOpenRec((o) => ({ ...o, [r.key]: true }))} className="rounded-lg bg-teal-400/20 px-2.5 py-1 text-xs font-semibold text-teal-50 hover:bg-teal-400/30">
+                        Record something else
+                      </button>
+                      {d.err && <span className="text-red-300">{d.err}</span>}
+                    </div>
                   )
                 ) : (
                   <span className="text-teal-200/40">not decided yet</span>
