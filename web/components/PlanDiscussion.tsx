@@ -189,7 +189,7 @@ export default function PlanDiscussion({
                     </span>
                   )}
                   <span className="tabular-nums text-amber-300">{r.n}.</span> {r.title}
-                  {r.priority && <div className="mt-1 text-xs font-normal text-amber-200/90">{r.priority.ask}</div>}
+                  {r.priority && <div className="mt-1 text-xs font-normal text-amber-300">{r.priority.ask}</div>}
                 </div>
                 <span className={`rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
               </div>
@@ -247,7 +247,7 @@ export default function PlanDiscussion({
                           disabled={d.busy}
                           onClick={() => takeSuggestion(r)}
                           title={r.prep.suggest}
-                          className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/25 disabled:opacity-50"
+                          className="rounded-lg border border-amber-400/40 bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-400/25 disabled:opacity-50"
                         >
                           {d.busy ? "Saving…" : "Take the suggested landing"}
                         </button>
