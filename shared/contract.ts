@@ -380,6 +380,97 @@ export const CurrentRead = z.object({
   sources: z.array(z.string()),
 });
 
+/* ---------- company financials — "The business" (D140, mirrors web/lib/financials/view.ts) ----------
+ * Everything is computed on the server (growth, the bank and re-cut rules, the health grades), so the app
+ * only renders. Money = integer minor units in `currency` (the company's REPORTING currency); EPS is ×10,000;
+ * ratios are basis points. A growth figure is either a number or "n/m" with the reason. */
+export const FinGrowth = z.union([
+  z.object({ kind: z.literal("ok"), bps: z.number().int() }),
+  z.object({ kind: z.literal("nm"), reason: z.enum(["zero-base", "negative-base", "basis-changed"]) }),
+]);
+const FinRevision = z.union([
+  z.object({ kind: z.literal("ok"), days: z.number().int(), eps: FinGrowth.nullable(), revenue: FinGrowth.nullable() }),
+  z.object({ kind: z.literal("building"), daysOfHistory: z.number().int() }),
+]);
+const num = z.number().nullable();
+const FinHeadline = z.object({
+  asOf: z.string(), label: z.string(), currency: z.string(),
+  revenueTtm: num, revenueQ: num, revenueQYearAgo: num, revenueYoY: FinGrowth.nullable(), revenueQoQ: FinGrowth.nullable(), revenueAccelBps: num,
+  epsQ4: num, epsQ4YearAgo: num, epsYoY: FinGrowth.nullable(),
+  netIncomeQ: num, operatingIncomeQ: num, netIncomeQYearAgo: num, netIncomeYoY: FinGrowth.nullable(), netIncomeTtm: num,
+  roeBps: num, grossMarginBps: num, operatingMarginBps: num, netMarginBps: num, operatingMarginChangeBps: num, netMarginChangeBps: num,
+  preRevenue: z.boolean(), fcfTtm: num, fcfMarginBps: num, netDebt: num, shareChangeYoY: FinGrowth.nullable(), quartersAvailable: z.number().int(),
+});
+const FinQuarter = z.object({
+  periodEnd: z.string(), label: z.string(),
+  revenue: num, netIncome: num, epsQ4: num, fcf: num, operatingMarginBps: num, netMarginBps: num,
+  revenueYoY: FinGrowth.nullable(), epsYoY: FinGrowth.nullable(), netIncomeYoY: FinGrowth.nullable(),
+});
+const FinEstimate = z.object({
+  targetEnd: z.string(),
+  revenueAvg: num, revenueLow: num, revenueHigh: num, epsAvg4: num, epsLow4: num, epsHigh4: num, analysts: num,
+  rev30: FinRevision, rev90: FinRevision,
+  base: z.object({ periodEnd: z.string(), revenue: num, epsAvg4: num }).nullable(), // the reported period a year earlier
+});
+const FinSegment = z.object({
+  periodEnd: z.string(), period: z.string(), currency: z.string().nullable(),
+  parts: z.array(z.object({ name: z.string(), cents: z.number() })),
+  compare: z.union([
+    z.object({
+      kind: z.literal("ok"), totalChange: z.number(),
+      parts: z.array(z.object({ name: z.string(), cents: z.number(), prevCents: z.number(), growth: FinGrowth.nullable(), shareOfChangeBps: num })),
+    }),
+    z.object({ kind: z.literal("resegmented"), since: z.string() }), // the segments were re-cut: nothing compared
+    z.object({ kind: z.literal("none") }),
+  ]),
+});
+export const FinancialsCompany = z.object({
+  kind: z.literal("company"),
+  name: z.string().nullable(),
+  sector: z.string().nullable(),
+  financial: z.boolean(), // a lender/insurer: the card leads with profit, EPS and return on equity
+  currency: z.string(),
+  headline: FinHeadline,
+  quarters: z.array(FinQuarter),
+  estimates: z.object({ nextYear: FinEstimate.nullable(), followingYear: FinEstimate.nullable(), nextQuarter: FinEstimate.nullable(), historySince: z.string().nullable() }).nullable(),
+  health: z.object({
+    date: z.string(), piotroski: num, altmanZ: num, freeFloatBps: num, sharesOutstanding: num, fmpRating: z.string().nullable(), fmpDcfCents: num, fmpDcfPriceCents: num,
+  }).nullable(),
+  facts: z.object({
+    financial: z.boolean(), cash: num, debt: num, netDebt: num, fcfTtm: num, operatingIncomeTtm: num, interestTtm: num,
+    interestCoverX10: num, debtYearsX10: num, runwayMonths: num, buybacksTtm: num, dividendsTtm: num, stockCompTtm: num,
+  }).nullable(),
+  checks: z.array(z.object({ key: z.enum(["debt", "interest", "cash", "shares", "profit", "trend"]), tone: z.enum(["good", "ok", "bad"]) })),
+  segments: z.object({ product: FinSegment.nullable(), geographic: FinSegment.nullable() }),
+  call: z.object({
+    fiscalYear: z.number().int(), fiscalQuarter: z.number().int(), callDate: z.string(),
+    summary: z.object({
+      headline: z.string(),
+      guidance: z.object({ direction: z.string(), detail: z.string() }),
+      tone: z.string(), toneWhy: z.string(),
+      highlights: z.array(z.string()), risks: z.array(z.string()), dodged: z.array(z.string()),
+      quotes: z.array(z.object({ speaker: z.string(), text: z.string() })), // verbatim, checked against the transcript
+    }).nullable(),
+  }).nullable(),
+  filings: z.array(z.object({ form: z.string(), filedAt: z.string(), url: z.string(), docUrl: z.string().nullable() })),
+  sec: z.object({ symbol: z.string(), crossListed: z.boolean(), insiderFrom: z.string().nullable() }).nullable(),
+  insiders: z.object({
+    since: z.string(),
+    buys: z.object({ count: z.number().int(), cents: z.number(), people: z.number().int() }),
+    sells: z.object({ count: z.number().int(), cents: z.number(), people: z.number().int() }),
+    people: z.array(z.object({ name: z.string(), title: z.string().nullable(), boughtCents: z.number(), soldCents: z.number(), trades: z.number().int(), last: z.string() })),
+  }).nullable(),
+  updatedAt: z.string().nullable(),
+});
+export const Financials = z.union([
+  FinancialsCompany,
+  z.object({ kind: z.literal("etf"), name: z.string().nullable() }),
+  z.object({ kind: z.literal("none"), reason: z.enum(["not-fetched", "no-statements"]) }),
+]);
+export type Financials = z.infer<typeof Financials>;
+export type FinancialsCompany = z.infer<typeof FinancialsCompany>;
+export type FinGrowth = z.infer<typeof FinGrowth>;
+
 export const Dossier = z.object({
   symbol: z.string(),
   name: z.string(),
@@ -430,6 +521,8 @@ export const Dossier = z.object({
   currentRead: CurrentRead.nullable().default(null),
   // Members watching this name (D78) — a stack of faces on the stock header; [] = nobody.
   watchers: z.array(Watcher).default([]),
+  // "The business" (D140, 2026-10-23) — additive + optional; null when FMP is off or the name has no statements yet.
+  financials: Financials.nullish(),
 });
 
 /* ---------- today / The Daily — v0 (sections per docs/NEWSPAPER.md) ---------- */

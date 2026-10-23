@@ -26,6 +26,8 @@ import { personByName, personByEmail, ownerKeyFor } from "./people";
 import { userForEmail, memberEmails, seesMeters } from "./users";
 import { displayNameForEmail } from "./sso-names";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
+import { financialsView } from "./financials/view";
+import { ensureFinancials, getStatus as getFinancialsStatus } from "./financials/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
 import { parseBoard, buildPlayViews, buildBoardTrends, chessRefsForSymbol, bareChainKey } from "./chess";
@@ -1772,7 +1774,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     quote, journal, signals, sigFull, analyst, directiveRow, pendingResearch, peersRaw,
     position, tradesRaw, watch, settings, grades, gradeActionsRaw, gradesTrend, targetTrend,
     earnings, newsRaw, institutional, holdersRaw, scoreboardRaw, closesRaw, smart,
-    optionsRow, socialRow, personalRaw, chessRefs,
+    optionsRow, socialRow, personalRaw, chessRefs, financials,
   ] = await Promise.all([
     getQuote(sym).catch(() => null),
     prisma.journalEntry.findMany({ where: { symbol: sym }, orderBy: { at: "desc" }, take: 50 }),
@@ -1804,7 +1806,16 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     opts?.requestedBy ? personalPositionsFor(memberEmails(), y).catch(() => []) : Promise.resolve([]),
     // Chess Moves boards that feature this name (the value-chain cards).
     chessRefsForSymbol(sym).catch(() => []),
+    // "The business" (D140) — the same read model as the web stock page, keyed by the LISTING symbol.
+    fmp ? financialsView(y).catch(() => null) : Promise.resolve(null),
   ]);
+  // Same rule as the web page: a member's view of a name with no (or week-old) statements fetches them
+  // in the background — FMP only, never Claude (§3.9), so the next open has the section.
+  if (fmp && opts?.requestedBy) {
+    void getFinancialsStatus(y)
+      .then((st) => (!st?.statementsAt || Date.now() - st.statementsAt.getTime() > 7 * 86_400_000 ? ensureFinancials(y) : undefined))
+      .catch(() => undefined);
+  }
 
   const currentReadEntry = journal.find((j) => j.kind === "RESEARCH" || j.kind === "DECISION");
   const stanceEntry = journal.find((j) => j.stance);
@@ -2070,6 +2081,7 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
         stages,
       };
     }),
+    financials,
     // Members' own money in this name (bought-at = avg cost). Empty for viewers.
     personalPositions: personalRaw.map((pp) => ({
       owner: personByEmail(pp.email)?.name ?? displayNameForEmail(pp.email),
