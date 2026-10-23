@@ -2,12 +2,10 @@ import Term from "@/components/Term";
 import type { FinancialsView } from "@/lib/financials/view";
 import { bigMoney, growthText } from "@/lib/financials/format";
 
-// D140 display loop, round 2 — two alternatives to the score-led Financial health panel. Both say
-// health in DOLLARS (Graham reads dollars, not scores): what it owes vs holds, whether profit covers
-// the interest, whether cash comes in or goes out, what owners got back. PLAIN ANSWERS asks the four
-// questions and answers each in a sentence; CHECKLIST grades the same facts green / amber / red
-// (grades from derive.healthChecks, pure + tested) with a one-line reason. The scores move to a
-// footer line in both.
+// D140 — the Financial health panel, as a checklist (Cam's pick, display round 2, 2026-10-23). Each
+// fact is said in DOLLARS (Graham reads dollars, not scores) and graded green / amber / red by
+// derive.healthChecks (pure + tested; the thresholds are written there). Piotroski and Altman Z have
+// their own panel beside it (Scores, in FinancialsSection).
 
 type Company = Extract<FinancialsView, { kind: "company" }>;
 type Tone = Company["checks"][number]["tone"];
@@ -146,40 +144,6 @@ function lines(v: Company) {
   return out;
 }
 
-function Q({ q, children }: { q: string; children: React.ReactNode }) {
-  return (
-    <div className="border-b border-teal-400/10 pb-3 last:border-0 last:pb-0">
-      <div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-teal-300/70">{q}</div>
-      <p className="leading-snug text-teal-100/85">{children}</p>
-    </div>
-  );
-}
-
-export function HealthAnswers({ v, footer }: { v: Company; footer: React.ReactNode }) {
-  const L = lines(v);
-  const qs: Array<[string, React.ReactNode]> = v.financial
-    ? [
-        ["Is it earning well on its capital?", L.profit],
-        ["Is profit growing?", L.trend],
-        ["What did owners get back?", L.returned],
-        ["Is your slice shrinking?", L.shares],
-      ]
-    : [
-        ["Could it pay off its debt?", L.debt],
-        ["Can it afford the interest?", L.interest],
-        ["Is cash coming in or going out?", L.cash],
-        ["What did owners get back?", L.returned],
-        ["Is your slice shrinking?", L.shares],
-      ];
-  const shown = qs.filter(([, a]) => a != null);
-  return (
-    <div className="space-y-3">
-      {shown.length === 0 ? <p className="text-teal-200/50">Not enough in our feed to answer these yet.</p> : shown.map(([q, a]) => <Q key={q} q={q}>{a}</Q>)}
-      {footer}
-    </div>
-  );
-}
-
 const DOT: Record<Tone, string> = { good: "bg-emerald-400", ok: "bg-amber-300", bad: "bg-red-400" };
 const TITLE: Record<Company["checks"][number]["key"], string> = {
   debt: "Debt",
@@ -190,7 +154,7 @@ const TITLE: Record<Company["checks"][number]["key"], string> = {
   trend: "Profit trend",
 };
 
-export function HealthChecklist({ v, footer }: { v: Company; footer: React.ReactNode }) {
+export default function HealthChecklist({ v }: { v: Company }) {
   const L = lines(v);
   const checks = v.checks.filter((k) => L[k.key] != null);
   const good = checks.filter((k) => k.tone === "good").length;
@@ -231,7 +195,6 @@ export function HealthChecklist({ v, footer }: { v: Company; footer: React.React
         </p>
       )}
       {checks.length === 0 && <p className="text-teal-200/50">Not enough in our feed to grade this yet.</p>}
-      {footer}
     </div>
   );
 }

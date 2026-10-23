@@ -76,10 +76,10 @@ export type Feed = "profile" | "statements" | "estimates" | "health" | "segments
 
 /** Which feeds a name needs now. Statements: weekly, but DAILY once the newest quarter we hold is
  *  80+ days old (the next report is due — P0 R11). ETFs/funds stop after the profile. */
-export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt" | "latestPeriodEnd" | "estimatesDay" | "healthAt" | "segmentsAt" | "filingsDay" | "insiderAt" | "callsDay" | "isEtf" | "isFund" | "usFiler" | "statementsCovered"> | null, deep: boolean, now: Date, today: string): Feed[] {
+export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt" | "latestPeriodEnd" | "estimatesDay" | "healthAt" | "segmentsAt" | "filingsDay" | "insiderAt" | "callsDay" | "isEtf" | "isFund" | "usFiler" | "statementsCovered" | "companyName"> | null, deep: boolean, now: Date, today: string): Feed[] {
   const older = (d: Date | null | undefined, maxMs: number) => !d || now.getTime() - d.getTime() > maxMs;
   const out: Feed[] = [];
-  if (!st || older(st.profileAt, WEEK_MS)) out.push("profile");
+  if (!st || st.companyName == null || older(st.profileAt, WEEK_MS)) out.push("profile"); // no name yet = the profile never really landed
   if (st && (st.isEtf || st.isFund)) return out;
   const newQuarterDue = st?.latestPeriodEnd != null && now.getTime() - Date.parse(`${st.latestPeriodEnd}T00:00:00Z`) > 80 * DAY_MS;
   if (!st || older(st.statementsAt, WEEK_MS) || (newQuarterDue && older(st.statementsAt, 20 * 3600_000))) out.push("statements");
@@ -100,6 +100,10 @@ const US_EXCHANGES = new Set(["NASDAQ", "NYSE", "AMEX", "NYSEARCA", "BATS", "CBO
 
 async function refreshProfile(key: string): Promise<void> {
   const [p] = rows(await fmpGet(`profile?symbol=${enc(key)}`));
+  // An empty answer is not a profile. Writing it blanked the sector of 102 names in the throttled first
+  // backfill (2026-10-22), so banks like NU were graded as ordinary companies. Leave profileAt alone so
+  // the name stays due and is asked again.
+  if (!p || (!p.companyName && !p.sector)) throw new Error("empty profile");
   const splits = rows(await fmpGet(`splits?symbol=${enc(key)}`))
     .map((s) => ({ date: String(s.date ?? ""), numerator: Number(s.numerator), denominator: Number(s.denominator) }))
     .filter((s) => s.date && s.numerator > 0 && s.denominator > 0);

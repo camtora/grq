@@ -2,8 +2,7 @@ import PanelHeader from "@/components/PanelHeader";
 import Term from "@/components/Term";
 import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
-import LayoutSwitch from "./LayoutSwitch";
-import { HealthAnswers, HealthChecklist } from "./HealthVariants";
+import HealthChecklist from "./HealthChecklist";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -256,10 +255,13 @@ export default function FinancialsSection({
         </Card>
       </div>
 
-      {/* ── Analysts · Health · Segments ───────────────────────────────────────────────── */}
-      <div className="grid items-stretch gap-6 lg:grid-cols-3">
+      {/* ── Health + scores · Analysts · Segments ───────────────────────────────────────────────── */}
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+        <Health v={v} />
+        <Scores v={v} listingCurrency={listingCurrency} />
+      </div>
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
         <Estimates v={v} />
-        <Health v={v} listingCurrency={listingCurrency} />
         <Segments v={v} revTerm={revTerm} />
       </div>
 
@@ -344,110 +346,75 @@ function Estimates({ v }: { v: Company }) {
   );
 }
 
-function Health({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
-  const footer = <ScoreFooter v={v} listingCurrency={listingCurrency} />;
+function Health({ v }: { v: Company }) {
   return (
     <div className="flex h-full flex-col space-y-2">
       <PanelHeader fresh="weekly">Financial health</PanelHeader>
       <Card className="flex-1 p-5 text-sm">
-        <LayoutSwitch
-          storeKey="grq-fin-health"
-          initial="answers"
-          options={[
-            { key: "scores", label: "Scores", node: <HealthScores v={v} listingCurrency={listingCurrency} /> },
-            { key: "answers", label: "Plain answers", node: <HealthAnswers v={v} footer={footer} /> },
-            { key: "checklist", label: "Checklist", node: <HealthChecklist v={v} footer={footer} /> },
-          ]}
-        />
+        <HealthChecklist v={v} />
       </Card>
     </div>
   );
 }
 
-/** The textbook scores in one quiet line, under the dollar layouts. */
-function ScoreFooter({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
+/** The textbook scores beside the checklist (Cam, 2026-10-23: "I like them both"). Net cash and the
+ *  share count live in the checklist, in dollars, so they aren't repeated here. */
+function Scores({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
   const s = v.health;
-  if (!s || (s.piotroski == null && s.altmanZ == null && !s.fmpRating)) return null;
+  const any = s && (s.piotroski != null || s.altmanZ != null || (s.freeFloatBps != null && s.freeFloatBps > 0) || s.fmpRating);
   return (
-    <div className="mt-1 border-t border-teal-400/10 pt-3 text-[11px] leading-relaxed text-teal-200/50">
-      <span className="uppercase tracking-wider">Textbook scores:</span>{" "}
-      {s.piotroski != null && (
-        <>
-          <Term k="piotroski">Piotroski</Term> {s.piotroski}/9 ({piotroskiWord(s.piotroski).toLowerCase()})
-        </>
-      )}
-      {s.altmanZ != null && (
-        <>
-          {s.piotroski != null ? " · " : ""}
-          <Term k="altman-z">Altman Z</Term> {s.altmanZ.toFixed(1)} ({altmanWord(s.altmanZ).word.toLowerCase()})
-        </>
-      )}
-      {s.fmpRating && (
-        <>
-          {" "}
-          · FMP&apos;s own grade {s.fmpRating}
-          {s.fmpDcfCents != null && s.fmpDcfPriceCents != null && dcfShowable(s.fmpDcfCents, s.fmpDcfPriceCents, v, listingCurrency) && (
-            <>, fair value {money(s.fmpDcfCents, listingCurrency)} vs price {money(s.fmpDcfPriceCents, listingCurrency)}</>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function HealthScores({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
-  const s = v.health;
-  const h = v.headline;
-  const ccy = v.currency;
-  const share = h.shareChangeYoY;
-  return (
-      <div>
-        <dl className="space-y-2.5">
-          {s?.piotroski != null && (
-            <Row label={<Term k="piotroski">Piotroski</Term>}>
-              <span className="tabular-nums text-teal-50">{s.piotroski}/9</span>{" "}
-              <Chip tone={s.piotroski >= 7 ? "green" : s.piotroski >= 4 ? "teal" : "red"}>{piotroskiWord(s.piotroski)}</Chip>
-            </Row>
-          )}
-          {s?.altmanZ != null && (
-            <Row label={<Term k="altman-z">Altman Z</Term>}>
-              <span className="tabular-nums text-teal-50">{s.altmanZ.toFixed(1)}</span> <Chip tone={altmanWord(s.altmanZ).tone}>{altmanWord(s.altmanZ).word}</Chip>
-            </Row>
-          )}
-          {h.netDebt != null && (
-            <Row label={<Term k="net-debt">{h.netDebt <= 0 ? "Net cash" : "Net debt"}</Term>}>
-              <span className={`tabular-nums ${h.netDebt <= 0 ? "text-emerald-400" : "text-teal-50"}`}>{bigMoney(Math.abs(h.netDebt), ccy)}</span>
-            </Row>
-          )}
-          {share && (
-            <Row label={<Term k="dilution">Shares, 1 yr</Term>}>
-              {/* Neutral on purpose: fewer shares (buybacks) is not a loss, so no red/green here. */}
-              <span className="tabular-nums text-teal-50" title={nmReason(share) ?? undefined}>{growthText(share)}</span>{" "}
-              <span className="text-[11px] text-teal-200/45">
-                {share.kind === "ok" ? (share.bps <= -50 ? "buying back stock" : share.bps >= 200 ? "issuing new shares" : "about flat") : ""}
-              </span>
-            </Row>
-          )}
-          {s?.freeFloatBps != null && s.freeFloatBps > 0 && (
-            <Row label={<Term k="free-float">Free float</Term>}>
-              <span className="tabular-nums text-teal-50">{bpsText(s.freeFloatBps, 0)}</span>
-              {s.freeFloatBps < 2000 && <span className="text-[11px] text-amber-300/80"> small: can be jumpy</span>}
-            </Row>
-          )}
-        </dl>
+    <div className="flex h-full flex-col space-y-2">
+      <PanelHeader fresh="weekly">Health scores</PanelHeader>
+      <Card className="flex-1 p-5 text-sm">
+        {!any ? (
+          <p className="text-teal-200/50">No scores in our feed for this company.</p>
+        ) : (
+          <dl className="space-y-2.5">
+            {s?.piotroski != null && (
+              <Row label={<Term k="piotroski">Piotroski</Term>}>
+                <span className="tabular-nums text-teal-50">{s.piotroski}/9</span>{" "}
+                <Chip tone={s.piotroski >= 7 ? "green" : s.piotroski >= 4 ? "teal" : "red"}>{piotroskiWord(s.piotroski)}</Chip>
+              </Row>
+            )}
+            {s?.piotroski != null && (
+              <ScoreNote>
+                Passes {s.piotroski} of 9 yes-or-no tests: is it profitable, is cash coming in, is debt falling, are margins and
+                efficiency improving, has it avoided issuing shares. 7 or more is strong, 3 or less weak.
+              </ScoreNote>
+            )}
+            {s?.altmanZ != null && (
+              <Row label={<Term k="altman-z">Altman Z</Term>}>
+                <span className="tabular-nums text-teal-50">{s.altmanZ.toFixed(1)}</span> <Chip tone={altmanWord(s.altmanZ).tone}>{altmanWord(s.altmanZ).word}</Chip>
+              </Row>
+            )}
+            {s?.altmanZ != null && (
+              <ScoreNote>
+                A 1968 formula for the risk of going bust, from profit, assets, debt and market value. Above 3 is safe, below 1.8
+                is the danger zone. Utilities and other heavy borrowers often sit low by design.
+              </ScoreNote>
+            )}
+            {s?.freeFloatBps != null && s.freeFloatBps > 0 && (
+              <Row label={<Term k="free-float">Free float</Term>}>
+                <span className="tabular-nums text-teal-50">{bpsText(s.freeFloatBps, 0)}</span>
+                {s.freeFloatBps < 2000 && <span className="text-[11px] text-amber-300/80"> small: can be jumpy</span>}
+              </Row>
+            )}
+            {s?.freeFloatBps != null && s.freeFloatBps > 0 && (
+              <ScoreNote>The share of stock that trades freely, not locked up by founders, insiders or governments.</ScoreNote>
+            )}
+          </dl>
+        )}
         {s?.fmpRating && (
           <div className="mt-4 border-t border-teal-400/10 pt-3 text-[11px] text-teal-200/50">
-            <span className="uppercase tracking-wider">FMP&apos;s own model, not ours:</span>{" "}
-            {s.fmpRating && <>grade {s.fmpRating}</>}
+            <span className="uppercase tracking-wider">FMP&apos;s own model, not ours:</span> grade {s.fmpRating}
             {s.fmpDcfCents != null && s.fmpDcfPriceCents != null && dcfShowable(s.fmpDcfCents, s.fmpDcfPriceCents, v, listingCurrency) && (
-              <>
-                {s.fmpRating ? " · " : ""}fair value {money(s.fmpDcfCents, listingCurrency)} vs price {money(s.fmpDcfPriceCents, listingCurrency)}
-              </>
+              <> · fair value {money(s.fmpDcfCents, listingCurrency)} vs price {money(s.fmpDcfPriceCents, listingCurrency)}</>
             )}
           </div>
         )}
-        {v.financial && <p className="mt-3 text-[11px] text-teal-200/40">A bank&apos;s card skips the Altman Z-score, net debt and free cash flow: none of them fits a lender.</p>}
-      </div>
+        {v.financial && <p className="mt-3 text-[11px] text-teal-200/40">A bank&apos;s card skips the Altman Z-score: it doesn&apos;t fit a lender.</p>}
+      </Card>
+    </div>
   );
 }
 
@@ -459,6 +426,10 @@ function dcfShowable(dcf: number, price: number, v: Company, listingCurrency: st
   if (listingCurrency && listingCurrency.toUpperCase() !== v.currency.toUpperCase()) return false;
   const r = dcf / price;
   return r >= 0.25 && r <= 4;
+}
+
+function ScoreNote({ children }: { children: React.ReactNode }) {
+  return <dd className="-mt-1 pb-1 text-[11px] leading-snug text-teal-200/45">{children}</dd>;
 }
 
 function Row({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {

@@ -4509,3 +4509,15 @@ burning cash with ≥ 24 months of runway is a watch, less a problem; share coun
 Banks: return on equity (≥ 10% good, < 5% weak) and profit trend, never debt or interest. A payout under 1% of the
 company's scale is housekeeping, not a return to owners (TN.CN's "$377 of buybacks"). `FinancialPeriod.interestExpense`
 added, backfilled from the stored raw statements (no refetch).
+
+**Health decided (2026-10-23): Checklist and Scores, side by side.** Cam kept both — the graded dollar checklist
+and the textbook scores as their own panel, each score with a one-line plain meaning. **Grade spread across the
+256 names** (`scripts/health-grade-spread.ts`): debt red 25%, interest 16%, shares 14%, cash 10%; banks' return on
+equity never red. The reds are mostly where they should be (cash burners, serial share issuers) — **but utilities
+and REITs read red on debt and interest by design** (FTS.TO, CPX.TO, WELL: they borrow to build and fund through
+new shares), so the thresholds are generic rules of thumb, not calibrated per industry. **Bug found by that
+check:** 102 names held an empty profile from the throttled first backfill (the old `fmpGet` read FMP's refusal as
+"no profile"), so no sector — 11 financials (NU, INTR, KKR, BNY, PNFP…) got the ordinary card. Re-fetched
+(`scripts/financials-profile-heal.ts`); `refreshProfile` now refuses to write an empty profile, and `dueFeeds`
+re-asks a nameless one the next day (`test/financials-due.test.ts`). Open: "Financial Services" also catches
+exchanges and data firms (CME, SPGI, FDS), which aren't lenders and would read fine on the ordinary card.
