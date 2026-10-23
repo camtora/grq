@@ -233,8 +233,14 @@ function marginChange(cur: PeriodRow, prev: PeriodRow | null, field: "operatingI
 /** Banks and insurers: FMP synthesises a "gross profit", flips their revenue basis, and the Altman Z
  *  formula reads them as distressed (P0 R3). Their card leads with profit, EPS and return on equity,
  *  and drops gross margin, Altman Z, net debt, free cash flow and the DCF. */
-export function isFinancialSector(sector: string | null | undefined): boolean {
-  return /financial/i.test(sector ?? "");
+/** A lender or insurer: its revenue flips gross/net, its "debt" is its funding and interest is its cost of
+ *  goods, so it gets the bank card. FMP's "Financial Services" sector also holds firms that are none of
+ *  those — exchanges and data vendors (CME, SPGI, FDS) and insurance BROKERS (AON, AJG), which earn fees
+ *  and carry ordinary debt — so those industries read as ordinary companies. Not separable by industry:
+ *  V and MA share "Credit Services" with the lenders AXP and COF, and stay on the bank card. */
+const NOT_LENDERS = /data & stock exchanges|insurance - brokers/i;
+export function isFinancialSector(sector: string | null | undefined, industry?: string | null): boolean {
+  return /financial/i.test(sector ?? "") && !NOT_LENDERS.test(industry ?? "");
 }
 
 export type Headline = {
@@ -269,11 +275,11 @@ export type Headline = {
   quartersAvailable: number;
 };
 
-export function headline(rows: PeriodRow[], opts: { sector?: string | null; splits?: Split[] } = {}): Headline | null {
+export function headline(rows: PeriodRow[], opts: { sector?: string | null; industry?: string | null; splits?: Split[] } = {}): Headline | null {
   const qs = quarters(rows);
   const q0 = qs[0];
   if (!q0) return null;
-  const fin = isFinancialSector(opts.sector);
+  const fin = isFinancialSector(opts.sector, opts.industry);
   const ya = yearAgo(qs, q0);
   const pq = prevQuarter(qs, q0);
   const q2 = qs[2] ?? null;
@@ -320,8 +326,8 @@ export function headline(rows: PeriodRow[], opts: { sector?: string | null; spli
 }
 
 /** Per-quarter series for a trend chart, oldest → newest, with YoY growth where a year-ago quarter exists. */
-export function quarterSeries(rows: PeriodRow[], n = 8, sector?: string | null) {
-  const fin = isFinancialSector(sector);
+export function quarterSeries(rows: PeriodRow[], n = 8, sector?: string | null, industry?: string | null) {
+  const fin = isFinancialSector(sector, industry);
   const qs = quarters(rows);
   return qs
     .slice(0, n)
@@ -449,11 +455,11 @@ export type HealthFacts = {
 
 const out = (v: bigint | null) => (v == null ? null : v < 0n ? -v : 0n);
 
-export function healthFacts(rows: PeriodRow[], sector?: string | null): HealthFacts | null {
+export function healthFacts(rows: PeriodRow[], sector?: string | null, industry?: string | null): HealthFacts | null {
   const qs = quarters(rows);
   const q0 = qs[0];
   if (!q0) return null;
-  const fin = isFinancialSector(sector);
+  const fin = isFinancialSector(sector, industry);
   const fcfT = ttm(qs, "fcf");
   const opT = ttm(qs, "operatingIncome");
   const intT = fin ? null : ttm(qs, "interestExpense");
@@ -511,4 +517,21 @@ export function healthChecks(f: HealthFacts, opts: { roeBps: number | null; netI
   const s = opts.shareChangeYoY;
   if (s?.kind === "ok") c.push({ key: "shares", tone: s.bps <= 200 ? "good" : s.bps <= 500 ? "ok" : "bad" });
   return c;
+}
+
+// ── What a forecast is compared with (display round 3) ────────────────────────────────────────
+/** The reported period a year before a forecast's target: next quarter vs the same quarter last year,
+ *  a fiscal year vs the year before it. Matched by end date (±45 days), the same tolerance as yearAgo.
+ *  Revenue is withheld for a bank: analysts' "revenue" and our feed's can be counted differently. */
+export function estimateBaseline(
+  rows: PeriodRow[],
+  period: "FY" | "Q",
+  targetEnd: string,
+  financial: boolean,
+): { periodEnd: string; revenue: bigint | null; epsDiluted4: number | null } | null {
+  const pool = period === "FY" ? years(rows) : quarters(rows);
+  const want = ms(targetEnd) - 365 * DAY;
+  const hit = pool.find((r) => Math.abs(ms(r.periodEnd) - want) <= 45 * DAY);
+  if (!hit) return null;
+  return { periodEnd: hit.periodEnd, revenue: financial ? null : hit.revenue, epsDiluted4: hit.epsDiluted4 };
 }

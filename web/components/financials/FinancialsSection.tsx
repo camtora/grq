@@ -3,6 +3,8 @@ import Term from "@/components/Term";
 import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
 import HealthChecklist from "./HealthChecklist";
+import LayoutSwitch from "./LayoutSwitch";
+import { EstimatesCompared, EstimatesRanges } from "./EstimatesVariants";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -300,6 +302,14 @@ function Estimates({ v }: { v: Company }) {
         {!e || rows.every(([, t]) => !t) ? (
           <p className="text-teal-200/40">No analyst forecasts in our feed for this company.</p>
         ) : (
+          <LayoutSwitch
+            storeKey="grq-fin-estimates"
+            initial="compared"
+            options={[
+              {
+                key: "numbers",
+                label: "Numbers",
+                node: (
           <div className="space-y-3">
             {rows.map(([label, t]) =>
               t ? (
@@ -335,6 +345,12 @@ function Estimates({ v }: { v: Company }) {
               ) : null,
             )}
           </div>
+                ),
+              },
+              { key: "compared", label: "Vs last year", node: <EstimatesCompared v={v} /> },
+              { key: "ranges", label: "Ranges", node: <EstimatesRanges v={v} /> },
+            ]}
+          />
         )}
         <p className="mt-3 text-[11px] text-teal-200/40">
           <Term k="estimate-revision">Revisions</Term> (how these forecasts move) appear once our own record is long enough: 30 days from {e?.historySince ?? "the first snapshot"}{" "}

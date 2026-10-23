@@ -161,6 +161,15 @@ describe("the headline", () => {
     const y = [q("Q1", 2026, "2026-03-31", { revenue: B(81), costOfRevenue: B(40) }), q("Q1", 2025, "2025-03-31", { revenue: B(1), costOfRevenue: B(0) })];
     assert.equal(headline(y)!.revenueYoY?.kind, "ok");
   });
+  it("the bank card is for lenders and insurers, not every 'Financial Services' firm", () => {
+    assert.ok(isFinancialSector("Financial Services", "Banks - Diversified")); // RY
+    assert.ok(isFinancialSector("Financial Services", "Insurance - Property & Casualty")); // CB
+    assert.ok(isFinancialSector("Financial Services", "Financial - Credit Services")); // AXP, COF (and V, MA: not separable)
+    assert.ok(!isFinancialSector("Financial Services", "Financial - Data & Stock Exchanges")); // CME, SPGI, FDS
+    assert.ok(!isFinancialSector("Financial Services", "Insurance - Brokers")); // AON, AJG: fees, ordinary debt
+    assert.ok(!isFinancialSector("Technology", "Software - Application"));
+    assert.equal(headline(nvdaLike(), { sector: "Financial Services", industry: "Financial - Data & Stock Exchanges" })!.netDebt != null, true);
+  });
   it("a bank's card drops gross margin, free cash flow and net debt (P0 R3)", () => {
     assert.ok(isFinancialSector("Financial Services"));
     const h = headline(nvdaLike(), { sector: "Financial Services" })!;
@@ -212,5 +221,22 @@ describe("filings (P0 R6)", () => {
   it("keeps the forms that matter, drops the bank-note flood and Form 4", () => {
     for (const f of ["8-K", "10-Q", "10-K", "6-K", "40-F", "DEF 14A"]) assert.ok(keepFiling(f), f);
     for (const f of ["424B2", "FWP", "4", "4/A", "NPORT-P", "497"]) assert.ok(!keepFiling(f), f);
+  });
+});
+
+import { estimateBaseline } from "../lib/financials/derive";
+describe("what a forecast is compared with", () => {
+  it("next quarter → the same quarter a year earlier; a year → the year before", () => {
+    const rows = nvdaLike();
+    assert.equal(estimateBaseline(rows, "Q", "2026-10-25", false)?.periodEnd, "2025-10-26");
+    assert.equal(estimateBaseline(rows, "FY", "2027-01-31", false)?.periodEnd, "2026-01-25");
+    assert.equal(estimateBaseline(rows, "FY", "2027-01-31", false)?.revenue, B(570));
+  });
+  it("no reported year to compare with → null (the year after next)", () =>
+    assert.equal(estimateBaseline(nvdaLike(), "FY", "2028-01-30", false), null));
+  it("a bank's revenue is withheld; its EPS isn't", () => {
+    const b = estimateBaseline(nvdaLike(), "Q", "2026-10-25", true)!;
+    assert.equal(b.revenue, null);
+    assert.notEqual(b.epsDiluted4, null);
   });
 });

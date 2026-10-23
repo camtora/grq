@@ -10,7 +10,7 @@
 import { prisma } from "../db";
 import { etDateStr } from "../../agent/calendar";
 import { getPeriods, getEstimates, getStatus, splitsOf } from "./store";
-import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, type Growth, type EstimateRow } from "./derive";
+import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, type Growth, type EstimateRow, type PeriodRow } from "./derive";
 import type { CallSummary } from "./call-summary";
 
 const n = (v: bigint | null | undefined): number | null => (v == null ? null : Number(v));
@@ -83,10 +83,11 @@ type EstimateTarget = {
   analysts: number | null;
   rev30: ReturnType<typeof revision>;
   rev90: ReturnType<typeof revision>;
+  base: { periodEnd: string; revenue: number | null; epsAvg4: number | null } | null; // the reported period a year earlier
 };
 type EstimatesOut = { nextYear: EstimateTarget | null; followingYear: EstimateTarget | null; nextQuarter: EstimateTarget | null; historySince: string | null };
 
-function target(history: EstimateRow[], today: string): EstimateTarget | null {
+function target(history: EstimateRow[], today: string, rows: PeriodRow[], financial: boolean): EstimateTarget | null {
   const now = consensusOn(history, today);
   if (!now) return null;
   // A "forecast" with no analysts behind it is FMP's placeholder (TN.CN: 0 analysts, EPS $0.00) — not a forecast.
@@ -102,12 +103,16 @@ function target(history: EstimateRow[], today: string): EstimateTarget | null {
     analysts: now.analystsEps ?? now.analystsRevenue,
     rev30: revision(history, today, 30),
     rev90: revision(history, today, 90),
+    base: (() => {
+      const b = estimateBaseline(rows, now.period === "FY" ? "FY" : "Q", now.targetEnd, financial);
+      return b ? { periodEnd: b.periodEnd, revenue: n(b.revenue), epsAvg4: b.epsDiluted4 } : null;
+    })(),
   };
 }
 
 /** `after` = the newest REPORTED period end: "next quarter" is the first one not yet reported, which
  *  can already be in the past (SHOP's Sep quarter, reported in November). */
-function estimatesOut(rows: EstimateRow[], today: string, after: string): EstimatesOut | null {
+function estimatesOut(rows: EstimateRow[], today: string, after: string, periods: PeriodRow[], financial: boolean): EstimatesOut | null {
   if (rows.length === 0) return null;
   const by = new Map<string, EstimateRow[]>();
   for (const r of rows) {
@@ -122,9 +127,9 @@ function estimatesOut(rows: EstimateRow[], today: string, after: string): Estima
   const fy = future("FY");
   const q = future("Q");
   return {
-    nextYear: fy[0] ? target(fy[0], today) : null,
-    followingYear: fy[1] ? target(fy[1], today) : null,
-    nextQuarter: q[0] ? target(q[0], today) : null,
+    nextYear: fy[0] ? target(fy[0], today, periods, financial) : null,
+    followingYear: fy[1] ? target(fy[1], today, periods, financial) : null,
+    nextQuarter: q[0] ? target(q[0], today, periods, financial) : null,
     historySince: rows.reduce<string | null>((a, r) => (a == null || r.asOf < a ? r.asOf : a), null),
   };
 }
@@ -162,10 +167,10 @@ export async function financialsView(key: string): Promise<FinancialsView> {
   if (!st) return { kind: "none", reason: "not-fetched" };
   if (st.isEtf || st.isFund) return { kind: "etf", name: st.companyName };
   const periods = await getPeriods(k);
-  const h = headline(periods, { sector: st.sector, splits: splitsOf(st) });
+  const h = headline(periods, { sector: st.sector, industry: st.industry, splits: splitsOf(st) });
   if (!h) return { kind: "none", reason: st.statementsCovered === false ? "no-statements" : "not-fetched" };
-  const financial = isFinancialSector(st.sector);
-  const facts = healthFacts(periods, st.sector);
+  const financial = isFinancialSector(st.sector, st.industry);
+  const facts = healthFacts(periods, st.sector, st.industry);
   const checks = facts ? healthChecks(facts, { roeBps: h.roeBps, netIncomeYoY: h.netIncomeYoY, shareChangeYoY: h.shareChangeYoY }) : [];
 
   const [est, health, product, geographic, call, filings, insider] = await Promise.all([
@@ -185,8 +190,8 @@ export async function financialsView(key: string): Promise<FinancialsView> {
     financial,
     currency: h.currency,
     headline: headlineOut(h),
-    quarters: seriesOut(quarterSeries(periods, 8, st.sector)),
-    estimates: estimatesOut(est, today, h.asOf),
+    quarters: seriesOut(quarterSeries(periods, 8, st.sector, st.industry)),
+    estimates: estimatesOut(est, today, h.asOf, periods, financial),
     health: health
       ? {
           date: health.date,

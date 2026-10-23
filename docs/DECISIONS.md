@@ -4519,5 +4519,12 @@ new shares), so the thresholds are generic rules of thumb, not calibrated per in
 check:** 102 names held an empty profile from the throttled first backfill (the old `fmpGet` read FMP's refusal as
 "no profile"), so no sector — 11 financials (NU, INTR, KKR, BNY, PNFP…) got the ordinary card. Re-fetched
 (`scripts/financials-profile-heal.ts`); `refreshProfile` now refuses to write an empty profile, and `dueFeeds`
-re-asks a nameless one the next day (`test/financials-due.test.ts`). Open: "Financial Services" also catches
-exchanges and data firms (CME, SPGI, FDS), which aren't lenders and would read fine on the ordinary card.
+re-asks a nameless one the next day (`test/financials-due.test.ts`). "Financial Services" also caught exchanges and
+data firms (CME, SPGI, FDS, MCO, CBOE, TRU) and insurance brokers (AON, AJG, GSHD) — none is a lender or carries
+insurance risk — so `isFinancialSector` now takes the industry and sends those to the ordinary card (Cam, same day).
+V and MA share "Credit Services" with the lenders AXP and COF and stay on the bank card: not separable by label.
+
+**Display round 3 (2026-10-23): What analysts expect.** Each forecast is now grounded against something we know
+(`estimateBaseline`: next quarter vs the same quarter last year, a fiscal year vs the year before it, matched ±45
+days; the year after next vs the prior year's forecast; a bank's revenue withheld). Two layouts beside the plain
+numbers: *Vs last year* (dollar sentences) and *Ranges* (analyst spread with last year as a tick).

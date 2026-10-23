@@ -11,8 +11,8 @@ async function main() {
   const reds: Record<string, string[]> = {};
   for (const st of names) {
     const rows = await getPeriods(st.symbol);
-    const h = headline(rows, { sector: st.sector, splits: splitsOf(st) });
-    const f = healthFacts(rows, st.sector);
+    const h = headline(rows, { sector: st.sector, industry: st.industry, splits: splitsOf(st) });
+    const f = healthFacts(rows, st.sector, st.industry);
     if (!h || !f) continue;
     for (const c of healthChecks(f, { roeBps: h.roeBps, netIncomeYoY: h.netIncomeYoY, shareChangeYoY: h.shareChangeYoY })) {
       (tally[c.key] ??= { good: 0, ok: 0, bad: 0 })[c.tone]++;
