@@ -24,6 +24,7 @@ import RatingBar from "@/components/RatingBar";
 import WatchButton from "@/components/WatchButton";
 import AvatarStack from "@/components/AvatarStack";
 import { watchersFor, isWatching } from "@/lib/watch";
+import { buildCoverage, financialsCoverage, type Cov } from "@/lib/coverage";
 import { fmpEnabled, fmpPlanRefused, fmpAnalystTarget, fmpPeerComparison, fmpEarningsReport, fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpInstitutional, fmpTopHolders } from "@/lib/fmp";
 import { stockNewsCards } from "@/lib/news/queries";
 import { NewsRow } from "@/components/NewsList";
@@ -338,62 +339,33 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
   // The 10-tier data-coverage map (docs/DATA-SOURCES.md) for THIS name: what's
   // wired & live, what's partial, and — honestly — why the rest is dark.
-  type Cov = { tier: number; name: string; status: "live" | "partial" | "none"; detail: string };
   const cadListing = /\.(TO|V|NE|CN)$/i.test(entry.yahoo); // CA listing → no structured insider feed yet
   const insiderBuys = smartMoney?.insiderBuyers ?? 0;
-  // WHY a feed panel is empty (D134). Our market-data plan (FMP Starter) refuses 13F outright
-  // and refuses any Toronto-listed symbol on targets / ratings / earnings; the panels ask by
-  // the US ticker, so a Canadian-only name simply comes back empty. Say that, rather than
-  // "no coverage yet" — which read as though the data didn't exist. `thirteenFRefused` is
-  // only true after a real refusal on this load's own request.
+  // WHY a feed panel is empty (D134). On FMP's Starter plan (2026-10-08→15) 13F and Toronto symbols on
+  // targets / ratings / earnings were refused; the key is back on the higher plan, so a refusal is the
+  // exception. The "not in our plan" wording appears only after a REAL refusal on this load
+  // (fmpPlanRefused) — otherwise an empty panel just means there's no data for this listing.
   const thirteenFRefused = fmpPlanRefused("institutional-ownership/symbol-positions-summary");
-  const caPlanNote = (what: string) => `No info — ${what.toLowerCase()} for Toronto listings aren't in our market-data plan.`;
-  const coverage: Cov[] = [
-    { tier: 1, name: "Price/vol", status: closes.length > 1 ? "live" : "partial", detail: `${closes.length} sessions of OHLCV → signals` },
-    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : cadListing ? "cap/sector only — Toronto-listing analyst data isn't in our data plan" : "cap/sector only" },
-    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : cadListing ? "Toronto-listing earnings data isn't in our data plan" : "no FMP coverage for this name" },
-    { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
-    { tier: 9, name: "Macro", status: "live", detail: "BoC structured feed — rates/CPI/FX (in the agent + Today)" },
-    {
-      tier: 4,
-      name: "Insider",
-      status: insiderBuys > 0 ? "live" : "partial",
-      detail:
-        insiderBuys > 0
-          ? `${insiderBuys} insider buy(s), 90d · structured Form 4 / OpenInsider`
-          : cadListing
-            ? "CA insider not yet structured — agent web-researches SEDI/SEDAR+ in dossiers"
-            : "US Form 4 + OpenInsider wired — no recent open-market buys on file",
-    },
-    {
-      tier: 5,
-      name: "Institutional",
-      status: institutional ? "live" : "none",
-      detail: institutional
-        ? `${institutional.investorsHolding.toLocaleString()} institutions · ${institutional.investorsHoldingChange >= 0 ? "+" : ""}${institutional.investorsHoldingChange} QoQ`
-        : thirteenFRefused
-          ? "13F isn't included in our current market-data plan"
-          : "13F is US-listed holdings — empty for pure-TSX issuers",
-    },
-    {
-      tier: 3,
-      name: "Options positioning",
-      status: optionsData ? "live" : "none",
-      detail: optionsData
-        ? `dealer gamma ${optionsData.regime}, put/call ${optionsData.pcOI?.toFixed(2) ?? "?"} — CBOE, a signal (never traded)`
-        : "US-listed optionable names only — no chain for this name",
-    },
-    {
-      tier: 8,
-      name: "Social",
-      status: socialData ? "live" : "partial",
-      detail: socialData
-        ? `${socialData.mentions} Reddit mentions${socialData.velocity != null ? `, ${socialData.velocity.toFixed(1)}× 7-day` : ""} — a crowd signal (never traded, on probation)`
-        : "Reddit/Stocktwits wired — no retail chatter on this name (US-centric; CA goes dark)",
-    },
-    { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
-  ];
-  coverage.sort((a, b) => a.tier - b.tier); // show tiers in order T1→T10
+  // Only after a REAL refusal of this listing on this load — never assumed from the suffix (it was, for every
+  // Toronto name, and kept saying so after the plan came back on 2026-10-15).
+  const analystRefused = fmpPlanRefused("price-target-consensus", entry.yahoo) || fmpPlanRefused("grades-consensus", entry.yahoo);
+  const earningsRefused = fmpPlanRefused("earnings", entry.yahoo);
+  const caPlanNote = (what: string) => `No info — ${what.toLowerCase()} for this listing aren't in our current market-data plan.`;
+  const coverage: Cov[] = buildCoverage({
+    closes: closes.length,
+    analyst: !!analyst,
+    grades: !!grades,
+    marketCap: !!entry.marketCapM,
+    cadListing,
+    refused: { analyst: analystRefused, earnings: earningsRefused, thirteenF: thirteenFRefused },
+    earnings: earnings ? { next: earnings.next?.date ?? null, last: earnings.last?.date ?? null } : null,
+    news: news.length,
+    institutional: institutional ? { holders: institutional.investorsHolding, change: institutional.investorsHoldingChange } : null,
+    options: optionsData ? { regime: optionsData.regime, pcOI: optionsData.pcOI } : null,
+    social: socialData ? { mentions: socialData.mentions, velocity: socialData.velocity } : null,
+    ...financialsCoverage(financials),
+    insiderBuys90d: insiderBuys,
+  });
 
   // Structural confidence gaps for the "what would change our mind" panel: the
   // decision-relevant data tiers that are dark/partial for THIS name, read straight
@@ -862,7 +834,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           ) : (
             <PanelEmpty
               reason={
-                cadListing
+                cadListing && analystRefused
                   ? caPlanNote("Analyst ratings")
                   : "No analyst ratings on record for this name yet."
               }
@@ -1005,7 +977,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           ) : (
             <PanelEmpty
               reason={
-                cadListing
+                cadListing && analystRefused
                   ? caPlanNote("Analyst price targets")
                   : "No analyst price targets on record for this name yet."
               }
@@ -1160,7 +1132,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           ) : (
             <PanelEmpty
               reason={
-                cadListing
+                cadListing && earningsRefused
                   ? caPlanNote("Earnings dates and results")
                   : "No earnings-calendar coverage from FMP for this name yet."
               }

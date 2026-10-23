@@ -11,7 +11,7 @@ import { computeSignals, overallSignal } from "@/agent/signals";
 import { DIALS } from "@/agent/policy";
 import { etParts, etDateStr, isMarketDay, isMarketOpen, startOfEtDay } from "@/agent/calendar";
 import {
-  fmpEnabled, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews,
+  fmpEnabled, fmpPlanRefused, fmpAnalystTarget, fmpIndices, fmpPeerComparison, fmpNews, fmpStockNews,
   fmpGrades, fmpGradeActions, fmpGradesTrend, fmpTargetTrend, fmpEarningsReport, fmpInstitutional, fmpTopHolders,
   fmpGainers, fmpEarningsCalendar, stripSuffix,
 } from "./fmp";
@@ -27,6 +27,7 @@ import { userForEmail, memberEmails, seesMeters } from "./users";
 import { displayNameForEmail } from "./sso-names";
 import { accountsForMembers, personalPositionsFor } from "./external/store";
 import { financialsView } from "./financials/view";
+import { buildCoverage, financialsCoverage } from "./coverage";
 import { ensureFinancials, getStatus as getFinancialsStatus } from "./financials/store";
 import { getOptions, optionsLine } from "./options/store";
 import { getSocial, socialLine } from "./social/store";
@@ -1914,19 +1915,27 @@ export async function dossierResponse(symbol: string, opts?: { requestedBy?: str
     : null;
 
   const news = newsRaw as Array<{ title: string; url: string; publisher: string; at: string }>;
-  const insiderBuys = smart?.insiderBuyers ?? 0;
-  const coverage: Array<{ tier: number; name: string; status: string; detail: string }> = [
-    { tier: 1, name: "Price/vol", status: closesRaw.length > 1 ? "live" : "partial", detail: `${closesRaw.length} sessions of OHLCV → signals` },
-    { tier: 2, name: "Fundamentals", status: analyst || grades || entry.marketCapM ? "live" : "none", detail: analyst ? "analyst targets · peers · ratings" : "cap/sector only" },
-    { tier: 6, name: "Earnings", status: earnings ? "live" : "none", detail: earnings ? (earnings.next ? `next ${earnings.next.date}` : `last ${earnings.last?.date}`) : "no FMP coverage for this name" },
-    { tier: 7, name: "News", status: news.length > 0 ? "live" : "none", detail: news.length > 0 ? `${news.length} recent headlines` : "no FMP coverage for this name" },
-    { tier: 9, name: "Macro", status: "live", detail: "BoC + FRED structured feed — rates/CPI/FX" },
-    { tier: 4, name: "Insider", status: insiderBuys > 0 ? "live" : "partial", detail: insiderBuys > 0 ? `${insiderBuys} insider buy(s), 90d` : cadListing ? "CA insider via agent web-research" : "US Form 4 + OpenInsider wired — no recent buys" },
-    { tier: 5, name: "Institutional", status: institutional ? "live" : "none", detail: institutional ? `${institutional.investorsHolding.toLocaleString()} institutions` : "13F is US-listed — empty for pure-TSX" },
-    { tier: 3, name: "Options flow", status: "none", detail: "never traded; US-centric — later" },
-    { tier: 8, name: "Social", status: "none", detail: "deliberately late — noisy, gameable" },
-    { tier: 10, name: "Alt data", status: "none", detail: "paid + US-centric — revisit at scale" },
-  ].sort((a, b) => a.tier - b.tier);
+  // The same builder as the web stock page (lib/coverage.ts) — this copy had drifted (it still called options
+  // and social "later" months after both went live).
+  const coverage = buildCoverage({
+    closes: closesRaw.length,
+    analyst: !!analyst,
+    grades: !!grades,
+    marketCap: !!entry.marketCapM,
+    cadListing,
+    refused: {
+      analyst: fmpPlanRefused("price-target-consensus", y) || fmpPlanRefused("grades-consensus", y),
+      earnings: fmpPlanRefused("earnings", y),
+      thirteenF: fmpPlanRefused("institutional-ownership/symbol-positions-summary"),
+    },
+    earnings: earnings ? { next: earnings.next?.date ?? null, last: earnings.last?.date ?? null } : null,
+    news: news.length,
+    institutional: institutional ? { holders: institutional.investorsHolding, change: institutional.investorsHoldingChange } : null,
+    options: optionsRow ? { regime: optionsRow.regime ?? null, pcOI: optionsRow.pcOI ?? null } : null,
+    social: socialRow ? { mentions: socialRow.mentions, velocity: socialRow.velocity ?? null } : null,
+    ...financialsCoverage(financials),
+    insiderBuys90d: smart?.insiderBuyers ?? 0,
+  });
 
   const smartOut =
     smart && smart.hasAny

@@ -4545,3 +4545,12 @@ company (D132):** a CA name's US twin is accepted only when the US profile's com
 CIK, and every insider row must carry that CIK — FMP's "SHOP" feed mixes in a different, older company's filings,
 which the CIK check drops. `InsiderQuarter` is no longer read (the agent image still writes it until its next
 rebuild; drop it after).
+
+**Data-coverage map, one builder (2026-10-23).** The stock page's 10-tier map lived twice — the web page and the
+app's dossier (`lib/feed.ts`) — and the copies had drifted (the app still called options and social "later").
+Now `lib/coverage.ts` `buildCoverage` serves both (`test/coverage.test.ts`): fundamentals name what's actually
+behind the page (statements, forecasts, targets, ratings, health, segments), insiders read the company's own
+Form 4s in dollars (and say when a 40-F filer's people report on SEDI instead), earnings say when the last call is
+summarized, macro is BoC + FRED. **The Starter-week "isn't in our market-data plan" wording for Toronto names was
+unconditional** — on the coverage map and three empty panels (ratings, targets, earnings) — and kept saying it
+after the plan came back; it now appears only after a real refusal on that load (`fmpPlanRefused`).
