@@ -2,8 +2,6 @@ import PanelHeader from "@/components/PanelHeader";
 import Term from "@/components/Term";
 import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
-import LayoutSwitch from "./LayoutSwitch";
-import { HeadlineStory, HeadlineTable } from "./HeadlineVariants";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -95,177 +93,164 @@ export default function FinancialsSection({
           The business
         </PanelHeader>
         <Card className="p-5">
-          <LayoutSwitch
-            initial="card"
-            options={[
-              { key: "story", label: "Story", node: <HeadlineStory v={v} symbol={symbol} /> },
-              {
-                key: "card",
-                label: "Report card",
-                node: (
-                  <div>
-              <p className="text-sm leading-relaxed text-teal-100/85">
-                {h.preRevenue ? (
-                  <>
-                    <strong className="text-teal-50">No sales yet.</strong> {symbol} isn&apos;t earning revenue so far (common for explorers and drug developers).
-                    {h.netIncomeTtm != null && (
-                      <>
-                        {" "}Over the last year it {h.netIncomeTtm < 0 ? "lost" : "made"} <strong className="text-teal-50">{bigMoney(Math.abs(h.netIncomeTtm), ccy)}</strong>
-                      </>
-                    )}
-                    {h.fcfTtm != null && (
-                      <>
-                        {" "}and {h.fcfTtm < 0 ? "used" : "generated"} <strong className={h.fcfTtm < 0 ? "text-red-400" : "text-emerald-400"}>{bigMoney(Math.abs(h.fcfTtm), ccy)}</strong> of cash
-                      </>
-                    )}
-                    .{h.netDebt != null && h.netDebt < 0 ? <> It holds {bigMoney(-h.netDebt, ccy)} more cash than debt: that runway is the number to watch.</> : null}
-                  </>
-                ) : v.financial ? (
-                  <>
-                    Profit was <strong className="text-teal-50">{bigMoney(h.netIncomeQ, ccy)}</strong> in the latest quarter ({h.label}, to {monthLabel(h.asOf)})
-                    {niDelta != null && h.netIncomeYoY?.kind === "ok" ? (
-                      <>
-                        , {niDelta >= 0 ? "up" : "down"} <strong className={niDelta >= 0 ? "text-emerald-400" : "text-red-400"}>{bigMoney(Math.abs(niDelta), ccy)}</strong> (
-                        <G g={h.netIncomeYoY} />) on the same quarter a year ago
-                      </>
-                    ) : null}
-                    . Earnings per share {epsMoney(h.epsQ4, ccy)} (<G g={h.epsYoY} />).
-                    {h.netIncomeTtm != null && <> Over the last year: <strong className="text-teal-50">{bigMoney(h.netIncomeTtm, ccy)}</strong> of profit.</>}
-                    {h.revenueYoY?.kind === "nm" && (
-                      <span className="text-teal-200/50">
-                        {" "}Revenue growth isn&apos;t shown: our data feed changed how it counts this {v.sector?.match(/insur/i) ? "company" : "bank"}&apos;s revenue (
-                        <Term k="bank-revenue">why</Term>).
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {revLabel} were <strong className="text-teal-50">{bigMoney(h.revenueQ, ccy)}</strong> in the latest quarter ({h.label}, to {monthLabel(h.asOf)})
-                    {revDelta != null && h.revenueYoY?.kind === "ok" ? (
-                      <>
-                        , {revDelta >= 0 ? "up" : "down"} <strong className={revDelta >= 0 ? "text-emerald-400" : "text-red-400"}>{bigMoney(Math.abs(revDelta), ccy)}</strong> (
-                        <G g={h.revenueYoY} />) on the same quarter a year ago
-                      </>
-                    ) : null}
-                    .{" "}
-                    {h.revenueTtm != null && (
-                      <>
-                        Over the last year: <strong className="text-teal-50">{bigMoney(h.revenueTtm, ccy)}</strong> of {revLabel.toLowerCase()}
-                        {h.netIncomeTtm != null && <>, {bigMoney(h.netIncomeTtm, ccy)} of profit</>}
-                        {h.fcfTtm != null && <>, {bigMoney(h.fcfTtm, ccy)} of free cash flow</>}.
-                      </>
-                    )}
-                  </>
-                )}
-                {otherCcy && (
-                  <span className="text-teal-200/50"> Figures are in {ccy}, the currency {symbol} reports in, not the {listingCurrency} it trades in.</span>
-                )}
-              </p>
+          <div>
+            <p className="text-sm leading-relaxed text-teal-100/85">
+              {h.preRevenue ? (
+                <>
+                  <strong className="text-teal-50">No sales yet.</strong> {symbol} isn&apos;t earning revenue so far (common for explorers and drug developers).
+                  {h.netIncomeTtm != null && (
+                    <>
+                      {" "}Over the last year it {h.netIncomeTtm < 0 ? "lost" : "made"} <strong className="text-teal-50">{bigMoney(Math.abs(h.netIncomeTtm), ccy)}</strong>
+                    </>
+                  )}
+                  {h.fcfTtm != null && (
+                    <>
+                      {" "}and {h.fcfTtm < 0 ? "used" : "generated"} <strong className={h.fcfTtm < 0 ? "text-red-400" : "text-emerald-400"}>{bigMoney(Math.abs(h.fcfTtm), ccy)}</strong> of cash
+                    </>
+                  )}
+                  .{h.netDebt != null && h.netDebt < 0 ? <> It holds {bigMoney(-h.netDebt, ccy)} more cash than debt: that runway is the number to watch.</> : null}
+                </>
+              ) : v.financial ? (
+                <>
+                  Profit was <strong className="text-teal-50">{bigMoney(h.netIncomeQ, ccy)}</strong> in the latest quarter ({h.label}, to {monthLabel(h.asOf)})
+                  {niDelta != null && h.netIncomeYoY?.kind === "ok" ? (
+                    <>
+                      , {niDelta >= 0 ? "up" : "down"} <strong className={niDelta >= 0 ? "text-emerald-400" : "text-red-400"}>{bigMoney(Math.abs(niDelta), ccy)}</strong> (
+                      <G g={h.netIncomeYoY} />) on the same quarter a year ago
+                    </>
+                  ) : null}
+                  . Earnings per share {epsMoney(h.epsQ4, ccy)} (<G g={h.epsYoY} />).
+                  {h.netIncomeTtm != null && <> Over the last year: <strong className="text-teal-50">{bigMoney(h.netIncomeTtm, ccy)}</strong> of profit.</>}
+                  {h.revenueYoY?.kind === "nm" && (
+                    <span className="text-teal-200/50">
+                      {" "}Revenue growth isn&apos;t shown: our data feed changed how it counts this {v.sector?.match(/insur/i) ? "company" : "bank"}&apos;s revenue (
+                      <Term k="bank-revenue">why</Term>).
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {revLabel} were <strong className="text-teal-50">{bigMoney(h.revenueQ, ccy)}</strong> in the latest quarter ({h.label}, to {monthLabel(h.asOf)})
+                  {revDelta != null && h.revenueYoY?.kind === "ok" ? (
+                    <>
+                      , {revDelta >= 0 ? "up" : "down"} <strong className={revDelta >= 0 ? "text-emerald-400" : "text-red-400"}>{bigMoney(Math.abs(revDelta), ccy)}</strong> (
+                      <G g={h.revenueYoY} />) on the same quarter a year ago
+                    </>
+                  ) : null}
+                  .{" "}
+                  {h.revenueTtm != null && (
+                    <>
+                      Over the last year: <strong className="text-teal-50">{bigMoney(h.revenueTtm, ccy)}</strong> of {revLabel.toLowerCase()}
+                      {h.netIncomeTtm != null && <>, {bigMoney(h.netIncomeTtm, ccy)} of profit</>}
+                      {h.fcfTtm != null && <>, {bigMoney(h.fcfTtm, ccy)} of free cash flow</>}.
+                    </>
+                  )}
+                </>
+              )}
+              {otherCcy && (
+                <span className="text-teal-200/50"> Figures are in {ccy}, the currency {symbol} reports in, not the {listingCurrency} it trades in.</span>
+              )}
+            </p>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                {v.financial ? (
-                  <StatCard
-                    size="sm"
-                    label="Profit (quarter)"
-                    term="earnings"
-                    value={bigMoney(h.netIncomeQ, ccy)}
-                    note={
-                      <>
-                        <G g={h.netIncomeYoY} /> <Term k="yoy">YoY</Term>
-                      </>
-                    }
-                  />
-                ) : h.preRevenue ? (
-                  <StatCard size="sm" label="Sales (12 mo)" term="revenue" value="none yet" valueClassName="text-teal-200/60" />
-                ) : (
-                  <StatCard
-                    size="sm"
-                    label={`${revLabel} (12 mo)`}
-                    term="ttm"
-                    value={bigMoney(h.revenueTtm, ccy)}
-                    note={
-                      <>
-                        <G g={h.revenueYoY} /> <Term k="yoy">YoY</Term>
-                        {h.revenueAccelBps != null && (
-                          <>
-                            {" · "}
-                            <Term k="growth-acceleration">{h.revenueAccelBps >= 0 ? "speeding up" : "slowing"}</Term>{" "}
-                            {ptsText(Math.abs(h.revenueAccelBps)).replace(/^\+/, "")}
-                          </>
-                        )}
-                      </>
-                    }
-                  />
-                )}
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {v.financial ? (
                 <StatCard
                   size="sm"
-                  label="EPS (quarter)"
-                  term="eps"
-                  value={epsMoney(h.epsQ4, ccy)}
-                  valueClassName={h.epsQ4 != null && h.epsQ4 < 0 ? "text-red-400" : "text-teal-50"}
+                  label="Profit (quarter)"
+                  term="earnings"
+                  value={bigMoney(h.netIncomeQ, ccy)}
                   note={
                     <>
-                      <G g={h.epsYoY} /> YoY{h.epsQ4YearAgo != null ? ` (was ${epsMoney(h.epsQ4YearAgo, ccy)})` : ""}
+                      <G g={h.netIncomeYoY} /> <Term k="yoy">YoY</Term>
                     </>
                   }
                 />
-                {v.financial ? (
-                  <StatCard size="sm" label="Return on equity" term="return-on-equity" value={bpsText(h.roeBps)} note="last year's profit ÷ shareholders' money" />
-                ) : h.preRevenue ? (
-                  <StatCard
-                    size="sm"
-                    label="Profit (12 mo)"
-                    term="earnings"
-                    value={bigMoney(h.netIncomeTtm, ccy)}
-                    valueClassName={h.netIncomeTtm != null && h.netIncomeTtm < 0 ? "text-red-400" : "text-teal-50"}
-                  />
-                ) : (
-                  <StatCard
-                    size="sm"
-                    label="Operating margin"
-                    term="operating-margin"
-                    value={bpsText(h.operatingMarginBps)}
-                    note={h.operatingMarginChangeBps != null ? `${ptsText(h.operatingMarginChangeBps)} vs a year ago` : undefined}
-                    valueClassName={h.operatingMarginBps != null && h.operatingMarginBps < 0 ? "text-red-400" : "text-teal-50"}
-                  />
-                )}
-                {v.financial ? (
-                  <StatCard
-                    size="sm"
-                    label="Revenue (12 mo)"
-                    term="bank-revenue"
-                    value={h.revenueTtm != null ? bigMoney(h.revenueTtm, ccy) : "n/m"}
-                    valueClassName={h.revenueTtm != null ? "text-teal-50" : "text-teal-200/50"}
-                    note={h.revenueTtm != null ? <><G g={h.revenueYoY} /> YoY</> : "our feed changed how it counts it"}
-                  />
-                ) : (
-                  <StatCard
-                    size="sm"
-                    label="Free cash flow (12 mo)"
-                    term="free-cash-flow"
-                    value={bigMoney(h.fcfTtm, ccy)}
-                    valueClassName={h.fcfTtm != null && h.fcfTtm < 0 ? "text-red-400" : "text-teal-50"}
-                    note={h.fcfMarginBps != null && !h.preRevenue ? `${bpsText(h.fcfMarginBps)} of sales` : h.preRevenue ? "cash used running the business" : undefined}
-                  />
-                )}
-              </div>
-
-              {v.quarters.length >= 2 && (
-                <div className="mt-5">
-                  <QuarterBars
-                    points={v.quarters}
-                    currency={ccy}
-                    revenueLabel={revLabel}
-                    metrics={v.financial ? ["profit", "eps"] : h.preRevenue ? ["fcf", "eps"] : ["revenue", "eps", "fcf", "margin"]}
-                  />
-                </div>
+              ) : h.preRevenue ? (
+                <StatCard size="sm" label="Sales (12 mo)" term="revenue" value="none yet" valueClassName="text-teal-200/60" />
+              ) : (
+                <StatCard
+                  size="sm"
+                  label={`${revLabel} (12 mo)`}
+                  term="ttm"
+                  value={bigMoney(h.revenueTtm, ccy)}
+                  note={
+                    <>
+                      <G g={h.revenueYoY} /> <Term k="yoy">YoY</Term>
+                      {h.revenueAccelBps != null && (
+                        <>
+                          {" · "}
+                          <Term k="growth-acceleration">{h.revenueAccelBps >= 0 ? "speeding up" : "slowing"}</Term>{" "}
+                          {ptsText(Math.abs(h.revenueAccelBps)).replace(/^\+/, "")}
+                        </>
+                      )}
+                    </>
+                  }
+                />
               )}
-                  </div>
-                ),
-              },
-              { key: "table", label: "Table", node: <HeadlineTable v={v} /> },
-            ]}
-          />
+              <StatCard
+                size="sm"
+                label="EPS (quarter)"
+                term="eps"
+                value={epsMoney(h.epsQ4, ccy)}
+                valueClassName={h.epsQ4 != null && h.epsQ4 < 0 ? "text-red-400" : "text-teal-50"}
+                note={
+                  <>
+                    <G g={h.epsYoY} /> YoY{h.epsQ4YearAgo != null ? ` (was ${epsMoney(h.epsQ4YearAgo, ccy)})` : ""}
+                  </>
+                }
+              />
+              {v.financial ? (
+                <StatCard size="sm" label="Return on equity" term="return-on-equity" value={bpsText(h.roeBps)} note="last year's profit ÷ shareholders' money" />
+              ) : h.preRevenue ? (
+                <StatCard
+                  size="sm"
+                  label="Profit (12 mo)"
+                  term="earnings"
+                  value={bigMoney(h.netIncomeTtm, ccy)}
+                  valueClassName={h.netIncomeTtm != null && h.netIncomeTtm < 0 ? "text-red-400" : "text-teal-50"}
+                />
+              ) : (
+                <StatCard
+                  size="sm"
+                  label="Operating margin"
+                  term="operating-margin"
+                  value={bpsText(h.operatingMarginBps)}
+                  note={h.operatingMarginChangeBps != null ? `${ptsText(h.operatingMarginChangeBps)} vs a year ago` : undefined}
+                  valueClassName={h.operatingMarginBps != null && h.operatingMarginBps < 0 ? "text-red-400" : "text-teal-50"}
+                />
+              )}
+              {v.financial ? (
+                <StatCard
+                  size="sm"
+                  label="Revenue (12 mo)"
+                  term="bank-revenue"
+                  value={h.revenueTtm != null ? bigMoney(h.revenueTtm, ccy) : "n/m"}
+                  valueClassName={h.revenueTtm != null ? "text-teal-50" : "text-teal-200/50"}
+                  note={h.revenueTtm != null ? <><G g={h.revenueYoY} /> YoY</> : "our feed changed how it counts it"}
+                />
+              ) : (
+                <StatCard
+                  size="sm"
+                  label="Free cash flow (12 mo)"
+                  term="free-cash-flow"
+                  value={bigMoney(h.fcfTtm, ccy)}
+                  valueClassName={h.fcfTtm != null && h.fcfTtm < 0 ? "text-red-400" : "text-teal-50"}
+                  note={h.fcfMarginBps != null && !h.preRevenue ? `${bpsText(h.fcfMarginBps)} of sales` : h.preRevenue ? "cash used running the business" : undefined}
+                />
+              )}
+            </div>
+
+            {v.quarters.length >= 2 && (
+              <div className="mt-5">
+                <QuarterBars
+                  points={v.quarters}
+                  currency={ccy}
+                  revenueLabel={revLabel}
+                  metrics={v.financial ? ["profit", "eps"] : h.preRevenue ? ["fcf", "eps"] : ["revenue", "eps", "fcf", "margin"]}
+                />
+              </div>
+            )}
+          </div>
         </Card>
       </div>
 

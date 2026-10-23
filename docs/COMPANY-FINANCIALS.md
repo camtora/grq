@@ -1,6 +1,6 @@
 # Company financials — implementation plan
 
-**Status:** APPROVED (Cam, 2026-10-22). **Backend BUILT 2026-10-22 (P0–P5 data layer: every feed below except X1/X2). Display ROUND 1 shipped the same night (members + viewers): "The business" section + a Layout trial switch (Story · Report card · Table) for the headline — pick one.** Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
+**Status:** APPROVED (Cam, 2026-10-22). **Backend BUILT 2026-10-22 (P0–P5 data layer: every feed below except X1/X2). Display ROUND 1 shipped the same night (members + viewers): "The business" section. Headline layout DECIDED 2026-10-23: Report card (Story and Table removed). Next: the lower panels.** Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
 any point**, Run 3 included; the display goes through the design loop (§5). Decision record: **D140**.
 
 **One line:** wire every company-level feed our FMP plan already pays for (financial statements, forward
@@ -359,4 +359,5 @@ prompt-audit staging (D129–D137) and must not land mid-watch.
 
 | Round | Date | What | Waiting on |
 |---|---|---|---|
-| 1 | 2026-10-22 | First cut of every panel, members + viewers only. Headline in three switchable layouts (Story · Report card · Table) on the live page. | Cam + Graham: which headline layout; then the same question for each lower panel |
+| 1 | 2026-10-22 | First cut of every panel, members + viewers only. Headline in three switchable layouts (Story · Report card · Table) on the live page. | — |
+| 1a | 2026-10-23 | **Headline decided: Report card** (Cam: "the report card looks the best"). Story and Table removed with the switch. | The lower panels, one at a time |

@@ -4494,3 +4494,7 @@ analyst target with no analysts behind it is FMP's placeholder and is hidden; "n
 yet REPORTED (SHOP's September quarter, reported in November), not the first after today; FMP's DCF shows only
 where it can be read straight (same reporting and listing currency, has sales, price ≥ $1, within 4× of the price —
 it compared SHOP's US$30 with a C$245 price).
+
+**Headline decided (2026-10-23): the Report card** — a summary sentence, four tiles, the 8-quarter bar chart.
+Cam picked it; Story and Table are deleted with the switch (`HeadlineVariants.tsx` gone; `LayoutSwitch` stays for the
+panel rounds). The section stays members + viewers only until the lower panels are settled.
