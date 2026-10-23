@@ -4527,4 +4527,4 @@ V and MA share "Credit Services" with the lenders AXP and COF and stay on the ba
 **Display round 3 (2026-10-23): What analysts expect.** Each forecast is now grounded against something we know
 (`estimateBaseline`: next quarter vs the same quarter last year, a fiscal year vs the year before it, matched ±45
 days; the year after next vs the prior year's forecast; a bank's revenue withheld). Two layouts beside the plain
-numbers: *Vs last year* (dollar sentences) and *Ranges* (analyst spread with last year as a tick).
+numbers: *Vs last year* (dollar sentences) and *Ranges* (analyst spread with last year as a tick). **Decided the same day: Vs last year** (Numbers and Ranges removed; the revision line moved under each year).

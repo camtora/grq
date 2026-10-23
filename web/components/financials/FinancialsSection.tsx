@@ -3,8 +3,7 @@ import Term from "@/components/Term";
 import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
 import HealthChecklist from "./HealthChecklist";
-import LayoutSwitch from "./LayoutSwitch";
-import { EstimatesCompared, EstimatesRanges } from "./EstimatesVariants";
+import EstimatesCompared from "./EstimatesCompared";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -278,20 +277,8 @@ export default function FinancialsSection({
   );
 }
 
-function revisionText(r: { kind: string; days?: number; daysOfHistory?: number; eps?: Growth | null; revenue?: Growth | null }, days: number) {
-  if (r.kind === "building") {
-    return <span className="text-teal-200/40">{days}-day: building history ({r.daysOfHistory ?? 0} of {days} days)</span>;
-  }
-  return (
-    <span>
-      {days}-day: EPS <G g={r.eps} />, sales <G g={r.revenue} />
-    </span>
-  );
-}
-
 function Estimates({ v }: { v: Company }) {
   const e = v.estimates;
-  const ccy = v.currency;
   const rows = e ? ([["Next year", e.nextYear], ["Year after", e.followingYear], ["Next quarter", e.nextQuarter]] as const) : [];
   return (
     <div className="flex h-full flex-col space-y-2">
@@ -302,55 +289,7 @@ function Estimates({ v }: { v: Company }) {
         {!e || rows.every(([, t]) => !t) ? (
           <p className="text-teal-200/40">No analyst forecasts in our feed for this company.</p>
         ) : (
-          <LayoutSwitch
-            storeKey="grq-fin-estimates"
-            initial="compared"
-            options={[
-              {
-                key: "numbers",
-                label: "Numbers",
-                node: (
-          <div className="space-y-3">
-            {rows.map(([label, t]) =>
-              t ? (
-                <div key={label} className="border-b border-teal-400/10 pb-2 last:border-0 last:pb-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-xs uppercase tracking-wider text-teal-200/50">
-                      {label} <span className="normal-case tracking-normal text-teal-200/35">to {monthLabel(t.targetEnd)}</span>
-                    </span>
-                    <span className="text-[10px] text-teal-200/40">
-                      {t.analysts != null ? `${t.analysts} analyst${t.analysts === 1 ? "" : "s"}` : ""}
-                      {t.analysts != null && t.analysts <= 2 ? " · thin" : ""}
-                    </span>
-                  </div>
-                  <div className="mt-1 tabular-nums text-teal-100/85">
-                    <Term k="consensus-estimate">EPS</Term> {epsMoney(t.epsAvg4, ccy)}{" "}
-                    <span className="text-[11px] text-teal-200/40">
-                      ({epsMoney(t.epsLow4, ccy)}–{epsMoney(t.epsHigh4, ccy)})
-                    </span>
-                  </div>
-                  <div className="tabular-nums text-teal-100/85">
-                    Sales {bigMoney(t.revenueAvg, ccy)}{" "}
-                    <span className="text-[11px] text-teal-200/40">
-                      ({bigMoney(t.revenueLow, ccy)}–{bigMoney(t.revenueHigh, ccy)})
-                    </span>
-                  </div>
-                  {label !== "Next quarter" && (t.rev30.kind === "ok" || t.rev90.kind === "ok") && (
-                    <div className="mt-1 space-y-0.5 text-[11px]">
-                      <div>{revisionText(t.rev30, 30)}</div>
-                      <div>{revisionText(t.rev90, 90)}</div>
-                    </div>
-                  )}
-                </div>
-              ) : null,
-            )}
-          </div>
-                ),
-              },
-              { key: "compared", label: "Vs last year", node: <EstimatesCompared v={v} /> },
-              { key: "ranges", label: "Ranges", node: <EstimatesRanges v={v} /> },
-            ]}
-          />
+          <EstimatesCompared v={v} />
         )}
         <p className="mt-3 text-[11px] text-teal-200/40">
           <Term k="estimate-revision">Revisions</Term> (how these forecasts move) appear once our own record is long enough: 30 days from {e?.historySince ?? "the first snapshot"}{" "}
