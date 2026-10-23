@@ -244,11 +244,11 @@ export default function FinancialsSection({
       </div>
 
       {/* ── Health + scores · Analysts · Segments ───────────────────────────────────────────────── */}
-      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+      {/* One row on a wide screen (Cam, 2026-10-23), two by two in between, stacked on a phone. Each panel
+          spans two rows of a shared grid (subgrid), so the cards start level even when a title wraps. */}
+      <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4 md:[&>*]:row-span-2 md:[&>*]:grid md:[&>*]:grid-rows-subgrid md:[&>*]:gap-y-0">
         <Health v={v} />
         <Scores v={v} listingCurrency={listingCurrency} />
-      </div>
-      <div className="grid items-stretch gap-6 lg:grid-cols-2">
         <Estimates v={v} />
         <Segments v={v} revTerm={revTerm} />
       </div>

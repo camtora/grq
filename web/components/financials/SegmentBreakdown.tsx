@@ -104,28 +104,28 @@ export default function SegmentBreakdown({ seg, title, company }: { seg: Seg; ti
           const g = p.prevCents == null ? null : grow(p.cents, p.prevCents);
           return (
             <li key={p.name}>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-baseline justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-teal-100/80">
                   <span className={`h-2 w-2 shrink-0 rounded-full ${SHADES[i % SHADES.length]}`} />
-                  <span className="truncate">{tidyName(p.name)}</span>
+                  <span className="truncate" title={tidyName(p.name)}>{tidyName(p.name)}</span>
                 </span>
                 <span className="shrink-0 tabular-nums text-teal-200/60">
                   {bigMoney(p.cents, ccy)} · {Math.round((p.cents / total) * 100)}%
-                  {d != null && (
-                    <span className={`ml-1.5 ${tone(g)}`}>
-                      {d >= 0 ? "+" : "−"}
-                      {bigMoney(Math.abs(d), ccy)} ({growthText(g)})
-                    </span>
-                  )}
                 </span>
               </div>
               {d != null && (
-                <div className="ml-3.5 mt-0.5 flex h-1">
-                  <div className="flex w-1/2 justify-end">
-                    {d < 0 && <div className="h-full rounded-l-full" style={{ width: `${(-d / maxMove) * 100}%`, background: "var(--spark-down)" }} />}
+                <div className="ml-3.5 mt-0.5 flex items-center gap-2">
+                  <span className={`w-28 shrink-0 text-[11px] tabular-nums ${tone(g)}`}>
+                    {d >= 0 ? "+" : "−"}
+                    {bigMoney(Math.abs(d), ccy)} ({growthText(g)})
+                  </span>
+                  <div className="flex h-1 flex-1">
+                    <div className="flex w-1/2 justify-end">
+                      {d < 0 && <div className="h-full rounded-l-full" style={{ width: `${(-d / maxMove) * 100}%`, background: "var(--spark-down)" }} />}
+                    </div>
+                    <div className="w-px bg-teal-400/30" />
+                    <div className="flex w-1/2">{d > 0 && <div className="h-full rounded-r-full" style={{ width: `${(d / maxMove) * 100}%`, background: "var(--spark-up)" }} />}</div>
                   </div>
-                  <div className="w-px bg-teal-400/30" />
-                  <div className="flex w-1/2">{d > 0 && <div className="h-full rounded-r-full" style={{ width: `${(d / maxMove) * 100}%`, background: "var(--spark-up)" }} />}</div>
                 </div>
               )}
             </li>
