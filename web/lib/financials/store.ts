@@ -159,6 +159,7 @@ async function refreshStatements(key: string): Promise<void> {
       operatingIncome: toMinor(i.operatingIncome),
       netIncome: toMinor(i.netIncome),
       ebitda: toMinor(i.ebitda),
+      interestExpense: toMinor(i.interestExpense),
       epsDiluted4: toEps4(i.epsDiluted),
       sharesDiluted: toWhole(i.weightedAverageShsOutDil),
       operatingCashFlow: toMinor(c?.operatingCashFlow ?? c?.netCashProvidedByOperatingActivities),
@@ -423,7 +424,7 @@ export async function getPeriods(key: string): Promise<PeriodRow[]> {
     select: {
       period: true, fiscalYear: true, periodEnd: true, currency: true, revenue: true, costOfRevenue: true, grossProfit: true, operatingIncome: true,
       netIncome: true, epsDiluted4: true, sharesDiluted: true, operatingCashFlow: true, capex: true, freeCashFlow: true,
-      cash: true, totalDebt: true, totalEquity: true,
+      cash: true, totalDebt: true, totalEquity: true, interestExpense: true, buybacks: true, dividendsPaid: true, stockComp: true,
     },
   });
 }

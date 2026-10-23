@@ -4498,3 +4498,14 @@ it compared SHOP's US$30 with a C$245 price).
 **Headline decided (2026-10-23): the Report card** — a summary sentence, four tiles, the 8-quarter bar chart.
 Cam picked it; Story and Table are deleted with the switch (`HeadlineVariants.tsx` gone; `LayoutSwitch` stays for the
 panel rounds). The section stays members + viewers only until the lower panels are settled.
+
+**Display round 2 (2026-10-23): Financial health, in dollars.** The round-1 panel led with Piotroski and Altman Z —
+scores Graham can't read as money. Two dollar layouts now sit beside it on the trial switch: *Plain answers* (could it
+pay off its debt · can it afford the interest · is cash coming in or going out · what did owners get back · is your
+slice shrinking) and *Checklist* (the same sentences, graded). Grades are round and stated: debt clearable from ≤ 3
+years of free cash is fine, > 6 heavy; profit ≥ 8× interest easy, < 3× tight — **but a company holding more cash
+than debt is never flagged on interest** (TN.CN: $3.7K of interest against $878K net cash read red on the first cut);
+burning cash with ≥ 24 months of runway is a watch, less a problem; share count up ≤ 2%/yr normal, > 5% dilution.
+Banks: return on equity (≥ 10% good, < 5% weak) and profit trend, never debt or interest. A payout under 1% of the
+company's scale is housekeeping, not a return to owners (TN.CN's "$377 of buybacks"). `FinancialPeriod.interestExpense`
+added, backfilled from the stored raw statements (no refetch).

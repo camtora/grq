@@ -1961,6 +1961,7 @@ model FinancialPeriod {
   operatingIncome   BigInt?
   netIncome         BigInt?
   ebitda            BigInt?
+  interestExpense   BigInt? // interest paid on debt (FMP income.interestExpense); a bank's is its cost of goods, never shown as a burden
   epsDiluted4       Int? // diluted EPS × 10,000 (P0 R8)
   sharesDiluted     BigInt? // weighted average diluted shares (whole shares)
   operatingCashFlow BigInt?

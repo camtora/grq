@@ -74,6 +74,11 @@ export type PeriodRow = {
   cash: bigint | null;
   totalDebt: bigint | null;
   totalEquity: bigint | null;
+  // Optional: older fixtures and callers don't carry them; null/undefined both mean "not reported".
+  interestExpense?: bigint | null;
+  buybacks?: bigint | null; // negative = cash out
+  dividendsPaid?: bigint | null; // negative = cash out
+  stockComp?: bigint | null;
 };
 
 const DAY = 86_400_000;
@@ -109,7 +114,7 @@ export function prevQuarter(qs: PeriodRow[], cur: PeriodRow): PeriodRow | null {
   return gap >= 60 && gap <= 120 ? p : null;
 }
 
-type MoneyField = "revenue" | "grossProfit" | "operatingIncome" | "netIncome" | "operatingCashFlow" | "freeCashFlow";
+type MoneyField = "revenue" | "grossProfit" | "operatingIncome" | "netIncome" | "operatingCashFlow" | "freeCashFlow" | "interestExpense" | "buybacks" | "dividendsPaid" | "stockComp";
 
 /** Trailing twelve months: the sum of 4 consecutive quarters starting at `from` (index into the
  *  newest-first list). null if any quarter is missing, the field is null in any, or the four don't
@@ -417,4 +422,93 @@ export const FILING_FORMS = new Set(["8-K", "10-Q", "10-K", "6-K", "40-F", "20-F
 
 export function keepFiling(form: string): boolean {
   return FILING_FORMS.has(form.trim().toUpperCase());
+}
+
+// ── Health, in dollars (display round 2) ───────────────────────────────────────────────────────
+// The scores (Piotroski, Altman Z) come from FMP; these are the plain facts behind "is it healthy",
+// computed from the statements so every one can be said in dollars: what it owes vs holds, how long
+// its cash would take to clear the debt, how many times profit covers interest, how long the cash
+// lasts if it burns, and what it handed back to owners. Banks get none of the debt/interest lines
+// (their debt is their funding and interest is their cost of goods).
+
+export type HealthFacts = {
+  financial: boolean;
+  cash: bigint | null;
+  debt: bigint | null;
+  netDebt: bigint | null; // + owes more than it holds
+  fcfTtm: bigint | null;
+  operatingIncomeTtm: bigint | null;
+  interestTtm: bigint | null;
+  interestCoverX10: number | null; // operating profit ÷ interest, ×10 (85 = 8.5×)
+  debtYearsX10: number | null; // net debt ÷ yearly free cash, ×10 (only when it owes and has free cash)
+  runwayMonths: number | null; // only when it burns cash and holds more cash than debt
+  buybacksTtm: bigint | null; // positive = spent buying back
+  dividendsTtm: bigint | null; // positive = paid out
+  stockCompTtm: bigint | null;
+};
+
+const out = (v: bigint | null) => (v == null ? null : v < 0n ? -v : 0n);
+
+export function healthFacts(rows: PeriodRow[], sector?: string | null): HealthFacts | null {
+  const qs = quarters(rows);
+  const q0 = qs[0];
+  if (!q0) return null;
+  const fin = isFinancialSector(sector);
+  const fcfT = ttm(qs, "fcf");
+  const opT = ttm(qs, "operatingIncome");
+  const intT = fin ? null : ttm(qs, "interestExpense");
+  const nd = fin ? null : netDebt(q0);
+  let cover: number | null = null;
+  if (intT != null && intT > 0n && opT != null) cover = Number((opT * 10n) / intT);
+  const debtYears = nd != null && nd > 0n && fcfT != null && fcfT > 0n ? Number((nd * 10n) / fcfT) : null;
+  const runway = nd != null && nd < 0n && fcfT != null && fcfT < 0n ? Math.round((Number(-nd) * 12) / Number(-fcfT)) : null;
+  return {
+    financial: fin,
+    cash: fin ? null : q0.cash,
+    debt: fin ? null : q0.totalDebt,
+    netDebt: nd,
+    fcfTtm: fin ? null : fcfT,
+    operatingIncomeTtm: opT,
+    interestTtm: intT,
+    interestCoverX10: cover,
+    debtYearsX10: debtYears,
+    runwayMonths: runway,
+    buybacksTtm: out(ttm(qs, "buybacks")),
+    dividendsTtm: out(ttm(qs, "dividendsPaid")),
+    stockCompTtm: ttm(qs, "stockComp"),
+  };
+}
+
+export type CheckTone = "good" | "ok" | "bad";
+export type HealthCheck = { key: "debt" | "interest" | "cash" | "shares" | "profit" | "trend"; tone: CheckTone };
+
+/** The checklist grades. Thresholds are deliberately round and stated in the panel's own words:
+ *  debt payable from ≤ 3 years of free cash is fine, > 6 is heavy; profit ≥ 8× interest is easy,
+ *  < 3× is tight (unless it holds more cash than debt: then it could repay it all today); burning cash with ≥ 2 years of runway is a watch, less is a problem; share count
+ *  up ≤ 2% a year is normal, > 5% is real dilution. Banks: return on equity ≥ 10% good, < 5% weak. */
+export function healthChecks(f: HealthFacts, opts: { roeBps: number | null; netIncomeYoY: Growth | null; shareChangeYoY: Growth | null }): HealthCheck[] {
+  const c: HealthCheck[] = [];
+  if (f.financial) {
+    if (opts.roeBps != null) c.push({ key: "profit", tone: opts.roeBps >= 1000 ? "good" : opts.roeBps >= 500 ? "ok" : "bad" });
+    const g = opts.netIncomeYoY;
+    if (g?.kind === "ok") c.push({ key: "trend", tone: g.bps >= 0 ? "good" : g.bps >= -1000 ? "ok" : "bad" });
+  } else {
+    if (f.netDebt != null) {
+      const tone: CheckTone =
+        f.netDebt <= 0n ? "good" : f.debtYearsX10 == null ? "bad" : f.debtYearsX10 <= 30 ? "good" : f.debtYearsX10 <= 60 ? "ok" : "bad";
+      c.push({ key: "debt", tone });
+    }
+    if (f.netDebt != null && f.netDebt <= 0n && f.interestTtm != null) {
+      c.push({ key: "interest", tone: "good" }); // more cash than debt: it could repay the lot today, so the bill can't bite
+    } else if (f.interestCoverX10 != null) {
+      c.push({ key: "interest", tone: f.interestCoverX10 >= 80 ? "good" : f.interestCoverX10 >= 30 ? "ok" : "bad" });
+    }
+    if (f.fcfTtm != null) {
+      const tone: CheckTone = f.fcfTtm > 0n ? "good" : f.runwayMonths != null && f.runwayMonths >= 24 ? "ok" : "bad";
+      c.push({ key: "cash", tone });
+    }
+  }
+  const s = opts.shareChangeYoY;
+  if (s?.kind === "ok") c.push({ key: "shares", tone: s.bps <= 200 ? "good" : s.bps <= 500 ? "ok" : "bad" });
+  return c;
 }

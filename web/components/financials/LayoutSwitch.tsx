@@ -8,9 +8,8 @@ import { useEffect, useState } from "react";
 
 export type LayoutOption = { key: string; label: string; node: React.ReactNode };
 
-const STORE = "grq-fin-layout";
-
-export default function LayoutSwitch({ options, initial }: { options: LayoutOption[]; initial: string }) {
+export default function LayoutSwitch({ options, initial, storeKey }: { options: LayoutOption[]; initial: string; storeKey: string }) {
+  const STORE = storeKey; // one key per block on trial, so each pick is remembered separately
   const [pick, setPick] = useState(initial);
   useEffect(() => {
     try {
@@ -19,7 +18,7 @@ export default function LayoutSwitch({ options, initial }: { options: LayoutOpti
     } catch {
       /* private window / blocked storage: the default layout is fine */
     }
-  }, [options]);
+  }, [options, STORE]);
   const choose = (k: string) => {
     setPick(k);
     try {
@@ -41,7 +40,7 @@ export default function LayoutSwitch({ options, initial }: { options: LayoutOpti
             type="button"
             onClick={() => choose(o.key)}
             className={`rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${
-              current.key === o.key ? "bg-amber-400/15 text-amber-200" : "text-teal-200/45 hover:text-teal-200/80"
+              current.key === o.key ? "bg-amber-400/15 text-amber-300" : "text-teal-200/45 hover:text-teal-200/80"
             }`}
           >
             {o.label}

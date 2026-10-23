@@ -10,7 +10,7 @@
 import { prisma } from "../db";
 import { etDateStr } from "../../agent/calendar";
 import { getPeriods, getEstimates, getStatus, splitsOf } from "./store";
-import { headline, quarterSeries, revision, consensusOn, isFinancialSector, type Growth, type EstimateRow } from "./derive";
+import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, type Growth, type EstimateRow } from "./derive";
 import type { CallSummary } from "./call-summary";
 
 const n = (v: bigint | null | undefined): number | null => (v == null ? null : Number(v));
@@ -29,6 +29,8 @@ export type FinancialsView =
       quarters: ReturnType<typeof seriesOut>;
       estimates: EstimatesOut | null;
       health: HealthOut | null;
+      facts: ReturnType<typeof factsOut> | null; // health in dollars (round 2)
+      checks: ReturnType<typeof healthChecks>;
       segments: { product: SegmentOut | null; geographic: SegmentOut | null };
       call: CallOut | null;
       filings: Array<{ form: string; filedAt: string; url: string; docUrl: string | null }>;
@@ -48,6 +50,21 @@ function headlineOut(h: NonNullable<ReturnType<typeof headline>>) {
     netIncomeQYearAgo: n(h.netIncomeQYearAgo),
     fcfTtm: n(h.fcfTtm),
     netDebt: n(h.netDebt),
+  };
+}
+
+function factsOut(f: NonNullable<ReturnType<typeof healthFacts>>) {
+  return {
+    ...f,
+    cash: n(f.cash),
+    debt: n(f.debt),
+    netDebt: n(f.netDebt),
+    fcfTtm: n(f.fcfTtm),
+    operatingIncomeTtm: n(f.operatingIncomeTtm),
+    interestTtm: n(f.interestTtm),
+    buybacksTtm: n(f.buybacksTtm),
+    dividendsTtm: n(f.dividendsTtm),
+    stockCompTtm: n(f.stockCompTtm),
   };
 }
 
@@ -148,6 +165,8 @@ export async function financialsView(key: string): Promise<FinancialsView> {
   const h = headline(periods, { sector: st.sector, splits: splitsOf(st) });
   if (!h) return { kind: "none", reason: st.statementsCovered === false ? "no-statements" : "not-fetched" };
   const financial = isFinancialSector(st.sector);
+  const facts = healthFacts(periods, st.sector);
+  const checks = facts ? healthChecks(facts, { roeBps: h.roeBps, netIncomeYoY: h.netIncomeYoY, shareChangeYoY: h.shareChangeYoY }) : [];
 
   const [est, health, product, geographic, call, filings, insider] = await Promise.all([
     getEstimates(k),
@@ -180,6 +199,8 @@ export async function financialsView(key: string): Promise<FinancialsView> {
           fmpDcfPriceCents: health.fmpDcfPriceCents,
         }
       : null,
+    facts: facts ? factsOut(facts) : null,
+    checks,
     segments: { product: segmentOut(product, today), geographic: segmentOut(geographic, today) },
     call: call ? { fiscalYear: call.fiscalYear, fiscalQuarter: call.fiscalQuarter, callDate: call.callDate, summary: (call.summary as CallSummary | null) ?? null } : null,
     filings: filings.map((f) => ({ form: f.form, filedAt: f.filedAt, url: f.url, docUrl: f.docUrl })),

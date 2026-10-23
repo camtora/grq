@@ -233,6 +233,24 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     example: "Owes $10B, holds $4B of cash: net debt of $6B.",
     related: ["leverage", "free-cash-flow"],
   },
+  "interest-cover": {
+    term: "Interest cover",
+    def: "How many times a company's operating profit covers the interest on its debt. 10× means a year's profit could pay ten years of interest; under 3× means a bad year could make the interest hard to meet.",
+    example: "Made $800M from operations, paid $100M of interest: covered 8×.",
+    related: ["net-debt", "operating-margin"],
+  },
+  "cash-runway": {
+    term: "Cash runway",
+    def: "For a company that spends more cash than it brings in: how long the cash it holds would last at its current pace. When it runs short, it usually sells new shares, which shrinks every existing owner's slice.",
+    example: "Holds $12M, burned $6M last year: about 24 months of runway.",
+    related: ["free-cash-flow", "dilution"],
+  },
+  "stock-based-pay": {
+    term: "Stock-based pay",
+    def: "Pay handed to staff as shares instead of cash. It costs the company no cash, but new shares make every existing owner's slice a little smaller, unless buybacks soak them up.",
+    example: "A company pays $2B of staff pay in stock and spends $2B buying shares back: the share count stays about flat.",
+    related: ["dilution", "buyback"],
+  },
   "consensus-estimate": {
     term: "Consensus estimate",
     def: "The average forecast from the professional analysts who follow a company: what they expect it to earn or sell in a coming year or quarter. The low and high show how much they disagree. A forecast from one or two analysts is a thin read.",

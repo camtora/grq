@@ -2,6 +2,8 @@ import PanelHeader from "@/components/PanelHeader";
 import Term from "@/components/Term";
 import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
+import LayoutSwitch from "./LayoutSwitch";
+import { HealthAnswers, HealthChecklist } from "./HealthVariants";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -343,14 +345,63 @@ function Estimates({ v }: { v: Company }) {
 }
 
 function Health({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
+  const footer = <ScoreFooter v={v} listingCurrency={listingCurrency} />;
+  return (
+    <div className="flex h-full flex-col space-y-2">
+      <PanelHeader fresh="weekly">Financial health</PanelHeader>
+      <Card className="flex-1 p-5 text-sm">
+        <LayoutSwitch
+          storeKey="grq-fin-health"
+          initial="answers"
+          options={[
+            { key: "scores", label: "Scores", node: <HealthScores v={v} listingCurrency={listingCurrency} /> },
+            { key: "answers", label: "Plain answers", node: <HealthAnswers v={v} footer={footer} /> },
+            { key: "checklist", label: "Checklist", node: <HealthChecklist v={v} footer={footer} /> },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+}
+
+/** The textbook scores in one quiet line, under the dollar layouts. */
+function ScoreFooter({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
+  const s = v.health;
+  if (!s || (s.piotroski == null && s.altmanZ == null && !s.fmpRating)) return null;
+  return (
+    <div className="mt-1 border-t border-teal-400/10 pt-3 text-[11px] leading-relaxed text-teal-200/50">
+      <span className="uppercase tracking-wider">Textbook scores:</span>{" "}
+      {s.piotroski != null && (
+        <>
+          <Term k="piotroski">Piotroski</Term> {s.piotroski}/9 ({piotroskiWord(s.piotroski).toLowerCase()})
+        </>
+      )}
+      {s.altmanZ != null && (
+        <>
+          {s.piotroski != null ? " · " : ""}
+          <Term k="altman-z">Altman Z</Term> {s.altmanZ.toFixed(1)} ({altmanWord(s.altmanZ).word.toLowerCase()})
+        </>
+      )}
+      {s.fmpRating && (
+        <>
+          {" "}
+          · FMP&apos;s own grade {s.fmpRating}
+          {s.fmpDcfCents != null && s.fmpDcfPriceCents != null && dcfShowable(s.fmpDcfCents, s.fmpDcfPriceCents, v, listingCurrency) && (
+            <>, fair value {money(s.fmpDcfCents, listingCurrency)} vs price {money(s.fmpDcfPriceCents, listingCurrency)}</>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function HealthScores({ v, listingCurrency }: { v: Company; listingCurrency: string | null }) {
   const s = v.health;
   const h = v.headline;
   const ccy = v.currency;
   const share = h.shareChangeYoY;
   return (
-    <div className="flex h-full flex-col space-y-2">
-      <PanelHeader fresh="weekly">Financial health</PanelHeader>
-      <Card className="flex-1 p-5 text-sm">
+      <div>
         <dl className="space-y-2.5">
           {s?.piotroski != null && (
             <Row label={<Term k="piotroski">Piotroski</Term>}>
@@ -396,8 +447,7 @@ function Health({ v, listingCurrency }: { v: Company; listingCurrency: string | 
           </div>
         )}
         {v.financial && <p className="mt-3 text-[11px] text-teal-200/40">A bank&apos;s card skips the Altman Z-score, net debt and free cash flow: none of them fits a lender.</p>}
-      </Card>
-    </div>
+      </div>
   );
 }
 
