@@ -73,6 +73,7 @@ export type PeriodRow = {
   freeCashFlow: bigint | null;
   cash: bigint | null;
   totalDebt: bigint | null;
+  totalEquity: bigint | null;
 };
 
 const DAY = 86_400_000;
@@ -127,13 +128,12 @@ export function ttm(qs: PeriodRow[], field: MoneyField | "fcf", from = 0): bigin
   return sum;
 }
 
-/** TTM revenue on the right basis; null across a basis change for non-financials (a sum of two
- *  different definitions is no number at all). */
+/** TTM revenue; null across a basis change (a sum of two different definitions is no number at all). */
 export function ttmRevenue(qs: PeriodRow[], financial: boolean, from = 0): bigint | null {
   const four = qs.slice(from, from + 4);
-  if (four.length < 4 || ttm(qs, "revenue", from) == null) return null;
-  if (!financial && four.some((q) => basisChanged(q, four[0]))) return null;
-  return four.reduce((s, q) => s + (revenueOf(q, financial) ?? 0n), 0n);
+  const sum = ttm(qs, "revenue", from);
+  if (sum == null || four.some((q) => basisChanged(q, four[0], financial))) return null;
+  return sum;
 }
 
 /** Free cash flow: FMP's own figure when present, else operating cash flow less capex. Capex is
@@ -173,36 +173,61 @@ export function shareChange(cur: PeriodRow, prev: PeriodRow, splits: Split[]): G
   return growth(c, Math.round(p));
 }
 
-// ── Revenue basis: FMP changes how it books a bank's revenue between quarters ────────────────
+// ── Revenue basis: FMP changes how it books some companies' revenue between quarters ─────────
 
-/** FMP's "revenue" for a bank or insurer flips between GROSS (interest income included, the interest
- *  paid booked as "cost of revenue") and NET from one quarter to the next — RY switched to gross in
- *  late 2025, C to net in Q3 2026 (measured 2026-10-22: +140% and −46% "growth" that never happened).
- *  Revenue less cost of revenue is the same number on either basis, so for financials that NET figure
- *  is the revenue we measure. */
-export function revenueOf(q: Pick<PeriodRow, "revenue" | "costOfRevenue">, financial: boolean): bigint | null {
-  if (!financial || q.revenue == null) return q.revenue;
-  return q.costOfRevenue != null && q.costOfRevenue > 0n ? q.revenue - q.costOfRevenue : q.revenue;
+/** Did FMP change how it counts a FINANCIAL company's revenue between two periods? It does this to
+ *  banks and insurers: RY moved from net to gross revenue in late 2025 and C from gross to net in Q3
+ *  2026, which read as +140% and −46% "growth" (and BNS, NA, IFC, MFC show the same in their history).
+ *  Two tells: a cost-of-revenue line appearing or vanishing (RY), or its share of revenue jumping more
+ *  than 25 points (C: 51% → 11%).
+ *
+ *  Only financials are tested. Surveyed across the universe 2026-10-22, the same tells on other
+ *  companies were real business — NVDA's April 2025 inventory write-down (costs ×3 in a real +69%
+ *  revenue quarter), POET's first sales, gold and memory price booms — so for them revenue is measured
+ *  as reported. A first version applied the zero/non-zero tell to everyone and would have called real
+ *  growth "n/m".
+ *
+ *  Across a change, revenue growth is "n/m" — it is not rebuilt. A second version (also 2026-10-22)
+ *  rebuilt bank revenue as revenue minus cost of revenue and read RY at +22.9% while RBC's own call
+ *  said about 9%: FMP's gross-basis "cost of revenue" is not the deduction RBC makes. Profit and EPS
+ *  don't flip and agree with what the banks report (RY +11% / +12.8%), so a bank's card leads with them. */
+export function basisChanged(
+  a: Pick<PeriodRow, "costOfRevenue" | "revenue">,
+  b: Pick<PeriodRow, "costOfRevenue" | "revenue">,
+  financial: boolean,
+): boolean {
+  if (!financial || a.costOfRevenue == null || b.costOfRevenue == null) return false;
+  if ((a.costOfRevenue === 0n) !== (b.costOfRevenue === 0n)) return true;
+  const share = (q: Pick<PeriodRow, "costOfRevenue" | "revenue">) =>
+    q.revenue != null && q.revenue > 0n ? Number(q.costOfRevenue) / Number(q.revenue) : null;
+  const sa = share(a);
+  const sb = share(b);
+  return sa != null && sb != null && Math.abs(sa - sb) > BASIS_SHIFT;
 }
 
-/** Did the reporting basis change between two periods? (Cost of revenue present in one, absent in the
- *  other — the visible tell of FMP re-classifying.) For non-financials a revenue comparison across a
- *  basis change is "n/m", never a percentage. */
-export function basisChanged(a: Pick<PeriodRow, "costOfRevenue">, b: Pick<PeriodRow, "costOfRevenue">): boolean {
-  if (a.costOfRevenue == null || b.costOfRevenue == null) return false;
-  return (a.costOfRevenue === 0n) !== (b.costOfRevenue === 0n);
-}
+/** How far cost-of-revenue's share of revenue may move between two compared quarters of a financial
+ *  company before we treat it as the feed re-classifying. */
+export const BASIS_SHIFT = 0.25;
 
-function revenueGrowth(cur: PeriodRow, prev: PeriodRow | null, financial: boolean): Growth | null {
+function revenueGrowth(cur: PeriodRow, prev: PeriodRow | null, fin: boolean): Growth | null {
   if (!prev) return null;
-  if (!financial && basisChanged(cur, prev)) return { kind: "nm", reason: "basis-changed" };
-  return growth(revenueOf(cur, financial), revenueOf(prev, financial));
+  if (basisChanged(cur, prev, fin)) return { kind: "nm", reason: "basis-changed" };
+  return growth(cur.revenue, prev.revenue);
+}
+
+/** A margin change across a basis change is no more real than the revenue change. */
+function marginChange(cur: PeriodRow, prev: PeriodRow | null, field: "operatingIncome" | "netIncome", fin: boolean): number | null {
+  if (!prev || basisChanged(cur, prev, fin)) return null;
+  const a = ratioBps(cur[field], cur.revenue);
+  const b = ratioBps(prev[field], prev.revenue);
+  return a != null && b != null ? a - b : null;
 }
 
 // ── The headline numbers for one company ─────────────────────────────────────────────────────
 
-/** Banks and insurers: FMP synthesises a "gross profit" and the Altman Z formula reads them as
- *  distressed (P0 R3). Their card drops gross margin, Altman Z and the DCF. */
+/** Banks and insurers: FMP synthesises a "gross profit", flips their revenue basis, and the Altman Z
+ *  formula reads them as distressed (P0 R3). Their card leads with profit, EPS and return on equity,
+ *  and drops gross margin, Altman Z, net debt, free cash flow and the DCF. */
 export function isFinancialSector(sector: string | null | undefined): boolean {
   return /financial/i.test(sector ?? "");
 }
@@ -211,19 +236,27 @@ export type Headline = {
   asOf: string; // newest quarter's period end
   label: string; // "FY2027 Q2"
   currency: string;
-  revenueBasis: "revenue" | "net-revenue"; // net for banks/insurers — see revenueOf
-  revenueTtm: bigint | null;
+  revenueTtm: bigint | null; // null when the last four quarters straddle a basis change
   revenueQ: bigint | null;
+  revenueQYearAgo: bigint | null; // the same fiscal quarter a year earlier, same basis only — for "up $X" (dollars first)
   revenueYoY: Growth | null; // latest quarter vs same quarter a year earlier
   revenueQoQ: Growth | null;
   revenueAccelBps: number | null; // YoY growth now − YoY growth two quarters ago
   epsQ4: number | null;
+  epsQ4YearAgo: number | null;
   epsYoY: Growth | null;
+  netIncomeQ: bigint | null;
+  operatingIncomeQ: bigint | null;
+  netIncomeQYearAgo: bigint | null;
+  netIncomeYoY: Growth | null;
   netIncomeTtm: bigint | null;
+  roeBps: number | null; // profit over the last year ÷ shareholders' equity now
   grossMarginBps: number | null; // null for financials
   operatingMarginBps: number | null;
   netMarginBps: number | null;
-  operatingMarginChangeBps: number | null; // vs the same quarter a year earlier
+  operatingMarginChangeBps: number | null; // vs the same quarter a year earlier (same basis only)
+  netMarginChangeBps: number | null;
+  preRevenue: boolean; // no sales (an explorer, a biotech) — the card leads with cash, not growth
   fcfTtm: bigint | null;
   fcfMarginBps: number | null;
   netDebt: bigint | null;
@@ -241,36 +274,41 @@ export function headline(rows: PeriodRow[], opts: { sector?: string | null; spli
   const q2 = qs[2] ?? null;
   const q2ya = q2 ? yearAgo(qs, q2) : null;
 
-  const rev = (q: PeriodRow) => revenueOf(q, fin);
   const yoyNow = revenueGrowth(q0, ya, fin);
   const yoyThen = q2 ? revenueGrowth(q2, q2ya, fin) : null;
   const accel = yoyNow?.kind === "ok" && yoyThen?.kind === "ok" ? yoyNow.bps - yoyThen.bps : null;
-
-  const opNow = ratioBps(q0.operatingIncome, rev(q0));
-  const opThen = ya ? ratioBps(ya.operatingIncome, rev(ya)) : null;
   const revTtm = ttmRevenue(qs, fin);
   const fcfTtm = ttm(qs, "fcf");
+  const niTtm = ttm(qs, "netIncome");
 
   return {
     asOf: q0.periodEnd,
     label: `FY${q0.fiscalYear} ${q0.period}`,
     currency: q0.currency,
-    revenueBasis: fin ? "net-revenue" : "revenue",
     revenueTtm: revTtm,
-    revenueQ: rev(q0),
+    revenueQ: q0.revenue,
+    revenueQYearAgo: ya && !basisChanged(q0, ya, fin) ? ya.revenue : null,
     revenueYoY: yoyNow,
     revenueQoQ: revenueGrowth(q0, pq, fin),
     revenueAccelBps: accel,
     epsQ4: q0.epsDiluted4,
+    epsQ4YearAgo: ya?.epsDiluted4 ?? null,
     epsYoY: ya ? growth(q0.epsDiluted4, ya.epsDiluted4) : null,
-    netIncomeTtm: ttm(qs, "netIncome"),
+    netIncomeQ: q0.netIncome,
+    operatingIncomeQ: q0.operatingIncome,
+    netIncomeQYearAgo: ya?.netIncome ?? null,
+    netIncomeYoY: ya ? growth(q0.netIncome, ya.netIncome) : null,
+    netIncomeTtm: niTtm,
+    roeBps: ratioBps(niTtm, q0.totalEquity),
     grossMarginBps: fin ? null : ratioBps(q0.grossProfit, q0.revenue),
-    operatingMarginBps: opNow,
-    netMarginBps: ratioBps(q0.netIncome, rev(q0)),
-    operatingMarginChangeBps: opNow != null && opThen != null ? opNow - opThen : null,
-    fcfTtm,
+    operatingMarginBps: ratioBps(q0.operatingIncome, q0.revenue),
+    netMarginBps: ratioBps(q0.netIncome, q0.revenue),
+    operatingMarginChangeBps: marginChange(q0, ya, "operatingIncome", fin),
+    netMarginChangeBps: marginChange(q0, ya, "netIncome", fin),
+    preRevenue: (revTtm ?? q0.revenue ?? 0n) <= 0n,
+    fcfTtm: fin ? null : fcfTtm, // a lender's cash flow statement is its loan book moving, not "free cash"
     fcfMarginBps: fin ? null : ratioBps(fcfTtm, revTtm),
-    netDebt: fin ? null : netDebt(q0), // a bank's "debt" is its deposits/funding — not leverage in this sense
+    netDebt: fin ? null : netDebt(q0), // a bank's "debt" is its funding — not leverage in this sense
     shareChangeYoY: ya ? shareChange(q0, ya, opts.splits ?? []) : null,
     quartersAvailable: qs.length,
   };
@@ -287,13 +325,15 @@ export function quarterSeries(rows: PeriodRow[], n = 8, sector?: string | null) 
       return {
         periodEnd: q.periodEnd,
         label: `${q.period} FY${q.fiscalYear}`,
-        revenue: revenueOf(q, fin),
+        revenue: q.revenue,
         netIncome: q.netIncome,
         epsQ4: q.epsDiluted4,
         fcf: fcf(q),
-        operatingMarginBps: ratioBps(q.operatingIncome, revenueOf(q, fin)),
+        operatingMarginBps: ratioBps(q.operatingIncome, q.revenue),
+        netMarginBps: ratioBps(q.netIncome, q.revenue),
         revenueYoY: revenueGrowth(q, ya, fin),
         epsYoY: ya ? growth(q.epsDiluted4, ya.epsDiluted4) : null,
+        netIncomeYoY: ya ? growth(q.netIncome, ya.netIncome) : null,
       };
     })
     .reverse();

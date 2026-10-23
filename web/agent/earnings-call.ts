@@ -16,8 +16,9 @@ const MAX_ATTEMPTS = 3;
 const TRANSCRIPT_CAP = 120_000; // chars — the longest calls run ~90k; anything past this is boilerplate
 
 /** Summarize up to `max` unsummarized recent calls. Returns how many were written. */
-export async function runCallSummaries(max = 12): Promise<{ written: number; failed: number }> {
-  const deep = new Set((await financialsTargets()).filter((t) => t.deep).map((t) => t.key));
+export async function runCallSummaries(max = 12, only?: string[]): Promise<{ written: number; failed: number }> {
+  let deep = new Set((await financialsTargets()).filter((t) => t.deep).map((t) => t.key));
+  if (only) deep = new Set(only.map((s) => s.toUpperCase()).filter((s) => deep.has(s))); // a host-side run for named names (still deep-only)
   if (deep.size === 0) return { written: 0, failed: 0 };
   const since = new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString().slice(0, 10);
   const pending = await prisma.earningsCall.findMany({

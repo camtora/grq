@@ -41,7 +41,11 @@ function headlineOut(h: NonNullable<ReturnType<typeof headline>>) {
     ...h,
     revenueTtm: n(h.revenueTtm),
     revenueQ: n(h.revenueQ),
+    revenueQYearAgo: n(h.revenueQYearAgo),
     netIncomeTtm: n(h.netIncomeTtm),
+    netIncomeQ: n(h.netIncomeQ),
+    operatingIncomeQ: n(h.operatingIncomeQ),
+    netIncomeQYearAgo: n(h.netIncomeQYearAgo),
     fcfTtm: n(h.fcfTtm),
     netDebt: n(h.netDebt),
   };
@@ -68,6 +72,8 @@ type EstimatesOut = { nextYear: EstimateTarget | null; followingYear: EstimateTa
 function target(history: EstimateRow[], today: string): EstimateTarget | null {
   const now = consensusOn(history, today);
   if (!now) return null;
+  // A "forecast" with no analysts behind it is FMP's placeholder (TN.CN: 0 analysts, EPS $0.00) — not a forecast.
+  if (!((now.analystsEps ?? 0) > 0 || (now.analystsRevenue ?? 0) > 0)) return null;
   return {
     targetEnd: now.targetEnd,
     revenueAvg: n(now.revenueAvg),
@@ -82,7 +88,9 @@ function target(history: EstimateRow[], today: string): EstimateTarget | null {
   };
 }
 
-function estimatesOut(rows: EstimateRow[], today: string): EstimatesOut | null {
+/** `after` = the newest REPORTED period end: "next quarter" is the first one not yet reported, which
+ *  can already be in the past (SHOP's Sep quarter, reported in November). */
+function estimatesOut(rows: EstimateRow[], today: string, after: string): EstimatesOut | null {
   if (rows.length === 0) return null;
   const by = new Map<string, EstimateRow[]>();
   for (const r of rows) {
@@ -91,7 +99,7 @@ function estimatesOut(rows: EstimateRow[], today: string): EstimatesOut | null {
   }
   const future = (period: string) =>
     [...by.entries()]
-      .filter(([k]) => k.startsWith(`${period}|`) && k.split("|")[1] > today)
+      .filter(([k]) => k.startsWith(`${period}|`) && k.split("|")[1] > after)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, h]) => h);
   const fy = future("FY");
@@ -159,7 +167,7 @@ export async function financialsView(key: string): Promise<FinancialsView> {
     currency: h.currency,
     headline: headlineOut(h),
     quarters: seriesOut(quarterSeries(periods, 8, st.sector)),
-    estimates: estimatesOut(est, today),
+    estimates: estimatesOut(est, today, h.asOf),
     health: health
       ? {
           date: health.date,

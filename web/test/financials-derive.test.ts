@@ -12,7 +12,7 @@ const B = (n: number) => BigInt(n) * 100n; // whole units → cents
 function q(period: string, fiscalYear: number, periodEnd: string, over: Partial<PeriodRow> = {}): PeriodRow {
   return {
     period, fiscalYear, periodEnd, currency: "USD",
-    revenue: B(100), costOfRevenue: B(40), grossProfit: B(60), operatingIncome: B(20), netIncome: B(15), epsDiluted4: 10_000,
+    revenue: B(100), costOfRevenue: B(40), grossProfit: B(60), totalEquity: null, operatingIncome: B(20), netIncome: B(15), epsDiluted4: 10_000,
     sharesDiluted: 1000n, operatingCashFlow: B(25), capex: B(-5), freeCashFlow: B(20), cash: B(50), totalDebt: B(30),
     ...over,
   };
@@ -120,28 +120,53 @@ describe("the headline", () => {
     assert.equal(h.grossMarginBps, 3000); // 60 / 200
     assert.equal(h.quartersAvailable, 7);
   });
-  it("a bank's revenue is NET of interest paid, so FMP's gross/net flip isn't growth (measured on C, RY)", () => {
-    // C as FMP served it 2026-10-22: Q3 2026 on a NET basis, Q3 2025 on a GROSS basis.
+  it("across FMP's revenue-basis flip, revenue growth is n/m — for banks too (C, RY as served 2026-10-22)", () => {
+    // RY: gross-basis now, net (cost of revenue 0) a year ago. An earlier rule rebuilt +22.9% from
+    // revenue − cost of revenue; RBC's own call said ~9%. We don't measure across the flip.
+    const ry = [
+      q("Q3", 2026, "2026-07-31", { revenue: B(38632), costOfRevenue: B(18841), netIncome: B(6022), epsDiluted4: 42_300 }),
+      q("Q3", 2025, "2025-07-31", { revenue: B(16104), costOfRevenue: B(0), netIncome: B(5415), epsDiluted4: 37_500 }),
+    ];
+    const h = headline(ry, { sector: "Financial Services" })!;
+    assert.deepEqual(h.revenueYoY, { kind: "nm", reason: "basis-changed" });
+    assert.equal(h.revenueQYearAgo, null);
+    assert.equal(h.netMarginChangeBps, null);
+    // Profit and EPS don't flip, and match what RBC reported (+11%, +12.8%).
+    assert.deepEqual(h.netIncomeYoY, { kind: "ok", bps: 1121 });
+    assert.deepEqual(h.epsYoY, { kind: "ok", bps: 1280 });
+  });
+  it("C's switch keeps a cost line but its share of revenue jumps 51% → 11%: still n/m", () => {
     const c = [
       q("Q3", 2026, "2026-09-30", { revenue: B(23813), costOfRevenue: B(2586) }),
       q("Q3", 2025, "2025-09-30", { revenue: B(43845), costOfRevenue: B(24188) }),
     ];
-    const h = headline(c, { sector: "Financial Services" })!;
-    assert.equal(h.revenueBasis, "net-revenue");
-    assert.deepEqual(h.revenueYoY, { kind: "ok", bps: 799 }); // 21227 vs 19657, not −45.7%
-    // RY: gross now, net (cost of revenue 0) a year ago.
-    const ry = [q("Q3", 2026, "2026-07-31", { revenue: B(38632), costOfRevenue: B(18841) }), q("Q3", 2025, "2025-07-31", { revenue: B(16104), costOfRevenue: B(0) })];
-    assert.deepEqual(headline(ry, { sector: "Financial Services" })!.revenueYoY, { kind: "ok", bps: 2289 }); // 19791 vs 16104, not +139.9%
+    assert.deepEqual(headline(c, { sector: "Financial Services" })!.revenueYoY, { kind: "nm", reason: "basis-changed" });
   });
-  it("a non-financial whose basis flips is n/m, never a percentage", () => {
-    const x = [q("Q3", 2026, "2026-09-30", { revenue: B(200), costOfRevenue: B(80) }), q("Q3", 2025, "2025-09-30", { revenue: B(100), costOfRevenue: B(0) })];
-    assert.deepEqual(headline(x)!.revenueYoY, { kind: "nm", reason: "basis-changed" });
+  it("a bank's ordinary margin shift is not a basis change", () => {
+    const x = [q("Q3", 2026, "2026-09-30", { revenue: B(200), costOfRevenue: B(50) }), q("Q3", 2025, "2025-09-30", { revenue: B(100), costOfRevenue: B(35) })];
+    assert.deepEqual(headline(x, { sector: "Financial Services" })!.revenueYoY, { kind: "ok", bps: 10000 }); // cost share 35% → 25%
   });
-  it("a bank's card drops gross margin, FCF margin and net debt (P0 R3)", () => {
+  it("same basis both years → an ordinary revenue growth figure", () => {
+    const x = [q("Q3", 2026, "2026-09-30", { revenue: B(110), costOfRevenue: B(50) }), q("Q3", 2025, "2025-09-30", { revenue: B(100), costOfRevenue: B(45) })];
+    assert.deepEqual(headline(x, { sector: "Financial Services" })!.revenueYoY, { kind: "ok", bps: 1000 });
+  });
+  it("return on equity = last year's profit ÷ equity now", () => {
+    const rows = quarters(nvdaLike()).map((r) => ({ ...r, totalEquity: B(400) }));
+    // TTM net income = 4 × 15 = 60 → 60 / 400 = 15%
+    assert.equal(headline(rows)!.roeBps, 1500);
+  });
+  it("a non-financial is measured as reported, even through a sharp cost move (NVDA's 2025 write-down, POET's first sales)", () => {
+    const x = [q("Q1", 2026, "2025-04-27", { revenue: B(44), costOfRevenue: B(17) }), q("Q1", 2025, "2024-04-28", { revenue: B(26), costOfRevenue: B(5) })];
+    assert.deepEqual(headline(x)!.revenueYoY, { kind: "ok", bps: 6923 });
+    const y = [q("Q1", 2026, "2026-03-31", { revenue: B(81), costOfRevenue: B(40) }), q("Q1", 2025, "2025-03-31", { revenue: B(1), costOfRevenue: B(0) })];
+    assert.equal(headline(y)!.revenueYoY?.kind, "ok");
+  });
+  it("a bank's card drops gross margin, free cash flow and net debt (P0 R3)", () => {
     assert.ok(isFinancialSector("Financial Services"));
     const h = headline(nvdaLike(), { sector: "Financial Services" })!;
     assert.equal(h.grossMarginBps, null);
     assert.equal(h.fcfMarginBps, null);
+    assert.equal(h.fcfTtm, null);
     assert.equal(h.netDebt, null);
     assert.notEqual(h.netMarginBps, null);
   });

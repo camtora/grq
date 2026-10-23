@@ -423,7 +423,7 @@ export async function getPeriods(key: string): Promise<PeriodRow[]> {
     select: {
       period: true, fiscalYear: true, periodEnd: true, currency: true, revenue: true, costOfRevenue: true, grossProfit: true, operatingIncome: true,
       netIncome: true, epsDiluted4: true, sharesDiluted: true, operatingCashFlow: true, capex: true, freeCashFlow: true,
-      cash: true, totalDebt: true,
+      cash: true, totalDebt: true, totalEquity: true,
     },
   });
 }

@@ -52,6 +52,9 @@ import { screenReadFor } from "@/lib/market-screen/retrieval";
 import PanelHeader from "@/components/PanelHeader";
 import DirectiveButtons from "@/components/DirectiveButtons";
 import Term from "@/components/Term";
+import FinancialsSection from "@/components/financials/FinancialsSection";
+import { financialsView } from "@/lib/financials/view";
+import { ensureFinancials, getStatus as getFinancialsStatus } from "@/lib/financials/store";
 
 // Always render fresh on the server — never a prefetch-cached copy. A find researched
 // AFTER it was first opened (e.g. its full dossier landed) must show the NEW dossier when
@@ -297,6 +300,17 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   // Both refreshers no-op cheaply against a fresh cache, so this is safe on every view.
   void refreshOptions(symbol).catch(() => {});
   void refreshSocialOne(symbol).catch(() => {});
+
+  // Company financials (D140) — ROUND 1 of the display loop: members + viewers only until Cam and
+  // Graham pick a design (docs/COMPANY-FINANCIALS.md §5). Read from our tables; a name the daily job
+  // doesn't cover (or a stale one) is fetched fire-and-forget — FMP only, never Claude — so the next
+  // view has it. Keyed by the listing symbol (P0 R1), which is entry.yahoo.
+  const financials = book && fmpEnabled() ? await financialsView(entry.yahoo).catch(() => null) : null;
+  if (book && fmpEnabled()) {
+    void getFinancialsStatus(entry.yahoo)
+      .then((st) => (!st?.statementsAt || Date.now() - st.statementsAt.getTime() > 7 * 86_400_000 ? ensureFinancials(entry.yahoo) : undefined))
+      .catch(() => {});
+  }
 
   // The at-a-glance verdict + the agent's expected return (latest dossier target).
   const rec = signals ? overallSignal(signals) : null;
@@ -1154,6 +1168,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           )}
         </div>
       </section>
+
+      {/* Company financials (D140): statements, forecasts, health, segments, the last call, filings. */}
+      {financials && <FinancialsSection view={financials} symbol={symbol} listingCurrency={entry.currency ?? null} />}
 
       {/* Tier 3 + Tier 8 — options positioning + social buzz, side by side, equal height. Both signals, never traded. */}
       <section className="mb-6 grid items-stretch gap-6 lg:grid-cols-2">

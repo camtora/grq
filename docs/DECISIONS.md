@@ -4473,3 +4473,24 @@ and `scripts/financials-backfill.ts`. 30 + 8 tests.
   a panel that degrades quietly, and wrong for any job that writes "nothing found" down.
 
 **Not in this decision:** any change to `buildContext`, the dossier prompt, the signal families or the scoreboard.
+
+**D140 addendum — the bank rule was wrong, twice, and is now evidence-shaped (same night, 2026-10-22).** The
+backend note above said bank revenue measured NET of cost of revenue was "the same number on either basis" (RY
++22.9%, C +8.0%). Round 1 of the display put RBC's earnings-call summary beside it: RBC said revenue grew about
+**9%**. FMP's gross-basis "cost of revenue" is not the deduction RBC makes, so the rebuilt figure was invented.
+Profit (+11%) and EPS (+12.8%) matched RBC's own numbers. Now: across a flip, revenue growth is **n/m** (not
+rebuilt), and a bank's card leads with profit, EPS and return on equity. A second attempt tested every company for
+a basis flip by its cost-of-revenue share; surveyed across the universe it flagged NVDA's April 2025 inventory
+write-down, POET's first sales and the gold/memory booms — real business, not re-classification — so the flip test
+(`basisChanged`) applies to **financials only**, where all the evidence is (RY, C, BNS, NA, IFC, MFC). Two tells:
+a cost line appearing/vanishing, or its share of revenue moving more than 25 points (C: 51% → 11%).
+
+**Display round 1 shipped (members + viewers only).** "The business" section on the stock page: headline +
+8-quarter trend, What analysts expect, Financial health, Where the money comes from, The last earnings call,
+Filings & insiders (`components/financials/*`). A members' **Layout trial** switch offers three headline layouts —
+Story (dollar sentences + sparks), Report card (tiles + bar chart), Table (8 quarters side by side) — for Cam and
+Graham to choose. Other rules found while building it: a pre-revenue company leads with cash used and runway; an
+analyst target with no analysts behind it is FMP's placeholder and is hidden; "next quarter" is the first one not
+yet REPORTED (SHOP's September quarter, reported in November), not the first after today; FMP's DCF shows only
+where it can be read straight (same reporting and listing currency, has sales, price ≥ $1, within 4× of the price —
+it compared SHOP's US$30 with a C$245 price).

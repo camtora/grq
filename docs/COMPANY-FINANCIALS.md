@@ -1,6 +1,6 @@
 # Company financials — implementation plan
 
-**Status:** APPROVED (Cam, 2026-10-22). **Backend BUILT 2026-10-22 (P0–P5 data layer: every feed below except X1/X2), display not started.** Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
+**Status:** APPROVED (Cam, 2026-10-22). **Backend BUILT 2026-10-22 (P0–P5 data layer: every feed below except X1/X2). Display ROUND 1 shipped the same night (members + viewers): "The business" section + a Layout trial switch (Story · Report card · Table) for the headline — pick one.** Backend (ingest, storage, jobs, agent rebuilds that carry them) may ship **at
 any point**, Run 3 included; the display goes through the design loop (§5). Decision record: **D140**.
 
 **One line:** wire every company-level feed our FMP plan already pays for (financial statements, forward
@@ -329,7 +329,7 @@ prompt-audit staging (D129–D137) and must not land mid-watch.
   happens to return the same statements, but different scores, rating and DCF. One key per name: `member.yahoo`.
 - **R2 — reporting currency is per company, and often not the listing's.** `AEM.TO` and `TXG.TO` report USD,
   `TSM` TWD, `ASML` EUR, `SHOP.TO` USD. Confirms §3.3.
-- **R3 — financials (banks, insurers) get a different card.** FMP synthesises a "gross profit" for banks (C:
+- **R3 — financials (banks, insurers) get a different card.** *(Superseded in part the same night — see R12.)* FMP synthesises a "gross profit" for banks (C:
   revenue − "cost of revenue" = interest expense), so gross margin is meaningless there; Altman Z is meaningless
   too (C 0.1, RY 0.3: "distress" by formula, healthy in fact); and the DCF is nonsense (RY.TO −549). For
   sector = Financial Services: suppress gross margin, Altman Z and DCF; keep revenue, net income, EPS, margins
@@ -350,3 +350,13 @@ prompt-audit staging (D129–D137) and must not land mid-watch.
   2026-06-30 = FY2027 Q1). Store them as given; never derive the fiscal year from the date.
 - **R11 — filing timing.** `acceptedDate`/`filingDate` are present (C filed 2026-10-13, the same morning as its
   call). The refresh after an earnings date can key off them.
+- **R12 — bank revenue is not rebuilt (display round 1, 2026-10-22).** FMP flips a bank's revenue between gross and
+  net; across a flip revenue growth is n/m and the card leads with profit, EPS and return on equity. The flip test
+  applies to financials only (`basisChanged`): on other companies the same tells were real business (NVDA's 2025
+  write-down). Full story: D140 addendum.
+
+## 10. Display loop log
+
+| Round | Date | What | Waiting on |
+|---|---|---|---|
+| 1 | 2026-10-22 | First cut of every panel, members + viewers only. Headline in three switchable layouts (Story · Report card · Table) on the live page. | Cam + Graham: which headline layout; then the same question for each lower panel |
