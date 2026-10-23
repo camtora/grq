@@ -10,7 +10,7 @@
 import { prisma } from "../db";
 import { etDateStr } from "../../agent/calendar";
 import { getPeriods, getEstimates, getStatus, splitsOf } from "./store";
-import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, segmentCompare, segmentSeries, type SegRow, type Growth, type EstimateRow, type PeriodRow } from "./derive";
+import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, segmentCompare, type SegRow, type Growth, type EstimateRow, type PeriodRow } from "./derive";
 import type { CallSummary } from "./call-summary";
 
 const n = (v: bigint | null | undefined): number | null => (v == null ? null : Number(v));
@@ -151,7 +151,6 @@ type SegmentOut = {
   currency: string | null;
   parts: Array<{ name: string; cents: number }>;
   compare: ReturnType<typeof segmentCompare>; // vs the same period a year earlier; n/m across a re-cut
-  series: SegRow[]; // up to 8 quarters, oldest → newest, back to the last re-cut
 };
 
 type SegDbRow = { periodEnd: string; period: string; currency: string | null; data: unknown };
@@ -169,7 +168,7 @@ function segmentOut(all: SegDbRow[], today: string): SegmentOut | null {
     .sort((a, b) => b.cents - a.cents);
   if (parts.length < 2) return null; // one segment is no chart
   const rows = all.map(segRow);
-  return { periodEnd: row.periodEnd, period: row.period, currency: row.currency, parts, compare: segmentCompare(rows, segRow(row)), series: segmentSeries(rows) };
+  return { periodEnd: row.periodEnd, period: row.period, currency: row.currency, parts, compare: segmentCompare(rows, segRow(row)) };
 }
 
 type CallOut = { fiscalYear: number; fiscalQuarter: number; callDate: string; summary: CallSummary | null };

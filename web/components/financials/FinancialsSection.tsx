@@ -4,8 +4,7 @@ import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
 import HealthChecklist from "./HealthChecklist";
 import EstimatesCompared from "./EstimatesCompared";
-import LayoutSwitch from "./LayoutSwitch";
-import { SegmentGrowth, SegmentTrend, SEG_SHADES, tidyName } from "./SegmentVariants";
+import SegmentBreakdown from "./SegmentBreakdown";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -398,41 +397,6 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
   );
 }
 
-function SegmentBar({ seg, title }: { seg: NonNullable<Company["segments"]["product"]>; title: string }) {
-  const total = seg.parts.reduce((a, p) => a + p.cents, 0) || 1;
-  const top = seg.parts.slice(0, 5);
-  const rest = seg.parts.slice(5).reduce((a, p) => a + p.cents, 0);
-  const parts = rest > 0 ? [...top, { name: "Other", cents: rest }] : top;
-  return (
-    <div>
-      <div className="mb-1.5 flex items-baseline justify-between text-[11px] text-teal-200/45">
-        <span className="uppercase tracking-wider">{title}</span>
-        <span>
-          {seg.period === "FY" ? "year" : seg.period} to {monthLabel(seg.periodEnd)}
-        </span>
-      </div>
-      <div className="flex h-3 w-full overflow-hidden rounded-full">
-        {parts.map((p, i) => (
-          <div key={p.name} className={SEG_SHADES[i % SEG_SHADES.length]} style={{ width: `${(p.cents / total) * 100}%` }} title={p.name} />
-        ))}
-      </div>
-      <ul className="mt-2 space-y-1 text-xs">
-        {parts.map((p, i) => (
-          <li key={p.name} className="flex items-center justify-between gap-2">
-            <span className="flex min-w-0 items-center gap-1.5 text-teal-100/80">
-              <span className={`h-2 w-2 shrink-0 rounded-full ${SEG_SHADES[i % SEG_SHADES.length]}`} />
-              <span className="truncate">{tidyName(p.name)}</span>
-            </span>
-            <span className="shrink-0 tabular-nums text-teal-200/60">
-              {bigMoney(p.cents, seg.currency)} · {Math.round((p.cents / total) * 100)}%
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function Segments({ v, revTerm }: { v: Company; revTerm: string }) {
   const { product, geographic } = v.segments;
   const company = v.name ?? "The company";
@@ -445,42 +409,10 @@ function Segments({ v, revTerm }: { v: Company; revTerm: string }) {
             This company doesn&apos;t break its <Term k={revTerm}>sales</Term> into separate lines of business in our feed, or reports just one.
           </p>
         ) : (
-          <LayoutSwitch
-            storeKey="grq-fin-segments"
-            initial="growth"
-            options={[
-              {
-                key: "split",
-                label: "Split",
-                node: (
-                  <div className="space-y-4">
-                    {product && <SegmentBar seg={product} title="By business" />}
-                    {geographic && <SegmentBar seg={geographic} title="By region" />}
-                  </div>
-                ),
-              },
-              {
-                key: "growth",
-                label: "Growth",
-                node: (
-                  <div className="space-y-5">
-                    {product && <SegmentGrowth seg={product} title="By business" company={company} />}
-                    {geographic && <SegmentGrowth seg={geographic} title="By region" company={company} />}
-                  </div>
-                ),
-              },
-              {
-                key: "trend",
-                label: "Trend",
-                node: (
-                  <div className="space-y-5">
-                    {product && <SegmentTrend seg={product} title="By business" company={company} />}
-                    {geographic && <SegmentTrend seg={geographic} title="By region" company={company} />}
-                  </div>
-                ),
-              },
-            ]}
-          />
+          <div className="space-y-5">
+            {product && <SegmentBreakdown seg={product} title="By business" company={company} />}
+            {geographic && <SegmentBreakdown seg={geographic} title="By region" company={company} />}
+          </div>
         )}
         <p className="text-[11px] text-teal-200/40">
           <Term k="business-segment">Segments</Term> show which part of the company is doing the growing.

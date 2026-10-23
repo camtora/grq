@@ -1,7 +1,7 @@
-// D140 display round 4 — segments over time (lib/financials/derive.ts).
+// D140 display round 4 — segments a year apart (lib/financials/derive.ts).
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { segmentCompare, segmentSeries, segmentYearAgo, type SegRow } from "../lib/financials/derive";
+import { segmentCompare, segmentYearAgo, type SegRow } from "../lib/financials/derive";
 
 const r = (period: string, periodEnd: string, data: Record<string, number>): SegRow => ({ period, periodEnd, data });
 
@@ -50,9 +50,4 @@ describe("segments a year apart", () => {
     assert.deepEqual(segmentCompare(flip, flip[0]), { kind: "resegmented", since: "2026-04-26" });
   });
   it("no period a year earlier → none", () => assert.deepEqual(segmentCompare(steady.slice(0, 3), steady[0]), { kind: "none" }));
-});
-
-describe("the segment trend", () => {
-  it("runs oldest → newest, quarters only", () => assert.deepEqual(segmentSeries(steady).map((x) => x.periodEnd), ["2025-09-30", "2026-03-31", "2026-06-30", "2026-09-30"]));
-  it("stops at the last re-cut", () => assert.deepEqual(segmentSeries(nvda).map((x) => x.periodEnd), ["2026-04-26", "2026-07-26"]));
 });

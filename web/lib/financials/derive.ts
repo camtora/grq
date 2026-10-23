@@ -591,17 +591,3 @@ export function segmentCompare(rows: SegRow[], cur: SegRow): SegmentCompare {
     .sort((a, b) => b.cents - a.cents);
   return { kind: "ok", parts, totalChange };
 }
-
-/** Up to `n` quarters, oldest → newest, back to the last re-cut: a stacked trend only makes sense
- *  while the segments mean the same thing. */
-export function segmentSeries(rows: SegRow[], n = 8): SegRow[] {
-  const qs = rows.filter((r) => /^Q[1-4]$/.test(r.period)).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
-  if (qs.length === 0) return [];
-  const key = segNames(qs[0]);
-  const out: SegRow[] = [];
-  for (const r of qs) {
-    if (segNames(r) !== key || out.length >= n) break;
-    out.push(r);
-  }
-  return out.reverse();
-}

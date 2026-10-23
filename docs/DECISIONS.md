@@ -4533,4 +4533,4 @@ numbers: *Vs last year* (dollar sentences) and *Ranges* (analyst spread with las
 company is doing the growing" and showed only today's split. Segments are now compared with the same period a year
 earlier — **except across a re-cut**: when the set of segment names changes, a same-named segment may not be the same
 business (NVDA's "Data Center" before and after its Apr 2026 re-cut), so the panel says the company changed how it
-splits its sales and compares nothing (the bank-revenue rule, again). Layouts on trial: Split · Growth · Trend.
+splits its sales and compares nothing (the bank-revenue rule, again). Layouts on trial: Split · Growth · Trend. **Decided the same day: Split and Growth combined into one** (share bar + sentence + per-segment dollars, share and change); Trend removed.
