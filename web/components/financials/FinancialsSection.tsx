@@ -4,6 +4,8 @@ import { Card, Chip, StatCard } from "@/components/ui";
 import QuarterBars from "./QuarterBars";
 import HealthChecklist from "./HealthChecklist";
 import EstimatesCompared from "./EstimatesCompared";
+import LayoutSwitch from "./LayoutSwitch";
+import { SegmentGrowth, SegmentTrend, SEG_SHADES, tidyName } from "./SegmentVariants";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -396,14 +398,6 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
   );
 }
 
-/** FMP passes some region names in capitals ("TAIWAN, PROVINCE OF CHINA"); calm them down. */
-function tidyName(n: string): string {
-  if (n !== n.toUpperCase() || n.length <= 4) return n;
-  return n.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\bOf\b/g, "of").replace(/\bAnd\b/g, "and");
-}
-
-const SEG_SHADES = ["bg-teal-400/80", "bg-teal-400/55", "bg-teal-400/35", "bg-emerald-400/50", "bg-amber-400/45", "bg-teal-400/20"];
-
 function SegmentBar({ seg, title }: { seg: NonNullable<Company["segments"]["product"]>; title: string }) {
   const total = seg.parts.reduce((a, p) => a + p.cents, 0) || 1;
   const top = seg.parts.slice(0, 5);
@@ -441,6 +435,7 @@ function SegmentBar({ seg, title }: { seg: NonNullable<Company["segments"]["prod
 
 function Segments({ v, revTerm }: { v: Company; revTerm: string }) {
   const { product, geographic } = v.segments;
+  const company = v.name ?? "The company";
   return (
     <div className="flex h-full flex-col space-y-2">
       <PanelHeader fresh="quarterly">Where the money comes from</PanelHeader>
@@ -450,10 +445,42 @@ function Segments({ v, revTerm }: { v: Company; revTerm: string }) {
             This company doesn&apos;t break its <Term k={revTerm}>sales</Term> into separate lines of business in our feed, or reports just one.
           </p>
         ) : (
-          <>
-            {product && <SegmentBar seg={product} title="By business" />}
-            {geographic && <SegmentBar seg={geographic} title="By region" />}
-          </>
+          <LayoutSwitch
+            storeKey="grq-fin-segments"
+            initial="growth"
+            options={[
+              {
+                key: "split",
+                label: "Split",
+                node: (
+                  <div className="space-y-4">
+                    {product && <SegmentBar seg={product} title="By business" />}
+                    {geographic && <SegmentBar seg={geographic} title="By region" />}
+                  </div>
+                ),
+              },
+              {
+                key: "growth",
+                label: "Growth",
+                node: (
+                  <div className="space-y-5">
+                    {product && <SegmentGrowth seg={product} title="By business" company={company} />}
+                    {geographic && <SegmentGrowth seg={geographic} title="By region" company={company} />}
+                  </div>
+                ),
+              },
+              {
+                key: "trend",
+                label: "Trend",
+                node: (
+                  <div className="space-y-5">
+                    {product && <SegmentTrend seg={product} title="By business" company={company} />}
+                    {geographic && <SegmentTrend seg={geographic} title="By region" company={company} />}
+                  </div>
+                ),
+              },
+            ]}
+          />
         )}
         <p className="text-[11px] text-teal-200/40">
           <Term k="business-segment">Segments</Term> show which part of the company is doing the growing.

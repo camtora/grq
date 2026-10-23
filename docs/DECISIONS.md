@@ -4528,3 +4528,9 @@ V and MA share "Credit Services" with the lenders AXP and COF and stay on the ba
 (`estimateBaseline`: next quarter vs the same quarter last year, a fiscal year vs the year before it, matched ±45
 days; the year after next vs the prior year's forecast; a bank's revenue withheld). Two layouts beside the plain
 numbers: *Vs last year* (dollar sentences) and *Ranges* (analyst spread with last year as a tick). **Decided the same day: Vs last year** (Numbers and Ranges removed; the revision line moved under each year).
+
+**Display round 4 (2026-10-23): Where the money comes from, over time.** The panel promised "which part of the
+company is doing the growing" and showed only today's split. Segments are now compared with the same period a year
+earlier — **except across a re-cut**: when the set of segment names changes, a same-named segment may not be the same
+business (NVDA's "Data Center" before and after its Apr 2026 re-cut), so the panel says the company changed how it
+splits its sales and compares nothing (the bank-revenue rule, again). Layouts on trial: Split · Growth · Trend.

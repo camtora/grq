@@ -535,3 +535,73 @@ export function estimateBaseline(
   if (!hit) return null;
   return { periodEnd: hit.periodEnd, revenue: financial ? null : hit.revenue, epsDiluted4: hit.epsDiluted4 };
 }
+
+// ── Segments over time (display round 4) ──────────────────────────────────────────────────────
+// A company re-cuts its segments from time to time (NVDA went from five lines to Data Center + Edge
+// Computing in FY2027). A segment of the same NAME across a re-cut may not be the same business, so
+// across a change of the set of names we compare nothing — "n/m", never rebuilt (the bank-revenue rule).
+
+export type SegRow = { period: string; periodEnd: string; data: Record<string, number> };
+
+const segNames = (r: SegRow) =>
+  Object.entries(r.data)
+    .filter(([, v]) => typeof v === "number" && v > 0)
+    .map(([k]) => k)
+    .sort()
+    .join("|");
+
+/** The same period type a year earlier (±45 days). */
+export function segmentYearAgo(rows: SegRow[], cur: SegRow): SegRow | null {
+  const want = ms(cur.periodEnd) - 365 * DAY;
+  const fy = cur.period === "FY";
+  return rows.find((r) => (r.period === "FY") === fy && Math.abs(ms(r.periodEnd) - want) <= 45 * DAY) ?? null;
+}
+
+export type SegmentCompare =
+  | { kind: "ok"; parts: Array<{ name: string; cents: number; prevCents: number; growth: Growth | null; shareOfChangeBps: number | null }>; totalChange: number }
+  | { kind: "resegmented"; since: string } // the set of segments changed: no like-for-like comparison
+  | { kind: "none" }; // no period a year earlier
+
+export function segmentCompare(rows: SegRow[], cur: SegRow): SegmentCompare {
+  const ya = segmentYearAgo(rows, cur);
+  if (!ya) return { kind: "none" };
+  if (segNames(ya) !== segNames(cur)) {
+    // When did the current cut start? Walk back from the newest same-type period while the names hold —
+    // the start of the unbroken run, not the first time these names ever appeared (FMP's region labels
+    // flip back and forth: NVDA's matched a 2024 quarter, then didn't, then did again).
+    const same = rows.filter((r) => (r.period === "FY") === (cur.period === "FY") && r.periodEnd <= cur.periodEnd).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+    let since = cur.periodEnd;
+    for (const r of same) {
+      if (segNames(r) !== segNames(cur)) break;
+      since = r.periodEnd;
+    }
+    return { kind: "resegmented", since };
+  }
+  const names = segNames(cur).split("|");
+  const totalChange = names.reduce((a, n) => a + (cur.data[n] - ya.data[n]), 0);
+  const parts = names
+    .map((name) => {
+      const cents = cur.data[name];
+      const prevCents = ya.data[name];
+      const d = cents - prevCents;
+      // Share of the company-wide change: only meaningful when the total moved in one clear direction.
+      const shareOfChangeBps = totalChange !== 0 ? Math.round((d / totalChange) * 10_000) : null;
+      return { name, cents, prevCents, growth: growth(cents, prevCents), shareOfChangeBps };
+    })
+    .sort((a, b) => b.cents - a.cents);
+  return { kind: "ok", parts, totalChange };
+}
+
+/** Up to `n` quarters, oldest → newest, back to the last re-cut: a stacked trend only makes sense
+ *  while the segments mean the same thing. */
+export function segmentSeries(rows: SegRow[], n = 8): SegRow[] {
+  const qs = rows.filter((r) => /^Q[1-4]$/.test(r.period)).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+  if (qs.length === 0) return [];
+  const key = segNames(qs[0]);
+  const out: SegRow[] = [];
+  for (const r of qs) {
+    if (segNames(r) !== key || out.length >= n) break;
+    out.push(r);
+  }
+  return out.reverse();
+}

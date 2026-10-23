@@ -10,7 +10,7 @@
 import { prisma } from "../db";
 import { etDateStr } from "../../agent/calendar";
 import { getPeriods, getEstimates, getStatus, splitsOf } from "./store";
-import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, type Growth, type EstimateRow, type PeriodRow } from "./derive";
+import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, segmentCompare, segmentSeries, type SegRow, type Growth, type EstimateRow, type PeriodRow } from "./derive";
 import type { CallSummary } from "./call-summary";
 
 const n = (v: bigint | null | undefined): number | null => (v == null ? null : Number(v));
@@ -145,9 +145,21 @@ type HealthOut = {
   fmpDcfPriceCents: number | null;
 };
 
-type SegmentOut = { periodEnd: string; period: string; currency: string | null; parts: Array<{ name: string; cents: number }> };
+type SegmentOut = {
+  periodEnd: string;
+  period: string;
+  currency: string | null;
+  parts: Array<{ name: string; cents: number }>;
+  compare: ReturnType<typeof segmentCompare>; // vs the same period a year earlier; n/m across a re-cut
+  series: SegRow[]; // up to 8 quarters, oldest → newest, back to the last re-cut
+};
 
-function segmentOut(row: { periodEnd: string; period: string; currency: string | null; data: unknown } | null, today: string): SegmentOut | null {
+type SegDbRow = { periodEnd: string; period: string; currency: string | null; data: unknown };
+const segRow = (r: SegDbRow): SegRow => ({ period: r.period, periodEnd: r.periodEnd, data: (r.data ?? {}) as Record<string, number> });
+
+/** `all` = every stored period of one kind, newest first (FY before Q4 on the same date). */
+function segmentOut(all: SegDbRow[], today: string): SegmentOut | null {
+  const row = all[0];
   if (!row) return null;
   const age = (Date.parse(today) - Date.parse(row.periodEnd)) / 86_400_000;
   if (age > SEGMENT_MAX_AGE_DAYS) return null;
@@ -155,7 +167,9 @@ function segmentOut(row: { periodEnd: string; period: string; currency: string |
     .filter(([, v]) => typeof v === "number" && v > 0)
     .map(([name, cents]) => ({ name, cents }))
     .sort((a, b) => b.cents - a.cents);
-  return parts.length >= 2 ? { periodEnd: row.periodEnd, period: row.period, currency: row.currency, parts } : null; // one segment is no chart
+  if (parts.length < 2) return null; // one segment is no chart
+  const rows = all.map(segRow);
+  return { periodEnd: row.periodEnd, period: row.period, currency: row.currency, parts, compare: segmentCompare(rows, segRow(row)), series: segmentSeries(rows) };
 }
 
 type CallOut = { fiscalYear: number; fiscalQuarter: number; callDate: string; summary: CallSummary | null };
@@ -176,8 +190,8 @@ export async function financialsView(key: string): Promise<FinancialsView> {
   const [est, health, product, geographic, call, filings, insider] = await Promise.all([
     getEstimates(k),
     prisma.companyHealth.findFirst({ where: { symbol: k }, orderBy: { date: "desc" } }),
-    prisma.revenueSegment.findFirst({ where: { symbol: k, kind: "product" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }] }),
-    prisma.revenueSegment.findFirst({ where: { symbol: k, kind: "geographic" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }] }),
+    prisma.revenueSegment.findMany({ where: { symbol: k, kind: "product" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }], take: 30 }),
+    prisma.revenueSegment.findMany({ where: { symbol: k, kind: "geographic" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }], take: 30 }),
     prisma.earningsCall.findFirst({ where: { symbol: k }, orderBy: { callDate: "desc" } }),
     prisma.companyFiling.findMany({ where: { symbol: k }, orderBy: { filedAt: "desc" }, take: 8 }),
     prisma.insiderQuarter.findMany({ where: { symbol: k }, orderBy: [{ year: "desc" }, { quarter: "desc" }], take: 8 }),
