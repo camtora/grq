@@ -4534,3 +4534,14 @@ company is doing the growing" and showed only today's split. Segments are now co
 earlier — **except across a re-cut**: when the set of segment names changes, a same-named segment may not be the same
 business (NVDA's "Data Center" before and after its Apr 2026 re-cut), so the panel says the company changed how it
 splits its sales and compares nothing (the bank-revenue rule, again). Layouts on trial: Split · Growth · Trend. **Decided the same day: Split and Growth combined into one** (share bar + sentence + per-segment dollars, share and change); Trend removed.
+
+**Display round 5 (2026-10-23): Filings & insiders vs Smart Money.** The two panels both showed insiders, from
+different feeds that disagreed (FMP insider-statistics counted 25 NVDA sells in Q3 — every Form 4 line; our
+trade records held 15 open-market sales worth US$530M). Now one job each: Smart Money = outside money (13F funds,
+Congress); Filings & insiders = the company's own people, in dollars, from its open-market Form 4s. The daily
+financials job pulls each name's own Form 4s (`insider-trading/search`; the market-wide "latest 400" feed only
+ever caught some of them) into the same `InsiderTrade` table through one shared upsert. **A bare ticker is not a
+company (D132):** a CA name's US twin is accepted only when the US profile's company name matches and it carries a
+CIK, and every insider row must carry that CIK — FMP's "SHOP" feed mixes in a different, older company's filings,
+which the CIK check drops. `InsiderQuarter` is no longer read (the agent image still writes it until its next
+rebuild; drop it after).

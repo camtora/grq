@@ -13,6 +13,7 @@ import {
   fmpHouseLatest,
   fmpCongressByName,
   fmpInsiderLatest,
+  type FmpInsiderTrade,
   type Fmp13FHolding,
   type FmpPoliticalTrade,
 } from "../fmp";
@@ -183,44 +184,50 @@ export async function ingestCongress(): Promise<number> {
 }
 
 // --- Insiders (daily) — FMP open-market Form 4 + OpenInsider top buys ----------
+
+/** Store one FMP Form 4 row if it's an open-market purchase (P) or sale (S) — awards, option
+ *  exercises, tax withholding and gifts are noise for "what insiders did with their own money".
+ *  Shared with the per-company pull in lib/financials/store.ts; the key makes the two idempotent. */
+export async function upsertFmpInsiderTrade(t: FmpInsiderTrade): Promise<boolean> {
+  const isBuy = /^P-/i.test(t.transactionType) || t.transactionType.toLowerCase().includes("purchase");
+  const isSell = /^S-/i.test(t.transactionType) || t.transactionType.toLowerCase().includes("sale");
+  if (!isBuy && !isSell) return false;
+  if (t.price <= 0 || t.shares <= 0 || !t.txnDate) return false;
+  const side = isBuy ? "BUY" : "SELL";
+  const key = `fmp:${t.symbol}:${t.reportingName}:${t.txnDate}:${t.transactionType}:${t.shares}`;
+  try {
+    await prisma.insiderTrade.upsert({
+      where: { key },
+      create: {
+        key,
+        symbol: t.symbol,
+        companyName: null,
+        insiderName: t.reportingName,
+        insiderTitle: t.typeOfOwner || null,
+        side,
+        txnType: t.transactionType,
+        shares: Math.min(2_000_000_000, Math.round(t.shares)),
+        priceUsd: t.price,
+        valueUsd: t.price * t.shares,
+        txnDate: new Date(`${t.txnDate}T00:00:00Z`),
+        filedAt: new Date(`${(t.filingDate || t.txnDate).slice(0, 10)}T00:00:00Z`),
+        source: "fmp",
+        link: t.url || null,
+      },
+      update: {},
+    });
+    return true;
+  } catch (e) {
+    console.error(`[smartmoney] insider(fmp) upsert failed:`, e instanceof Error ? e.message : e);
+    return false;
+  }
+}
 export async function ingestInsiders(): Promise<number> {
   let n = 0;
   // FMP: keep open-market purchases (P-Purchase) and sales (S-Sale); the board
   // shows buys, but storing both leaves room for a sells view later.
   const fmp = await fmpInsiderLatest(4).catch(() => []);
-  for (const t of fmp) {
-    const isBuy = /^P-/i.test(t.transactionType) || (t.transactionType.toLowerCase().includes("purchase"));
-    const isSell = /^S-/i.test(t.transactionType) || t.transactionType.toLowerCase().includes("sale");
-    if (!isBuy && !isSell) continue; // skip M-Exempt/A-Award/G-Gift noise
-    if (t.price <= 0 || t.shares <= 0 || !t.txnDate) continue;
-    const side = isBuy ? "BUY" : "SELL";
-    const key = `fmp:${t.symbol}:${t.reportingName}:${t.txnDate}:${t.transactionType}:${t.shares}`;
-    try {
-      await prisma.insiderTrade.upsert({
-        where: { key },
-        create: {
-          key,
-          symbol: t.symbol,
-          companyName: null,
-          insiderName: t.reportingName,
-          insiderTitle: t.typeOfOwner || null,
-          side,
-          txnType: t.transactionType,
-          shares: Math.min(2_000_000_000, Math.round(t.shares)),
-          priceUsd: t.price,
-          valueUsd: t.price * t.shares,
-          txnDate: new Date(`${t.txnDate}T00:00:00Z`),
-          filedAt: new Date(`${(t.filingDate || t.txnDate).slice(0, 10)}T00:00:00Z`),
-          source: "fmp",
-          link: t.url || null,
-        },
-        update: {},
-      });
-      n++;
-    } catch (e) {
-      console.error(`[smartmoney] insider(fmp) upsert failed:`, e instanceof Error ? e.message : e);
-    }
-  }
+  for (const t of fmp) if (await upsertFmpInsiderTrade(t)) n++;
 
   // OpenInsider: the curated "top purchases of the day" (cross-check / supplement).
   const oi = await fetchOpenInsiderTopBuys();

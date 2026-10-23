@@ -8,11 +8,23 @@ const fresh = {
   profileAt: new Date("2026-10-22T20:00:00Z"), statementsAt: new Date("2026-10-22T20:00:00Z"), latestPeriodEnd: "2026-06-30",
   estimatesDay: "2026-10-23", healthAt: new Date("2026-10-22T20:00:00Z"), segmentsAt: new Date("2026-10-22T20:00:00Z"),
   filingsDay: "2026-10-23", insiderAt: new Date("2026-10-22T20:00:00Z"), callsDay: "2026-10-23",
-  isEtf: false, isFund: false, usFiler: true, statementsCovered: true, companyName: "Nu Holdings Ltd.",
+  isEtf: false, isFund: false, secSymbol: "NU", statementsCovered: true, companyName: "Nu Holdings Ltd.",
 };
 
 describe("dueFeeds — the profile", () => {
   it("a fresh profile with a name isn't asked again", () => assert.ok(!dueFeeds(fresh, true, now, "2026-10-23").includes("profile")));
   it("a profile that landed empty (no company name) is asked again the next day, not in a week", () =>
     assert.ok(dueFeeds({ ...fresh, companyName: null }, true, now, "2026-10-23").includes("profile")));
+});
+
+describe("dueFeeds — SEC feeds follow the SEC twin", () => {
+  it("no SEC filer (pure-TSX name): no filings, no insider pull", () => {
+    const due = dueFeeds({ ...fresh, secSymbol: null, filingsDay: null, insiderAt: null }, true, now, "2026-10-23");
+    assert.ok(!due.includes("filings") && !due.includes("insider"));
+  });
+  it("insiders: a followed name is re-pulled daily, any other weekly", () => {
+    const st = { ...fresh, insiderAt: new Date("2026-10-22T14:00:00Z") }; // a day old
+    assert.ok(dueFeeds(st, true, now, "2026-10-23").includes("insider"));
+    assert.ok(!dueFeeds(st, false, now, "2026-10-23").includes("insider"));
+  });
 });

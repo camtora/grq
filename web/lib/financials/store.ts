@@ -7,7 +7,9 @@
 // second run in a day costs a handful of status reads and no FMP calls.
 
 import { prisma } from "../db";
-import { fmpGetStrict, FmpError } from "../fmp";
+import { fmpGetStrict, FmpError, fmpInsiderRow } from "../fmp";
+import { upsertFmpInsiderTrade } from "../smart-money/ingest";
+import { bareTicker, sameCompanyName } from "../universe";
 import { etDateStr } from "../../agent/calendar";
 import { allWatches } from "../watch";
 import {
@@ -76,7 +78,7 @@ export type Feed = "profile" | "statements" | "estimates" | "health" | "segments
 
 /** Which feeds a name needs now. Statements: weekly, but DAILY once the newest quarter we hold is
  *  80+ days old (the next report is due — P0 R11). ETFs/funds stop after the profile. */
-export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt" | "latestPeriodEnd" | "estimatesDay" | "healthAt" | "segmentsAt" | "filingsDay" | "insiderAt" | "callsDay" | "isEtf" | "isFund" | "usFiler" | "statementsCovered" | "companyName"> | null, deep: boolean, now: Date, today: string): Feed[] {
+export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt" | "latestPeriodEnd" | "estimatesDay" | "healthAt" | "segmentsAt" | "filingsDay" | "insiderAt" | "callsDay" | "isEtf" | "isFund" | "secSymbol" | "statementsCovered" | "companyName"> | null, deep: boolean, now: Date, today: string): Feed[] {
   const older = (d: Date | null | undefined, maxMs: number) => !d || now.getTime() - d.getTime() > maxMs;
   const out: Feed[] = [];
   if (!st || st.companyName == null || older(st.profileAt, WEEK_MS)) out.push("profile"); // no name yet = the profile never really landed
@@ -87,9 +89,10 @@ export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt"
   if (st?.estimatesDay !== today) out.push("estimates");
   if (!st || older(st.healthAt, WEEK_MS)) out.push("health");
   if (!st || older(st.segmentsAt, WEEK_MS)) out.push("segments");
-  const us = st?.usFiler ?? false;
-  if (us && deep && st?.filingsDay !== today) out.push("filings");
-  if (us && (!st || older(st.insiderAt, WEEK_MS))) out.push("insider");
+  const sec = st?.secSymbol != null; // files with the SEC: itself, or its US cross-listing
+  if (sec && deep && st?.filingsDay !== today) out.push("filings");
+  // Insiders file within two business days: daily for the names the fund follows, weekly otherwise.
+  if (sec && (!st || older(st.insiderAt, deep ? 20 * 3600_000 : WEEK_MS))) out.push("insider");
   if (deep && st?.callsDay !== today) out.push("calls");
   return out;
 }
@@ -98,7 +101,21 @@ export function dueFeeds(st: Pick<FinancialsStatus, "profileAt" | "statementsAt"
 
 const US_EXCHANGES = new Set(["NASDAQ", "NYSE", "AMEX", "NYSEARCA", "BATS", "CBOE"]);
 
-async function refreshProfile(key: string): Promise<void> {
+/** Which US ticker files this company's SEC paperwork (Form 4s, 10-Ks / 40-Fs). A US listing is its
+ *  own; a Canadian one may be cross-listed (SHOP.TO → SHOP), but a bare ticker can be ANOTHER company
+ *  (NEO.TO is Neo Performance Materials, bare NEO is NeoGenomics — D132), so the twin is accepted only
+ *  when its company name matches and it carries a CIK; never by stripping the suffix alone. */
+async function secTwin(key: string, p: Row | undefined): Promise<{ secSymbol: string | null; secCik: string | null }> {
+  const usHere = !!p?.cik && US_EXCHANGES.has(String(p?.exchange ?? "").toUpperCase());
+  if (usHere) return { secSymbol: key, secCik: String(p!.cik) };
+  const bare = bareTicker(key);
+  if (bare === key) return { secSymbol: null, secCik: null };
+  const [u] = rows(await fmpGet(`profile?symbol=${enc(bare)}`));
+  const ok = !!u?.cik && US_EXCHANGES.has(String(u?.exchange ?? "").toUpperCase()) && sameCompanyName(str(u?.companyName), str(p?.companyName));
+  return ok ? { secSymbol: bare, secCik: String(u!.cik) } : { secSymbol: null, secCik: null };
+}
+
+export async function refreshProfile(key: string): Promise<void> {
   const [p] = rows(await fmpGet(`profile?symbol=${enc(key)}`));
   // An empty answer is not a profile. Writing it blanked the sector of 102 names in the throttled first
   // backfill (2026-10-22), so banks like NU were graded as ordinary companies. Leave profileAt alone so
@@ -114,6 +131,8 @@ async function refreshProfile(key: string): Promise<void> {
     isEtf: p?.isEtf === true,
     isFund: p?.isFund === true,
     usFiler: !!p?.cik && US_EXCHANGES.has(String(p?.exchange ?? "").toUpperCase()),
+    cik: str(p?.cik),
+    ...(await secTwin(key, p)),
     splits: splits as unknown as Prisma.InputJsonValue,
     profileAt: new Date(),
   };
@@ -286,19 +305,19 @@ async function refreshSegments(key: string): Promise<void> {
 
 /** SEC filings in a window, split in half whenever FMP's 100-row page fills (a bank's note flood
  *  would otherwise push a real 8-K off the page). */
-async function filingsWindow(key: string, from: string, to: string, depth = 0): Promise<Row[]> {
-  const list = rows(await fmpGet(`sec-filings-search/symbol?symbol=${enc(key)}&from=${from}&to=${to}&limit=100`));
+async function filingsWindow(secSymbol: string, from: string, to: string, depth = 0): Promise<Row[]> {
+  const list = rows(await fmpGet(`sec-filings-search/symbol?symbol=${enc(secSymbol)}&from=${from}&to=${to}&limit=100`));
   if (list.length >= 100 && from < to && depth < 6) {
     const mid = new Date((Date.parse(from) + Date.parse(to)) / 2).toISOString().slice(0, 10);
     const next = new Date(Date.parse(mid) + DAY_MS).toISOString().slice(0, 10);
-    return [...(await filingsWindow(key, from, mid, depth + 1)), ...(await filingsWindow(key, next, to, depth + 1))];
+    return [...(await filingsWindow(secSymbol, from, mid, depth + 1)), ...(await filingsWindow(secSymbol, next, to, depth + 1))];
   }
   return list;
 }
 
-async function refreshFilings(key: string, today: string, firstTime: boolean): Promise<void> {
+async function refreshFilings(key: string, secSymbol: string, today: string, firstTime: boolean): Promise<void> {
   const from = new Date(Date.parse(today) - (firstTime ? 365 : 10) * DAY_MS).toISOString().slice(0, 10);
-  const list = await filingsWindow(key, from, today);
+  const list = await filingsWindow(secSymbol, from, today);
   for (const f of list) {
     const form = String(f.formType ?? "");
     const url = str(f.link);
@@ -309,24 +328,27 @@ async function refreshFilings(key: string, today: string, firstTime: boolean): P
   await prisma.financialsStatus.update({ where: { symbol: key }, data: { filingsDay: today } });
 }
 
-async function refreshInsider(key: string): Promise<void> {
-  const list = rows(await fmpGet(`insider-trading/statistics?symbol=${enc(key)}`));
-  for (const r of list.slice(0, 12)) {
-    const year = int(r.year);
-    const quarter = int(r.quarter);
-    if (year == null || quarter == null) continue;
-    const data = {
-      buys: int(r.totalPurchases) ?? 0,
-      sells: int(r.totalSales) ?? 0,
-      acquired: int(r.acquiredTransactions) ?? 0,
-      disposed: int(r.disposedTransactions) ?? 0,
-      sharesAcquired: toWhole(r.totalAcquired),
-      sharesDisposed: toWhole(r.totalDisposed),
-      fetchedAt: new Date(),
-    };
-    await prisma.insiderQuarter.upsert({ where: { symbol_year_quarter: { symbol: key, year, quarter } }, create: { symbol: key, year, quarter, ...data }, update: data });
+/** The company's own open-market insider trades, from FMP's per-company Form 4 feed, into the same
+ *  InsiderTrade table the Smart Money board fills from the market-wide feed (shared upsert, shared
+ *  key, so the two never double-store). Every row must carry the filer's CIK. `fullYear` pages back
+ *  ~13 months (first pull / backfill); otherwise the newest 100 rows cover any week. */
+export async function refreshInsider(key: string, secSymbol: string, secCik: string, today: string, fullYear: boolean): Promise<number> {
+  const cutoff = new Date(Date.parse(today) - 400 * DAY_MS).toISOString().slice(0, 10);
+  const want = secCik.replace(/^0+/, "");
+  let stored = 0;
+  for (let page = 0; page < (fullYear ? 10 : 1); page++) {
+    const list = rows(await fmpGet(`insider-trading/search?symbol=${enc(secSymbol)}&page=${page}&limit=100`));
+    for (const r of list) {
+      const t = fmpInsiderRow(r);
+      if (!t || String(t.companyCik ?? "").replace(/^0+/, "") !== want) continue; // someone else's ticker
+      if (t.txnDate && t.txnDate < cutoff) continue;
+      if (await upsertFmpInsiderTrade(t)) stored++;
+    }
+    const oldest = list.reduce<string>((m, r) => (String(r.transactionDate ?? "9") < m ? String(r.transactionDate) : m), "9");
+    if (list.length < 100 || oldest < cutoff) break;
   }
-  await prisma.financialsStatus.update({ where: { symbol: key }, data: { insiderAt: new Date() } });
+  await prisma.financialsStatus.update({ where: { symbol: key }, data: { insiderAt: new Date(), ...(fullYear ? { insiderFrom: cutoff } : {}) } });
+  return stored;
 }
 
 /** Record which earnings calls have transcripts (the last 8). Summaries are written separately, by
@@ -381,8 +403,8 @@ export async function refreshName(key: string, deep: boolean, opts: { today?: st
   await run("estimates", () => refreshEstimates(key, today));
   await run("health", () => refreshHealth(key, today));
   await run("segments", () => refreshSegments(key));
-  await run("filings", () => refreshFilings(key, today, st!.filingsDay == null));
-  await run("insider", () => refreshInsider(key));
+  await run("filings", () => refreshFilings(key, st!.secSymbol!, today, st!.filingsDay == null));
+  await run("insider", () => refreshInsider(key, st!.secSymbol!, st!.secCik!, today, st!.insiderFrom == null).then(() => undefined));
   await run("calls", () => refreshCallList(key, today));
   return due;
 }

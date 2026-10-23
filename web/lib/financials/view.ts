@@ -12,6 +12,7 @@ import { etDateStr } from "../../agent/calendar";
 import { getPeriods, getEstimates, getStatus, splitsOf } from "./store";
 import { headline, quarterSeries, revision, consensusOn, isFinancialSector, healthFacts, healthChecks, estimateBaseline, segmentCompare, type SegRow, type Growth, type EstimateRow, type PeriodRow } from "./derive";
 import type { CallSummary } from "./call-summary";
+import { insiderSummary, type InsiderSummary } from "./insiders";
 
 const n = (v: bigint | null | undefined): number | null => (v == null ? null : Number(v));
 const SEGMENT_MAX_AGE_DAYS = 456; // ~15 months
@@ -34,7 +35,11 @@ export type FinancialsView =
       segments: { product: SegmentOut | null; geographic: SegmentOut | null };
       call: CallOut | null;
       filings: Array<{ form: string; filedAt: string; url: string; docUrl: string | null }>;
-      insider: Array<{ year: number; quarter: number; buys: number; sells: number; acquired: number; disposed: number }>;
+      // The company's own people, from its open-market Form 4s (round 5). `sec` says who files: null = no SEC
+      // filer we can find (pure-TSX, or a CA name whose US ticker differs); crossListed = files through its US
+      // listing; insiderFrom = how far back our per-company pull reaches (null = not pulled yet).
+      sec: { symbol: string; crossListed: boolean; insiderFrom: string | null } | null;
+      insiders: InsiderSummary | null;
       updatedAt: string | null;
     };
 
@@ -192,8 +197,14 @@ export async function financialsView(key: string): Promise<FinancialsView> {
     prisma.revenueSegment.findMany({ where: { symbol: k, kind: "product" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }], take: 30 }),
     prisma.revenueSegment.findMany({ where: { symbol: k, kind: "geographic" }, orderBy: [{ periodEnd: "desc" }, { period: "asc" }], take: 30 }),
     prisma.earningsCall.findFirst({ where: { symbol: k }, orderBy: { callDate: "desc" } }),
-    prisma.companyFiling.findMany({ where: { symbol: k }, orderBy: { filedAt: "desc" }, take: 8 }),
-    prisma.insiderQuarter.findMany({ where: { symbol: k }, orderBy: [{ year: "desc" }, { quarter: "desc" }], take: 8 }),
+    prisma.companyFiling.findMany({ where: { symbol: k }, orderBy: { filedAt: "desc" }, take: 40 }),
+    st.secSymbol
+      ? prisma.insiderTrade.findMany({
+          // FMP rows only: OpenInsider repeats some of the same buys under another key.
+          where: { symbol: st.secSymbol, source: "fmp", txnDate: { gte: new Date(Date.parse(`${today}T00:00:00Z`) - 366 * 86_400_000) } },
+          select: { insiderName: true, insiderTitle: true, side: true, valueUsd: true, shares: true, txnDate: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   return {
@@ -222,7 +233,8 @@ export async function financialsView(key: string): Promise<FinancialsView> {
     segments: { product: segmentOut(product, today), geographic: segmentOut(geographic, today) },
     call: call ? { fiscalYear: call.fiscalYear, fiscalQuarter: call.fiscalQuarter, callDate: call.callDate, summary: (call.summary as CallSummary | null) ?? null } : null,
     filings: filings.map((f) => ({ form: f.form, filedAt: f.filedAt, url: f.url, docUrl: f.docUrl })),
-    insider: insider.map((r) => ({ year: r.year, quarter: r.quarter, buys: r.buys, sells: r.sells, acquired: r.acquired, disposed: r.disposed })),
+    sec: st.secSymbol ? { symbol: st.secSymbol, crossListed: st.secSymbol !== k, insiderFrom: st.insiderFrom } : null,
+    insiders: st.secSymbol && st.insiderFrom ? insiderSummary(insider, today) : null,
     updatedAt: st.statementsAt?.toISOString() ?? null,
   };
 }

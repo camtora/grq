@@ -5,6 +5,7 @@ import QuarterBars from "./QuarterBars";
 import HealthChecklist from "./HealthChecklist";
 import EstimatesCompared from "./EstimatesCompared";
 import SegmentBreakdown from "./SegmentBreakdown";
+import FilingsInsiders from "./FilingsInsiders";
 import type { FinancialsView } from "@/lib/financials/view";
 import type { Growth } from "@/lib/financials/derive";
 import { money } from "@/lib/money";
@@ -40,21 +41,6 @@ function altmanWord(z: number): { word: string; tone: "green" | "teal" | "red" }
   return z >= 3 ? { word: "safe zone", tone: "green" } : z >= 1.8 ? { word: "grey zone", tone: "teal" } : { word: "danger zone", tone: "red" };
 }
 
-const FORM_MEANING: Record<string, string> = {
-  "8-K": "something important happened",
-  "8-K/A": "a correction to an 8-K",
-  "10-Q": "quarterly report",
-  "10-Q/A": "a corrected quarterly report",
-  "10-K": "annual report",
-  "10-K/A": "a corrected annual report",
-  "6-K": "a foreign company's update",
-  "20-F": "a foreign company's annual report",
-  "40-F": "a Canadian company's annual report (US filing)",
-  "S-1": "registering new shares",
-  "DEF 14A": "notice of the shareholder meeting",
-  "SC 13D": "an investor now owns 5%+ and may push for change",
-  "SC 13D/A": "an update from a 5%+ activist holder",
-};
 
 export default function FinancialsSection({
   view,
@@ -272,7 +258,7 @@ export default function FinancialsSection({
         <div className="lg:col-span-2">
           <CallPanel v={v} />
         </div>
-        <FilingsPanel v={v} />
+        <FilingsInsiders v={v} />
       </div>
     </section>
   );
@@ -497,69 +483,4 @@ function CallPanel({ v }: { v: Company }) {
   );
 }
 
-function FilingsPanel({ v }: { v: Company }) {
-  const quarters = v.insider.slice(0, 4);
-  return (
-    <div className="flex h-full flex-col space-y-2">
-      <PanelHeader fresh="daily">Filings &amp; insiders</PanelHeader>
-      <Card className="flex-1 space-y-4 p-5 text-sm">
-        {v.filings.length === 0 && quarters.length === 0 ? (
-          <p className="text-teal-200/40">
-            No US filings in our feed. Canadian companies file on SEDAR+, which our feed doesn&apos;t cover; insider trades for pure-TSX names come from Alfred&apos;s
-            research.
-          </p>
-        ) : (
-          <>
-            {v.filings.length > 0 && (
-              <div>
-                <div className="text-xs uppercase tracking-wider text-teal-200/50">
-                  Recent <Term k="sec-filing">SEC filings</Term>
-                </div>
-                <ul className="mt-1.5 space-y-1">
-                  {v.filings.slice(0, 6).map((f) => (
-                    <li key={f.url} className="flex items-baseline justify-between gap-2 text-xs">
-                      <a href={f.docUrl ?? f.url} target="_blank" rel="noreferrer" className="min-w-0 truncate">
-                        <span className="font-mono font-semibold text-teal-200 hover:underline">{f.form}</span>{" "}
-                        <span className="text-teal-100/60">{FORM_MEANING[f.form] ?? ""}</span>
-                      </a>
-                      <span className="shrink-0 tabular-nums text-teal-200/40">{f.filedAt}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {quarters.length > 0 && (
-              <div>
-                <div className="text-xs uppercase tracking-wider text-teal-200/50">
-                  <Term k="insider">Insider</Term> trades on the open market
-                </div>
-                <table className="mt-1.5 w-full text-xs">
-                  <thead>
-                    <tr className="text-left text-[10px] uppercase tracking-wider text-teal-200/40">
-                      <th className="py-0.5 font-normal">Quarter</th>
-                      <th className="py-0.5 text-right font-normal">Buys</th>
-                      <th className="py-0.5 text-right font-normal">Sells</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quarters.map((q) => (
-                      <tr key={`${q.year}-${q.quarter}`} className="border-t border-teal-400/10">
-                        <td className="py-1 text-teal-100/70">
-                          Q{q.quarter} {q.year}
-                        </td>
-                        <td className={`py-1 text-right tabular-nums ${q.buys > 0 ? "text-emerald-400" : "text-teal-200/40"}`}>{q.buys}</td>
-                        <td className={`py-1 text-right tabular-nums ${q.sells > 0 ? "text-amber-300/80" : "text-teal-200/40"}`}>{q.sells}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="mt-1.5 text-[10px] text-teal-200/40">Executives selling is common (pay comes in stock); executives buying with their own cash is the rarer signal.</p>
-              </div>
-            )}
-          </>
-        )}
-      </Card>
-    </div>
-  );
-}
 

@@ -2101,6 +2101,9 @@ model FinancialsStatus {
   isEtf             Boolean   @default(false)
   isFund            Boolean   @default(false)
   usFiler           Boolean   @default(false) // has a CIK + US listing → filings/insider feeds apply
+  cik               String? // SEC id from the profile (US listings only; FMP gives CA listings none)
+  secSymbol         String? // the US ticker this company files with the SEC under: itself, or a CA name's cross-listing (SHOP.TO → SHOP); null = none
+  secCik            String? // that filer's CIK — every insider row must carry it (a bare ticker can be another company: NEO.TO ≠ NEO)
   splits            Json? // [{date, numerator, denominator}]
   profileAt         DateTime?
   statementsAt      DateTime?
@@ -2111,6 +2114,7 @@ model FinancialsStatus {
   segmentsAt        DateTime?
   filingsDay        String?
   insiderAt         DateTime?
+  insiderFrom       String? // YYYY-MM-DD our per-company insider history reaches back to (set by a full-year pull); null = not pulled yet
   callsDay          String?
   updatedAt         DateTime  @updatedAt
 }

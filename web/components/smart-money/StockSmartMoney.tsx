@@ -2,7 +2,6 @@ import { Card } from "@/components/ui";
 import Term from "@/components/Term";
 import PanelHeader from "@/components/PanelHeader";
 import SmartMoneyAvatar from "./SmartMoneyAvatar";
-import { fmtUsd } from "@/lib/smart-money/types";
 import type { SymbolSmartMoney } from "@/lib/smart-money/queries";
 
 // "Smart money on this stock" — which tracked investors hold or traded THIS name,
@@ -25,13 +24,13 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null })
 
   return (
     <div className="flex h-full flex-col space-y-2">
-      <PanelHeader fresh="daily" freshTitle="13F / insider / congress feeds, ingested by the runner daily (13F only on a new filing)">
+      <PanelHeader fresh="daily" freshTitle="13F / congress feeds, ingested by the runner daily (13F only on a new filing)">
         Smart money <span className="normal-case tracking-normal text-teal-200/40">· tracked investors</span>
       </PanelHeader>
       <Card className="flex-1 p-5">
-        {!sm || !sm.hasAny ? (
+        {!sm || !(hasFaces || sm.congressBuyers > 0 || sm.congressSellers > 0) ? (
           <p className="text-sm text-teal-200/40">
-            No tracked smart-money activity{sm ? ` on ${sm.symbol}` : ""} — no 13F holders, insider, or congress trades on file.
+            No tracked smart-money activity{sm ? ` on ${sm.symbol}` : ""} — no 13F holders or congress trades on file.
           </p>
         ) : (
           <>
@@ -92,7 +91,9 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null })
         </div>
       )}
 
-      {(sm.congressBuyers > 0 || sm.congressSellers > 0 || sm.insiderBuyers > 0) && (
+      {/* Insiders moved to "Filings & insiders" in The business (D140 round 5), in dollars, buys and sells:
+          this panel is outside money only. sm.insider* still feeds the agent's context unchanged. */}
+      {(sm.congressBuyers > 0 || sm.congressSellers > 0) && (
         <div className={`flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-teal-200/50 ${hasFaces ? "mt-3" : ""}`}>
           {(sm.congressBuyers > 0 || sm.congressSellers > 0) && (
             <span>
@@ -100,11 +101,6 @@ export default function StockSmartMoney({ sm }: { sm: SymbolSmartMoney | null })
               {sm.congressBuyers > 0 && <b className="text-emerald-300/80">{sm.congressBuyers} bought</b>}
               {sm.congressBuyers > 0 && sm.congressSellers > 0 && " · "}
               {sm.congressSellers > 0 && <b className="text-red-300/80">{sm.congressSellers} sold</b>}
-            </span>
-          )}
-          {sm.insiderBuyers > 0 && (
-            <span>
-              <Term k="insider">Insiders</Term> (90d): <b className="text-emerald-300/80">{sm.insiderBuyers} bought</b> ~{fmtUsd(sm.insiderBuyValueUsd)}
             </span>
           )}
         </div>

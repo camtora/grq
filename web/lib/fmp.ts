@@ -862,6 +862,7 @@ export async function fmpCongressByName(lastName: string): Promise<Array<{ chamb
 // to open-market PURCHASES (transactionType "P-Purchase"), not option exercises.
 export type FmpInsiderTrade = {
   symbol: string;
+  companyCik?: string | null; // the filer's SEC id (per-company pulls check it)
   reportingName: string;
   typeOfOwner: string;
   transactionType: string;
@@ -873,26 +874,34 @@ export type FmpInsiderTrade = {
   url: string;
 };
 
+/** One FMP insider-trading row → our shape (shared by the market-wide feed and the per-company
+ *  pull in lib/financials/store.ts). */
+export function fmpInsiderRow(r: Record<string, unknown>): FmpInsiderTrade | null {
+  const sym = String(r.symbol ?? "").toUpperCase();
+  if (!sym) return null;
+  return {
+    symbol: sym,
+    companyCik: r.companyCik == null ? null : String(r.companyCik),
+    reportingName: String(r.reportingName ?? ""),
+    typeOfOwner: String(r.typeOfOwner ?? ""),
+    transactionType: String(r.transactionType ?? ""),
+    acquiredDisposed: String(r.acquisitionOrDisposition ?? ""),
+    shares: typeof r.securitiesTransacted === "number" ? r.securitiesTransacted : 0,
+    price: typeof r.price === "number" ? r.price : 0,
+    txnDate: String(r.transactionDate ?? ""),
+    filingDate: String(r.filingDate ?? ""),
+    url: String(r.url ?? ""),
+  };
+}
+
 export async function fmpInsiderLatest(pages = 4): Promise<FmpInsiderTrade[]> {
   const out: FmpInsiderTrade[] = [];
   for (let p = 0; p < pages; p++) {
     const raw = await fmpGet<Array<Record<string, unknown>>>(`insider-trading/latest?page=${p}&limit=100`);
     if (!Array.isArray(raw) || raw.length === 0) break;
     for (const r of raw) {
-      const sym = String(r.symbol ?? "").toUpperCase();
-      if (!sym) continue;
-      out.push({
-        symbol: sym,
-        reportingName: String(r.reportingName ?? ""),
-        typeOfOwner: String(r.typeOfOwner ?? ""),
-        transactionType: String(r.transactionType ?? ""),
-        acquiredDisposed: String(r.acquisitionOrDisposition ?? ""),
-        shares: typeof r.securitiesTransacted === "number" ? r.securitiesTransacted : 0,
-        price: typeof r.price === "number" ? r.price : 0,
-        txnDate: String(r.transactionDate ?? ""),
-        filingDate: String(r.filingDate ?? ""),
-        url: String(r.url ?? ""),
-      });
+      const t = fmpInsiderRow(r);
+      if (t) out.push(t);
     }
     if (raw.length < 100) break;
   }
